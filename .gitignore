@@ -1,5 +1,7 @@
 # http://www.gnu.org/software/automake
 
+libsane-airscan.so
+
 Makefile.in
 /ar-lib
 /mdate-sh
