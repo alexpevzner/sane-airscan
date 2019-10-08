@@ -1,5 +1,9 @@
+CFLAGS	= -O2 -W -Wall
+CFLAGS += `pkg-config --cflags --libs avahi-client`
+CFLAGS += `pkg-config --cflags --libs libjpeg`
+
 all:	libsane-airscan.so
 
-libsane-airscan.so: airscan.c
+libsane-airscan.so: Makefile airscan.c
 	ctags -R .
-	gcc -o libsane-airscan.so -shared -O2 -W -Wall airscan.c
+	gcc -o libsane-airscan.so -shared ${CFLAGS} airscan.c
