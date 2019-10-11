@@ -19,7 +19,13 @@
 /******************** Constants *********************/
 /* Service type to look for
  */
-#define AIRSCAN_ZEROCONF_SERVICE_TYPE   "_uscan._tcp"
+#define AIRSCAN_ZEROCONF_SERVICE_TYPE           "_uscan._tcp"
+
+/* If failed, AVAHI client will be automatically
+ * restarted after the following timeout expires,
+ * in seconds
+ */
+#define AIRSCAN_AVAHI_CLIENT_RESTART_TIMEOUT    1
 
 /******************** Debugging ********************/
 #define DBG(level, msg, args...)        printf(msg, ##args)
@@ -236,7 +242,7 @@ dd_avahi_client_restart_defer (void)
         dd_avahi_client_stop();
 
         gettimeofday(&tv, NULL);
-        tv.tv_sec ++;
+        tv.tv_sec += AIRSCAN_AVAHI_CLIENT_RESTART_TIMEOUT;
         dd_avahi_poll->timeout_update(dd_avahi_restart_timer, &tv);
 }
 
