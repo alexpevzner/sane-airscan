@@ -7,6 +7,7 @@
 #include <sane/sane.h>
 
 #include <stdio.h>
+#include <sys/time.h>
 
 #include <avahi-client/client.h>
 #include <avahi-client/lookup.h>
@@ -32,6 +33,8 @@ static SANE_Device **airprint_device_list = NULL;
 /* AVAHI stuff
  */
 static AvahiThreadedPoll *dd_avahi_threaded_poll;
+static const AvahiPoll *dd_avahi_poll;
+static AvahiTimeout *dd_avahi_restart_timer;
 static AvahiClient *dd_avahi_client;
 static AvahiServiceBrowser *dd_avahi_browser;
 
@@ -44,7 +47,7 @@ static void
 dd_avahi_browser_stop (void);
 
 static void
-dd_avahi_client_stop (void);
+dd_avahi_client_start (void);
 
 static void
 dd_avahi_client_restart_defer (void);
@@ -144,8 +147,6 @@ dd_avahi_browser_start (AvahiClient *client)
             AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC,
             AIRSCAN_ZEROCONF_SERVICE_TYPE, NULL,
             0, dd_avahi_browser_callback, client);
-
-DBG(1,"browser=%p\n", dd_avahi_browser);
 }
 
 /* Stop service browser
@@ -188,10 +189,22 @@ dd_avahi_client_callback (AvahiClient *client, AvahiClientState state,
     }
 }
 
+/* Timer for differed AVAHI client restart
+ */
+static void
+dd_avahi_restart_timer_callback(AvahiTimeout *t, void *userdata)
+{
+    (void) t;
+    (void) userdata;
+
+    DBG(1,"TIMER\n");
+    dd_avahi_client_start();
+}
+
 /* Stop AVAHI client
  */
 static void
-dd_avahi_client_start (void)
+dd_avahi_client_stop (void)
 {
     if (dd_avahi_client != NULL) {
         avahi_client_free(dd_avahi_client);
@@ -202,14 +215,13 @@ dd_avahi_client_start (void)
 /* Start/restart the AVAHI client
  */
 static void
-dd_avahi_client_stop (void)
+dd_avahi_client_start (void)
 {
     int error;
-    const AvahiPoll *poll = avahi_threaded_poll_get (dd_avahi_threaded_poll);
 
-    dd_avahi_client_start();
+    dd_avahi_client_stop();
 
-    dd_avahi_client = avahi_client_new (poll, AVAHI_CLIENT_NO_FAIL,
+    dd_avahi_client = avahi_client_new (dd_avahi_poll, AVAHI_CLIENT_NO_FAIL,
         dd_avahi_client_callback, NULL, &error);
 }
 
@@ -218,11 +230,14 @@ dd_avahi_client_stop (void)
 static void
 dd_avahi_client_restart_defer (void)
 {
+        struct timeval tv;
+
         dd_avahi_browser_stop();
         dd_avahi_client_stop();
-        if (dd_avahi_client == NULL) {
-            // FIXME
-        }
+
+        gettimeofday(&tv, NULL);
+        tv.tv_sec ++;
+        dd_avahi_poll->timeout_update(dd_avahi_restart_timer, &tv);
 }
 
 /* Initialize device discovery
@@ -235,7 +250,15 @@ dd_init (void)
         goto FAIL;
     }
 
-    dd_avahi_client_stop();
+    dd_avahi_poll = avahi_threaded_poll_get(dd_avahi_threaded_poll);
+
+    dd_avahi_restart_timer = dd_avahi_poll->timeout_new(dd_avahi_poll, NULL,
+            dd_avahi_restart_timer_callback, NULL);
+    if (dd_avahi_restart_timer == NULL) {
+        goto FAIL;
+    }
+
+    dd_avahi_client_start();
     if (dd_avahi_client == NULL) {
         goto FAIL;
     }
@@ -259,14 +282,16 @@ dd_exit (void)
     if (dd_avahi_threaded_poll != NULL) {
         avahi_threaded_poll_stop(dd_avahi_threaded_poll);
 
-        if (dd_avahi_browser != NULL) {
-            avahi_service_browser_free(dd_avahi_browser);
-            dd_avahi_browser = NULL;
+        dd_avahi_browser_stop();
+        dd_avahi_client_stop();
+
+        if (dd_avahi_restart_timer != NULL) {
+            dd_avahi_poll->timeout_free(dd_avahi_restart_timer);
+            dd_avahi_restart_timer = NULL;
         }
 
-        dd_avahi_client_start();
-
         avahi_threaded_poll_free(dd_avahi_threaded_poll);
+        dd_avahi_poll = NULL;
         dd_avahi_threaded_poll = NULL;
     }
 }
@@ -291,6 +316,7 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
  */
 void
 sane_exit (void) {
+    dd_exit();
 }
 
 /* Get list of devices

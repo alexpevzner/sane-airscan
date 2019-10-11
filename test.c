@@ -6,6 +6,7 @@
 
 #include <sane/sane.h>
 
+#include <stdio.h>
 #include <stddef.h>
 #include <unistd.h>
 
@@ -86,7 +87,8 @@ main (int argc, char **argv)
     (void) argv;
 
     sane_init(NULL, NULL);
-    sleep(1000);
+    getchar();
+    sane_exit();
 }
 
 /* vim:ts=8:sw=4:et
