@@ -4,9 +4,13 @@
  * See LICENSE for license terms and conditions
  */
 
+#define _GNU_SOURCE
+
 #include <sane/sane.h>
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/time.h>
 
 #include <avahi-client/client.h>
@@ -27,6 +31,15 @@
  */
 #define AIRSCAN_AVAHI_CLIENT_RESTART_TIMEOUT    1
 
+/******************** Types ********************/
+/* Device descriptor
+ */
+typedef struct {
+    const char *name;      /* Device name */
+    const char *host_name; /* Host name */
+    const char *url;       /* eSCL base URL */
+} airscan_device;
+
 /******************** Debugging ********************/
 #define DBG(level, msg, args...)        printf(msg, ##args)
 
@@ -35,7 +48,75 @@
  */
 static SANE_Device **airprint_device_list = NULL;
 
-/******************** Device Discovery  ********************/
+/******************** Device management ********************/
+/* Forward declarations
+ */
+static void
+airscan_device_destroy(airscan_device *device);
+
+/* Create a device descriptor
+ */
+static airscan_device*
+airscan_device_new (const char *name, const char *host_name,
+        const AvahiAddress *addr, uint16_t port,
+        AvahiStringList *txt)
+{
+    airscan_device      *device = calloc(sizeof(airscan_device), 1);
+
+    /* Copy relevant data from AVAHI buffers to device */
+    device->name = strdup(name);
+    if (device->name == NULL) {
+        goto FAIL;
+    }
+
+    device->host_name = strdup(host_name);
+    if (device->host_name == NULL) {
+        goto FAIL;
+    }
+
+    /* Build device API URL */
+    AvahiStringList *rs = avahi_string_list_find(txt, "rs");
+    const char *rs_text = NULL;
+    if (rs != NULL && rs->size > 3) {
+        rs_text = (const char*) rs->text + 3;
+    }
+
+    char *url;
+    char str_addr[128];
+    avahi_address_snprint(str_addr, sizeof(str_addr), addr);
+
+    if (rs_text != NULL) {
+        asprintf(&url, "http://%s:%d/%s/", str_addr, port, rs_text);
+    } else {
+        asprintf(&url, "http://%s:%d/", str_addr, port);
+    }
+
+    if (url == NULL) {
+        goto FAIL;
+    }
+
+    device->url = url;
+
+    return device;
+
+FAIL:
+    if (device) {
+        airscan_device_destroy(device);
+    }
+    return NULL;
+}
+
+/* Destroy a device descriptor
+ */
+static void
+airscan_device_destroy(airscan_device *device)
+{
+    free((void*) device->name);
+    free((void*) device->host_name);
+    free((void*) device->url);
+}
+
+/******************** Device Discovery ********************/
 /* AVAHI stuff
  */
 static AvahiThreadedPoll *dd_avahi_threaded_poll;
@@ -90,6 +171,12 @@ dd_avahi_resolver_callback (AvahiServiceResolver *r, AvahiIfIndex interface,
         for (t = txt; t; t = t->next) {
             DBG(1, "  TXT: %*s\n", (int) t->size, t->text);
         }
+
+        airscan_device *dev = airscan_device_new(name, host_name,
+                addr, port, txt);
+
+        DBG(1, "url=%s\n", dev->url);
+        airscan_device_destroy(dev);
     }
 
     avahi_service_resolver_free(r);
