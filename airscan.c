@@ -20,6 +20,8 @@
 #include <avahi-common/malloc.h>
 #include <avahi-common/error.h>
 
+#include <curl/curl.h>
+
 /******************** Constants *********************/
 /* Service type to look for
  */
@@ -215,7 +217,7 @@ static AvahiServiceBrowser *dd_avahi_browser;
 /* Forward declarations
  */
 static void
-dd_exit (void);
+dd_cleanup (void);
 
 static void
 dd_avahi_browser_stop (void);
@@ -427,7 +429,7 @@ dd_init (void)
 {
     dd_avahi_threaded_poll = avahi_threaded_poll_new();
     if (dd_avahi_threaded_poll == NULL) {
-        goto FAIL;
+        return SANE_STATUS_NO_MEM;
     }
 
     dd_avahi_poll = avahi_threaded_poll_get(dd_avahi_threaded_poll);
@@ -435,29 +437,25 @@ dd_init (void)
     dd_avahi_restart_timer = dd_avahi_poll->timeout_new(dd_avahi_poll, NULL,
             dd_avahi_restart_timer_callback, NULL);
     if (dd_avahi_restart_timer == NULL) {
-        goto FAIL;
+        return SANE_STATUS_NO_MEM;
     }
 
     dd_avahi_client_start();
     if (dd_avahi_client == NULL) {
-        goto FAIL;
+        return SANE_STATUS_NO_MEM;
     }
 
     if (avahi_threaded_poll_start (dd_avahi_threaded_poll) < 0) {
-        goto FAIL;
+        return SANE_STATUS_NO_MEM;
     }
 
     return SANE_STATUS_GOOD;
-
-FAIL:
-    dd_exit();
-    return SANE_STATUS_NO_MEM;
 }
 
-/* Exit device discovery
+/* Cleanup device discovery
  */
 static void
-dd_exit (void)
+dd_cleanup (void)
 {
     if (dd_avahi_threaded_poll != NULL) {
         avahi_threaded_poll_stop(dd_avahi_threaded_poll);
@@ -476,6 +474,34 @@ dd_exit (void)
     }
 }
 
+/******************** HTTP client ********************/
+/* LibCURL stuff
+ */
+static CURL *http_curl_multi;
+
+/* Initialize HTTP client
+ */
+static SANE_Status
+http_init (void)
+{
+    http_curl_multi = curl_multi_init();
+    if (http_curl_multi == NULL) {
+        return SANE_STATUS_NO_MEM;
+    }
+    return SANE_STATUS_GOOD;
+}
+
+/* Cleanup HTTP client
+ */
+static void
+http_cleanup (void)
+{
+    if (http_curl_multi != NULL) {
+        curl_multi_cleanup(http_curl_multi);
+        http_curl_multi = NULL;
+    }
+}
+
 /******************** SANE API ********************/
 /* Initialize the backend
  */
@@ -488,6 +514,13 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
     (void) authorize;
 
     status = dd_init();
+    if (status == SANE_STATUS_GOOD) {
+        http_init();
+    }
+
+    if (status != SANE_STATUS_GOOD) {
+        sane_exit();
+    }
 
     return status;
 }
@@ -501,7 +534,8 @@ sane_exit (void)
     (void) buf_destroy;
     (void) buf_write;
 
-    dd_exit();
+    http_cleanup();
+    dd_cleanup();
 }
 
 /* Get list of devices
