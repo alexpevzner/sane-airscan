@@ -4,21 +4,14 @@
  * See LICENSE for license terms and conditions
  */
 
-#define _GNU_SOURCE
-
 #include <sane/sane.h>
 
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <sys/time.h>
 
 #include <avahi-client/client.h>
 #include <avahi-client/lookup.h>
-
-#include <avahi-common/malloc.h>
 #include <avahi-common/error.h>
-
 #include <avahi-glib/glib-watch.h>
 
 #include <glib.h>
@@ -63,18 +56,11 @@ airscan_device_new (const char *name, const char *host_name,
         const AvahiAddress *addr, uint16_t port,
         AvahiStringList *txt)
 {
-    airscan_device      *device = calloc(sizeof(airscan_device), 1);
+    airscan_device      *device = g_new0(airscan_device, 1);
 
     /* Copy relevant data from AVAHI buffers to device */
-    device->name = strdup(name);
-    if (device->name == NULL) {
-        goto FAIL;
-    }
-
-    device->host_name = strdup(host_name);
-    if (device->host_name == NULL) {
-        goto FAIL;
-    }
+    device->name = g_strdup(name);
+    device->host_name = g_strdup(host_name);
 
     /* Build device API URL */
     AvahiStringList *rs = avahi_string_list_find(txt, "rs");
@@ -83,29 +69,17 @@ airscan_device_new (const char *name, const char *host_name,
         rs_text = (const char*) rs->text + 3;
     }
 
-    char *url;
     char str_addr[128];
     avahi_address_snprint(str_addr, sizeof(str_addr), addr);
 
     if (rs_text != NULL) {
-        asprintf(&url, "http://%s:%d/%s/", str_addr, port, rs_text);
+        device->url = g_strdup_printf("http://%s:%d/%s/", str_addr, port,
+                rs_text);
     } else {
-        asprintf(&url, "http://%s:%d/", str_addr, port);
+        device->url = g_strdup_printf("http://%s:%d/", str_addr, port);
     }
-
-    if (url == NULL) {
-        goto FAIL;
-    }
-
-    device->url = url;
 
     return device;
-
-FAIL:
-    if (device) {
-        airscan_device_destroy(device);
-    }
-    return NULL;
 }
 
 /* Destroy a device descriptor
@@ -113,9 +87,10 @@ FAIL:
 static void
 airscan_device_destroy(airscan_device *device)
 {
-    free((void*) device->name);
-    free((void*) device->host_name);
-    free((void*) device->url);
+    g_free((void*) device->name);
+    g_free((void*) device->host_name);
+    g_free((void*) device->url);
+    g_free(device);
 }
 
 /******************** GLIB integration ********************/
