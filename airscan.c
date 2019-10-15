@@ -16,11 +16,12 @@
 #include <avahi-client/client.h>
 #include <avahi-client/lookup.h>
 
-#include <avahi-common/thread-watch.h>
 #include <avahi-common/malloc.h>
 #include <avahi-common/error.h>
 
-#include <curl/curl.h>
+#include <avahi-glib/glib-watch.h>
+
+#include <glib.h>
 
 /******************** Constants *********************/
 /* Service type to look for
@@ -205,10 +206,72 @@ airscan_device_destroy(airscan_device *device)
     free((void*) device->url);
 }
 
+/******************** GLIB integration ********************/
+/* GLIB stuff
+ */
+static GThread *glib_thread;
+static GMainContext *glib_main_context;
+static GMainLoop *glib_main_loop;
+
+/* Initialize GLIB integration
+ */
+static SANE_Status
+glib_init (void)
+{
+    glib_main_context = g_main_context_new();
+    glib_main_loop = g_main_loop_new(glib_main_context, TRUE);
+    DBG(1,"%p\n", glib_thread);
+    return SANE_STATUS_GOOD;
+}
+
+/* Cleanup GLIB integration
+ */
+static void
+glib_cleanup (void)
+{
+    if (glib_main_context != NULL) {
+        g_main_loop_unref(glib_main_loop);
+        glib_main_loop = NULL;
+        g_main_context_unref(glib_main_context);
+        glib_main_context = NULL;
+    }
+}
+
+/* GLIB thread main function
+ */
+static gpointer
+glib_thread_func (gpointer data)
+{
+    g_main_context_push_thread_default(glib_main_context);
+    g_main_loop_run(glib_main_loop);
+
+    (void) data;
+    return NULL;
+}
+
+/* Start GLIB thread. All background operations (AVAHI service discovery,
+ * HTTP transfers) are performed on a context of this thread
+ */
+static void
+glib_thread_start (void) {
+    glib_thread = g_thread_new("airscan", glib_thread_func, NULL);
+}
+
+/* Stop GLIB thread
+ */
+static void
+glib_thread_stop (void) {
+    if (glib_thread != NULL) {
+        g_main_loop_quit(glib_main_loop);
+        g_thread_join(glib_thread);
+        glib_thread = NULL;
+    }
+}
+
 /******************** Device Discovery ********************/
 /* AVAHI stuff
  */
-static AvahiThreadedPoll *dd_avahi_threaded_poll;
+static AvahiGLibPoll *dd_avahi_glib_poll;
 static const AvahiPoll *dd_avahi_poll;
 static AvahiTimeout *dd_avahi_restart_timer;
 static AvahiClient *dd_avahi_client;
@@ -239,13 +302,8 @@ dd_avahi_resolver_callback (AvahiServiceResolver *r, AvahiIfIndex interface,
 {
     (void) interface;
     (void) protocol;
-    (void) name;
     (void) type;
     (void) domain;
-    (void) host_name;
-    (void) addr;
-    (void) port;
-    (void) txt;
     (void) flags;
     (void) userdata;
 
@@ -280,11 +338,6 @@ dd_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
         AvahiLookupResultFlags flags, void* userdata)
 {
     (void) b;
-    (void) interface;
-    (void) protocol;
-    (void) name;
-    (void) type;
-    (void) domain;
     (void) flags;
     (void) userdata;
 
@@ -427,12 +480,13 @@ dd_avahi_client_restart_defer (void)
 static SANE_Status
 dd_init (void)
 {
-    dd_avahi_threaded_poll = avahi_threaded_poll_new();
-    if (dd_avahi_threaded_poll == NULL) {
+    dd_avahi_glib_poll = avahi_glib_poll_new(glib_main_context,
+            G_PRIORITY_DEFAULT);
+    if (dd_avahi_glib_poll == NULL) {
         return SANE_STATUS_NO_MEM;
     }
 
-    dd_avahi_poll = avahi_threaded_poll_get(dd_avahi_threaded_poll);
+    dd_avahi_poll = avahi_glib_poll_get(dd_avahi_glib_poll);
 
     dd_avahi_restart_timer = dd_avahi_poll->timeout_new(dd_avahi_poll, NULL,
             dd_avahi_restart_timer_callback, NULL);
@@ -445,10 +499,6 @@ dd_init (void)
         return SANE_STATUS_NO_MEM;
     }
 
-    if (avahi_threaded_poll_start (dd_avahi_threaded_poll) < 0) {
-        return SANE_STATUS_NO_MEM;
-    }
-
     return SANE_STATUS_GOOD;
 }
 
@@ -457,9 +507,7 @@ dd_init (void)
 static void
 dd_cleanup (void)
 {
-    if (dd_avahi_threaded_poll != NULL) {
-        avahi_threaded_poll_stop(dd_avahi_threaded_poll);
-
+    if (dd_avahi_glib_poll != NULL) {
         dd_avahi_browser_stop();
         dd_avahi_client_stop();
 
@@ -468,26 +516,18 @@ dd_cleanup (void)
             dd_avahi_restart_timer = NULL;
         }
 
-        avahi_threaded_poll_free(dd_avahi_threaded_poll);
+        avahi_glib_poll_free(dd_avahi_glib_poll);
         dd_avahi_poll = NULL;
-        dd_avahi_threaded_poll = NULL;
+        dd_avahi_glib_poll = NULL;
     }
 }
 
 /******************** HTTP client ********************/
-/* LibCURL stuff
- */
-static CURL *http_curl_multi;
-
 /* Initialize HTTP client
  */
 static SANE_Status
 http_init (void)
 {
-    http_curl_multi = curl_multi_init();
-    if (http_curl_multi == NULL) {
-        return SANE_STATUS_NO_MEM;
-    }
     return SANE_STATUS_GOOD;
 }
 
@@ -496,10 +536,6 @@ http_init (void)
 static void
 http_cleanup (void)
 {
-    if (http_curl_multi != NULL) {
-        curl_multi_cleanup(http_curl_multi);
-        http_curl_multi = NULL;
-    }
 }
 
 /******************** SANE API ********************/
@@ -513,7 +549,10 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
     (void) version_code;
     (void) authorize;
 
-    status = dd_init();
+    status = glib_init();
+    if (status == SANE_STATUS_GOOD) {
+        status = dd_init();
+    }
     if (status == SANE_STATUS_GOOD) {
         http_init();
     }
@@ -521,6 +560,8 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
     if (status != SANE_STATUS_GOOD) {
         sane_exit();
     }
+
+    glib_thread_start();
 
     return status;
 }
@@ -534,8 +575,11 @@ sane_exit (void)
     (void) buf_destroy;
     (void) buf_write;
 
+    glib_thread_stop();
+
     http_cleanup();
     dd_cleanup();
+    glib_cleanup();
 }
 
 /* Get list of devices
