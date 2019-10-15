@@ -220,7 +220,6 @@ glib_init (void)
 {
     glib_main_context = g_main_context_new();
     glib_main_loop = g_main_loop_new(glib_main_context, TRUE);
-    DBG(1,"%p\n", glib_thread);
     return SANE_STATUS_GOOD;
 }
 
