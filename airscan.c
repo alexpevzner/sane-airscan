@@ -42,94 +42,6 @@
  */
 static SANE_Device **airprint_device_list = NULL;
 
-/******************** Memory buffers ********************/
-/* Initial buffer size
- */
-#define BUF_INITIAL_SIZE        4096
-
-/* The growable memory buffer
- */
-typedef struct {
-    void   *data;     /* Buffered data */
-    size_t size;      /* Data's size */
-    size_t allocated; /* Amount of actually allocated bytes */
-} buf;
-
-/* Create new buffer
- */
-static buf*
-buf_new (void)
-{
-    buf *b = (buf*) calloc(sizeof(buf), 1);
-    if (b != NULL) {
-        b->data = calloc(BUF_INITIAL_SIZE, 1);
-        if (b->data != NULL) {
-            b->allocated = BUF_INITIAL_SIZE;
-            return b;
-        }
-        free(b);
-    }
-    return NULL;
-}
-
-/* Destroy the buffer
- */
-static void
-buf_destroy (buf *b)
-{
-    free(b->data);
-    free(b);
-}
-
-/* Get buffer's data
- */
-static inline const void*
-buf_data (buf *b)
-{
-    return b->data;
-}
-
-/* Get buffer's size
- */
-static inline size_t
-buf_size (buf *b)
-{
-    return b->size;
-}
-
-/* Write some data to the buffer. In a case of allocation
- * error, may write less bytes that requested
- */
-static size_t
-buf_write (buf *b, const void *data, size_t size)
-{
-    size_t allocated = b->allocated;
-    size_t needed = b->size + size;
-
-    if (needed < b->size) {
-        return 0; /* Counter overflow */
-    }
-
-    while (allocated < needed) {
-        allocated += allocated;
-        if (allocated < b->allocated) {
-            return 0; /* Counter overflow */
-        }
-    }
-
-    void *p = realloc(b->data, allocated);
-    if (p == NULL) {
-        return 0; /* OOM */
-    }
-
-    b->data = p;
-    memcpy(b->size + (char*) b->data, data, size);
-    b->size = needed;
-    b->allocated = allocated;
-
-    return size;
-}
-
 /******************** Device management ********************/
 /* Device descriptor
  */
@@ -570,10 +482,6 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
 void
 sane_exit (void)
 {
-    (void) buf_new;
-    (void) buf_destroy;
-    (void) buf_write;
-
     glib_thread_stop();
 
     http_cleanup();
