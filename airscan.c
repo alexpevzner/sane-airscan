@@ -16,6 +16,8 @@
 
 #include <glib.h>
 
+#include <libsoup/soup.h>
+
 /******************** Constants *********************/
 /* Service type to look for
  */
@@ -42,25 +44,25 @@ typedef struct {
     const char *name;      /* Device name */
     const char *host_name; /* Host name */
     const char *url;       /* eSCL base URL */
-} airscan_device;
+} device;
 
 /* Forward declarations
  */
 static void
-airscan_device_destroy(airscan_device *device);
+device_destroy(device *device);
 
 /* Create a device descriptor
  */
-static airscan_device*
-airscan_device_new (const char *name, const char *host_name,
+static device*
+device_new (const char *name, const char *host_name,
         const AvahiAddress *addr, uint16_t port,
         AvahiStringList *txt)
 {
-    airscan_device      *device = g_new0(airscan_device, 1);
+    device      *dev = g_new0(device, 1);
 
     /* Copy relevant data from AVAHI buffers to device */
-    device->name = g_strdup(name);
-    device->host_name = g_strdup(host_name);
+    dev->name = g_strdup(name);
+    dev->host_name = g_strdup(host_name);
 
     /* Build device API URL */
     AvahiStringList *rs = avahi_string_list_find(txt, "rs");
@@ -73,24 +75,24 @@ airscan_device_new (const char *name, const char *host_name,
     avahi_address_snprint(str_addr, sizeof(str_addr), addr);
 
     if (rs_text != NULL) {
-        device->url = g_strdup_printf("http://%s:%d/%s/", str_addr, port,
+        dev->url = g_strdup_printf("http://%s:%d/%s/", str_addr, port,
                 rs_text);
     } else {
-        device->url = g_strdup_printf("http://%s:%d/", str_addr, port);
+        dev->url = g_strdup_printf("http://%s:%d/", str_addr, port);
     }
 
-    return device;
+    return dev;
 }
 
 /* Destroy a device descriptor
  */
 static void
-airscan_device_destroy(airscan_device *device)
+device_destroy(device *dev)
 {
-    g_free((void*) device->name);
-    g_free((void*) device->host_name);
-    g_free((void*) device->url);
-    g_free(device);
+    g_free((void*) dev->name);
+    g_free((void*) dev->host_name);
+    g_free((void*) dev->url);
+    g_free(dev);
 }
 
 /******************** GLIB integration ********************/
@@ -205,11 +207,11 @@ dd_avahi_resolver_callback (AvahiServiceResolver *r, AvahiIfIndex interface,
             DBG(1, "  TXT: %*s\n", (int) t->size, t->text);
         }
 
-        airscan_device *dev = airscan_device_new(name, host_name,
+        device *dev = device_new(name, host_name,
                 addr, port, txt);
 
         DBG(1, "url=%s\n", dev->url);
-        airscan_device_destroy(dev);
+        device_destroy(dev);
     }
 
     avahi_service_resolver_free(r);
