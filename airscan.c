@@ -41,29 +41,90 @@ static SANE_Device **airprint_device_list = NULL;
 /* Device descriptor
  */
 typedef struct {
-    const char *name;      /* Device name */
-    const char *host_name; /* Host name */
-    const char *url;       /* eSCL base URL */
+    const char           *name;     /* Device name */
+    AvahiServiceResolver *resolver; /* Service resolver; may be NULL */
+    const char           *url;      /* eSCL base URL */
 } device;
+
+/* Static variables
+ */
+static GTree *device_table;
 
 /* Forward declarations
  */
 static void
 device_destroy(device *device);
 
+/* Print device-related debug message
+ */
+#define DEVICE_DEBUG(dev, fmt, args...) \
+    DBG(1, "dev: \"%s\": " fmt "\n", dev->name, ##args)
+
+/* Compare device names, for device_table
+ */
+static int
+device_name_compare (gconstpointer a, gconstpointer b, gpointer userdata)
+{
+    (void) userdata;
+    return strcmp((const char *) a, (const char*) b);
+}
+
+/* Initialize device management
+ */
+static SANE_Status
+device_management_init (void)
+{
+    device_table = g_tree_new_full(device_name_compare, NULL, NULL,
+            (GDestroyNotify) device_destroy);
+    return SANE_STATUS_GOOD;
+}
+
+/* Cleanup device management
+ */
+static void
+device_management_cleanup (void)
+{
+    if (device_table != NULL) {
+        g_tree_unref(device_table);
+        device_table = NULL;
+    }
+}
+
 /* Create a device descriptor
  */
 static device*
-device_new (const char *name, const char *host_name,
-        const AvahiAddress *addr, uint16_t port,
-        AvahiStringList *txt)
+device_new (const char *name)
 {
     device      *dev = g_new0(device, 1);
 
-    /* Copy relevant data from AVAHI buffers to device */
     dev->name = g_strdup(name);
-    dev->host_name = g_strdup(host_name);
+    DEVICE_DEBUG(dev, "created");
 
+    return dev;
+}
+
+/* Destroy a device descriptor
+ */
+static void
+device_destroy (device *dev)
+{
+    DEVICE_DEBUG(dev, "destroyed");
+
+    g_free((void*) dev->name);
+    if (dev->resolver != NULL) {
+        avahi_service_resolver_free(dev->resolver);
+        dev->resolver = NULL;
+    }
+    g_free((void*) dev->url);
+    g_free(dev);
+}
+
+/* Called when AVAHI resovler is done
+ */
+static void
+device_resolver_done (device *dev, const AvahiAddress *addr, uint16_t port,
+        AvahiStringList *txt)
+{
     /* Build device API URL */
     AvahiStringList *rs = avahi_string_list_find(txt, "rs");
     const char *rs_text = NULL;
@@ -81,18 +142,31 @@ device_new (const char *name, const char *host_name,
         dev->url = g_strdup_printf("http://%s:%d/", str_addr, port);
     }
 
-    return dev;
+    DEVICE_DEBUG(dev, "url=\"%s\"", dev->url);
 }
 
-/* Destroy a device descriptor
+/* Find device in a table
+ */
+static device*
+device_find (const char *name)
+{
+    return g_tree_lookup(device_table, name);
+}
+
+/* Add device to device table
  */
 static void
-device_destroy(device *dev)
+device_add (device *dev)
 {
-    g_free((void*) dev->name);
-    g_free((void*) dev->host_name);
-    g_free((void*) dev->url);
-    g_free(dev);
+    g_tree_insert(device_table, (gpointer) dev->name, dev);
+}
+
+/* Del device from device table
+ */
+static void
+device_del (const char *name)
+{
+    g_tree_remove(device_table, name);
 }
 
 /******************** GLIB integration ********************/
@@ -179,6 +253,20 @@ dd_avahi_client_start (void);
 static void
 dd_avahi_client_restart_defer (void);
 
+
+/* Get current AVAHI error string
+ */
+static const char*
+dd_avahi_strerror (void)
+{
+    return avahi_strerror(avahi_client_errno(dd_avahi_client));
+}
+
+/* Print DD-related debug message
+ */
+#define DD_DEBUG(name, fmt, args...)    \
+        DBG(1, "discovery: \"%s\": " fmt "\n", name, ##args)
+
 /* AVAHI service resolver callback
  */
 static void
@@ -192,26 +280,22 @@ dd_avahi_resolver_callback (AvahiServiceResolver *r, AvahiIfIndex interface,
     (void) protocol;
     (void) type;
     (void) domain;
+    (void) host_name;
     (void) flags;
-    (void) userdata;
 
-    if (event == AVAHI_RESOLVER_FOUND) {
-        DBG(1, "resolver: name=%s, type=%s domain=%s\n", name, type, domain);
-        DBG(1, "host_name=%s\n", host_name);
-        char buf[128];
-        DBG(1, "addr=%s\n", avahi_address_snprint(buf, sizeof(buf), addr));
-        DBG(1, "port=%d\n", port);
+    device *dev = userdata;
+    dev->resolver = NULL; /* Not owned by device anymore */
 
-        AvahiStringList *t;
-        for (t = txt; t; t = t->next) {
-            DBG(1, "  TXT: %*s\n", (int) t->size, t->text);
-        }
+    switch (event) {
+    case AVAHI_RESOLVER_FOUND:
+        DD_DEBUG(name, "resolver: OK");
+        device_resolver_done(dev, addr, port, txt);
+        break;
 
-        device *dev = device_new(name, host_name,
-                addr, port, txt);
-
-        DBG(1, "url=%s\n", dev->url);
-        device_destroy(dev);
+    case AVAHI_RESOLVER_FAILURE:
+        DD_DEBUG(name, "resolver: %s", dd_avahi_strerror());
+        device_del(dev->name);
+        break;
     }
 
     avahi_service_resolver_free(r);
@@ -229,24 +313,39 @@ dd_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
     (void) flags;
     (void) userdata;
 
-DBG(1,"browser event=%d\n", event);
-
     switch (event) {
     case AVAHI_BROWSER_NEW:
-        DBG(1, "name=%s type=%s domain=%s\n", name, type, domain);
+        DD_DEBUG(name, "found");
 
+        /* Check for duplicate device */
+        if (device_find (name) ) {
+            DD_DEBUG(name, "already known; ignoring");
+            break;
+        }
+
+        device *dev = device_new(name);
+
+        /* Initiate desolver */
         AvahiServiceResolver *r;
         r = avahi_service_resolver_new(dd_avahi_client, interface, protocol,
                 name, type, domain, AVAHI_PROTO_UNSPEC, 0,
-                dd_avahi_resolver_callback, NULL);
+                dd_avahi_resolver_callback, dev);
 
         if (r == NULL) {
+            DD_DEBUG(name, "%s", dd_avahi_strerror());
             dd_avahi_client_restart_defer();
+            break;
         }
+
+        /* Add a device */
+        dev->resolver = r;
+        device_add(dev);
 
         break;
 
     case AVAHI_BROWSER_REMOVE:
+        DD_DEBUG(name, "removed");
+        device_del(name);
         break;
 
     case AVAHI_BROWSER_FAILURE:
@@ -437,6 +536,7 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
     (void) version_code;
     (void) authorize;
 
+    /* Initialize all parts */
     status = glib_init();
     if (status == SANE_STATUS_GOOD) {
         status = dd_init();
@@ -444,11 +544,15 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
     if (status == SANE_STATUS_GOOD) {
         http_init();
     }
+    if (status == SANE_STATUS_GOOD) {
+        status = device_management_init();
+    }
 
     if (status != SANE_STATUS_GOOD) {
         sane_exit();
     }
 
+    /* Start airscan thread */
     glib_thread_start();
 
     return status;
@@ -461,6 +565,7 @@ sane_exit (void)
 {
     glib_thread_stop();
 
+    device_management_cleanup();
     http_cleanup();
     dd_cleanup();
     glib_cleanup();
