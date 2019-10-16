@@ -17,6 +17,7 @@
 #include <glib.h>
 
 #include <libsoup/soup.h>
+#include <libxml/tree.h>
 
 /******************** Constants *********************/
 /* Service type to look for
@@ -36,6 +37,62 @@
 /* List of devices
  */
 static SANE_Device **airprint_device_list = NULL;
+
+/******************** XML utilities ********************/
+/* Match node name
+ */
+static SANE_Bool
+xml_node_match_name (xmlNode *node, const char *prefix, const char *name)
+{
+    const char *node_prefix = NULL;
+
+    if (node->ns) {
+        node_prefix = (const char*) node->ns->prefix;
+    }
+
+    /* Match prefix */
+    if (prefix != NULL) {
+        if (node_prefix == NULL || strcmp(prefix, node_prefix)) {
+            return SANE_FALSE;
+        }
+    } else {
+        if (node_prefix != NULL) {
+            return SANE_FALSE;
+        }
+    }
+
+    /* Match node name */
+    return !strcmp(name, (const char*) node->name);
+}
+
+/* Find real node, skipping comments and blank nodes
+ */
+static xmlNode*
+xml_node_real (xmlNode *node)
+{
+    while (node  != NULL &&
+           (node->type == XML_COMMENT_NODE || xmlIsBlankNode (node))) {
+        node = node->next;
+    }
+
+    return node;
+}
+
+/* Find first node's real child
+ */
+static xmlNode*
+xml_node_child (xmlNode *node)
+{
+    return xml_node_real(node->children);
+}
+
+/* Find the next node's real sibling
+ */
+static xmlNode*
+xml_node_next (xmlNode *node)
+{
+    return xml_node_real(node->next);
+}
 
 /******************** Device management ********************/
 /* Device descriptor
@@ -204,16 +261,60 @@ static void
 device_scanner_capabilities_callback (device *dev, SoupMessage *msg)
 {
     DEVICE_DEBUG(dev, "ScannerCapabilities: status=%d", msg->status_code);
+
+    xmlDoc *doc = NULL;
+    const char *model = NULL, *make_and_model = NULL;
+
+    /* Check request status */
     if (!SOUP_STATUS_IS_SUCCESSFUL(msg->status_code)) {
         DEVICE_DEBUG(dev, "failed to load ScannerCapabilities");
-        device_del(dev->name);
-        return;
+        goto FAIL;
     }
 
+    /* Parse XML response */
     SoupBuffer *buf = soup_message_body_flatten(msg->response_body);
-    write(1, buf->data, buf->length);
-    write(1, "\n", 1);
+
+    doc = xmlParseMemory(buf->data, buf->length);
     soup_buffer_free(buf);
+
+    if (doc == NULL) {
+        DEVICE_DEBUG(dev, "failed to parse ScannerCapabilities response XML");
+        goto FAIL;
+    }
+
+    xmlNode *node;
+    node = xmlDocGetRootElement(doc);
+    if (!xml_node_match_name(node, "scan", "ScannerCapabilities")) {
+        DEVICE_DEBUG(dev, "invalid ScannerCapabilities response");
+    }
+
+    node = xml_node_child(node);
+    while (node != NULL) {
+        DBG(1, "%s\n", node->name);
+
+        if (xml_node_match_name(node, "pwg", "ModelName")) {
+            model = (const char*) xmlNodeGetContent(node);
+        } else if (xml_node_match_name(node, "pwg", "MakeAndModel")) {
+            make_and_model = (const char*) xmlNodeGetContent(node);
+        }
+
+        node = xml_node_next(node);
+    }
+
+    DBG(1, "model=%s\n", model);
+    DBG(1, "make_and_model=%s\n", make_and_model);
+
+    return;
+
+FAIL:
+    if (doc != NULL) {
+        xmlFreeDoc(doc);
+    }
+
+    xmlFree((void*) model);
+    xmlFree((void*) make_and_model);
+
+    device_del(dev->name);
 }
 
 /* User data, associated with each HTTP message

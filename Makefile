@@ -3,6 +3,7 @@ CFLAGS += `pkg-config --cflags --libs avahi-client`
 CFLAGS += `pkg-config --cflags --libs avahi-glib`
 CFLAGS += `pkg-config --cflags --libs libjpeg`
 CFLAGS += `pkg-config --cflags --libs libsoup-2.4`
+CFLAGS += `pkg-config --cflags --libs libxml-2.0`
 
 all:	libsane-airscan.so test
 
