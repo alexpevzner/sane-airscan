@@ -41,19 +41,28 @@ static SANE_Device **airprint_device_list = NULL;
 /* Device descriptor
  */
 typedef struct {
-    const char           *name;     /* Device name */
-    AvahiServiceResolver *resolver; /* Service resolver; may be NULL */
-    const char           *url;      /* eSCL base URL */
+    const char           *name;         /* Device name */
+    AvahiServiceResolver *resolver;     /* Service resolver; may be NULL */
+    SoupURI              *base_url;     /* eSCL base URI */
+    GPtrArray            *http_pending; /* Pending HTTP requests */
 } device;
 
 /* Static variables
  */
 static GTree *device_table;
+static SoupSession *device_http_session;
 
 /* Forward declarations
  */
 static void
 device_destroy(device *device);
+
+static void
+device_scanner_capabilities_callback (device *dev, SoupMessage *msg);
+
+static void
+device_http_get (device *dev, const char *path,
+        void (*callback)(device*, SoupMessage*));
 
 /* Print device-related debug message
  */
@@ -69,25 +78,27 @@ device_name_compare (gconstpointer a, gconstpointer b, gpointer userdata)
     return strcmp((const char *) a, (const char*) b);
 }
 
-/* Initialize device management
+/* Start devices management. Called from the airscan thread
  */
-static SANE_Status
-device_management_init (void)
+static void
+device_management_start (void)
 {
     device_table = g_tree_new_full(device_name_compare, NULL, NULL,
             (GDestroyNotify) device_destroy);
-    return SANE_STATUS_GOOD;
+
+    device_http_session = soup_session_new();
 }
 
-/* Cleanup device management
+/* Finish device management. Called from the airscan thread
  */
 static void
-device_management_cleanup (void)
+device_management_finish (void)
 {
-    if (device_table != NULL) {
-        g_tree_unref(device_table);
-        device_table = NULL;
-    }
+    soup_session_abort(device_http_session);
+    g_object_unref(device_http_session);
+    device_http_session = NULL;
+
+    g_tree_unref(device_table);
 }
 
 /* Create a device descriptor
@@ -98,6 +109,8 @@ device_new (const char *name)
     device      *dev = g_new0(device, 1);
 
     dev->name = g_strdup(name);
+    dev->http_pending = g_ptr_array_new();
+
     DEVICE_DEBUG(dev, "created");
 
     return dev;
@@ -110,12 +123,22 @@ device_destroy (device *dev)
 {
     DEVICE_DEBUG(dev, "destroyed");
 
-    g_free((void*) dev->name);
+    /* Kill all pending I/O activities */
     if (dev->resolver != NULL) {
         avahi_service_resolver_free(dev->resolver);
-        dev->resolver = NULL;
     }
-    g_free((void*) dev->url);
+
+    guint i;
+    for (i = 0; i < dev->http_pending->len; i ++) {
+        soup_session_cancel_message(device_http_session,
+                g_ptr_array_index(dev->http_pending, i), SOUP_STATUS_CANCELLED);
+    }
+
+    /* Release all memory */
+    g_free((void*) dev->name);
+    soup_uri_free(dev->base_url);
+    g_ptr_array_unref(dev->http_pending);
+
     g_free(dev);
 }
 
@@ -132,17 +155,23 @@ device_resolver_done (device *dev, const AvahiAddress *addr, uint16_t port,
         rs_text = (const char*) rs->text + 3;
     }
 
-    char str_addr[128];
+    char str_addr[128], *url;
+
     avahi_address_snprint(str_addr, sizeof(str_addr), addr);
 
     if (rs_text != NULL) {
-        dev->url = g_strdup_printf("http://%s:%d/%s/", str_addr, port,
+        url = g_strdup_printf("http://%s:%d/%s/", str_addr, port,
                 rs_text);
     } else {
-        dev->url = g_strdup_printf("http://%s:%d/", str_addr, port);
+        url = g_strdup_printf("http://%s:%d/", str_addr, port);
     }
 
-    DEVICE_DEBUG(dev, "url=\"%s\"", dev->url);
+    dev->base_url = soup_uri_new(url);
+    DEVICE_DEBUG(dev, "url=\"%s\"", url);
+
+    /* Fetch device capabilities */
+    device_http_get(dev, "ScannerCapabilities",
+            device_scanner_capabilities_callback);
 }
 
 /* Find device in a table
@@ -167,6 +196,69 @@ static void
 device_del (const char *name)
 {
     g_tree_remove(device_table, name);
+}
+
+/* ScannerCapabilities fetch callback
+ */
+static void
+device_scanner_capabilities_callback (device *dev, SoupMessage *msg)
+{
+    DEVICE_DEBUG(dev, "ScannerCapabilities: status=%d", msg->status_code);
+    if (!SOUP_STATUS_IS_SUCCESSFUL(msg->status_code)) {
+        DEVICE_DEBUG(dev, "failed to load ScannerCapabilities");
+        device_del(dev->name);
+        return;
+    }
+
+    SoupBuffer *buf = soup_message_body_flatten(msg->response_body);
+    write(1, buf->data, buf->length);
+    write(1, "\n", 1);
+    soup_buffer_free(buf);
+}
+
+/* User data, associated with each HTTP message
+ */
+typedef struct {
+    device *dev;
+    void   (*callback)(device *dev, SoupMessage *msg);
+} device_http_userdata;
+
+/* HTTP request completion callback
+ */
+static void
+device_http_callback(SoupSession *session, SoupMessage *msg, gpointer userdata)
+{
+    (void) session;
+
+    if (msg->status_code != SOUP_STATUS_CANCELLED) {
+        device_http_userdata *data = userdata;
+        g_ptr_array_remove(data->dev->http_pending, msg);
+        data->callback(data->dev, msg);
+    }
+
+    g_free(userdata);
+}
+
+/* Initiate HTTP request
+ */
+static void
+device_http_get (device *dev, const char *path,
+        void (*callback)(device*, SoupMessage*))
+{
+    (void) dev;
+    (void) path;
+
+    SoupURI *url = soup_uri_new_with_base(dev->base_url, path);
+    SoupMessage *msg = soup_message_new_from_uri("GET", url);
+    soup_uri_free(url);
+
+    device_http_userdata *data = g_new0(device_http_userdata, 1);
+    data->dev = dev;
+    data->callback = callback;
+
+    soup_session_queue_message(device_http_session, msg,
+            device_http_callback, data);
+    g_ptr_array_add(dev->http_pending, msg);
 }
 
 /******************** GLIB integration ********************/
@@ -205,7 +297,9 @@ static gpointer
 glib_thread_func (gpointer data)
 {
     g_main_context_push_thread_default(glib_main_context);
+    device_management_start();
     g_main_loop_run(glib_main_loop);
+    device_management_finish();
 
     (void) data;
     return NULL;
@@ -544,9 +638,6 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
     if (status == SANE_STATUS_GOOD) {
         http_init();
     }
-    if (status == SANE_STATUS_GOOD) {
-        status = device_management_init();
-    }
 
     if (status != SANE_STATUS_GOOD) {
         sane_exit();
@@ -565,7 +656,6 @@ sane_exit (void)
 {
     glib_thread_stop();
 
-    device_management_cleanup();
     http_cleanup();
     dd_cleanup();
     glib_cleanup();
