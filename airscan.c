@@ -169,6 +169,14 @@ xml_iter_node_name (xml_iter *iter)
     return iter->name;
 }
 
+/* Match name of the current node against the pattern
+ */
+static SANE_Bool
+xml_iter_node_name_match (xml_iter *iter, const char *pattern)
+{
+    return !g_strcmp0(xml_iter_node_name(iter), pattern);
+}
+
 /* Get value of the current node as a text
  *
  * The returned string remains valid, until iterator is cleaned up
@@ -378,7 +386,7 @@ device_scanner_capabilities_callback (device *dev, SoupMessage *msg)
 
 
     xml_iter_set(&iter, xmlDocGetRootElement(doc));
-    if (g_strcmp0(xml_iter_node_name(&iter), "scan:ScannerCapabilities")) {
+    if (!xml_iter_node_name_match(&iter, "scan:ScannerCapabilities")) {
         DEVICE_DEBUG(dev, "invalid ScannerCapabilities response");
         goto DONE;
     }
@@ -387,9 +395,9 @@ device_scanner_capabilities_callback (device *dev, SoupMessage *msg)
     while (!xml_iter_end(&iter)) {
         DBG(1, "%s\n", xml_iter_node_name(&iter));
 
-        if (!g_strcmp0(xml_iter_node_name(&iter), "pwg:ModelName")) {
+        if (xml_iter_node_name_match(&iter, "pwg:ModelName")) {
             model = g_strdup(xml_iter_node_value(&iter));
-        } else if (!g_strcmp0(xml_iter_node_name(&iter), "pwg:MakeAndModel")) {
+        } else if (xml_iter_node_name_match(&iter, "pwg:MakeAndModel")) {
             make_and_model = g_strdup(xml_iter_node_value(&iter));
         }
 
