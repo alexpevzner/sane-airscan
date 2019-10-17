@@ -39,59 +39,151 @@
 static SANE_Device **airprint_device_list = NULL;
 
 /******************** XML utilities ********************/
-/* Match node name
+/* XML iterator
  */
-static SANE_Bool
-xml_node_match_name (xmlNode *node, const char *prefix, const char *name)
-{
-    const char *node_prefix = NULL;
+typedef struct {
+    xmlNode       *node;
+    const char    *name;
+    const xmlChar *text;
+} xml_iter;
 
-    if (node->ns) {
-        node_prefix = (const char*) node->ns->prefix;
-    }
-
-    /* Match prefix */
-    if (prefix != NULL) {
-        if (node_prefix == NULL || strcmp(prefix, node_prefix)) {
-            return SANE_FALSE;
-        }
-    } else {
-        if (node_prefix != NULL) {
-            return SANE_FALSE;
-        }
-    }
-
-    /* Match node name */
-    return !strcmp(name, (const char*) node->name);
-}
-
-/* Find real node, skipping comments and blank nodes
+/* Static initializer for the XML iterator
  */
-static xmlNode*
-xml_node_real (xmlNode *node)
+#define XML_ITER_INIT   {NULL, NULL, NULL}
+
+/* Skip dummy nodes. This is internal function, don't call directly
+ */
+static void
+__xml_iter_skip_dummy (xml_iter *iter)
 {
+    xmlNode *node = iter->node;
+
     while (node  != NULL &&
            (node->type == XML_COMMENT_NODE || xmlIsBlankNode (node))) {
         node = node->next;
     }
 
-    return node;
+    iter->node = node;
 }
 
-/* Find first node's real child
+/* Invalidate cached data. This is internal function, don't call directly
  */
-static xmlNode*
-xml_node_child (xmlNode *node)
+static void
+__xml_iter_invalidate_cache (xml_iter *iter)
 {
-    return xml_node_real(node->children);
+    g_free((void*) iter->name);
+    xmlFree((xmlChar*) iter->text);
+    iter->name = NULL;
+    iter->text = NULL;
 }
 
-/* Find the next node's real sibling
+/* Set current node to iterate from
  */
-static xmlNode*
-xml_node_next (xmlNode *node)
+static void
+xml_iter_set (xml_iter *iter, xmlNode *node)
 {
-    return xml_node_real(node->next);
+    iter->node = node;
+    __xml_iter_skip_dummy(iter);
+    __xml_iter_invalidate_cache(iter);
+}
+
+
+/* Cleanup XML iterator
+ */
+static void
+xml_iter_cleanup (xml_iter *iter)
+{
+    __xml_iter_invalidate_cache(iter);
+    iter->node = NULL;
+}
+
+/* Check for end-of-document condition
+ */
+static SANE_Bool
+xml_iter_end (xml_iter *iter)
+{
+    return iter->node == NULL;
+}
+
+/* Shift to the next node
+ */
+static void
+xml_iter_next (xml_iter *iter)
+{
+    if (iter->node) {
+        iter->node = iter->node->next;
+        __xml_iter_skip_dummy(iter);
+        __xml_iter_invalidate_cache(iter);
+    }
+}
+
+/* Enter the current node - iterate its children
+ */
+static void
+xml_iter_enter (xml_iter *iter)
+{
+    if (iter->node) {
+        iter->node = iter->node->children;
+        __xml_iter_skip_dummy(iter);
+        __xml_iter_invalidate_cache(iter);
+    }
+}
+
+#if     0
+/* Leave the current node - return to its parent
+ */
+static void
+xml_iter_leave (xml_iter *iter)
+{
+    if (iter->node) {
+        iter->node = iter->node->parent;
+        __xml_iter_skip_dummy(iter);
+        __xml_iter_invalidate_cache(iter);
+    }
+}
+#endif
+
+/* Get name of the current node.
+ *
+ * The returned string remains valid, until iterator is cleaned up
+ * or current node is changed (by set/next/enter/leave operations).
+ * You don't need to free this string explicitly
+ */
+static const char*
+xml_iter_node_name (xml_iter *iter)
+{
+    const char *prefix = NULL;
+
+    if (iter->name == NULL && iter->node != NULL) {
+        if (iter->node->ns != NULL) {
+            prefix = (const char*) iter->node->ns->prefix;
+        }
+
+        if (prefix != NULL) {
+            iter->name = g_strconcat(prefix, ":", iter->node->name, NULL);
+        } else {
+            iter->name = g_strdup((const char*) iter->node->name);
+        }
+    }
+
+    return iter->name;
+}
+
+/* Get value of the current node as a text
+ *
+ * The returned string remains valid, until iterator is cleaned up
+ * or current node is changed (by set/next/enter/leave operations).
+ * You don't need to free this string explicitly
+ */
+static const char*
+xml_iter_node_value (xml_iter *iter)
+{
+    if (iter->text == NULL && iter->node != NULL) {
+        iter->text = xmlNodeGetContent(iter->node);
+        g_strstrip((char*) iter->text);
+    }
+
+    return (const char*) iter->text;
 }
 
 /******************** Device management ********************/
@@ -262,13 +354,15 @@ device_scanner_capabilities_callback (device *dev, SoupMessage *msg)
 {
     DEVICE_DEBUG(dev, "ScannerCapabilities: status=%d", msg->status_code);
 
-    xmlDoc *doc = NULL;
-    const char *model = NULL, *make_and_model = NULL;
+    xmlDoc    *doc = NULL;
+    char      *model = NULL, *make_and_model = NULL;
+    xml_iter  iter = XML_ITER_INIT;
+    SANE_Bool ok = FALSE;
 
     /* Check request status */
     if (!SOUP_STATUS_IS_SUCCESSFUL(msg->status_code)) {
         DEVICE_DEBUG(dev, "failed to load ScannerCapabilities");
-        goto FAIL;
+        goto DONE;
     }
 
     /* Parse XML response */
@@ -279,42 +373,47 @@ device_scanner_capabilities_callback (device *dev, SoupMessage *msg)
 
     if (doc == NULL) {
         DEVICE_DEBUG(dev, "failed to parse ScannerCapabilities response XML");
-        goto FAIL;
+        goto DONE;
     }
 
-    xmlNode *node;
-    node = xmlDocGetRootElement(doc);
-    if (!xml_node_match_name(node, "scan", "ScannerCapabilities")) {
+
+    xml_iter_set(&iter, xmlDocGetRootElement(doc));
+    if (g_strcmp0(xml_iter_node_name(&iter), "scan:ScannerCapabilities")) {
         DEVICE_DEBUG(dev, "invalid ScannerCapabilities response");
+        goto DONE;
     }
 
-    node = xml_node_child(node);
-    while (node != NULL) {
-        DBG(1, "%s\n", node->name);
+    xml_iter_enter(&iter);
+    while (!xml_iter_end(&iter)) {
+        DBG(1, "%s\n", xml_iter_node_name(&iter));
 
-        if (xml_node_match_name(node, "pwg", "ModelName")) {
-            model = (const char*) xmlNodeGetContent(node);
-        } else if (xml_node_match_name(node, "pwg", "MakeAndModel")) {
-            make_and_model = (const char*) xmlNodeGetContent(node);
+        if (!g_strcmp0(xml_iter_node_name(&iter), "pwg:ModelName")) {
+            model = g_strdup(xml_iter_node_value(&iter));
+        } else if (!g_strcmp0(xml_iter_node_name(&iter), "pwg:MakeAndModel")) {
+            make_and_model = g_strdup(xml_iter_node_value(&iter));
         }
 
-        node = xml_node_next(node);
+        xml_iter_next(&iter);
     }
 
     DBG(1, "model=%s\n", model);
     DBG(1, "make_and_model=%s\n", make_and_model);
 
-    return;
+    ok = TRUE;
 
-FAIL:
+    /* Cleanup and exit */
+DONE:
     if (doc != NULL) {
         xmlFreeDoc(doc);
     }
 
-    xmlFree((void*) model);
-    xmlFree((void*) make_and_model);
+    g_free(model);
+    g_free(make_and_model);
+    xml_iter_cleanup(&iter);
 
-    device_del(dev->name);
+    if (!ok) {
+        device_del(dev->name);
+    }
 }
 
 /* User data, associated with each HTTP message
