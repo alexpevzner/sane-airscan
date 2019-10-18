@@ -3,5 +3,6 @@ AirScan (a.k.a. eSCL) backend for sane
 
 ## References
 
-`https://github.com/kno10/python-scan-eSCL`
-`https://github.com/SimulPiscator/AirSane`
+[kno10/python-scan-eSCL](https://github.com/kno10/python-scan-eSCL)
+
+[SimulPiscator/AirSane](https://github.com/SimulPiscator/AirSane)
