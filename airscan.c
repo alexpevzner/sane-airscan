@@ -6,6 +6,8 @@
 
 #include <sane/sane.h>
 
+#include <assert.h>
+
 #include <stdio.h>
 #include <sys/time.h>
 
@@ -30,13 +32,12 @@
  */
 #define AIRSCAN_AVAHI_CLIENT_RESTART_TIMEOUT    1
 
+/* Max time to wait until device table is ready, in seconds
+ */
+#define DEVICE_TABLE_READY_TIMEOUT              5
+
 /******************** Debugging ********************/
 #define DBG(level, msg, args...)        printf("airscan: " msg, ##args)
-
-/******************** Static variables ********************/
-/* List of devices
- */
-static SANE_Device **airprint_device_list = NULL;
 
 /******************** XML utilities ********************/
 /* XML iterator
@@ -195,10 +196,22 @@ xml_iter_node_value (xml_iter *iter)
 }
 
 /******************** Device management ********************/
+/* Device flags
+ */
+enum {
+    DEVICE_RESOLVER_PENDING = (1 << 0), /* Pending service resolver */
+    DEVICE_GETCAPS_PENDING  = (1 << 1), /* Pending get scanner capabilities */
+    DEVICE_READY            = (1 << 2), /* Device is ready */
+    DEVICE_INIT_WAIT        = (1 << 3), /* Device was found during initial
+                                           scan and not ready yet */
+};
+
 /* Device descriptor
  */
 typedef struct {
     const char           *name;         /* Device name */
+    unsigned int         flags;         /* Device flags */
+    const char           *model;        /* Device model */
     AvahiServiceResolver *resolver;     /* Service resolver; may be NULL */
     SoupURI              *base_url;     /* eSCL base URI */
     GPtrArray            *http_pending; /* Pending HTTP requests */
@@ -207,6 +220,8 @@ typedef struct {
 /* Static variables
  */
 static GTree *device_table;
+static GCond device_table_cond;
+
 static SoupSession *device_http_session;
 
 /* Forward declarations
@@ -235,14 +250,33 @@ device_name_compare (gconstpointer a, gconstpointer b, gpointer userdata)
     return strcmp((const char *) a, (const char*) b);
 }
 
+/* Initialize device management
+ */
+static SANE_Status
+device_management_init (void)
+{
+    g_cond_init(&device_table_cond);
+    device_table = g_tree_new_full(device_name_compare, NULL, NULL,
+            (GDestroyNotify) device_destroy);
+
+    return SANE_STATUS_GOOD;
+}
+
+/* Cleanup device management
+ */
+static void
+device_management_cleanup (void)
+{
+    g_cond_clear(&device_table_cond);
+    g_tree_unref(device_table);
+    device_table = NULL;
+}
+
 /* Start devices management. Called from the airscan thread
  */
 static void
 device_management_start (void)
 {
-    device_table = g_tree_new_full(device_name_compare, NULL, NULL,
-            (GDestroyNotify) device_destroy);
-
     device_http_session = soup_session_new();
 }
 
@@ -254,8 +288,6 @@ device_management_finish (void)
     soup_session_abort(device_http_session);
     g_object_unref(device_http_session);
     device_http_session = NULL;
-
-    g_tree_unref(device_table);
 }
 
 /* Create a device descriptor
@@ -357,6 +389,63 @@ device_del (const char *name)
     g_tree_remove(device_table, name);
 }
 
+/* Userdata passed to device_table_foreach_callback
+ */
+typedef struct {
+    unsigned int flags;     /* Device flags */
+    unsigned int count;     /* Count of devices used so far */
+    device       **devlist; /* List of devices collected so far. May be NULL */
+} device_table_foreach_userdata;
+
+/* g_tree_foreach callback for traversing device table
+ */
+static gboolean
+device_table_foreach_callback (gpointer key, gpointer value, gpointer userdata)
+{
+    device *dev = value;
+    device_table_foreach_userdata *data = userdata;
+
+    (void) key;
+
+    if (!(data->flags & dev->flags)) {
+        return FALSE;
+    }
+
+    if (data->devlist != NULL) {
+        data->devlist[data->count] = dev;
+    }
+
+    data->count ++;
+
+    return FALSE;
+}
+
+/* Collect devices matching the flags. Return count of
+ * collected devices. If caller is only interested in
+ * the count, it is safe to call with out == NULL
+ *
+ * It's a caller responsibility to provide big enough
+ * output buffer (use device_table_size() to make a guess)
+ *
+ * Caller must own glib_main_loop lock
+ */
+static unsigned int
+device_table_collect (unsigned int flags, device *out[])
+{
+    device_table_foreach_userdata       data = {flags, 0, out};
+    g_tree_foreach(device_table, device_table_foreach_callback, &data);
+    return data.count;
+}
+
+/* Get current device_table size
+ */
+static unsigned
+device_table_size (void)
+{
+    assert(device_table);
+    return g_tree_nnodes(device_table);
+}
+
 /* ScannerCapabilities fetch callback
  */
 static void
@@ -410,6 +499,19 @@ device_scanner_capabilities_callback (device *dev, SoupMessage *msg)
     DBG(1, "make_and_model=%s\n", make_and_model);
 
     ok = TRUE;
+    dev->flags |= DEVICE_READY;
+    dev->flags &= ~DEVICE_INIT_WAIT;
+
+    if (model) {
+        dev->model = model;
+        g_free(make_and_model);
+        model = make_and_model = NULL;
+    } else if (make_and_model) {
+        dev->model = make_and_model;
+        make_and_model = NULL;
+    } else {
+        dev->model = g_strdup("Unknown");
+    }
 
     /* Cleanup and exit */
 DONE:
@@ -477,6 +579,12 @@ device_http_get (device *dev, const char *path,
 static GThread *glib_thread;
 static GMainContext *glib_main_context;
 static GMainLoop *glib_main_loop;
+G_LOCK_DEFINE_STATIC(glib_main_loop);
+
+/* Forward declarations
+ */
+static gint
+glib_poll_hook (GPollFD *ufds, guint nfsd, gint timeout);
 
 /* Initialize GLIB integration
  */
@@ -485,6 +593,8 @@ glib_init (void)
 {
     glib_main_context = g_main_context_new();
     glib_main_loop = g_main_loop_new(glib_main_context, TRUE);
+    g_main_context_set_poll_func(glib_main_context, glib_poll_hook);
+
     return SANE_STATUS_GOOD;
 }
 
@@ -499,6 +609,20 @@ glib_cleanup (void)
         g_main_context_unref(glib_main_context);
         glib_main_context = NULL;
     }
+}
+
+/* Poll function hook
+ */
+static gint
+glib_poll_hook (GPollFD *ufds, guint nfds, gint timeout)
+{
+    g_cond_broadcast(&device_table_cond);
+
+    G_LOCK(glib_main_loop);
+    gint ret = g_poll(ufds, nfds, timeout);
+    G_UNLOCK(glib_main_loop);
+
+    return ret;
 }
 
 /* GLIB thread main function
@@ -542,6 +666,7 @@ static const AvahiPoll *dd_avahi_poll;
 static AvahiTimeout *dd_avahi_restart_timer;
 static AvahiClient *dd_avahi_client;
 static AvahiServiceBrowser *dd_avahi_browser;
+static SANE_Bool dd_avahi_browser_init_wait;
 
 /* Forward declarations
  */
@@ -589,6 +714,7 @@ dd_avahi_resolver_callback (AvahiServiceResolver *r, AvahiIfIndex interface,
 
     device *dev = userdata;
     dev->resolver = NULL; /* Not owned by device anymore */
+    dev->flags &= ~DEVICE_RESOLVER_PENDING;
 
     switch (event) {
     case AVAHI_RESOLVER_FOUND:
@@ -628,8 +754,9 @@ dd_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
         }
 
         device *dev = device_new(name);
+        dev->flags = DEVICE_INIT_WAIT; // FIXME
 
-        /* Initiate desolver */
+        /* Initiate resolver */
         AvahiServiceResolver *r;
         r = avahi_service_resolver_new(dd_avahi_client, interface, protocol,
                 name, type, domain, AVAHI_PROTO_UNSPEC, 0,
@@ -637,14 +764,15 @@ dd_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
 
         if (r == NULL) {
             DD_DEBUG(name, "%s", dd_avahi_strerror());
+            device_del(dev->name);
             dd_avahi_client_restart_defer();
             break;
         }
 
         /* Add a device */
         dev->resolver = r;
+        dev->flags |= DEVICE_RESOLVER_PENDING;
         device_add(dev);
-
         break;
 
     case AVAHI_BROWSER_REMOVE:
@@ -658,6 +786,7 @@ dd_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
 
     case AVAHI_BROWSER_CACHE_EXHAUSTED:
     case AVAHI_BROWSER_ALL_FOR_NOW:
+        dd_avahi_browser_init_wait = FALSE;
         break;
     }
 }
@@ -733,6 +862,15 @@ static void
 dd_avahi_client_stop (void)
 {
     if (dd_avahi_client != NULL) {
+        device **unresolved = g_newa(device*, device_table_size());
+        unsigned int i, count;
+
+        count = device_table_collect(DEVICE_RESOLVER_PENDING, unresolved);
+        for (i = 0; i < count; i ++) {
+                unresolved[i]->resolver = NULL;
+                device_del(unresolved[i]->name);
+        }
+
         avahi_client_free(dd_avahi_client);
         dd_avahi_client = NULL;
     }
@@ -764,6 +902,8 @@ dd_avahi_client_restart_defer (void)
         gettimeofday(&tv, NULL);
         tv.tv_sec += AIRSCAN_AVAHI_CLIENT_RESTART_TIMEOUT;
         dd_avahi_poll->timeout_update(dd_avahi_restart_timer, &tv);
+
+        dd_avahi_browser_init_wait = FALSE;
 }
 
 /* Initialize device discovery
@@ -790,6 +930,8 @@ dd_init (void)
         return SANE_STATUS_NO_MEM;
     }
 
+    dd_avahi_browser_init_wait = TRUE;
+
     return SANE_STATUS_GOOD;
 }
 
@@ -810,26 +952,15 @@ dd_cleanup (void)
         avahi_glib_poll_free(dd_avahi_glib_poll);
         dd_avahi_poll = NULL;
         dd_avahi_glib_poll = NULL;
+        dd_avahi_browser_init_wait = FALSE;
     }
 }
 
-/******************** HTTP client ********************/
-/* Initialize HTTP client
- */
-static SANE_Status
-http_init (void)
-{
-    return SANE_STATUS_GOOD;
-}
-
-/* Cleanup HTTP client
- */
-static void
-http_cleanup (void)
-{
-}
-
 /******************** SANE API ********************/
+/* Static variables
+ */
+static const SANE_Device **sane_device_list;
+
 /* Initialize the backend
  */
 SANE_Status
@@ -849,10 +980,10 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
     /* Initialize all parts */
     status = glib_init();
     if (status == SANE_STATUS_GOOD) {
-        status = dd_init();
+        device_management_init();
     }
     if (status == SANE_STATUS_GOOD) {
-        http_init();
+        status = dd_init();
     }
 
     if (status != SANE_STATUS_GOOD) {
@@ -861,6 +992,8 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
 
     /* Start airscan thread */
     glib_thread_start();
+
+    DBG(1, "sane_init -- DONE\n");
 
     return status;
 }
@@ -874,9 +1007,22 @@ sane_exit (void)
 
     glib_thread_stop();
 
-    http_cleanup();
     dd_cleanup();
+    device_management_cleanup();
     glib_cleanup();
+
+    if (sane_device_list != NULL) {
+        unsigned int i;
+        const SANE_Device *info;
+
+        for (i = 0; (info = sane_device_list[i]) != NULL; i ++) {
+            g_free((void*) info->name);
+            g_free((void*) info->model);
+            g_free((void*) info);
+        }
+        g_free(sane_device_list);
+        sane_device_list = NULL;
+    }
 }
 
 /* Get list of devices
@@ -886,9 +1032,48 @@ sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
 {
     DBG(1, "sane_get_devices\n");
 
-    (void) local_only;
+    /* All our devices are non-local */
+    if (local_only) {
+        static const SANE_Device *empty_devlist[1] = { 0 };
+        *device_list = empty_devlist;
+        return SANE_STATUS_GOOD;
+    }
 
-    *device_list = (const SANE_Device **) airprint_device_list;
+    /* Acquire main loop lock */
+    G_LOCK(glib_main_loop);
+
+    /* Wait until table is ready */
+    gint64 timeout = g_get_monotonic_time() +
+            DEVICE_TABLE_READY_TIMEOUT * G_TIME_SPAN_SECOND;
+
+    while ((device_table_collect(DEVICE_INIT_WAIT, NULL) != 0 ||
+            dd_avahi_browser_init_wait) && g_get_monotonic_time() < timeout) {
+        g_cond_wait_until(&device_table_cond,
+                &G_LOCK_NAME(glib_main_loop), timeout);
+    }
+
+    /* Cleanup and exit */
+    //*device_list = device_table_export();
+    device **devlist = g_newa(device*, device_table_size());
+    unsigned int count = device_table_collect(DEVICE_READY, devlist);
+    unsigned int i;
+
+    sane_device_list = g_new0(const SANE_Device*, count + 1);
+    for (i = 0; i < count; i ++) {
+        SANE_Device *out = g_new0(SANE_Device, 1);
+        sane_device_list[i] = out;
+
+        out->name = g_strdup(devlist[i]->name);
+        out->vendor = "Unknown";
+        out->model = g_strdup(devlist[i]->model);
+        out->type = "eSCL network scanner";
+    }
+
+    *device_list = sane_device_list;
+
+    G_UNLOCK(glib_main_loop);
+
+    DBG(1, "sane_get_devices -- DONE\n");
 
     return SANE_STATUS_GOOD;
 }
