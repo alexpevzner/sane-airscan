@@ -210,8 +210,9 @@ enum {
  */
 typedef struct {
     const char           *name;         /* Device name */
-    unsigned int         flags;         /* Device flags */
+    const char           *vendor;       /* Device vendor */
     const char           *model;        /* Device model */
+    unsigned int         flags;         /* Device flags */
     AvahiServiceResolver *resolver;     /* Service resolver; may be NULL */
     SoupURI              *base_url;     /* eSCL base URI */
     GPtrArray            *http_pending; /* Pending HTTP requests */
@@ -325,6 +326,9 @@ device_destroy (device *dev)
 
     /* Release all memory */
     g_free((void*) dev->name);
+    g_free((void*) dev->vendor);
+    g_free((void*) dev->model);
+
     if (dev->base_url != NULL) {
         soup_uri_free(dev->base_url);
     }
@@ -387,6 +391,38 @@ static void
 device_del (const char *name)
 {
     g_tree_remove(device_table, name);
+}
+
+/* Save device vendor and model
+ */
+static void
+device_save_vendor_and_model (device *dev,
+        const char *model, const char *make_and_model)
+{
+    size_t model_len = model ? strlen(model) : 0;
+    size_t make_and_model_len = make_and_model ? strlen(make_and_model) : 0;
+
+    if (model_len && make_and_model_len > model_len &&
+        g_str_has_suffix(make_and_model, model)) {
+
+        dev->vendor = g_strndup(make_and_model, make_and_model_len - model_len);
+        g_strchomp((char*) dev->vendor);
+    }
+
+    if (dev->vendor == NULL) {
+        dev->vendor = g_strdup("Unknown");
+    }
+
+    if (model != NULL) {
+        dev->model = model;
+        model = NULL;
+    } else if (make_and_model != NULL) {
+        dev->model = make_and_model;
+        make_and_model = NULL;
+    }
+
+    g_free((void*) model);
+    g_free((void*) make_and_model);
 }
 
 /* Userdata passed to device_table_foreach_callback
@@ -511,16 +547,8 @@ device_scanner_capabilities_callback (device *dev, SoupMessage *msg)
     dev->flags |= DEVICE_READY;
     dev->flags &= ~DEVICE_INIT_WAIT;
 
-    if (model) {
-        dev->model = model;
-        g_free(make_and_model);
-        model = make_and_model = NULL;
-    } else if (make_and_model) {
-        dev->model = make_and_model;
-        make_and_model = NULL;
-    } else {
-        dev->model = g_strdup("Unknown");
-    }
+    device_save_vendor_and_model(dev, model, make_and_model);
+    model = make_and_model = NULL;
 
     /* Cleanup and exit */
 DONE:
@@ -1030,6 +1058,7 @@ sane_exit (void)
 
         for (i = 0; (info = sane_device_list[i]) != NULL; i ++) {
             g_free((void*) info->name);
+            g_free((void*) info->vendor);
             g_free((void*) info->model);
             g_free((void*) info);
         }
@@ -1077,7 +1106,7 @@ sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
         sane_device_list[i] = out;
 
         out->name = g_strdup(devlist[i]->name);
-        out->vendor = "Unknown";
+        out->vendor = g_strdup(devlist[i]->vendor);
         out->model = g_strdup(devlist[i]->model);
         out->type = "eSCL network scanner";
     }
