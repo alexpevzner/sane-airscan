@@ -1094,8 +1094,7 @@ sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
                 &G_LOCK_NAME(glib_main_loop), timeout);
     }
 
-    /* Cleanup and exit */
-    //*device_list = device_table_export();
+    /* Prepare response */
     device **devlist = g_newa(device*, device_table_size());
     unsigned int count = device_table_collect(DEVICE_READY, devlist);
     unsigned int i;
@@ -1113,6 +1112,7 @@ sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
 
     *device_list = sane_device_list;
 
+    /* Cleanup and exit */
     G_UNLOCK(glib_main_loop);
 
     DBG(1, "sane_get_devices -- DONE\n");
