@@ -535,6 +535,8 @@ DONE:
     if (!ok) {
         device_del(dev->name);
     }
+
+    g_cond_broadcast(&device_table_cond);
 }
 
 /* User data, associated with each HTTP message
@@ -625,8 +627,6 @@ glib_cleanup (void)
 static gint
 glib_poll_hook (GPollFD *ufds, guint nfds, gint timeout)
 {
-    g_cond_broadcast(&device_table_cond);
-
     G_LOCK(glib_main_loop);
     gint ret = g_poll(ufds, nfds, timeout);
     G_UNLOCK(glib_main_loop);
@@ -798,6 +798,7 @@ dd_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
     case AVAHI_BROWSER_CACHE_EXHAUSTED:
     case AVAHI_BROWSER_ALL_FOR_NOW:
         dd_avahi_browser_init_wait = FALSE;
+        g_cond_broadcast(&device_table_cond);
         break;
     }
 }
@@ -915,6 +916,7 @@ dd_avahi_client_restart_defer (void)
         dd_avahi_poll->timeout_update(dd_avahi_restart_timer, &tv);
 
         dd_avahi_browser_init_wait = FALSE;
+        g_cond_broadcast(&device_table_cond);
 }
 
 /* Initialize device discovery
