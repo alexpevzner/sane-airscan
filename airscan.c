@@ -446,6 +446,15 @@ device_table_size (void)
     return g_tree_nnodes(device_table);
 }
 
+/* Check if device table is ready, i.e., there is no DEVICE_INIT_WAIT
+ * devices
+ */
+static SANE_Bool
+device_table_ready (void)
+{
+    return device_table_collect(DEVICE_INIT_WAIT, NULL) == 0;
+}
+
 /* ScannerCapabilities fetch callback
  */
 static void
@@ -754,7 +763,9 @@ dd_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
         }
 
         device *dev = device_new(name);
-        dev->flags = DEVICE_INIT_WAIT; // FIXME
+        if (dd_avahi_browser_init_wait) {
+            dev->flags = DEVICE_INIT_WAIT;
+        }
 
         /* Initiate resolver */
         AvahiServiceResolver *r;
@@ -1046,8 +1057,8 @@ sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
     gint64 timeout = g_get_monotonic_time() +
             DEVICE_TABLE_READY_TIMEOUT * G_TIME_SPAN_SECOND;
 
-    while ((device_table_collect(DEVICE_INIT_WAIT, NULL) != 0 ||
-            dd_avahi_browser_init_wait) && g_get_monotonic_time() < timeout) {
+    while ((!device_table_ready() || dd_avahi_browser_init_wait) &&
+            g_get_monotonic_time() < timeout) {
         g_cond_wait_until(&device_table_cond,
                 &G_LOCK_NAME(glib_main_loop), timeout);
     }
