@@ -377,6 +377,7 @@ device_del_callback (gpointer p)
     }
 
     dev->flags |= DEVICE_HALTED;
+    dev->flags &= ~DEVICE_READY;
 
     /* Unref the device */
     device_unref(dev);
@@ -684,9 +685,9 @@ glib_cleanup (void)
 static gint
 glib_poll_hook (GPollFD *ufds, guint nfds, gint timeout)
 {
-    G_LOCK(glib_main_loop);
-    gint ret = g_poll(ufds, nfds, timeout);
     G_UNLOCK(glib_main_loop);
+    gint ret = g_poll(ufds, nfds, timeout);
+    G_LOCK(glib_main_loop);
 
     return ret;
 }
@@ -696,12 +697,17 @@ glib_poll_hook (GPollFD *ufds, guint nfds, gint timeout)
 static gpointer
 glib_thread_func (gpointer data)
 {
+    (void) data;
+
+    G_LOCK(glib_main_loop);
+
     g_main_context_push_thread_default(glib_main_context);
     device_management_start();
     g_main_loop_run(glib_main_loop);
     device_management_finish();
 
-    (void) data;
+    G_UNLOCK(glib_main_loop);
+
     return NULL;
 }
 
@@ -1156,14 +1162,24 @@ sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
 /* Open the device
  */
 SANE_Status
-sane_open (SANE_String_Const devicename, SANE_Handle *handle)
+sane_open (SANE_String_Const name, SANE_Handle *handle)
 {
     DBG(1, "sane_open\n");
 
-    (void) devicename;
-    (void) handle;
+    G_LOCK(glib_main_loop);
 
-    return SANE_STATUS_INVAL;
+    device *dev = device_find(name);
+    SANE_Status status = SANE_STATUS_INVAL;
+    if (dev != NULL && (dev->flags & DEVICE_READY) != 0) {
+        *handle = (SANE_Handle) device_ref(dev);
+        status = SANE_STATUS_GOOD;
+    }
+
+    G_UNLOCK(glib_main_loop);
+
+    DBG(1, "sane_open: status=%d\n", status);
+
+    return status;
 }
 
 /* Close the device
@@ -1172,7 +1188,8 @@ void
 sane_close (SANE_Handle handle)
 {
     DBG(1, "sane_close\n");
-    (void) handle;
+
+    device_unref((device*) handle);
 }
 
 /* Get option descriptor
