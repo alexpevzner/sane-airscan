@@ -6,8 +6,6 @@
 
 #include <sane/sane.h>
 
-#include <assert.h>
-
 #include <stdio.h>
 #include <sys/time.h>
 
@@ -202,13 +200,15 @@ enum {
     DEVICE_RESOLVER_PENDING = (1 << 0), /* Pending service resolver */
     DEVICE_GETCAPS_PENDING  = (1 << 1), /* Pending get scanner capabilities */
     DEVICE_READY            = (1 << 2), /* Device is ready */
-    DEVICE_INIT_WAIT        = (1 << 3), /* Device was found during initial
+    DEVICE_HALTED           = (1 << 3), /* Device is halted */
+    DEVICE_INIT_WAIT        = (1 << 4)  /* Device was found during initial
                                            scan and not ready yet */
 };
 
 /* Device descriptor
  */
 typedef struct {
+    volatile gint        refcnt;        /* Reference counter */
     const char           *name;         /* Device name */
     const char           *vendor;       /* Device vendor */
     const char           *model;        /* Device model */
@@ -228,7 +228,7 @@ static SoupSession *device_http_session;
 /* Forward declarations
  */
 static void
-device_destroy(device *device);
+device_del_callback (gpointer p);
 
 static void
 device_scanner_capabilities_callback (device *dev, SoupMessage *msg);
@@ -258,7 +258,7 @@ device_management_init (void)
 {
     g_cond_init(&device_table_cond);
     device_table = g_tree_new_full(device_name_compare, NULL, NULL,
-            (GDestroyNotify) device_destroy);
+            device_del_callback);
 
     return SANE_STATUS_GOOD;
 }
@@ -291,31 +291,83 @@ device_management_finish (void)
     device_http_session = NULL;
 }
 
-/* Create a device descriptor
+/* Add device to the table
  */
 static device*
-device_new (const char *name)
+device_add (const char *name)
 {
+    /* Create device */
     device      *dev = g_new0(device, 1);
 
+    dev->refcnt = 1;
     dev->name = g_strdup(name);
     dev->http_pending = g_ptr_array_new();
 
     DEVICE_DEBUG(dev, "created");
 
+    /* Add to the table */
+    g_tree_insert(device_table, (gpointer) dev->name, dev);
+
     return dev;
 }
 
-/* Destroy a device descriptor
+/* Del device from the table. It implicitly halts all
+ * pending I/O activity
+ *
+ * Note, reference to the device may still exist (device
+ * may be opened), so memory can be freed later, when
+ * device is not used anymore
  */
 static void
-device_destroy (device *dev)
+device_del (device *dev)
 {
-    DEVICE_DEBUG(dev, "destroyed");
+    g_tree_remove(device_table, dev->name);
+}
 
-    /* Kill all pending I/O activities */
+/* Ref the device
+ */
+static inline device*
+device_ref (device *dev)
+{
+    g_atomic_int_inc(&dev->refcnt);
+    return dev;
+}
+
+/* Unref the device
+ */
+static inline void
+device_unref (device *dev)
+{
+    if (g_atomic_int_dec_and_test(&dev->refcnt)) {
+        DEVICE_DEBUG(dev, "destroyed");
+        g_assert(dev->flags & DEVICE_HALTED);
+
+        /* Release all memory */
+        g_free((void*) dev->name);
+        g_free((void*) dev->vendor);
+        g_free((void*) dev->model);
+
+        if (dev->base_url != NULL) {
+            soup_uri_free(dev->base_url);
+        }
+        g_ptr_array_unref(dev->http_pending);
+
+        g_free(dev);
+    }
+}
+
+/* This callback is called by GTable, when device is removed
+ * from device_table, either explicitly or by table destructor
+ */
+static void
+device_del_callback (gpointer p)
+{
+    device *dev = p;
+
+    /* Stop all pending I/O activity */
     if (dev->resolver != NULL) {
         avahi_service_resolver_free(dev->resolver);
+        dev->resolver = NULL;
     }
 
     guint i;
@@ -324,17 +376,10 @@ device_destroy (device *dev)
                 g_ptr_array_index(dev->http_pending, i), SOUP_STATUS_CANCELLED);
     }
 
-    /* Release all memory */
-    g_free((void*) dev->name);
-    g_free((void*) dev->vendor);
-    g_free((void*) dev->model);
+    dev->flags |= DEVICE_HALTED;
 
-    if (dev->base_url != NULL) {
-        soup_uri_free(dev->base_url);
-    }
-    g_ptr_array_unref(dev->http_pending);
-
-    g_free(dev);
+    /* Unref the device */
+    device_unref(dev);
 }
 
 /* Called when AVAHI resovler is done
@@ -375,22 +420,6 @@ static device*
 device_find (const char *name)
 {
     return g_tree_lookup(device_table, name);
-}
-
-/* Add device to device table
- */
-static void
-device_add (device *dev)
-{
-    g_tree_insert(device_table, (gpointer) dev->name, dev);
-}
-
-/* Del device from device table
- */
-static void
-device_del (const char *name)
-{
-    g_tree_remove(device_table, name);
 }
 
 /* Save device vendor and model
@@ -478,7 +507,7 @@ device_table_collect (unsigned int flags, device *out[])
 static unsigned
 device_table_size (void)
 {
-    assert(device_table);
+    g_assert(device_table);
     return g_tree_nnodes(device_table);
 }
 
@@ -561,7 +590,7 @@ DONE:
     xml_iter_cleanup(&iter);
 
     if (!ok) {
-        device_del(dev->name);
+        device_del(dev);
     }
 
     g_cond_broadcast(&device_table_cond);
@@ -761,7 +790,7 @@ dd_avahi_resolver_callback (AvahiServiceResolver *r, AvahiIfIndex interface,
 
     case AVAHI_RESOLVER_FAILURE:
         DD_DEBUG(name, "resolver: %s", dd_avahi_strerror());
-        device_del(dev->name);
+        device_del(dev);
         break;
     }
 
@@ -780,6 +809,8 @@ dd_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
     (void) flags;
     (void) userdata;
 
+    device *dev;
+
     switch (event) {
     case AVAHI_BROWSER_NEW:
         DD_DEBUG(name, "found");
@@ -790,7 +821,7 @@ dd_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
             break;
         }
 
-        device *dev = device_new(name);
+        dev = device_add(name);
         if (dd_avahi_browser_init_wait) {
             dev->flags = DEVICE_INIT_WAIT;
         }
@@ -803,20 +834,22 @@ dd_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
 
         if (r == NULL) {
             DD_DEBUG(name, "%s", dd_avahi_strerror());
-            device_del(dev->name);
+            device_del(dev);
             dd_avahi_client_restart_defer();
             break;
         }
 
-        /* Add a device */
+        /* Attach resolver to device */
         dev->resolver = r;
         dev->flags |= DEVICE_RESOLVER_PENDING;
-        device_add(dev);
         break;
 
     case AVAHI_BROWSER_REMOVE:
         DD_DEBUG(name, "removed");
-        device_del(name);
+        device *dev = device_find(name);
+        if (dev != NULL) {
+            device_del(dev);
+        }
         break;
 
     case AVAHI_BROWSER_FAILURE:
@@ -908,7 +941,7 @@ dd_avahi_client_stop (void)
         count = device_table_collect(DEVICE_RESOLVER_PENDING, unresolved);
         for (i = 0; i < count; i ++) {
                 unresolved[i]->resolver = NULL;
-                device_del(unresolved[i]->name);
+                device_del(unresolved[i]);
         }
 
         avahi_client_free(dd_avahi_client);
