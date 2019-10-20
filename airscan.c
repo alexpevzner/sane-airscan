@@ -1189,7 +1189,9 @@ sane_close (SANE_Handle handle)
 {
     DBG(1, "sane_close\n");
 
+    G_LOCK(glib_main_loop);
     device_unref((device*) handle);
+    G_UNLOCK(glib_main_loop);
 }
 
 /* Get option descriptor
