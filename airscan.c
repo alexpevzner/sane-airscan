@@ -661,7 +661,7 @@ static SANE_Status
 glib_init (void)
 {
     glib_main_context = g_main_context_new();
-    glib_main_loop = g_main_loop_new(glib_main_context, TRUE);
+    glib_main_loop = g_main_loop_new(glib_main_context, FALSE);
     g_main_context_set_poll_func(glib_main_context, glib_poll_hook);
 
     return SANE_STATUS_GOOD;
@@ -717,6 +717,15 @@ glib_thread_func (gpointer data)
 static void
 glib_thread_start (void) {
     glib_thread = g_thread_new("airscan", glib_thread_func, NULL);
+
+    /* Wait until thread is started. Otherwise, g_main_loop_quit()
+     * might not terminate the thread
+     */
+    gulong usec = 100;
+    while (!g_main_loop_is_running(glib_main_loop)) {
+        g_usleep(usec);
+        usec += usec;
+    }
 }
 
 /* Stop GLIB thread
@@ -1104,6 +1113,8 @@ sane_exit (void)
         g_free(sane_device_list);
         sane_device_list = NULL;
     }
+
+    DBG(1, "sane_exit -- DONE\n");
 }
 
 /* Get list of devices
