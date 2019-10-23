@@ -34,6 +34,12 @@
  */
 #define DEVICE_TABLE_READY_TIMEOUT              5
 
+/* String constants for certain SANE options values
+ */
+#define OPTVAL_SOURCE_PLATEN      "Flatbed"
+#define OPTVAL_SOURCE_ADF_SIMPLEX "ADF"
+#define OPTVAL_SOURCE_ADF_DUPLEX  "ADF Duplex"
+
 /******************** Debugging ********************/
 #define DBG(level, msg, args...)        printf("airscan: " msg, ##args)
 
@@ -42,13 +48,15 @@
  */
 typedef struct {
     xmlNode       *node;
+    xmlNode       *parent;
     const char    *name;
     const xmlChar *text;
+    const char    *err;
 } xml_iter;
 
 /* Static initializer for the XML iterator
  */
-#define XML_ITER_INIT   {NULL, NULL, NULL}
+#define XML_ITER_INIT   {NULL, NULL, NULL, NULL, NULL}
 
 /* Skip dummy nodes. This is internal function, don't call directly
  */
@@ -72,8 +80,10 @@ __xml_iter_invalidate_cache (xml_iter *iter)
 {
     g_free((void*) iter->name);
     xmlFree((xmlChar*) iter->text);
+    g_free((void*) iter->err);
     iter->name = NULL;
     iter->text = NULL;
+    iter->err = NULL;
 }
 
 /* Set current node to iterate from
@@ -84,6 +94,7 @@ xml_iter_set (xml_iter *iter, xmlNode *node)
     iter->node = node;
     __xml_iter_skip_dummy(iter);
     __xml_iter_invalidate_cache(iter);
+    iter->parent = iter->node ? iter->node->parent : NULL;
 }
 
 
@@ -94,6 +105,7 @@ xml_iter_cleanup (xml_iter *iter)
 {
     __xml_iter_invalidate_cache(iter);
     iter->node = NULL;
+    iter->parent = NULL;
 }
 
 /* Check for end-of-document condition
@@ -122,25 +134,24 @@ static void
 xml_iter_enter (xml_iter *iter)
 {
     if (iter->node) {
+        iter->parent = iter->node;
         iter->node = iter->node->children;
         __xml_iter_skip_dummy(iter);
         __xml_iter_invalidate_cache(iter);
     }
 }
 
-#if     0
 /* Leave the current node - return to its parent
  */
 static void
 xml_iter_leave (xml_iter *iter)
 {
+    iter->node = iter->parent;
     if (iter->node) {
-        iter->node = iter->node->parent;
-        __xml_iter_skip_dummy(iter);
-        __xml_iter_invalidate_cache(iter);
+        iter->parent = iter->node->parent;
     }
+    __xml_iter_invalidate_cache(iter);
 }
-#endif
 
 /* Get name of the current node.
  *
@@ -176,7 +187,7 @@ xml_iter_node_name_match (xml_iter *iter, const char *pattern)
     return !g_strcmp0(xml_iter_node_name(iter), pattern);
 }
 
-/* Get value of the current node as a text
+/* Get value of the current node as text
  *
  * The returned string remains valid, until iterator is cleaned up
  * or current node is changed (by set/next/enter/leave operations).
@@ -191,6 +202,598 @@ xml_iter_node_value (xml_iter *iter)
     }
 
     return (const char*) iter->text;
+}
+
+/* Get value of the current node as unsigned integer
+ * Returns error string, NULL if OK
+ */
+static const char*
+xml_iter_node_value_uint (xml_iter *iter, SANE_Word *val)
+{
+    const char *s = xml_iter_node_value(iter);
+    char *end;
+    unsigned long v;
+
+    g_assert(s != NULL);
+
+    v = strtoul(s, &end, 10);
+    if (end == s || *end || v != (unsigned long) (SANE_Word) v) {
+        g_free((char*) iter->err);
+        iter->err = g_strdup_printf("%s: invalid numerical value",
+                xml_iter_node_name(iter));
+        return iter->err;
+    }
+
+    *val = (SANE_Word) v;
+    return NULL;
+}
+
+
+/******************** Types Arrays ********************/
+/* Initial capacity of arrays
+ */
+#define ARRAY_INITIAL_CAPACITY  4
+
+/* Initialize array of SANE_Word
+ */
+static void
+array_of_word_init (SANE_Word **a)
+{
+    *a = g_new0(SANE_Word, ARRAY_INITIAL_CAPACITY);
+}
+
+/* Cleanup array of SANE_Word
+ */
+static void
+array_of_word_cleanup (SANE_Word **a)
+{
+    g_free(*a);
+    *a = NULL;
+}
+
+/* Get length of the SANE_Word array
+ */
+static size_t
+array_of_word_len (SANE_Word **a)
+{
+    return (size_t) (*a)[0];
+}
+
+/* Append word to array
+ */
+static void
+array_of_word_append(SANE_Word **a, SANE_Word w)
+{
+    size_t sz = array_of_word_len(a) + 1;
+
+    /* If sz reached the power-of-2, reallocate the array, doubling its size */
+    if (sz >= ARRAY_INITIAL_CAPACITY && (sz & (sz - 1)) == 0) {
+        *a = g_renew(SANE_Word, (*a), sz + sz);
+    }
+
+    (*a)[sz] = w;
+    (*a)[0] ++;
+}
+
+/* Compare function for array_of_word_sort
+ */
+static int
+array_of_word_sort_cmp(const void *p1, const void *p2)
+{
+    return *(SANE_Word*) p1 - *(SANE_Word*) p2;
+}
+
+/* Sort array of SANE_Word in increasing order
+ */
+static void
+array_of_word_sort(SANE_Word **a)
+{
+    SANE_Word len = (*a)[0];
+
+    if (len) {
+        qsort((*a) + 1, len, sizeof(SANE_Word), array_of_word_sort_cmp);
+    }
+}
+
+/* Initialize array of SANE_String
+ */
+static void
+array_of_string_init (SANE_String **a)
+{
+    *a = g_new0(SANE_String, ARRAY_INITIAL_CAPACITY);
+}
+
+/* Cleanup array of SANE_String
+ */
+static void
+array_of_string_cleanup (SANE_String **a)
+{
+    g_free(*a);
+    *a = NULL;
+}
+
+/* Get length of the SANE_Word array
+ */
+static size_t
+array_of_string_len (SANE_String **a)
+{
+    size_t sz;
+
+    for (sz = 0; (*a)[sz]; sz ++)
+        ;
+
+    return sz;
+}
+
+/* Append string to array
+ */
+static void
+array_of_string_append(SANE_String **a, SANE_String s)
+{
+    size_t sz = array_of_string_len(a) + 1;
+
+    /* If sz reached the power-of-2, reallocate the array, doubling its size */
+    if (sz >= ARRAY_INITIAL_CAPACITY && (sz & (sz - 1)) == 0) {
+        *a = g_renew(SANE_String, (*a), sz + sz);
+    }
+
+    /* Append string */
+    (*a)[sz - 1] = s;
+    (*a)[sz] = NULL;
+}
+
+/******************** Device Capabilities  ********************/
+/* Source flags
+ */
+enum {
+    /* Supported color modes */
+    DEVCAPS_SOURCE_COLORMODE_BW1   = (1 << 0), /* 1-bit black&white */
+    DEVCAPS_SOURCE_COLORMODE_GRAY  = (1 << 1), /* Gray scale */
+    DEVCAPS_SOURCE_COLORMODE_COLOR = (1 << 2), /* Color */
+
+    /* Supported Intents */
+    DEVCAPS_SOURCE_INTENT_DOCUMENT      = (1 << 3),
+    DEVCAPS_SOURCE_INTENT_TXT_AND_GRAPH = (1 << 4),
+    DEVCAPS_SOURCE_INTENT_PHOTO         = (1 << 5),
+    DEVCAPS_SOURCE_INTENT_PREVIEW       = (1 << 6),
+
+    /* How resolutions are defined */
+    DEVCAPS_SOURCE_RES_DISCRETE = (1 << 7), /* Discrete resolutions */
+    DEVCAPS_SOURCE_RES_RANGE    = (1 << 8), /* Range of resolutions */
+
+    /* Supported document formats */
+    DEVCAPS_SOURCE_FMT_JPEG = (1 << 9),  /* JPEG image */
+    DEVCAPS_SOURCE_FMT_PDF  = (1 << 10), /* PDF image */
+};
+
+/* Source Capabilities (each device may contain multiple sources)
+ */
+typedef struct {
+    unsigned int flags;                    /* Source flags */
+    SANE_Word    min_width, max_width;     /* Min/max image width */
+    SANE_Word    min_height, max_height;   /* Min/max image height */
+    SANE_Word    *resolutions;             /* Discrete resolutions, in DPI */
+    SANE_Range   res_range_x, res_range_y; /* Resolutions ranges */
+} devcaps_source;
+
+/* Device Capabilities
+ */
+typedef struct {
+    /* Common capabilities */
+    SANE_Word      *resolutions; /* Common resolutions */
+    SANE_String    *sources;     /* Sources, in SANE format */
+    const char     *model;       /* Device model */
+    const char     *vendor;      /* Device vendor */
+
+    /* Sources */
+    devcaps_source *src_platen;      /* Platen (flatbed) scanner */
+    devcaps_source *src_adf_simplex; /* ADF in simplex mode */
+    devcaps_source *src_adf_duplex;  /* ADF in duplex mode */
+} devcaps;
+
+/* Allocate devcaps_source
+ */
+static devcaps_source*
+devcaps_source_new (void)
+{
+    devcaps_source *src = g_new0(devcaps_source, 1 );
+    array_of_word_init(&src->resolutions);
+    return src;
+}
+
+/* Free devcaps_source
+ */
+static void
+devcaps_source_free (devcaps_source *src)
+{
+    if (src != NULL) {
+        array_of_word_cleanup(&src->resolutions);
+        g_free(src);
+    }
+}
+
+/* Initialize Device Capabilities
+ */
+static void
+devcaps_init (devcaps *caps)
+{
+    array_of_word_init(&caps->resolutions);
+    array_of_string_init(&caps->sources);
+}
+
+/* Reset Device Capabilities: free all allocated memory, clear the structure
+ */
+static void
+devcaps_reset (devcaps *caps)
+{
+    array_of_word_cleanup(&caps->resolutions);
+    array_of_string_cleanup(&caps->sources);
+    g_free((void*) caps->vendor);
+    g_free((void*) caps->model);
+
+    devcaps_source_free(caps->src_platen);
+    devcaps_source_free(caps->src_adf_simplex);
+    devcaps_source_free(caps->src_adf_duplex);
+
+    memset(caps, 0, sizeof(*caps));
+}
+
+/* Parse color modes. Returns NULL on success, error string otherwise
+ */
+static const char*
+devcaps_source_parse_color_modes (xml_iter *iter, devcaps_source *src)
+{
+    xml_iter_enter(iter);
+    for (; !xml_iter_end(iter); xml_iter_next(iter)) {
+        if(xml_iter_node_name_match(iter, "scan:ColorMode")) {
+            const char *v = xml_iter_node_value(iter);
+DBG(1, ">>>>>>>> %s=%s\n", xml_iter_node_name(iter), v);
+            if (!strcmp(v, "BlackAndWhite1")) {
+                src->flags |= DEVCAPS_SOURCE_COLORMODE_BW1;
+            } else if (!strcmp(v, "Grayscale8")) {
+                src->flags |= DEVCAPS_SOURCE_COLORMODE_GRAY;
+            } else if (!strcmp(v, "RGB24")) {
+                src->flags |= DEVCAPS_SOURCE_COLORMODE_COLOR;
+            }
+        }
+    }
+    xml_iter_leave(iter);
+
+    return NULL;
+}
+
+/* Parse document formats. Returns NULL on success, error string otherwise
+ */
+static const char*
+devcaps_source_parse_document_formats (xml_iter *iter, devcaps_source *src)
+{
+    xml_iter_enter(iter);
+    for (; !xml_iter_end(iter); xml_iter_next(iter)) {
+        if(xml_iter_node_name_match(iter, "pwg:DocumentFormat")) {
+            const char *v = xml_iter_node_value(iter);
+DBG(1, ">>>>>>>> %s=%s\n", xml_iter_node_name(iter), v);
+            if (!strcmp(v, "image/jpeg")) {
+                src->flags |= DEVCAPS_SOURCE_FMT_JPEG;
+            } else if (!strcmp(v, "application/pdf")) {
+                src->flags |= DEVCAPS_SOURCE_FMT_PDF;
+            }
+        }
+    }
+    xml_iter_leave(iter);
+
+    return NULL;
+}
+
+/* Parse discrete resolutions.
+ * Returns NULL on success, error string otherwise
+ */
+static const char*
+devcaps_source_parse_discrete_resolutions (xml_iter *iter, devcaps_source *src)
+{
+    const char *err = NULL;
+
+    src->flags |= DEVCAPS_SOURCE_RES_DISCRETE;
+
+    xml_iter_enter(iter);
+    for (; err == NULL && !xml_iter_end(iter); xml_iter_next(iter)) {
+        if (xml_iter_node_name_match(iter, "scan:DiscreteResolution")) {
+            SANE_Word x = 0, y = 0;
+            xml_iter_enter(iter);
+            for (; err == NULL && !xml_iter_end(iter); xml_iter_next(iter)) {
+DBG(1, ">>>>>>>> %s\n", xml_iter_node_name(iter));
+                if (xml_iter_node_name_match(iter, "scan:XResolution")) {
+                    err = xml_iter_node_value_uint(iter, &x);
+                } else if (xml_iter_node_name_match(iter,
+                        "scan:YResolution")) {
+                    err = xml_iter_node_value_uint(iter, &y);
+                }
+            }
+            xml_iter_leave(iter);
+
+            if (x && y && x == y) {
+                array_of_word_append(&src->resolutions, x);
+            }
+        }
+    }
+    xml_iter_leave(iter);
+
+    array_of_word_sort(&src->resolutions);
+
+    return err;
+}
+
+/* Parse resolutions range
+ * Returns NULL on success, error string otherwise
+ */
+static const char*
+devcaps_source_parse_resolutions_range (xml_iter *iter, devcaps_source *src)
+{
+    const char *err = NULL;
+
+    src->flags |= DEVCAPS_SOURCE_RES_RANGE;
+
+    xml_iter_enter(iter);
+    for (; err == NULL && !xml_iter_end(iter); xml_iter_next(iter)) {
+        SANE_Range *range = NULL;
+        if (xml_iter_node_name_match(iter, "scan:XResolution")) {
+            range = &src->res_range_x;
+        } else if (xml_iter_node_name_match(iter, "scan:XResolution")) {
+            range = &src->res_range_y;
+        }
+
+        if (range != NULL) {
+            xml_iter_enter(iter);
+            for (; err == NULL && !xml_iter_end(iter); xml_iter_next(iter)) {
+                if (xml_iter_node_name_match(iter, "scan:Min")) {
+                    err = xml_iter_node_value_uint(iter, &range->min);
+                } else if (xml_iter_node_name_match(iter, "scan:Max")) {
+                    err = xml_iter_node_value_uint(iter, &range->max);
+                } else if (xml_iter_node_name_match(iter, "scan:Step")) {
+                    err = xml_iter_node_value_uint(iter, &range->quant);
+                }
+            }
+            xml_iter_leave(iter);
+        }
+    }
+    xml_iter_leave(iter);
+
+    return err;
+}
+
+/* Parse supported resolutions.
+ * Returns NULL on success, error string otherwise
+ */
+static const char*
+devcaps_source_parse_resolutions (xml_iter *iter, devcaps_source *src)
+{
+    const char *err = NULL;
+
+    xml_iter_enter(iter);
+    for (; err == NULL && !xml_iter_end(iter); xml_iter_next(iter)) {
+        if (xml_iter_node_name_match(iter, "scan:DiscreteResolutions")) {
+            err = devcaps_source_parse_discrete_resolutions(iter, src);
+        } else if (xml_iter_node_name_match(iter, "scan:ResolutionRange")) {
+            err = devcaps_source_parse_resolutions_range(iter, src);
+        }
+    }
+    xml_iter_leave(iter);
+
+    return err;
+}
+
+/* Parse setting profiles (color modes, document formats etc).
+ * Returns NULL on success, error string otherwise
+ */
+static const char*
+devcaps_source_parse_setting_profiles (xml_iter *iter, devcaps_source *src)
+{
+    const char *err = NULL;
+
+    xml_iter_enter(iter);
+    for (; err == NULL && !xml_iter_end(iter); xml_iter_next(iter)) {
+DBG(1, ">>>>>> %s\n", xml_iter_node_name(iter));
+        if (xml_iter_node_name_match(iter, "scan:SettingProfile")) {
+            xml_iter_enter(iter);
+            for (; err == NULL && !xml_iter_end(iter); xml_iter_next(iter)) {
+                if (xml_iter_node_name_match(iter, "scan:ColorModes")) {
+                    err = devcaps_source_parse_color_modes(iter, src);
+                } else if (xml_iter_node_name_match(iter,
+                        "scan:DocumentFormats")) {
+                    err = devcaps_source_parse_document_formats(iter, src);
+                } else if (xml_iter_node_name_match(iter,
+                        "scan:SupportedResolutions")) {
+                    err = devcaps_source_parse_resolutions(iter, src);
+                }
+            }
+            xml_iter_leave(iter);
+        }
+    }
+    xml_iter_leave(iter);
+
+    return err;
+}
+
+
+/* Parse source capabilities. Returns NULL on success, error string otherwise
+ */
+static const char*
+devcaps_source_parse (xml_iter *iter, devcaps_source **out)
+{
+    devcaps_source *src = devcaps_source_new();
+    const char *err = NULL;
+
+DBG(1, ">> %s\n", xml_iter_node_name(iter));
+    xml_iter_enter(iter);
+    for (; err == NULL && !xml_iter_end(iter); xml_iter_next(iter)) {
+DBG(1, ">>>> %s\n", xml_iter_node_name(iter));
+        if(xml_iter_node_name_match(iter, "scan:MinWidth")) {
+            err = xml_iter_node_value_uint(iter, &src->min_width);
+        } else if (xml_iter_node_name_match(iter, "scan:MaxWidth")) {
+            err = xml_iter_node_value_uint(iter, &src->max_width);
+        } else if (xml_iter_node_name_match(iter, "scan:MinHeight")) {
+            err = xml_iter_node_value_uint(iter, &src->min_height);
+        } else if (xml_iter_node_name_match(iter, "scan:MaxHeight")) {
+            err = xml_iter_node_value_uint(iter, &src->max_height);
+        } else if (xml_iter_node_name_match(iter, "scan:SettingProfiles")) {
+            err = devcaps_source_parse_setting_profiles(iter, src);
+        }
+    }
+    xml_iter_leave(iter);
+
+    if (err != NULL) {
+        devcaps_source_free(src);
+    } else {
+        if (*out == NULL) {
+            *out = src;
+        } else {
+            /* Duplicate detected. Ignored for now */
+            devcaps_source_free(src);
+        }
+    }
+
+    return err;
+}
+
+/* Parse device capabilities. Returns NULL if OK, error string otherwise
+ */
+static const char*
+devcaps_parse (devcaps *caps, xmlDoc *xml)
+{
+    const char *err = NULL;
+    char       *model = NULL, *make_and_model = NULL;
+    xml_iter   iter = XML_ITER_INIT;
+
+    /* Parse capabilities XML */
+    xml_iter_set(&iter, xmlDocGetRootElement(xml));
+    if (!xml_iter_node_name_match(&iter, "scan:ScannerCapabilities")) {
+        err = "XML: missed scan:ScannerCapabilities";
+        goto DONE;
+    }
+
+    xml_iter_enter(&iter);
+    for (; !xml_iter_end(&iter); xml_iter_next(&iter)) {
+        DBG(1, "%s\n", xml_iter_node_name(&iter));
+
+        if (xml_iter_node_name_match(&iter, "pwg:ModelName")) {
+            g_free(model);
+            model = g_strdup(xml_iter_node_value(&iter));
+        } else if (xml_iter_node_name_match(&iter, "pwg:MakeAndModel")) {
+            g_free(make_and_model);
+            make_and_model = g_strdup(xml_iter_node_value(&iter));
+        } else if (xml_iter_node_name_match(&iter, "scan:Platen")) {
+            xml_iter_enter(&iter);
+            if (xml_iter_node_name_match(&iter, "scan:PlatenInputCaps")) {
+                err = devcaps_source_parse(&iter, &caps->src_platen );
+            }
+            xml_iter_leave(&iter);
+        } else if (xml_iter_node_name_match(&iter, "scan:Adf")) {
+            xml_iter_enter(&iter);
+            while (!xml_iter_end(&iter)) {
+                if (xml_iter_node_name_match(&iter, "scan:AdfSimplexInputCaps")) {
+                    err = devcaps_source_parse(&iter, &caps->src_adf_simplex);
+                } else if (xml_iter_node_name_match(&iter,
+                        "scan:AdfDuplexInputCaps")) {
+                    err = devcaps_source_parse(&iter, &caps->src_adf_duplex);
+                }
+                xml_iter_next(&iter);
+            }
+            xml_iter_leave(&iter);
+        }
+
+        if (err != NULL) {
+            goto DONE;
+        }
+    }
+
+    /* Save model, try to guess vendor */
+    size_t model_len = model ? strlen(model) : 0;
+    size_t make_and_model_len = make_and_model ? strlen(make_and_model) : 0;
+
+    if (model_len && make_and_model_len > model_len &&
+        g_str_has_suffix(make_and_model, model)) {
+
+        caps->vendor = g_strndup(make_and_model,
+                make_and_model_len - model_len);
+        g_strchomp((char*) caps->vendor);
+    }
+
+    if (caps->vendor == NULL) {
+        caps->vendor = g_strdup("Unknown");
+    }
+
+    if (model != NULL) {
+        caps->model = model;
+        model = NULL;
+    } else if (make_and_model != NULL) {
+        caps->model = make_and_model;
+        make_and_model = NULL;
+    }
+
+    /* Update list of sources */
+    if (caps->src_platen != NULL) {
+        array_of_string_append(&caps->sources, OPTVAL_SOURCE_PLATEN);
+    }
+
+    if (caps->src_adf_simplex != NULL) {
+        array_of_string_append(&caps->sources, OPTVAL_SOURCE_ADF_SIMPLEX);
+    }
+
+    if (caps->src_adf_duplex != NULL) {
+        array_of_string_append(&caps->sources, OPTVAL_SOURCE_ADF_DUPLEX);
+    }
+
+DONE:
+    if (err != NULL) {
+        devcaps_reset(caps);
+    }
+
+    g_free(model);
+    g_free(make_and_model);
+    xml_iter_cleanup(&iter);
+
+    return err;
+}
+
+/* Dump device capabilities, for debugging
+ */
+static void
+devcaps_dump (devcaps *caps)
+{
+    int i, j;
+    GString *buf = g_string_new(NULL);
+
+    DBG(1, "===== device capabilities =====\n");
+    DBG(1, "  Model: %s\n", caps->model);
+    DBG(1, "  Vendor: %s\n", caps->vendor);
+    g_string_truncate(buf, 0);
+    for (i = 0; caps->sources[i] != NULL; i ++) {
+        g_string_append_printf(buf, " \"%s\"", caps->sources[i]);
+    }
+    DBG(1, "  Sources: %s\n", buf->str);
+
+    struct { char *name; devcaps_source *src; } sources[] = {
+        {OPTVAL_SOURCE_PLATEN, caps->src_platen},
+        {OPTVAL_SOURCE_ADF_SIMPLEX, caps->src_adf_simplex},
+        {OPTVAL_SOURCE_ADF_DUPLEX, caps->src_adf_duplex},
+        {NULL, NULL}
+    };
+
+    for (i = 0; sources[i].name; i ++) {
+        DBG(1, "  %s:\n", sources[i].name);
+        devcaps_source *src = sources[i].src;
+        DBG(1, "    Min Width/Height: %d/%d\n", src->min_width, src->min_height);
+        DBG(1, "    Max Width/Height: %d/%d\n", src->max_width, src->max_height);
+
+        if (src->flags & DEVCAPS_SOURCE_RES_DISCRETE) {
+            g_string_truncate(buf, 0);
+            for (j = 0; j < (int) array_of_word_len(&src->resolutions); j ++) {
+                g_string_append_printf(buf, " %d", src->resolutions[j+1]);
+            }
+            DBG(1, "    Resolutions: %s\n", buf->str);
+        }
+    }
+
+    g_string_free(buf, TRUE);
 }
 
 /******************** Device management ********************/
@@ -208,11 +811,13 @@ enum {
 /* Device descriptor
  */
 typedef struct {
+    /* Common part */
     volatile gint        refcnt;        /* Reference counter */
     const char           *name;         /* Device name */
-    const char           *vendor;       /* Device vendor */
-    const char           *model;        /* Device model */
     unsigned int         flags;         /* Device flags */
+    devcaps              caps;          /* Device capabilities */
+
+    /* I/O handling (AVAHI and HTTP) */
     AvahiServiceResolver *resolver;     /* Service resolver; may be NULL */
     SoupURI              *base_url;     /* eSCL base URI */
     GPtrArray            *http_pending; /* Pending HTTP requests */
@@ -301,6 +906,8 @@ device_add (const char *name)
 
     dev->refcnt = 1;
     dev->name = g_strdup(name);
+    devcaps_init(&dev->caps);
+
     dev->http_pending = g_ptr_array_new();
 
     DEVICE_DEBUG(dev, "created");
@@ -344,8 +951,8 @@ device_unref (device *dev)
 
         /* Release all memory */
         g_free((void*) dev->name);
-        g_free((void*) dev->vendor);
-        g_free((void*) dev->model);
+
+        devcaps_reset(&dev->caps);
 
         if (dev->base_url != NULL) {
             soup_uri_free(dev->base_url);
@@ -423,38 +1030,6 @@ device_find (const char *name)
     return g_tree_lookup(device_table, name);
 }
 
-/* Save device vendor and model
- */
-static void
-device_save_vendor_and_model (device *dev,
-        const char *model, const char *make_and_model)
-{
-    size_t model_len = model ? strlen(model) : 0;
-    size_t make_and_model_len = make_and_model ? strlen(make_and_model) : 0;
-
-    if (model_len && make_and_model_len > model_len &&
-        g_str_has_suffix(make_and_model, model)) {
-
-        dev->vendor = g_strndup(make_and_model, make_and_model_len - model_len);
-        g_strchomp((char*) dev->vendor);
-    }
-
-    if (dev->vendor == NULL) {
-        dev->vendor = g_strdup("Unknown");
-    }
-
-    if (model != NULL) {
-        dev->model = model;
-        model = NULL;
-    } else if (make_and_model != NULL) {
-        dev->model = make_and_model;
-        make_and_model = NULL;
-    }
-
-    g_free((void*) model);
-    g_free((void*) make_and_model);
-}
-
 /* Userdata passed to device_table_foreach_callback
  */
 typedef struct {
@@ -528,57 +1103,29 @@ device_scanner_capabilities_callback (device *dev, SoupMessage *msg)
 {
     DEVICE_DEBUG(dev, "ScannerCapabilities: status=%d", msg->status_code);
 
-    xmlDoc    *doc = NULL;
-    char      *model = NULL, *make_and_model = NULL;
-    xml_iter  iter = XML_ITER_INIT;
-    SANE_Bool ok = FALSE;
+    xmlDoc      *doc = NULL;
+    const char *err = NULL;
 
     /* Check request status */
     if (!SOUP_STATUS_IS_SUCCESSFUL(msg->status_code)) {
-        DEVICE_DEBUG(dev, "failed to load ScannerCapabilities");
+        err = "failed to load ScannerCapabilities";
         goto DONE;
     }
 
     /* Parse XML response */
     SoupBuffer *buf = soup_message_body_flatten(msg->response_body);
-
     doc = xmlParseMemory(buf->data, buf->length);
     soup_buffer_free(buf);
 
     if (doc == NULL) {
-        DEVICE_DEBUG(dev, "failed to parse ScannerCapabilities response XML");
+        err = "failed to parse ScannerCapabilities response XML";
         goto DONE;
     }
 
-
-    xml_iter_set(&iter, xmlDocGetRootElement(doc));
-    if (!xml_iter_node_name_match(&iter, "scan:ScannerCapabilities")) {
-        DEVICE_DEBUG(dev, "invalid ScannerCapabilities response");
-        goto DONE;
+    err = devcaps_parse(&dev->caps, doc);
+    if (err == NULL) {
+        devcaps_dump(&dev->caps);
     }
-
-    xml_iter_enter(&iter);
-    while (!xml_iter_end(&iter)) {
-        DBG(1, "%s\n", xml_iter_node_name(&iter));
-
-        if (xml_iter_node_name_match(&iter, "pwg:ModelName")) {
-            model = g_strdup(xml_iter_node_value(&iter));
-        } else if (xml_iter_node_name_match(&iter, "pwg:MakeAndModel")) {
-            make_and_model = g_strdup(xml_iter_node_value(&iter));
-        }
-
-        xml_iter_next(&iter);
-    }
-
-    DBG(1, "model=%s\n", model);
-    DBG(1, "make_and_model=%s\n", make_and_model);
-
-    ok = TRUE;
-    dev->flags |= DEVICE_READY;
-    dev->flags &= ~DEVICE_INIT_WAIT;
-
-    device_save_vendor_and_model(dev, model, make_and_model);
-    model = make_and_model = NULL;
 
     /* Cleanup and exit */
 DONE:
@@ -586,12 +1133,11 @@ DONE:
         xmlFreeDoc(doc);
     }
 
-    g_free(model);
-    g_free(make_and_model);
-    xml_iter_cleanup(&iter);
-
-    if (!ok) {
+    if (err != NULL) {
         device_del(dev);
+    } else {
+        dev->flags |= DEVICE_READY;
+        dev->flags &= ~DEVICE_INIT_WAIT;
     }
 
     g_cond_broadcast(&device_table_cond);
@@ -1155,8 +1701,8 @@ sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
         sane_device_list[i] = out;
 
         out->name = g_strdup(devlist[i]->name);
-        out->vendor = g_strdup(devlist[i]->vendor);
-        out->model = g_strdup(devlist[i]->model);
+        out->vendor = g_strdup(devlist[i]->caps.vendor);
+        out->model = g_strdup(devlist[i]->caps.model);
         out->type = "eSCL network scanner";
     }
 
