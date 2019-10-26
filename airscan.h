@@ -174,6 +174,85 @@ xml_iter_node_value (xml_iter *iter);
 const char*
 xml_iter_node_value_uint (xml_iter *iter, SANE_Word *val);
 
+/******************** Sane Options********************/
+/* String constants for certain SANE options values
+ */
+#define OPTVAL_SOURCE_PLATEN      "Flatbed"
+#define OPTVAL_SOURCE_ADF_SIMPLEX "ADF"
+#define OPTVAL_SOURCE_ADF_DUPLEX  "ADF Duplex"
+
+/******************** Device Capabilities  ********************/
+/* Source flags
+ */
+enum {
+    /* Supported color modes */
+    DEVCAPS_SOURCE_COLORMODE_BW1   = (1 << 0), /* 1-bit black&white */
+    DEVCAPS_SOURCE_COLORMODE_GRAY  = (1 << 1), /* Gray scale */
+    DEVCAPS_SOURCE_COLORMODE_COLOR = (1 << 2), /* Color */
+
+    /* Supported Intents */
+    DEVCAPS_SOURCE_INTENT_DOCUMENT      = (1 << 3),
+    DEVCAPS_SOURCE_INTENT_TXT_AND_GRAPH = (1 << 4),
+    DEVCAPS_SOURCE_INTENT_PHOTO         = (1 << 5),
+    DEVCAPS_SOURCE_INTENT_PREVIEW       = (1 << 6),
+
+    /* How resolutions are defined */
+    DEVCAPS_SOURCE_RES_DISCRETE = (1 << 7), /* Discrete resolutions */
+    DEVCAPS_SOURCE_RES_RANGE    = (1 << 8), /* Range of resolutions */
+
+    /* Supported document formats */
+    DEVCAPS_SOURCE_FMT_JPEG = (1 << 9),  /* JPEG image */
+    DEVCAPS_SOURCE_FMT_PDF  = (1 << 10), /* PDF image */
+};
+
+/* Source Capabilities (each device may contain multiple sources)
+ */
+typedef struct {
+    unsigned int flags;                    /* Source flags */
+    SANE_Word    min_width, max_width;     /* Min/max image width */
+    SANE_Word    min_height, max_height;   /* Min/max image height */
+    SANE_Word    *resolutions;             /* Discrete resolutions, in DPI */
+    SANE_Range   res_range_x, res_range_y; /* Resolutions ranges */
+} devcaps_source;
+
+/* Device Capabilities
+ */
+typedef struct {
+    /* Common capabilities */
+    SANE_Word      *resolutions; /* Common resolutions */
+    SANE_String    *sources;     /* Sources, in SANE format */
+    const char     *model;       /* Device model */
+    const char     *vendor;      /* Device vendor */
+
+    /* Sources */
+    devcaps_source *src_platen;      /* Platen (flatbed) scanner */
+    devcaps_source *src_adf_simplex; /* ADF in simplex mode */
+    devcaps_source *src_adf_duplex;  /* ADF in duplex mode */
+} devcaps;
+
+/* Initialize Device Capabilities
+ */
+void
+devcaps_init (devcaps *caps);
+
+/* Reset Device Capabilities: free all allocated memory, clear the structure
+ */
+void
+devcaps_reset (devcaps *caps);
+
+/* Parse device capabilities. devcaps structure must be initialized
+ * before calling this function.
+ *
+ * Returns NULL if OK, error string otherwise
+ */
+const char*
+devcaps_parse (devcaps *caps, xmlDoc *xml);
+
+/* Dump device capabilities, for debugging
+ */
+void
+devcaps_dump (const char *name, devcaps *caps);
+
 #endif
 
 /* vim:ts=8:sw=4:et

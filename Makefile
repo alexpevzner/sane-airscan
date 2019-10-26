@@ -1,4 +1,9 @@
-SRC	= airscan.c airscan-array.c airscan-xml.c sane_strstatus.c
+SRC	= \
+	airscan.c \
+	airscan-array.c \
+	airscan-devcaps.c \
+	airscan-xml.c \
+	sane_strstatus.c
 
 CFLAGS	= -O2 -g -W -Wall -fPIC
 CFLAGS += `pkg-config --cflags --libs avahi-client`
