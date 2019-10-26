@@ -8,17 +8,7 @@
 
 #include "airscan.h"
 
-#include <stdio.h>
-#include <sys/time.h>
-
-#include <avahi-client/client.h>
-#include <avahi-client/lookup.h>
-#include <avahi-common/error.h>
-#include <avahi-glib/glib-watch.h>
-
 #include <glib.h>
-
-#include <libsoup/soup.h>
 
 /* Allocate devcaps_source
  */

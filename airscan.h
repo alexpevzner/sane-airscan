@@ -7,6 +7,7 @@
 #ifndef airscan_h
 #define airscan_h
 
+#include <stdio.h>
 #include <sane/sane.h>
 #include <libxml/tree.h>
 
