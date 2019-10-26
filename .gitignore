@@ -1,6 +1,10 @@
 # http://www.gnu.org/software/automake
 
 libsane-airscan.so
+test
+
+tags
+*.swp
 
 Makefile.in
 /ar-lib
