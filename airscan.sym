@@ -1,0 +1,33 @@
+{
+	global:
+		sane_airscan_cancel;
+		sane_airscan_close;
+		sane_airscan_control_option;
+		sane_airscan_exit;
+		sane_airscan_get_devices;
+		sane_airscan_get_option_descriptor;
+		sane_airscan_get_parameters;
+		sane_airscan_get_select_fd;
+		sane_airscan_init;
+		sane_airscan_open;
+		sane_airscan_read;
+		sane_airscan_set_io_mode;
+		sane_airscan_start;
+		sane_cancel;
+		sane_close;
+		sane_control_option;
+		sane_exit;
+		sane_get_devices;
+		sane_get_option_descriptor;
+		sane_get_parameters;
+		sane_get_select_fd;
+		sane_init;
+		sane_open;
+		sane_read;
+		sane_set_io_mode;
+		sane_start;
+		sane_strstatus;
+
+	local:
+		*;
+};

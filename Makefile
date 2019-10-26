@@ -1,9 +1,12 @@
+SRC	= airscan.c airscan-array.c airscan-xml.c sane_strstatus.c
+
 CFLAGS	= -O2 -g -W -Wall -fPIC
 CFLAGS += `pkg-config --cflags --libs avahi-client`
 CFLAGS += `pkg-config --cflags --libs avahi-glib`
 CFLAGS += `pkg-config --cflags --libs libjpeg`
 CFLAGS += `pkg-config --cflags --libs libsoup-2.4`
 CFLAGS += `pkg-config --cflags --libs libxml-2.0`
+CFLAGS += -Wl,--version-script=airscan.sym
 
 # This magic is a workaround for libsoup bug.
 #
@@ -22,9 +25,9 @@ CFLAGS += -Wl,-z,nodelete
 
 all:	libsane-airscan.so test
 
-libsane-airscan.so: Makefile airscan.c
+libsane-airscan.so: Makefile $(SRC) airscan.h airscan.sym
 	@ctags -R .
-	gcc -o libsane-airscan.so -shared ${CFLAGS} airscan.c
+	gcc -o libsane-airscan.so -shared ${CFLAGS} $(SRC)
 
 test:	libsane-airscan.so test.c
 	#gcc -o test test.c -l sane
