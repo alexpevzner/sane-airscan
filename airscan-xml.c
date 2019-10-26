@@ -2,17 +2,14 @@
  *
  * Copyright (C) 2019 and up by Alexander Pevzner (pzz@apevzner.com)
  * See LICENSE for license terms and conditions
+ *
+ * XML utilities
  */
 
 #include "airscan.h"
 
 #include <glib.h>
 #include <libxml/tree.h>
-
-/******************** XML utilities ********************/
-/* Static initializer for the XML iterator
- */
-#define XML_ITER_INIT   {NULL, NULL, NULL, NULL, NULL}
 
 /* Skip dummy nodes. This is internal function, don't call directly
  */
