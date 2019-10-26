@@ -187,9 +187,9 @@ xml_iter_node_value_uint (xml_iter *iter, SANE_Word *val);
  */
 enum {
     /* Supported color modes */
-    DEVCAPS_SOURCE_COLORMODE_BW1   = (1 << 0), /* 1-bit black&white */
-    DEVCAPS_SOURCE_COLORMODE_GRAY  = (1 << 1), /* Gray scale */
-    DEVCAPS_SOURCE_COLORMODE_COLOR = (1 << 2), /* Color */
+    DEVCAPS_SOURCE_COLORMODE_BW1         = (1 << 0), /* 1-bit black&white */
+    DEVCAPS_SOURCE_COLORMODE_GRAYSCALE8  = (1 << 1), /* 8-bit gray scale */
+    DEVCAPS_SOURCE_COLORMODE_RGB24       = (1 << 2), /* 24-bit RGB color */
 
     /* Supported Intents */
     DEVCAPS_SOURCE_INTENT_DOCUMENT      = (1 << 3),
@@ -203,7 +203,8 @@ enum {
 
     /* Supported document formats */
     DEVCAPS_SOURCE_FMT_JPEG = (1 << 9),  /* JPEG image */
-    DEVCAPS_SOURCE_FMT_PDF  = (1 << 10), /* PDF image */
+    DEVCAPS_SOURCE_FMT_PNG  = (1 << 10),  /* PNG image */
+    DEVCAPS_SOURCE_FMT_PDF  = (1 << 11), /* PDF image */
 };
 
 /* Source Capabilities (each device may contain multiple sources)

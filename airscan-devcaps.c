@@ -9,6 +9,7 @@
 #include "airscan.h"
 
 #include <glib.h>
+#include <strings.h>
 
 /* Allocate devcaps_source
  */
@@ -67,9 +68,9 @@ devcaps_source_parse_color_modes (xml_iter *iter, devcaps_source *src)
             if (!strcmp(v, "BlackAndWhite1")) {
                 src->flags |= DEVCAPS_SOURCE_COLORMODE_BW1;
             } else if (!strcmp(v, "Grayscale8")) {
-                src->flags |= DEVCAPS_SOURCE_COLORMODE_GRAY;
+                src->flags |= DEVCAPS_SOURCE_COLORMODE_GRAYSCALE8;
             } else if (!strcmp(v, "RGB24")) {
-                src->flags |= DEVCAPS_SOURCE_COLORMODE_COLOR;
+                src->flags |= DEVCAPS_SOURCE_COLORMODE_RGB24;
             }
         }
     }
@@ -87,9 +88,11 @@ devcaps_source_parse_document_formats (xml_iter *iter, devcaps_source *src)
     for (; !xml_iter_end(iter); xml_iter_next(iter)) {
         if(xml_iter_node_name_match(iter, "pwg:DocumentFormat")) {
             const char *v = xml_iter_node_value(iter);
-            if (!strcmp(v, "image/jpeg")) {
+            if (!strcasecmp(v, "image/jpeg")) {
                 src->flags |= DEVCAPS_SOURCE_FMT_JPEG;
-            } else if (!strcmp(v, "application/pdf")) {
+            } else if (!strcasecmp(v, "image/png")) {
+                src->flags |= DEVCAPS_SOURCE_FMT_PNG;
+            } else if (!strcasecmp(v, "application/pdf")) {
                 src->flags |= DEVCAPS_SOURCE_FMT_PDF;
             }
         }
@@ -191,6 +194,11 @@ devcaps_source_parse_resolutions (xml_iter *iter, devcaps_source *src)
         }
     }
     xml_iter_leave(iter);
+
+    /* Prefer discrete resolution, if both are provided */
+    if (src->flags & DEVCAPS_SOURCE_RES_DISCRETE) {
+        src->flags &= ~DEVCAPS_SOURCE_RES_RANGE;
+    }
 
     return err;
 }
