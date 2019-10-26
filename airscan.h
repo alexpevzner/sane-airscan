@@ -219,7 +219,6 @@ typedef struct {
  */
 typedef struct {
     /* Common capabilities */
-    SANE_Word      *resolutions; /* Common resolutions */
     SANE_String    *sources;     /* Sources, in SANE format */
     const char     *model;       /* Device model */
     const char     *vendor;      /* Device vendor */

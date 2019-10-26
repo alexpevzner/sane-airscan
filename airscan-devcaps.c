@@ -46,7 +46,6 @@ devcaps_source_free (devcaps_source *src)
 void
 devcaps_init (devcaps *caps)
 {
-    array_of_word_init(&caps->resolutions);
     array_of_string_init(&caps->sources);
 }
 
@@ -55,7 +54,6 @@ devcaps_init (devcaps *caps)
 void
 devcaps_reset (devcaps *caps)
 {
-    array_of_word_cleanup(&caps->resolutions);
     array_of_string_cleanup(&caps->sources);
     g_free((void*) caps->vendor);
     g_free((void*) caps->model);
