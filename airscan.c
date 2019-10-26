@@ -39,8 +39,10 @@
 #define OPTVAL_SOURCE_ADF_SIMPLEX "ADF"
 #define OPTVAL_SOURCE_ADF_DUPLEX  "ADF Duplex"
 
-/******************** Debugging ********************/
-#define DBG(level, msg, args...)        printf("airscan: " msg, ##args)
+/******************** Global variables ********************/
+/* Debug flags
+ */
+int dbg_flags = DBG_FLG_ALL;
 
 /******************** Device Capabilities  ********************/
 /* Source flags
@@ -147,7 +149,6 @@ devcaps_source_parse_color_modes (xml_iter *iter, devcaps_source *src)
     for (; !xml_iter_end(iter); xml_iter_next(iter)) {
         if(xml_iter_node_name_match(iter, "scan:ColorMode")) {
             const char *v = xml_iter_node_value(iter);
-DBG(1, ">>>>>>>> %s=%s\n", xml_iter_node_name(iter), v);
             if (!strcmp(v, "BlackAndWhite1")) {
                 src->flags |= DEVCAPS_SOURCE_COLORMODE_BW1;
             } else if (!strcmp(v, "Grayscale8")) {
@@ -171,7 +172,6 @@ devcaps_source_parse_document_formats (xml_iter *iter, devcaps_source *src)
     for (; !xml_iter_end(iter); xml_iter_next(iter)) {
         if(xml_iter_node_name_match(iter, "pwg:DocumentFormat")) {
             const char *v = xml_iter_node_value(iter);
-DBG(1, ">>>>>>>> %s=%s\n", xml_iter_node_name(iter), v);
             if (!strcmp(v, "image/jpeg")) {
                 src->flags |= DEVCAPS_SOURCE_FMT_JPEG;
             } else if (!strcmp(v, "application/pdf")) {
@@ -200,7 +200,6 @@ devcaps_source_parse_discrete_resolutions (xml_iter *iter, devcaps_source *src)
             SANE_Word x = 0, y = 0;
             xml_iter_enter(iter);
             for (; err == NULL && !xml_iter_end(iter); xml_iter_next(iter)) {
-DBG(1, ">>>>>>>> %s\n", xml_iter_node_name(iter));
                 if (xml_iter_node_name_match(iter, "scan:XResolution")) {
                     err = xml_iter_node_value_uint(iter, &x);
                 } else if (xml_iter_node_name_match(iter,
@@ -291,7 +290,6 @@ devcaps_source_parse_setting_profiles (xml_iter *iter, devcaps_source *src)
 
     xml_iter_enter(iter);
     for (; err == NULL && !xml_iter_end(iter); xml_iter_next(iter)) {
-DBG(1, ">>>>>> %s\n", xml_iter_node_name(iter));
         if (xml_iter_node_name_match(iter, "scan:SettingProfile")) {
             xml_iter_enter(iter);
             for (; err == NULL && !xml_iter_end(iter); xml_iter_next(iter)) {
@@ -322,10 +320,8 @@ devcaps_source_parse (xml_iter *iter, devcaps_source **out)
     devcaps_source *src = devcaps_source_new();
     const char *err = NULL;
 
-DBG(1, ">> %s\n", xml_iter_node_name(iter));
     xml_iter_enter(iter);
     for (; err == NULL && !xml_iter_end(iter); xml_iter_next(iter)) {
-DBG(1, ">>>> %s\n", xml_iter_node_name(iter));
         if(xml_iter_node_name_match(iter, "scan:MinWidth")) {
             err = xml_iter_node_value_uint(iter, &src->min_width);
         } else if (xml_iter_node_name_match(iter, "scan:MaxWidth")) {
@@ -372,8 +368,6 @@ devcaps_parse (devcaps *caps, xmlDoc *xml)
 
     xml_iter_enter(&iter);
     for (; !xml_iter_end(&iter); xml_iter_next(&iter)) {
-        DBG(1, "%s\n", xml_iter_node_name(&iter));
-
         if (xml_iter_node_name_match(&iter, "pwg:ModelName")) {
             g_free(model);
             model = g_strdup(xml_iter_node_value(&iter));
@@ -457,19 +451,19 @@ DONE:
 /* Dump device capabilities, for debugging
  */
 static void
-devcaps_dump (devcaps *caps)
+devcaps_dump (const char *name, devcaps *caps)
 {
     int i, j;
     GString *buf = g_string_new(NULL);
 
-    DBG(1, "===== device capabilities =====\n");
-    DBG(1, "  Model: %s\n", caps->model);
-    DBG(1, "  Vendor: %s\n", caps->vendor);
+    DBG_PROTO(name, "===== device capabilities =====");
+    DBG_PROTO(name, "  Model: %s", caps->model);
+    DBG_PROTO(name, "  Vendor: %s", caps->vendor);
     g_string_truncate(buf, 0);
     for (i = 0; caps->sources[i] != NULL; i ++) {
         g_string_append_printf(buf, " \"%s\"", caps->sources[i]);
     }
-    DBG(1, "  Sources: %s\n", buf->str);
+    DBG_PROTO(name, "  Sources: %s", buf->str);
 
     struct { char *name; devcaps_source *src; } sources[] = {
         {OPTVAL_SOURCE_PLATEN, caps->src_platen},
@@ -479,17 +473,17 @@ devcaps_dump (devcaps *caps)
     };
 
     for (i = 0; sources[i].name; i ++) {
-        DBG(1, "  %s:\n", sources[i].name);
+        DBG_PROTO(name, "  %s:", sources[i].name);
         devcaps_source *src = sources[i].src;
-        DBG(1, "    Min Width/Height: %d/%d\n", src->min_width, src->min_height);
-        DBG(1, "    Max Width/Height: %d/%d\n", src->max_width, src->max_height);
+        DBG_PROTO(name, "    Min Width/Height: %d/%d", src->min_width, src->min_height);
+        DBG_PROTO(name, "    Max Width/Height: %d/%d", src->max_width, src->max_height);
 
         if (src->flags & DEVCAPS_SOURCE_RES_DISCRETE) {
             g_string_truncate(buf, 0);
             for (j = 0; j < (int) array_of_word_len(&src->resolutions); j ++) {
                 g_string_append_printf(buf, " %d", src->resolutions[j+1]);
             }
-            DBG(1, "    Resolutions: %s\n", buf->str);
+            DBG_PROTO(name, "    Resolutions: %s", buf->str);
         }
     }
 
@@ -541,11 +535,6 @@ device_scanner_capabilities_callback (device *dev, SoupMessage *msg);
 static void
 device_http_get (device *dev, const char *path,
         void (*callback)(device*, SoupMessage*));
-
-/* Print device-related debug message
- */
-#define DEVICE_DEBUG(dev, fmt, args...) \
-    DBG(1, "dev: \"%s\": " fmt "\n", dev->name, ##args)
 
 /* Compare device names, for device_table
  */
@@ -610,7 +599,7 @@ device_add (const char *name)
 
     dev->http_pending = g_ptr_array_new();
 
-    DEVICE_DEBUG(dev, "created");
+    DBG_DEVICE(dev->name, "created");
 
     /* Add to the table */
     g_tree_insert(device_table, (gpointer) dev->name, dev);
@@ -646,7 +635,7 @@ static inline void
 device_unref (device *dev)
 {
     if (g_atomic_int_dec_and_test(&dev->refcnt)) {
-        DEVICE_DEBUG(dev, "destroyed");
+        DBG_DEVICE(dev->name, "destroyed");
         g_assert(dev->flags & DEVICE_HALTED);
 
         /* Release all memory */
@@ -715,7 +704,7 @@ device_resolver_done (device *dev, const AvahiAddress *addr, uint16_t port,
     }
 
     dev->base_url = soup_uri_new(url);
-    DEVICE_DEBUG(dev, "url=\"%s\"", url);
+    DBG_DEVICE(dev->name, "url=\"%s\"", url);
 
     /* Fetch device capabilities */
     device_http_get(dev, "ScannerCapabilities",
@@ -801,7 +790,7 @@ device_table_ready (void)
 static void
 device_scanner_capabilities_callback (device *dev, SoupMessage *msg)
 {
-    DEVICE_DEBUG(dev, "ScannerCapabilities: status=%d", msg->status_code);
+    DBG_DEVICE(dev->name, "ScannerCapabilities: status=%d", msg->status_code);
 
     xmlDoc      *doc = NULL;
     const char *err = NULL;
@@ -824,7 +813,7 @@ device_scanner_capabilities_callback (device *dev, SoupMessage *msg)
 
     err = devcaps_parse(&dev->caps, doc);
     if (err == NULL) {
-        devcaps_dump(&dev->caps);
+        devcaps_dump(dev->name, &dev->caps);
     }
 
     /* Cleanup and exit */
@@ -1018,11 +1007,6 @@ dd_avahi_strerror (void)
     return avahi_strerror(avahi_client_errno(dd_avahi_client));
 }
 
-/* Print DD-related debug message
- */
-#define DD_DEBUG(name, fmt, args...)    \
-        DBG(1, "discovery: \"%s\": " fmt "\n", name, ##args)
-
 /* AVAHI service resolver callback
  */
 static void
@@ -1045,12 +1029,12 @@ dd_avahi_resolver_callback (AvahiServiceResolver *r, AvahiIfIndex interface,
 
     switch (event) {
     case AVAHI_RESOLVER_FOUND:
-        DD_DEBUG(name, "resolver: OK");
+        DBG_DISCOVERY(name, "resolver: OK");
         device_resolver_done(dev, addr, port, txt);
         break;
 
     case AVAHI_RESOLVER_FAILURE:
-        DD_DEBUG(name, "resolver: %s", dd_avahi_strerror());
+        DBG_DISCOVERY(name, "resolver: %s", dd_avahi_strerror());
         device_del(dev);
         break;
     }
@@ -1074,11 +1058,11 @@ dd_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
 
     switch (event) {
     case AVAHI_BROWSER_NEW:
-        DD_DEBUG(name, "found");
+        DBG_DISCOVERY(name, "found");
 
         /* Check for duplicate device */
         if (device_find (name) ) {
-            DD_DEBUG(name, "already known; ignoring");
+            DBG_DISCOVERY(name, "already known; ignoring");
             break;
         }
 
@@ -1094,7 +1078,7 @@ dd_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
                 dd_avahi_resolver_callback, dev);
 
         if (r == NULL) {
-            DD_DEBUG(name, "%s", dd_avahi_strerror());
+            DBG_DISCOVERY(name, "%s", dd_avahi_strerror());
             device_del(dev);
             dd_avahi_client_restart_defer();
             break;
@@ -1106,7 +1090,7 @@ dd_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
         break;
 
     case AVAHI_BROWSER_REMOVE:
-        DD_DEBUG(name, "removed");
+        DBG_DISCOVERY(name, "removed");
         device *dev = device_find(name);
         if (dev != NULL) {
             device_del(dev);
@@ -1186,7 +1170,6 @@ dd_avahi_restart_timer_callback(AvahiTimeout *t, void *userdata)
     (void) t;
     (void) userdata;
 
-    DBG(1,"TIMER\n");
     dd_avahi_client_start();
 }
 
@@ -1303,7 +1286,7 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
 {
     SANE_Status status;
 
-    DBG(1, "sane_init\n");
+    DBG_API_ENTER();
 
     if (version_code != NULL) {
         *version_code = SANE_VERSION_CODE (SANE_CURRENT_MAJOR,
@@ -1328,7 +1311,7 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
     /* Start airscan thread */
     glib_thread_start();
 
-    DBG(1, "sane_init -- DONE\n");
+    DBG_API_LEAVE();
 
     return status;
 }
@@ -1338,7 +1321,7 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
 void
 sane_exit (void)
 {
-    DBG(1, "sane_exit\n");
+    DBG_API_ENTER();
 
     glib_thread_stop();
 
@@ -1360,7 +1343,7 @@ sane_exit (void)
         sane_device_list = NULL;
     }
 
-    DBG(1, "sane_exit -- DONE\n");
+    DBG_API_LEAVE();
 }
 
 /* Get list of devices
@@ -1368,7 +1351,7 @@ sane_exit (void)
 SANE_Status
 sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
 {
-    DBG(1, "sane_get_devices\n");
+    DBG_API_ENTER();
 
     /* All our devices are non-local */
     if (local_only) {
@@ -1411,7 +1394,7 @@ sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
     /* Cleanup and exit */
     G_UNLOCK(glib_main_loop);
 
-    DBG(1, "sane_get_devices -- DONE\n");
+    DBG_API_LEAVE();
 
     return SANE_STATUS_GOOD;
 }
@@ -1421,7 +1404,7 @@ sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
 SANE_Status
 sane_open (SANE_String_Const name, SANE_Handle *handle)
 {
-    DBG(1, "sane_open\n");
+    DBG_API_ENTER();
 
     G_LOCK(glib_main_loop);
 
@@ -1434,7 +1417,7 @@ sane_open (SANE_String_Const name, SANE_Handle *handle)
 
     G_UNLOCK(glib_main_loop);
 
-    DBG(1, "sane_open: status=%d\n", status);
+    DBG_API_LEAVE();
 
     return status;
 }
@@ -1444,11 +1427,13 @@ sane_open (SANE_String_Const name, SANE_Handle *handle)
 void
 sane_close (SANE_Handle handle)
 {
-    DBG(1, "sane_close\n");
+    DBG_API_ENTER();
 
     G_LOCK(glib_main_loop);
     device_unref((device*) handle);
     G_UNLOCK(glib_main_loop);
+
+    DBG_API_LEAVE();
 }
 
 /* Get option descriptor
@@ -1456,10 +1441,12 @@ sane_close (SANE_Handle handle)
 const SANE_Option_Descriptor *
 sane_get_option_descriptor (SANE_Handle handle, SANE_Int option)
 {
-    DBG(1, "sane_get_option_descriptor\n");
+    DBG_API_ENTER();
 
     (void) handle;
     (void) option;
+
+    DBG_API_LEAVE();
 
     return NULL;
 }
@@ -1470,13 +1457,15 @@ SANE_Status
 sane_control_option (SANE_Handle handle, SANE_Int option, SANE_Action action,
                      void *value, SANE_Int *info)
 {
-    DBG(1, "sane_control_option\n");
+    DBG_API_ENTER();
 
     (void) handle;
     (void) option;
     (void) action;
     (void) value;
     (void) info;
+
+    DBG_API_LEAVE();
 
     return SANE_STATUS_UNSUPPORTED;
 }
@@ -1486,10 +1475,12 @@ sane_control_option (SANE_Handle handle, SANE_Int option, SANE_Action action,
 SANE_Status
 sane_get_parameters (SANE_Handle handle, SANE_Parameters *params)
 {
-    DBG(1, "sane_get_parameters\n");
+    DBG_API_ENTER();
 
     (void) handle;
     (void) params;
+
+    DBG_API_LEAVE();
 
     return SANE_STATUS_INVAL;
 }
@@ -1499,9 +1490,11 @@ sane_get_parameters (SANE_Handle handle, SANE_Parameters *params)
 SANE_Status
 sane_start (SANE_Handle handle)
 {
-    DBG(1, "sane_start\n");
+    DBG_API_ENTER();
 
     (void) handle;
+
+    DBG_API_LEAVE();
 
     return SANE_STATUS_INVAL;
 }
@@ -1512,12 +1505,14 @@ SANE_Status
 sane_read (SANE_Handle handle, SANE_Byte *data,
            SANE_Int max_length, SANE_Int *length)
 {
-    DBG(1, "sane_read\n");
+    DBG_API_ENTER();
 
     (void) handle;
     (void) data;
     (void) max_length;
     (void) length;
+
+    DBG_API_LEAVE();
 
     return SANE_STATUS_INVAL;
 }
@@ -1527,8 +1522,11 @@ sane_read (SANE_Handle handle, SANE_Byte *data,
 void
 sane_cancel (SANE_Handle handle)
 {
-    DBG(1, "sane_cancel\n");
+    DBG_API_ENTER();
+
     (void) handle;
+
+    DBG_API_LEAVE();
 }
 
 /* Set I/O mode
@@ -1536,10 +1534,12 @@ sane_cancel (SANE_Handle handle)
 SANE_Status
 sane_set_io_mode (SANE_Handle handle, SANE_Bool non_blocking)
 {
-    DBG(1, "sane_set_io_mode\n");
+    DBG_API_ENTER();
 
     (void) handle;
     (void) non_blocking;
+
+    DBG_API_LEAVE();
 
     return SANE_STATUS_GOOD;
 }
@@ -1549,11 +1549,14 @@ sane_set_io_mode (SANE_Handle handle, SANE_Bool non_blocking)
 SANE_Status
 sane_get_select_fd (SANE_Handle handle, SANE_Int * fd)
 {
-    DBG(1, "sane_get_select_fd\n");
+    DBG_API_ENTER();
 
     (void) handle;
 
     *fd = -1;
+
+    DBG_API_LEAVE();
+
     return SANE_STATUS_UNSUPPORTED;
 }
 

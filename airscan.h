@@ -10,6 +10,45 @@
 #include <sane/sane.h>
 #include <libxml/tree.h>
 
+/******************** Debugging ********************/
+/* Debug flags
+ */
+enum {
+    DBG_FLG_API       = (1 << 0), /* API tracing */
+    DBG_FLG_DISCOVERY = (1 << 1), /* Device discovery debugging */
+    DBG_FLG_PROTO     = (1 << 2), /* Protocol */
+    DBG_FLG_DEVICE    = (1 << 3), /* Device management */
+    DBG_FLG_ALL       = 0xff
+};
+
+extern int dbg_flags;
+
+/* Print debug message
+ */
+#define DBG_PRINT(flg, prefix, fmt, args...)                    \
+    do{                                                         \
+        if ((flg) & dbg_flags) {                                \
+            printf("airscan: " prefix ": " fmt "\n", ##args);   \
+        }                                                       \
+    } while(0)
+
+/* Shortcuts for various subsystems
+ */
+#define DBG_API(fmt, args...)                   \
+        DBG_PRINT(DBG_FLG_API, "api", fmt, ##args)
+
+#define DBG_API_ENTER() DBG_API("%s", __FUNCTION__)
+#define DBG_API_LEAVE() DBG_API("%s -- DONE", __FUNCTION__)
+
+#define DBG_DISCOVERY(name, fmt, args...)       \
+        DBG_PRINT(DBG_FLG_DISCOVERY, "discovery", "\"%s\": " fmt, name, ##args)
+
+#define DBG_PROTO(name, fmt, args...)           \
+        DBG_PRINT(DBG_FLG_PROTO, "proto", "\"%s\": " fmt, name, ##args)
+
+#define DBG_DEVICE(name, fmt, args...)           \
+        DBG_PRINT(DBG_FLG_DEVICE, "proto", "\"%s\": " fmt, name, ##args)
+
 /******************** Typed Arrays ********************/
 /* Initialize array of SANE_Word
  */
