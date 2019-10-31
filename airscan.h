@@ -205,6 +205,10 @@ enum {
     DEVCAPS_SOURCE_FMT_JPEG = (1 << 9),  /* JPEG image */
     DEVCAPS_SOURCE_FMT_PNG  = (1 << 10),  /* PNG image */
     DEVCAPS_SOURCE_FMT_PDF  = (1 << 11), /* PDF image */
+
+    /* Miscellaneous flags */
+    DEVCAPS_SOURCE_HAS_SIZE = (1 << 12), /* min_width, max_height and
+                                            derivatives are valid */
 };
 
 /* Source Capabilities (each device may contain multiple sources)
@@ -215,6 +219,8 @@ typedef struct {
     SANE_Word    min_height, max_height;   /* Min/max image height */
     SANE_Word    *resolutions;             /* Discrete resolutions, in DPI */
     SANE_Range   res_range;                /* Resolutions range, in DPI */
+    SANE_Range   win_x_range, win_y_range; /* Scan window range,
+                                              SANE_Fixed, in mm */
 } devcaps_source;
 
 /* Device Capabilities

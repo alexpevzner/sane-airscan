@@ -320,6 +320,34 @@ devcaps_source_parse (xml_iter *iter, devcaps_source **out)
     xml_iter_leave(iter);
 
     if (err != NULL) {
+        goto DONE;
+    }
+
+    if (src->max_width != 0 && src->max_height != 0 )
+    {
+        /* Validate window size */
+        if (src->min_width >= src->max_width )
+        {
+            err = "Invalid scan:MinWidth or scan:MaxWidth";
+            goto DONE;
+        }
+
+        if (src->min_height >= src->max_height)
+        {
+            err = "Invalid scan:MinHeight or scan:MaxHeight";
+            goto DONE;
+        }
+
+        /* Recompute to millimeters */
+        src->flags |= DEVCAPS_SOURCE_HAS_SIZE;
+        src->win_x_range.min = SANE_FIX((double) src->min_width * 25.4 / 300);
+        src->win_x_range.max = SANE_FIX((double) src->max_width * 25.4 / 300);
+        src->win_y_range.min = SANE_FIX((double) src->min_height * 25.4 / 300);
+        src->win_y_range.max = SANE_FIX((double) src->max_height * 25.4 / 300);
+    }
+
+DONE:
+    if (err != NULL) {
         devcaps_source_free(src);
     } else {
         if (*out == NULL) {
