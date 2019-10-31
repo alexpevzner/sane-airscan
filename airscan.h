@@ -214,7 +214,7 @@ typedef struct {
     SANE_Word    min_width, max_width;     /* Min/max image width */
     SANE_Word    min_height, max_height;   /* Min/max image height */
     SANE_Word    *resolutions;             /* Discrete resolutions, in DPI */
-    SANE_Range   res_range_x, res_range_y; /* Resolutions ranges */
+    SANE_Range   res_range;                /* Resolutions range, in DPI */
 } devcaps_source;
 
 /* Device Capabilities
@@ -253,6 +253,48 @@ devcaps_parse (devcaps *caps, xmlDoc *xml);
  */
 void
 devcaps_dump (const char *name, devcaps *caps);
+
+/* Choose appropriate scanner resolution
+ */
+SANE_Word
+devcaps_source_choose_resolution(devcaps_source *src, SANE_Word wanted);
+
+/******************** Mathematical Functions ********************/
+/* Find greatest common divisor of two positive integers
+ */
+SANE_Word
+math_gcd (SANE_Word x, SANE_Word y);
+
+/* Find least common multiple of two positive integers
+ */
+SANE_Word
+math_lcm (SANE_Word x, SANE_Word y);
+
+/* Find min of two words
+ */
+static inline SANE_Word
+math_min (SANE_Word a, SANE_Word b)
+{
+    return a < b ? a : b;
+}
+
+/* Find max of two words
+ */
+static inline SANE_Word
+math_max (SANE_Word a, SANE_Word b)
+{
+    return a > b ? a : b;
+}
+
+/* Merge two ranges, if possible
+ */
+SANE_Bool
+math_range_merge (SANE_Range *out, const SANE_Range *r1, const SANE_Range *r2);
+
+/* Choose nearest integer in range
+ */
+SANE_Word
+math_range_fit(const SANE_Range *r, SANE_Word i);
 
 #endif
 

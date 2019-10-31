@@ -2,6 +2,7 @@ SRC	= \
 	airscan.c \
 	airscan-array.c \
 	airscan-devcaps.c \
+	airscan-math.c \
 	airscan-xml.c \
 	sane_strstatus.c
 

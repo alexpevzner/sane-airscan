@@ -56,6 +56,32 @@ devcaps_reset (devcaps *caps)
     memset(caps, 0, sizeof(*caps));
 }
 
+/* Choose appropriate scanner resolution
+ */
+SANE_Word
+devcaps_source_choose_resolution(devcaps_source *src, SANE_Word wanted)
+{
+    if (src->flags & DEVCAPS_SOURCE_RES_DISCRETE) {
+        SANE_Word res = src->resolutions[1];
+        SANE_Word delta = (SANE_Word) labs(wanted - res);
+        size_t i, end = array_of_word_len(&src->resolutions) + 1;
+
+        for (i = 2; i < end; i ++) {
+            SANE_Word res2 = src->resolutions[i];
+            SANE_Word delta2 = (SANE_Word) labs(wanted - res2);
+
+            if (delta2 <= delta) {
+                res = res2;
+                delta = delta2;
+            }
+        }
+
+        return res;
+    } else {
+        return math_range_fit(&src->res_range, wanted);
+    }
+}
+
 /* Parse color modes. Returns NULL on success, error string otherwise
  */
 static const char*
@@ -86,7 +112,8 @@ devcaps_source_parse_document_formats (xml_iter *iter, devcaps_source *src)
 {
     xml_iter_enter(iter);
     for (; !xml_iter_end(iter); xml_iter_next(iter)) {
-        if(xml_iter_node_name_match(iter, "pwg:DocumentFormat")) {
+        if(xml_iter_node_name_match(iter, "pwg:DocumentFormat") ||
+           xml_iter_node_name_match(iter, "scan:DocumentFormatExt")) {
             const char *v = xml_iter_node_value(iter);
             if (!strcasecmp(v, "image/jpeg")) {
                 src->flags |= DEVCAPS_SOURCE_FMT_JPEG;
@@ -110,8 +137,6 @@ devcaps_source_parse_discrete_resolutions (xml_iter *iter, devcaps_source *src)
 {
     const char *err = NULL;
 
-    src->flags |= DEVCAPS_SOURCE_RES_DISCRETE;
-
     xml_iter_enter(iter);
     for (; err == NULL && !xml_iter_end(iter); xml_iter_next(iter)) {
         if (xml_iter_node_name_match(iter, "scan:DiscreteResolution")) {
@@ -134,7 +159,10 @@ devcaps_source_parse_discrete_resolutions (xml_iter *iter, devcaps_source *src)
     }
     xml_iter_leave(iter);
 
-    array_of_word_sort(&src->resolutions);
+    if (array_of_word_len((&src->resolutions)) > 0) {
+        src->flags |= DEVCAPS_SOURCE_RES_DISCRETE;
+        array_of_word_sort(&src->resolutions);
+    }
 
     return err;
 }
@@ -146,16 +174,15 @@ static const char*
 devcaps_source_parse_resolutions_range (xml_iter *iter, devcaps_source *src)
 {
     const char *err = NULL;
-
-    src->flags |= DEVCAPS_SOURCE_RES_RANGE;
+    SANE_Range range_x = {0, 0, 0}, range_y = {0, 0, 0};
 
     xml_iter_enter(iter);
     for (; err == NULL && !xml_iter_end(iter); xml_iter_next(iter)) {
         SANE_Range *range = NULL;
         if (xml_iter_node_name_match(iter, "scan:XResolution")) {
-            range = &src->res_range_x;
+            range = &range_x;
         } else if (xml_iter_node_name_match(iter, "scan:XResolution")) {
-            range = &src->res_range_y;
+            range = &range_y;
         }
 
         if (range != NULL) {
@@ -174,6 +201,35 @@ devcaps_source_parse_resolutions_range (xml_iter *iter, devcaps_source *src)
     }
     xml_iter_leave(iter);
 
+    if (range_x.min > range_x.max) {
+        err = "Invalid scan:XResolution range";
+        goto DONE;
+    }
+
+    if (range_y.min > range_y.max) {
+        err = "Invalid scan:YResolution range";
+        goto DONE;
+    }
+
+    /* If no quantization value, SANE uses 0, not 1
+     */
+    if (range_x.quant == 1) {
+        range_x.quant = 0;
+    }
+
+    if (range_y.quant == 1) {
+        range_y.quant = 0;
+    }
+
+    /* Try to merge x/y ranges */
+    if (!math_range_merge(&src->res_range, &range_x, &range_y)) {
+        err = "Incompatible scan:XResolution and scan:YResolution ranges";
+        goto DONE;
+    }
+
+    src->flags |= DEVCAPS_SOURCE_RES_RANGE;
+
+DONE:
     return err;
 }
 
@@ -198,6 +254,10 @@ devcaps_source_parse_resolutions (xml_iter *iter, devcaps_source *src)
     /* Prefer discrete resolution, if both are provided */
     if (src->flags & DEVCAPS_SOURCE_RES_DISCRETE) {
         src->flags &= ~DEVCAPS_SOURCE_RES_RANGE;
+    }
+
+    if (!(src->flags & (DEVCAPS_SOURCE_RES_DISCRETE|DEVCAPS_SOURCE_RES_RANGE))){
+        err = "Source resolutions are not defined";
     }
 
     return err;
