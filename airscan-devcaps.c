@@ -17,7 +17,7 @@ static devcaps_source*
 devcaps_source_new (void)
 {
     devcaps_source *src = g_new0(devcaps_source, 1 );
-    array_of_string_init(&src->modes);
+    array_of_string_init(&src->sane_modes);
     array_of_word_init(&src->resolutions);
     return src;
 }
@@ -28,7 +28,7 @@ static void
 devcaps_source_free (devcaps_source *src)
 {
     if (src != NULL) {
-        array_of_string_cleanup(&src->modes);
+        array_of_string_cleanup(&src->sane_modes);
         array_of_word_cleanup(&src->resolutions);
         g_free(src);
     }
@@ -39,15 +39,15 @@ devcaps_source_free (devcaps_source *src)
 void
 devcaps_init (devcaps *caps)
 {
-    array_of_string_init(&caps->sources);
+    array_of_string_init(&caps->sane_sources);
 }
 
-/* Reset Device Capabilities: free all allocated memory, clear the structure
+/* Cleanup Device Capabilities
  */
 void
-devcaps_reset (devcaps *caps)
+devcaps_cleanup (devcaps *caps)
 {
-    array_of_string_cleanup(&caps->sources);
+    array_of_string_cleanup(&caps->sane_sources);
     g_free((void*) caps->vendor);
     g_free((void*) caps->model);
 
@@ -55,8 +55,16 @@ devcaps_reset (devcaps *caps)
     for (i = 0; i < NUM_OPT_SOURCE; i ++) {
         devcaps_source_free(caps->src[i]);
     }
+}
 
+/* Reset Device Capabilities into initial state
+ */
+void
+devcaps_reset (devcaps *caps)
+{
+    devcaps_cleanup(caps);
     memset(caps, 0, sizeof(*caps));
+    devcaps_init(caps);
 }
 
 /* Choose appropriate scanner resolution
@@ -90,33 +98,30 @@ devcaps_source_choose_resolution(devcaps_source *src, SANE_Word wanted)
 static const char*
 devcaps_source_parse_color_modes (xml_iter *iter, devcaps_source *src)
 {
-    SANE_Bool bw1 = SANE_FALSE, grayscale8 = SANE_FALSE, rgb24 = SANE_FALSE;
+    src->modes = 0;
+    array_of_string_reset(&src->sane_modes);
 
     xml_iter_enter(iter);
     for (; !xml_iter_end(iter); xml_iter_next(iter)) {
         if(xml_iter_node_name_match(iter, "scan:ColorMode")) {
             const char *v = xml_iter_node_value(iter);
             if (!strcmp(v, "BlackAndWhite1")) {
-                bw1 = SANE_TRUE;
+                src->modes |= 1 << OPT_MODE_LINEART;
             } else if (!strcmp(v, "Grayscale8")) {
-                grayscale8 = SANE_TRUE;
+                src->modes |= 1 << OPT_MODE_GRAYSCALE;
             } else if (!strcmp(v, "RGB24")) {
-                rgb24 = SANE_TRUE;
+                src->modes |= 1 << OPT_SOURCE_ADF_DUPLEX;
             }
         }
     }
     xml_iter_leave(iter);
 
-    if (bw1) {
-        array_of_string_append(&src->modes, SANE_VALUE_SCAN_MODE_LINEART);
-    }
-
-    if (grayscale8) {
-        array_of_string_append(&src->modes, SANE_VALUE_SCAN_MODE_GRAY);
-    }
-
-    if (rgb24) {
-        array_of_string_append(&src->modes, SANE_VALUE_SCAN_MODE_COLOR);
+    OPT_MODE opt_mode;
+    for (opt_mode = (OPT_MODE) 0; opt_mode < NUM_OPT_MODE; opt_mode ++) {
+        if ((src->modes & (1 << opt_mode)) != 0) {
+            array_of_string_append(&src->sane_modes,
+                    (SANE_String) opt_mode_to_sane(opt_mode));
+        }
     }
 
     return NULL;
@@ -153,6 +158,8 @@ static const char*
 devcaps_source_parse_discrete_resolutions (xml_iter *iter, devcaps_source *src)
 {
     const char *err = NULL;
+
+    array_of_word_reset(&src->resolutions);
 
     xml_iter_enter(iter);
     for (; err == NULL && !xml_iter_end(iter); xml_iter_next(iter)) {
@@ -460,9 +467,10 @@ devcaps_parse (devcaps *caps, xmlDoc *xml)
     /* Update list of sources */
     OPT_SOURCE opt_src;
 
+    array_of_string_reset(&caps->sane_sources);
     for (opt_src = (OPT_SOURCE) 0; opt_src < NUM_OPT_SOURCE; opt_src ++) {
         if (caps->src[opt_src] != NULL) {
-            array_of_string_append(&caps->sources,
+            array_of_string_append(&caps->sane_sources,
                 (SANE_String) opt_source_to_sane(opt_src));
         }
     }
@@ -490,11 +498,12 @@ devcaps_dump (const char *name, devcaps *caps)
     DBG_PROTO(name, "===== device capabilities =====");
     DBG_PROTO(name, "  Model: %s", caps->model);
     DBG_PROTO(name, "  Vendor: %s", caps->vendor);
+
     g_string_truncate(buf, 0);
-    for (i = 0; caps->sources[i] != NULL; i ++) {
-        g_string_append_printf(buf, " \"%s\"", caps->sources[i]);
+    for (i = 0; caps->sane_sources[i] != NULL; i ++) {
+        g_string_append_printf(buf, " \"%s\"", caps->sane_sources[i]);
     }
-    DBG_PROTO(name, "  Sources: %s", buf->str);
+    DBG_PROTO(name, "  Sources:%s", buf->str);
 
     OPT_SOURCE opt_src;
     for (opt_src = (OPT_SOURCE) 0; opt_src < NUM_OPT_SOURCE; opt_src ++) {
@@ -510,6 +519,13 @@ devcaps_dump (const char *name, devcaps *caps)
             }
             DBG_PROTO(name, "    Resolutions: %s", buf->str);
         }
+
+        g_string_truncate(buf, 0);
+        for (i = 0; src->sane_modes[i] != NULL; i ++) {
+            g_string_append_printf(buf, " \"%s\"", src->sane_modes[i]);
+        }
+        DBG_PROTO(name, "    Modes:%s", buf->str);
+
     }
 
     g_string_free(buf, TRUE);

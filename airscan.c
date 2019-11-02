@@ -193,7 +193,7 @@ device_unref (device *dev)
         /* Release all memory */
         g_free((void*) dev->name);
 
-        devcaps_reset(&dev->caps);
+        devcaps_cleanup(&dev->caps);
 
         if (dev->base_url != NULL) {
             soup_uri_free(dev->base_url);
@@ -318,20 +318,20 @@ device_fill_options (device *dev)
     desc->name = SANE_NAME_SCAN_MODE;
     desc->title = SANE_TITLE_SCAN_MODE;
     desc->type = SANE_TYPE_STRING;
-    desc->size = array_of_string_max_strlen(&src->modes) + 1;
+    desc->size = array_of_string_max_strlen(&src->sane_modes) + 1;
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->constraint_type = SANE_CONSTRAINT_STRING_LIST;
-    desc->constraint.string_list = (SANE_String_Const*) src->modes;
+    desc->constraint.string_list = (SANE_String_Const*) src->sane_modes;
 
     /* OPT_SCAN_SOURCE */
     desc = &dev->opt_desc[OPT_SCAN_SOURCE];
     desc->name = SANE_NAME_SCAN_SOURCE;
     desc->title = SANE_TITLE_SCAN_SOURCE;
     desc->type = SANE_TYPE_STRING;
-    desc->size = array_of_string_max_strlen(&dev->caps.sources) + 1;
+    desc->size = array_of_string_max_strlen(&dev->caps.sane_sources) + 1;
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->constraint_type = SANE_CONSTRAINT_STRING_LIST;
-    desc->constraint.string_list = (SANE_String_Const*) dev->caps.sources;
+    desc->constraint.string_list = (SANE_String_Const*) dev->caps.sane_sources;
 
     /* OPT_GROUP_GEOMETRY */
     desc = &dev->opt_desc[OPT_GROUP_GEOMETRY];

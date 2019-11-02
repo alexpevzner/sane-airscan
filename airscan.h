@@ -63,6 +63,11 @@ array_of_word_init (SANE_Word **a);
 void
 array_of_word_cleanup (SANE_Word **a);
 
+/* Reset array of SANE_Word
+ */
+void
+array_of_word_reset (SANE_Word **a);
+
 /* Get length of the SANE_Word array
  */
 size_t
@@ -87,6 +92,11 @@ array_of_word_sort(SANE_Word **a);
  */
 void
 array_of_string_init (SANE_String **a);
+
+/* Reset array of SANE_String
+ */
+void
+array_of_string_reset (SANE_String **a);
 
 /* Cleanup array of SANE_String
  */
@@ -258,12 +268,6 @@ opt_mode_to_sane (OPT_MODE mode);
 /* Source flags
  */
 enum {
-    /* Supported color modes */
-
-    //DEVCAPS_SOURCE_COLORMODE_BW1         = (1 << 0), /* 1-bit black&white */
-    //DEVCAPS_SOURCE_COLORMODE_GRAYSCALE8  = (1 << 1), /* 8-bit gray scale */
-    //DEVCAPS_SOURCE_COLORMODE_RGB24       = (1 << 2), /* 24-bit RGB color */
-
     /* Supported Intents */
     DEVCAPS_SOURCE_INTENT_DOCUMENT      = (1 << 3),
     DEVCAPS_SOURCE_INTENT_TXT_AND_GRAPH = (1 << 4),
@@ -288,7 +292,8 @@ enum {
  */
 typedef struct {
     unsigned int flags;                    /* Source flags */
-    SANE_String  *modes;                   /* Color modes, in SANE format */
+    unsigned int modes;                    /* Set of 1 << OPT_MODE */
+    SANE_String  *sane_modes;              /* Color modes, in SANE format */
     SANE_Word    min_width, max_width;     /* Min/max image width */
     SANE_Word    min_height, max_height;   /* Min/max image height */
     SANE_Word    *resolutions;             /* Discrete resolutions, in DPI */
@@ -300,13 +305,13 @@ typedef struct {
 /* Device Capabilities
  */
 typedef struct {
-    /* Common capabilities */
-    SANE_String    *sources;            /* Sources, in SANE format */
+    /* Device identification */
     const char     *model;              /* Device model */
     const char     *vendor;             /* Device vendor */
 
     /* Sources */
-    devcaps_source *src[NUM_OPT_SOURCE]; /* All sources */
+    SANE_String    *sane_sources;        /* Sources, in SANE format */
+    devcaps_source *src[NUM_OPT_SOURCE]; /* Missed sources are NULL */
 } devcaps;
 
 /* Initialize Device Capabilities
@@ -314,7 +319,12 @@ typedef struct {
 void
 devcaps_init (devcaps *caps);
 
-/* Reset Device Capabilities: free all allocated memory, clear the structure
+/* Cleanup Device Capabilities
+ */
+void
+devcaps_cleanup (devcaps *caps);
+
+/* Reset Device Capabilities into initial state
  */
 void
 devcaps_reset (devcaps *caps);

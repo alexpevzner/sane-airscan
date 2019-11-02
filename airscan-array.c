@@ -30,6 +30,14 @@ array_of_word_cleanup (SANE_Word **a)
     *a = NULL;
 }
 
+/* Reset array of SANE_Word
+ */
+void
+array_of_word_reset (SANE_Word **a)
+{
+    (*a)[0] = 0;
+}
+
 /* Get length of the SANE_Word array
  */
 size_t
@@ -80,6 +88,14 @@ void
 array_of_string_init (SANE_String **a)
 {
     *a = g_new0(SANE_String, ARRAY_INITIAL_CAPACITY);
+}
+
+/* Reset array of SANE_String
+ */
+void
+array_of_string_reset (SANE_String **a)
+{
+    (*a)[0] = NULL;
 }
 
 /* Cleanup array of SANE_String
