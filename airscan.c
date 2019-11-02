@@ -351,7 +351,7 @@ device_fill_options (device *dev)
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_MM;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
-    desc->constraint.range = &src->win_x_range;
+    desc->constraint.range = &src->tl_x_range;
 
     /* OPT_SCAN_TL_Y */
     desc = &dev->opt_desc[OPT_SCAN_TL_Y];
@@ -362,7 +362,7 @@ device_fill_options (device *dev)
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_MM;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
-    desc->constraint.range = &src->win_y_range;
+    desc->constraint.range = &src->tl_y_range;
 
 
     /* OPT_SCAN_BR_X */
@@ -374,7 +374,7 @@ device_fill_options (device *dev)
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_MM;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
-    desc->constraint.range = &src->win_x_range;
+    desc->constraint.range = &src->br_x_range;
 
     /* OPT_SCAN_BR_Y */
     desc = &dev->opt_desc[OPT_SCAN_BR_Y];
@@ -385,7 +385,7 @@ device_fill_options (device *dev)
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_MM;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
-    desc->constraint.range = &src->win_y_range;
+    desc->constraint.range = &src->br_y_range;
 }
 
 /* Get device option

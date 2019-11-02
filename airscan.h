@@ -298,8 +298,8 @@ typedef struct {
     SANE_Word    min_height, max_height;   /* Min/max image height */
     SANE_Word    *resolutions;             /* Discrete resolutions, in DPI */
     SANE_Range   res_range;                /* Resolutions range, in DPI */
-    SANE_Range   win_x_range, win_y_range; /* Scan window range,
-                                              SANE_Fixed, in mm */
+    SANE_Range   tl_x_range, tl_y_range;   /* Top-left x/y ranges */
+    SANE_Range   br_x_range, br_y_range;   /* Bottom-right x/y ranges */
 } devcaps_source;
 
 /* Device Capabilities
