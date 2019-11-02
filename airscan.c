@@ -33,6 +33,10 @@
  */
 #define DEVICE_TABLE_READY_TIMEOUT              5
 
+/* Default resolution, DPI
+ */
+#define DEVICE_DEFAULT_RESOLUTION               300
+
 /******************** Global variables ********************/
 /* Debug flags
  */
@@ -66,8 +70,11 @@ typedef struct {
 
     /* Options */
     SANE_Option_Descriptor opt_desc[NUM_OPTIONS]; /* Option descriptors */
-    OPT_MODE               opt_mode;              /* Color mode */
     OPT_SOURCE             opt_src;               /* Current source */
+    OPT_MODE               opt_mode;              /* Color mode */
+    SANE_Word              opt_resolution;        /* Current resolution */
+    SANE_Word              opt_tl_x, opt_tl_y;    /* Top-left x/y */
+    SANE_Word              opt_br_x, opt_br_y;    /* Bottom-right x/y */
 } device;
 
 /* Static variables
@@ -151,6 +158,8 @@ device_add (const char *name)
     devcaps_init(&dev->caps);
 
     dev->http_pending = g_ptr_array_new();
+    dev->opt_src = OPT_SOURCE_UNKNOWN;
+    dev->opt_mode = OPT_MODE_UNKNOWN;
 
     DBG_DEVICE(dev->name, "created");
 
@@ -272,10 +281,10 @@ device_find (const char *name)
     return g_tree_lookup(device_table, name);
 }
 
-/* Fill device options
+/* Rebuild option descriptors
  */
 static void
-device_fill_options (device *dev)
+device_rebuild_opt_desc (device *dev)
 {
     SANE_Option_Descriptor *desc;
     devcaps_source         *src = dev->caps.src[dev->opt_src];
@@ -388,10 +397,40 @@ device_fill_options (device *dev)
     desc->constraint.range = &src->br_y_range;
 }
 
+/* Set current source. Affects many other options
+ */
+static void
+device_set_source (device *dev, OPT_SOURCE opt_src)
+{
+    dev->opt_src = opt_src;
+
+    /* Choose appropriate color mode */
+    devcaps_source *src = dev->caps.src[dev->opt_src];
+    while (dev->opt_mode < NUM_OPT_MODE &&
+           (src->modes & (1 << dev->opt_mode)) == 0) {
+        dev->opt_mode ++;
+    }
+
+    g_assert(dev->opt_mode != NUM_OPT_MODE);
+
+    /* Adjust resolution */
+    dev->opt_resolution = devcaps_source_choose_resolution(src,
+            DEVICE_DEFAULT_RESOLUTION);
+
+    /* Adjust window */
+    dev->opt_tl_x = 0;
+    dev->opt_tl_y = 0;
+
+    dev->opt_br_x = src->br_x_range.max;
+    dev->opt_br_y = src->br_y_range.max;
+
+    device_rebuild_opt_desc(dev);
+}
+
 /* Get device option
  */
 static SANE_Status
-dev_get_option (device *dev, SANE_Int option, void *value)
+device_get_option (device *dev, SANE_Int option, void *value)
 {
     SANE_Status status = SANE_STATUS_GOOD;
 
@@ -400,13 +439,32 @@ dev_get_option (device *dev, SANE_Int option, void *value)
         *(SANE_Word*) value = NUM_OPTIONS;
         break;
 
-    //case OPT_SCAN_RESOLUTION:
+    case OPT_SCAN_RESOLUTION:
+        *(SANE_Word*) value = dev->opt_resolution;
+        break;
+
     case OPT_SCAN_MODE:
         strcpy(value, opt_mode_to_sane(dev->opt_mode));
         break;
 
     case OPT_SCAN_SOURCE:
         strcpy(value, opt_source_to_sane(dev->opt_src));
+        break;
+
+    case OPT_SCAN_TL_X:
+        *(SANE_Word*) value = dev->opt_tl_x;
+        break;
+
+    case OPT_SCAN_TL_Y:
+        *(SANE_Word*) value = dev->opt_tl_y;
+        break;
+
+    case OPT_SCAN_BR_X:
+        *(SANE_Word*) value = dev->opt_tl_x;
+        break;
+
+    case OPT_SCAN_BR_Y:
+        *(SANE_Word*) value = dev->opt_tl_y;
         break;
 
     default:
@@ -523,23 +581,15 @@ DONE:
         device_del(dev);
     } else {
         /* Choose initial source */
-        while (dev->opt_src < NUM_OPT_SOURCE &&
-                (dev->caps.src[dev->opt_src]) == NULL) {
-            dev->opt_src ++;
+        OPT_SOURCE opt_src = (OPT_SOURCE) 0;
+        while (opt_src < NUM_OPT_SOURCE &&
+                (dev->caps.src[opt_src]) == NULL) {
+            opt_src ++;
         }
 
-        g_assert(dev->opt_src != NUM_OPT_SOURCE);
+        g_assert(opt_src != NUM_OPT_SOURCE);
+        device_set_source(dev, opt_src);
 
-        /* Choose initial color mode */
-        devcaps_source *src = dev->caps.src[dev->opt_src];
-        while (dev->opt_mode < NUM_OPT_MODE &&
-               (src->modes & (1 << dev->opt_mode)) == 0) {
-            dev->opt_mode ++;
-        }
-
-        g_assert(dev->opt_mode != NUM_OPT_MODE);
-
-        device_fill_options(dev);
         dev->flags |= DEVICE_READY;
         dev->flags &= ~DEVICE_INIT_WAIT;
     }
@@ -1182,7 +1232,7 @@ sane_control_option (SANE_Handle handle, SANE_Int option, SANE_Action action,
     DBG_API_ENTER();
 
     /* Roughly validate arguments */
-    if (option < 0 || option > NUM_OPTIONS) {
+    if (option < 0 || option > NUM_OPTIONS || dev == NULL || value == NULL) {
         goto DONE;
     }
 
@@ -1195,7 +1245,7 @@ sane_control_option (SANE_Handle handle, SANE_Int option, SANE_Action action,
 
     G_LOCK(glib_main_loop);
     if (action == SANE_ACTION_GET_VALUE) {
-        status = dev_get_option(dev, option, value);
+        status = device_get_option(dev, option, value);
     } else {
 
     }
