@@ -39,8 +39,16 @@ opt_name_decode (const opt_name_map map[], size_t map_size,
 static SANE_String_Const
 opt_name_encode (const opt_name_map map[], size_t map_size, SANE_Word value)
 {
-    g_assert(0 <= value && (size_t) value < map_size);
-    return map[value].name;
+    size_t i;
+    for (i = 0; i < map_size; i ++) {
+        if (map[i].value == value) {
+            return map[i].name;
+        }
+    }
+
+    g_assert(!"internal error");
+
+    return NULL;
 }
 
 /* Name map for OPT_SOURCE

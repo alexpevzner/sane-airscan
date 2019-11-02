@@ -66,6 +66,7 @@ typedef struct {
 
     /* Options */
     SANE_Option_Descriptor opt_desc[NUM_OPTIONS]; /* Option descriptors */
+    OPT_MODE               opt_mode;              /* Color mode */
     OPT_SOURCE             opt_src;               /* Current source */
 } device;
 
@@ -387,6 +388,34 @@ device_fill_options (device *dev)
     desc->constraint.range = &src->win_y_range;
 }
 
+/* Get device option
+ */
+static SANE_Status
+dev_get_option (device *dev, SANE_Int option, void *value)
+{
+    SANE_Status status = SANE_STATUS_GOOD;
+
+    switch (option) {
+    case OPT_NUM_OPTIONS:
+        *(SANE_Word*) value = NUM_OPTIONS;
+        break;
+
+    //case OPT_SCAN_RESOLUTION:
+    case OPT_SCAN_MODE:
+        strcpy(value, opt_mode_to_sane(dev->opt_mode));
+        break;
+
+    case OPT_SCAN_SOURCE:
+        strcpy(value, opt_source_to_sane(dev->opt_src));
+        break;
+
+    default:
+        status = SANE_STATUS_INVAL;
+    }
+
+    return status;
+}
+
 /* Userdata passed to device_table_foreach_callback
  */
 typedef struct {
@@ -493,14 +522,22 @@ DONE:
     if (err != NULL) {
         device_del(dev);
     } else {
-        OPT_SOURCE opt_src = (OPT_SOURCE) 0;
-
-        while (opt_src < NUM_OPT_SOURCE && dev->caps.src[opt_src] == NULL) {
-            opt_src ++;
+        /* Choose initial source */
+        while (dev->opt_src < NUM_OPT_SOURCE &&
+                (dev->caps.src[dev->opt_src]) == NULL) {
+            dev->opt_src ++;
         }
 
-        g_assert(opt_src < NUM_OPT_SOURCE);
-        dev->opt_src = opt_src;
+        g_assert(dev->opt_src != NUM_OPT_SOURCE);
+
+        /* Choose initial color mode */
+        devcaps_source *src = dev->caps.src[dev->opt_src];
+        while (dev->opt_mode < NUM_OPT_MODE &&
+               (src->modes & (1 << dev->opt_mode)) == 0) {
+            dev->opt_mode ++;
+        }
+
+        g_assert(dev->opt_mode != NUM_OPT_MODE);
 
         device_fill_options(dev);
         dev->flags |= DEVICE_READY;
@@ -1139,17 +1176,36 @@ SANE_Status
 sane_control_option (SANE_Handle handle, SANE_Int option, SANE_Action action,
                      void *value, SANE_Int *info)
 {
+    SANE_Status status = SANE_STATUS_UNSUPPORTED;
+    device *dev = (device*) handle;
+
     DBG_API_ENTER();
 
-    (void) handle;
-    (void) option;
-    (void) action;
-    (void) value;
+    /* Roughly validate arguments */
+    if (option < 0 || option > NUM_OPTIONS) {
+        goto DONE;
+    }
+
+    SANE_Option_Descriptor *desc = &dev->opt_desc[option];
+
+    if (action == SANE_ACTION_SET_VALUE && SANE_OPTION_IS_SETTABLE(desc->cap)){
+        status = SANE_STATUS_INVAL;
+        goto DONE;
+    }
+
+    G_LOCK(glib_main_loop);
+    if (action == SANE_ACTION_GET_VALUE) {
+        status = dev_get_option(dev, option, value);
+    } else {
+
+    }
+    G_UNLOCK(glib_main_loop);
+
     (void) info;
 
+DONE:
     DBG_API_LEAVE();
-
-    return SANE_STATUS_UNSUPPORTED;
+    return status;
 }
 
 /* Get current scan parameters

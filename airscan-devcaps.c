@@ -110,7 +110,7 @@ devcaps_source_parse_color_modes (xml_iter *iter, devcaps_source *src)
             } else if (!strcmp(v, "Grayscale8")) {
                 src->modes |= 1 << OPT_MODE_GRAYSCALE;
             } else if (!strcmp(v, "RGB24")) {
-                src->modes |= 1 << OPT_SOURCE_ADF_DUPLEX;
+                src->modes |= 1 << OPT_MODE_COLOR;
             }
         }
     }

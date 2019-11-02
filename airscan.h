@@ -230,9 +230,9 @@ typedef enum {
  */
 typedef enum {
     OPT_MODE_UNKNOWN = -1, /* Unknown */
-    OPT_MODE_LINEART,      /* 1-bit black and white */
-    OPT_MODE_GRAYSCALE,    /* 8-bit gray scale */
     OPT_MODE_COLOR,        /* RGB-24 */
+    OPT_MODE_GRAYSCALE,    /* 8-bit gray scale */
+    OPT_MODE_LINEART,      /* 1-bit black and white */
 
     NUM_OPT_MODE
 } OPT_MODE;
