@@ -17,6 +17,7 @@ static devcaps_source*
 devcaps_source_new (void)
 {
     devcaps_source *src = g_new0(devcaps_source, 1 );
+    array_of_string_init(&src->modes);
     array_of_word_init(&src->resolutions);
     return src;
 }
@@ -27,6 +28,7 @@ static void
 devcaps_source_free (devcaps_source *src)
 {
     if (src != NULL) {
+        array_of_string_cleanup(&src->modes);
         array_of_word_cleanup(&src->resolutions);
         g_free(src);
     }
@@ -87,20 +89,34 @@ devcaps_source_choose_resolution(devcaps_source *src, SANE_Word wanted)
 static const char*
 devcaps_source_parse_color_modes (xml_iter *iter, devcaps_source *src)
 {
+    SANE_Bool bw1 = SANE_FALSE, grayscale8 = SANE_FALSE, rgb24 = SANE_FALSE;
+
     xml_iter_enter(iter);
     for (; !xml_iter_end(iter); xml_iter_next(iter)) {
         if(xml_iter_node_name_match(iter, "scan:ColorMode")) {
             const char *v = xml_iter_node_value(iter);
             if (!strcmp(v, "BlackAndWhite1")) {
-                src->flags |= DEVCAPS_SOURCE_COLORMODE_BW1;
+                bw1 = SANE_TRUE;
             } else if (!strcmp(v, "Grayscale8")) {
-                src->flags |= DEVCAPS_SOURCE_COLORMODE_GRAYSCALE8;
+                grayscale8 = SANE_TRUE;
             } else if (!strcmp(v, "RGB24")) {
-                src->flags |= DEVCAPS_SOURCE_COLORMODE_RGB24;
+                rgb24 = SANE_TRUE;
             }
         }
     }
     xml_iter_leave(iter);
+
+    if (bw1) {
+        array_of_string_append(&src->modes, SANE_VALUE_SCAN_MODE_LINEART);
+    }
+
+    if (grayscale8) {
+        array_of_string_append(&src->modes, SANE_VALUE_SCAN_MODE_GRAY);
+    }
+
+    if (rgb24) {
+        array_of_string_append(&src->modes, SANE_VALUE_SCAN_MODE_COLOR);
+    }
 
     return NULL;
 }

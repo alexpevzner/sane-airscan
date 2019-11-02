@@ -63,6 +63,10 @@ typedef struct {
     AvahiServiceResolver *resolver;     /* Service resolver; may be NULL */
     SoupURI              *base_url;     /* eSCL base URI */
     GPtrArray            *http_pending; /* Pending HTTP requests */
+
+    /* Options */
+    SANE_Option_Descriptor opt_desc[NUM_OPTIONS]; /* Option descriptors */
+    devcaps_source         *opt_src;              /* Current source */
 } device;
 
 /* Static variables
@@ -267,6 +271,121 @@ device_find (const char *name)
     return g_tree_lookup(device_table, name);
 }
 
+/* Fill device options
+ */
+static void
+device_fill_options (device *dev)
+{
+    SANE_Option_Descriptor *desc;
+
+    memset(dev->opt_desc, 0, sizeof(dev->opt_desc));
+
+    /* OPT_NUM_OPTIONS */
+    desc = &dev->opt_desc[OPT_NUM_OPTIONS];
+    desc->name = SANE_NAME_NUM_OPTIONS;
+    desc->title = SANE_TITLE_NUM_OPTIONS;
+    desc->desc = SANE_DESC_NUM_OPTIONS;
+    desc->type = SANE_TYPE_INT;
+    desc->cap = SANE_CAP_SOFT_DETECT;
+
+    /* OPT_GROUP_STANDARD */
+    desc = &dev->opt_desc[OPT_GROUP_STANDARD];
+    desc->name = SANE_NAME_STANDARD;
+    desc->title = SANE_TITLE_STANDARD;
+    desc->desc = SANE_DESC_STANDARD;
+    desc->type = SANE_TYPE_GROUP;
+    desc->cap = 0;
+
+    /* OPT_SCAN_RESOLUTION */
+    desc = &dev->opt_desc[OPT_SCAN_RESOLUTION];
+    desc->name = SANE_NAME_SCAN_RESOLUTION;
+    desc->title = SANE_TITLE_SCAN_RESOLUTION;
+    desc->desc = SANE_DESC_SCAN_RESOLUTION;
+    desc->type = SANE_TYPE_INT;
+    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
+    desc->unit = SANE_UNIT_DPI;
+    if ((dev->opt_src->flags & DEVCAPS_SOURCE_RES_DISCRETE) != 0) {
+        desc->constraint_type = SANE_CONSTRAINT_WORD_LIST;
+        desc->constraint.word_list = dev->opt_src->resolutions;
+    } else {
+        desc->constraint_type = SANE_CONSTRAINT_RANGE;
+        desc->constraint.range = &dev->opt_src->res_range;
+    }
+
+    /* OPT_SCAN_MODE */
+    desc = &dev->opt_desc[OPT_SCAN_MODE];
+    desc->name = SANE_NAME_SCAN_MODE;
+    desc->title = SANE_TITLE_SCAN_MODE;
+    desc->type = SANE_TYPE_STRING;
+    desc->size = array_of_string_max_strlen(&dev->opt_src->modes) + 1;
+    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
+    desc->constraint_type = SANE_CONSTRAINT_STRING_LIST;
+    desc->constraint.string_list = (SANE_String_Const*) dev->opt_src->modes;
+
+    /* OPT_SCAN_SOURCE */
+    desc = &dev->opt_desc[OPT_SCAN_SOURCE];
+    desc->name = SANE_NAME_SCAN_SOURCE;
+    desc->title = SANE_TITLE_SCAN_SOURCE;
+    desc->type = SANE_TYPE_STRING;
+    desc->size = array_of_string_max_strlen(&dev->caps.sources) + 1;
+    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
+    desc->constraint_type = SANE_CONSTRAINT_STRING_LIST;
+    desc->constraint.string_list = (SANE_String_Const*) dev->caps.sources;
+
+    /* OPT_GROUP_GEOMETRY */
+    desc = &dev->opt_desc[OPT_GROUP_GEOMETRY];
+    desc->name = SANE_NAME_GEOMETRY;
+    desc->title = SANE_TITLE_GEOMETRY;
+    desc->desc = SANE_DESC_GEOMETRY;
+    desc->type = SANE_TYPE_GROUP;
+    desc->cap = 0;
+
+    /* OPT_SCAN_TL_X */
+    desc = &dev->opt_desc[OPT_SCAN_TL_X];
+    desc->name = SANE_NAME_SCAN_TL_X;
+    desc->title = SANE_TITLE_SCAN_TL_X;
+    desc->desc = SANE_DESC_SCAN_TL_X;
+    desc->type = SANE_TYPE_FIXED;
+    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
+    desc->unit = SANE_UNIT_MM;
+    desc->constraint_type = SANE_CONSTRAINT_RANGE;
+    desc->constraint.range = &dev->opt_src->win_x_range;
+
+    /* OPT_SCAN_TL_Y */
+    desc = &dev->opt_desc[OPT_SCAN_TL_Y];
+    desc->name = SANE_NAME_SCAN_TL_Y;
+    desc->title = SANE_TITLE_SCAN_TL_Y;
+    desc->desc = SANE_DESC_SCAN_TL_Y;
+    desc->type = SANE_TYPE_FIXED;
+    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
+    desc->unit = SANE_UNIT_MM;
+    desc->constraint_type = SANE_CONSTRAINT_RANGE;
+    desc->constraint.range = &dev->opt_src->win_y_range;
+
+
+    /* OPT_SCAN_BR_X */
+    desc = &dev->opt_desc[OPT_SCAN_BR_X];
+    desc->name = SANE_NAME_SCAN_BR_X;
+    desc->title = SANE_TITLE_SCAN_BR_X;
+    desc->desc = SANE_DESC_SCAN_BR_X;
+    desc->type = SANE_TYPE_FIXED;
+    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
+    desc->unit = SANE_UNIT_MM;
+    desc->constraint_type = SANE_CONSTRAINT_RANGE;
+    desc->constraint.range = &dev->opt_src->win_x_range;
+
+    /* OPT_SCAN_BR_Y */
+    desc = &dev->opt_desc[OPT_SCAN_BR_Y];
+    desc->name = SANE_NAME_SCAN_BR_Y;
+    desc->title = SANE_TITLE_SCAN_BR_Y;
+    desc->desc = SANE_DESC_SCAN_BR_Y;
+    desc->type = SANE_TYPE_FIXED;
+    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
+    desc->unit = SANE_UNIT_MM;
+    desc->constraint_type = SANE_CONSTRAINT_RANGE;
+    desc->constraint.range = &dev->opt_src->win_y_range;
+}
+
 /* Userdata passed to device_table_foreach_callback
  */
 typedef struct {
@@ -373,6 +492,15 @@ DONE:
     if (err != NULL) {
         device_del(dev);
     } else {
+        if (dev->caps.src_platen != NULL) {
+            dev->opt_src = dev->caps.src_platen;
+        } else if (dev->caps.src_adf_simplex != NULL) {
+            dev->opt_src = dev->caps.src_adf_simplex;
+        } else {
+            dev->opt_src = dev->caps.src_adf_duplex;
+        }
+
+        device_fill_options(dev);
         dev->flags |= DEVICE_READY;
         dev->flags &= ~DEVICE_INIT_WAIT;
     }
@@ -989,14 +1117,18 @@ sane_close (SANE_Handle handle)
 const SANE_Option_Descriptor *
 sane_get_option_descriptor (SANE_Handle handle, SANE_Int option)
 {
+    device *dev = (device*) handle;
+    SANE_Option_Descriptor *desc = NULL;
+
     DBG_API_ENTER();
 
-    (void) handle;
-    (void) option;
+    if (0 <= option && option < NUM_OPTIONS) {
+        desc = &dev->opt_desc[option];
+    }
 
     DBG_API_LEAVE();
 
-    return NULL;
+    return desc;
 }
 
 /* Get or set option value

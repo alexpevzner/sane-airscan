@@ -121,5 +121,23 @@ array_of_string_append(SANE_String **a, SANE_String s)
     (*a)[sz] = NULL;
 }
 
+/* Compute max string length in array of strings
+ */
+size_t
+array_of_string_max_strlen(SANE_String **a)
+{
+    size_t max_len = 0;
+    SANE_String *s = *a;
+
+    for (; s != NULL; s ++) {
+        size_t len = strlen(*s);
+        if (len > max_len) {
+            max_len = len;
+        }
+    }
+
+    return max_len;
+}
+
 /* vim:ts=8:sw=4:et
  */

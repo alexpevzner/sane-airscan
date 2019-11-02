@@ -7,9 +7,11 @@
 #ifndef airscan_h
 #define airscan_h
 
-#include <stdio.h>
 #include <sane/sane.h>
+#include <sane/saneopts.h>
+
 #include <libxml/tree.h>
+#include <stdio.h>
 
 /******************** Debugging ********************/
 /* Debug flags
@@ -101,6 +103,11 @@ array_of_string_len (SANE_String **a);
 void
 array_of_string_append(SANE_String **a, SANE_String s);
 
+/* Compute max string length in array of strings
+ */
+size_t
+array_of_string_max_strlen(SANE_String **a);
+
 /******************** XML utilities ********************/
 /* XML iterator
  */
@@ -176,7 +183,30 @@ const char*
 xml_iter_node_value_uint (xml_iter *iter, SANE_Word *val);
 
 /******************** Sane Options********************/
+/* Options numbers, for internal use
+ */
+enum {
+    OPT_NUM_OPTIONS,            /* Total number of options */
+
+    /* Standard options group */
+    OPT_GROUP_STANDARD,
+    OPT_SCAN_RESOLUTION,
+    OPT_SCAN_MODE,              /* I.e. color/grayscale etc */
+    OPT_SCAN_SOURCE,            /* Platem/ADF/ADF Duplex */
+
+    /* Geometry options group */
+    OPT_GROUP_GEOMETRY,
+    OPT_SCAN_TL_X,
+    OPT_SCAN_TL_Y,
+    OPT_SCAN_BR_X,
+    OPT_SCAN_BR_Y,
+
+    /* Total count of options, computed by compiler */
+    NUM_OPTIONS
+};
+
 /* String constants for certain SANE options values
+ * (missed from sane/sameopt.h)
  */
 #define OPTVAL_SOURCE_PLATEN      "Flatbed"
 #define OPTVAL_SOURCE_ADF_SIMPLEX "ADF"
@@ -187,9 +217,10 @@ xml_iter_node_value_uint (xml_iter *iter, SANE_Word *val);
  */
 enum {
     /* Supported color modes */
-    DEVCAPS_SOURCE_COLORMODE_BW1         = (1 << 0), /* 1-bit black&white */
-    DEVCAPS_SOURCE_COLORMODE_GRAYSCALE8  = (1 << 1), /* 8-bit gray scale */
-    DEVCAPS_SOURCE_COLORMODE_RGB24       = (1 << 2), /* 24-bit RGB color */
+
+    //DEVCAPS_SOURCE_COLORMODE_BW1         = (1 << 0), /* 1-bit black&white */
+    //DEVCAPS_SOURCE_COLORMODE_GRAYSCALE8  = (1 << 1), /* 8-bit gray scale */
+    //DEVCAPS_SOURCE_COLORMODE_RGB24       = (1 << 2), /* 24-bit RGB color */
 
     /* Supported Intents */
     DEVCAPS_SOURCE_INTENT_DOCUMENT      = (1 << 3),
@@ -215,6 +246,7 @@ enum {
  */
 typedef struct {
     unsigned int flags;                    /* Source flags */
+    SANE_String  *modes;                   /* Color modes, in SANE format */
     SANE_Word    min_width, max_width;     /* Min/max image width */
     SANE_Word    min_height, max_height;   /* Min/max image height */
     SANE_Word    *resolutions;             /* Discrete resolutions, in DPI */
