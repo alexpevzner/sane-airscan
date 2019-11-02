@@ -51,9 +51,10 @@ devcaps_reset (devcaps *caps)
     g_free((void*) caps->vendor);
     g_free((void*) caps->model);
 
-    devcaps_source_free(caps->src_platen);
-    devcaps_source_free(caps->src_adf_simplex);
-    devcaps_source_free(caps->src_adf_duplex);
+    unsigned int i;
+    for (i = 0; i < NUM_OPT_SOURCE; i ++) {
+        devcaps_source_free(caps->src[i]);
+    }
 
     memset(caps, 0, sizeof(*caps));
 }
@@ -407,17 +408,20 @@ devcaps_parse (devcaps *caps, xmlDoc *xml)
         } else if (xml_iter_node_name_match(&iter, "scan:Platen")) {
             xml_iter_enter(&iter);
             if (xml_iter_node_name_match(&iter, "scan:PlatenInputCaps")) {
-                err = devcaps_source_parse(&iter, &caps->src_platen );
+                err = devcaps_source_parse(&iter,
+                    &caps->src[OPT_SOURCE_PLATEN]);
             }
             xml_iter_leave(&iter);
         } else if (xml_iter_node_name_match(&iter, "scan:Adf")) {
             xml_iter_enter(&iter);
             while (!xml_iter_end(&iter)) {
                 if (xml_iter_node_name_match(&iter, "scan:AdfSimplexInputCaps")) {
-                    err = devcaps_source_parse(&iter, &caps->src_adf_simplex);
+                    err = devcaps_source_parse(&iter,
+                        &caps->src[OPT_SOURCE_ADF_SIMPLEX]);
                 } else if (xml_iter_node_name_match(&iter,
                         "scan:AdfDuplexInputCaps")) {
-                    err = devcaps_source_parse(&iter, &caps->src_adf_duplex);
+                    err = devcaps_source_parse(&iter,
+                        &caps->src[OPT_SOURCE_ADF_DUPLEX]);
                 }
                 xml_iter_next(&iter);
             }
@@ -454,16 +458,13 @@ devcaps_parse (devcaps *caps, xmlDoc *xml)
     }
 
     /* Update list of sources */
-    if (caps->src_platen != NULL) {
-        array_of_string_append(&caps->sources, OPTVAL_SOURCE_PLATEN);
-    }
+    OPT_SOURCE opt_src;
 
-    if (caps->src_adf_simplex != NULL) {
-        array_of_string_append(&caps->sources, OPTVAL_SOURCE_ADF_SIMPLEX);
-    }
-
-    if (caps->src_adf_duplex != NULL) {
-        array_of_string_append(&caps->sources, OPTVAL_SOURCE_ADF_DUPLEX);
+    for (opt_src = (OPT_SOURCE) 0; opt_src < NUM_OPT_SOURCE; opt_src ++) {
+        if (caps->src[opt_src] != NULL) {
+            array_of_string_append(&caps->sources,
+                (SANE_String) opt_source_to_sane(opt_src));
+        }
     }
 
 DONE:
@@ -495,16 +496,10 @@ devcaps_dump (const char *name, devcaps *caps)
     }
     DBG_PROTO(name, "  Sources: %s", buf->str);
 
-    struct { char *name; devcaps_source *src; } sources[] = {
-        {OPTVAL_SOURCE_PLATEN, caps->src_platen},
-        {OPTVAL_SOURCE_ADF_SIMPLEX, caps->src_adf_simplex},
-        {OPTVAL_SOURCE_ADF_DUPLEX, caps->src_adf_duplex},
-        {NULL, NULL}
-    };
-
-    for (i = 0; sources[i].name; i ++) {
-        DBG_PROTO(name, "  %s:", sources[i].name);
-        devcaps_source *src = sources[i].src;
+    OPT_SOURCE opt_src;
+    for (opt_src = (OPT_SOURCE) 0; opt_src < NUM_OPT_SOURCE; opt_src ++) {
+        DBG_PROTO(name, "  %s:", opt_source_to_sane(opt_src));
+        devcaps_source *src = caps->src[opt_src];
         DBG_PROTO(name, "    Min Width/Height: %d/%d", src->min_width, src->min_height);
         DBG_PROTO(name, "    Max Width/Height: %d/%d", src->max_width, src->max_height);
 

@@ -66,7 +66,7 @@ typedef struct {
 
     /* Options */
     SANE_Option_Descriptor opt_desc[NUM_OPTIONS]; /* Option descriptors */
-    devcaps_source         *opt_src;              /* Current source */
+    OPT_SOURCE             opt_src;               /* Current source */
 } device;
 
 /* Static variables
@@ -277,6 +277,7 @@ static void
 device_fill_options (device *dev)
 {
     SANE_Option_Descriptor *desc;
+    devcaps_source         *src = dev->caps.src[dev->opt_src];
 
     memset(dev->opt_desc, 0, sizeof(dev->opt_desc));
 
@@ -304,12 +305,12 @@ device_fill_options (device *dev)
     desc->type = SANE_TYPE_INT;
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_DPI;
-    if ((dev->opt_src->flags & DEVCAPS_SOURCE_RES_DISCRETE) != 0) {
+    if ((src->flags & DEVCAPS_SOURCE_RES_DISCRETE) != 0) {
         desc->constraint_type = SANE_CONSTRAINT_WORD_LIST;
-        desc->constraint.word_list = dev->opt_src->resolutions;
+        desc->constraint.word_list = src->resolutions;
     } else {
         desc->constraint_type = SANE_CONSTRAINT_RANGE;
-        desc->constraint.range = &dev->opt_src->res_range;
+        desc->constraint.range = &src->res_range;
     }
 
     /* OPT_SCAN_MODE */
@@ -317,10 +318,10 @@ device_fill_options (device *dev)
     desc->name = SANE_NAME_SCAN_MODE;
     desc->title = SANE_TITLE_SCAN_MODE;
     desc->type = SANE_TYPE_STRING;
-    desc->size = array_of_string_max_strlen(&dev->opt_src->modes) + 1;
+    desc->size = array_of_string_max_strlen(&src->modes) + 1;
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->constraint_type = SANE_CONSTRAINT_STRING_LIST;
-    desc->constraint.string_list = (SANE_String_Const*) dev->opt_src->modes;
+    desc->constraint.string_list = (SANE_String_Const*) src->modes;
 
     /* OPT_SCAN_SOURCE */
     desc = &dev->opt_desc[OPT_SCAN_SOURCE];
@@ -349,7 +350,7 @@ device_fill_options (device *dev)
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_MM;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
-    desc->constraint.range = &dev->opt_src->win_x_range;
+    desc->constraint.range = &src->win_x_range;
 
     /* OPT_SCAN_TL_Y */
     desc = &dev->opt_desc[OPT_SCAN_TL_Y];
@@ -360,7 +361,7 @@ device_fill_options (device *dev)
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_MM;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
-    desc->constraint.range = &dev->opt_src->win_y_range;
+    desc->constraint.range = &src->win_y_range;
 
 
     /* OPT_SCAN_BR_X */
@@ -372,7 +373,7 @@ device_fill_options (device *dev)
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_MM;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
-    desc->constraint.range = &dev->opt_src->win_x_range;
+    desc->constraint.range = &src->win_x_range;
 
     /* OPT_SCAN_BR_Y */
     desc = &dev->opt_desc[OPT_SCAN_BR_Y];
@@ -383,7 +384,7 @@ device_fill_options (device *dev)
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_MM;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
-    desc->constraint.range = &dev->opt_src->win_y_range;
+    desc->constraint.range = &src->win_y_range;
 }
 
 /* Userdata passed to device_table_foreach_callback
@@ -492,13 +493,14 @@ DONE:
     if (err != NULL) {
         device_del(dev);
     } else {
-        if (dev->caps.src_platen != NULL) {
-            dev->opt_src = dev->caps.src_platen;
-        } else if (dev->caps.src_adf_simplex != NULL) {
-            dev->opt_src = dev->caps.src_adf_simplex;
-        } else {
-            dev->opt_src = dev->caps.src_adf_duplex;
+        OPT_SOURCE opt_src = (OPT_SOURCE) 0;
+
+        while (opt_src < NUM_OPT_SOURCE && dev->caps.src[opt_src] == NULL) {
+            opt_src ++;
         }
+
+        g_assert(opt_src < NUM_OPT_SOURCE);
+        dev->opt_src = opt_src;
 
         device_fill_options(dev);
         dev->flags |= DEVICE_READY;

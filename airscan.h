@@ -205,12 +205,54 @@ enum {
     NUM_OPTIONS
 };
 
+/* Source numbers, for internal use
+ */
+typedef enum {
+    OPT_SOURCE_UNKNOWN = -1, /* Unknown */
+    OPT_SOURCE_PLATEN,       /* Flatbed (a.k.a platen) scanner */
+    OPT_SOURCE_ADF_SIMPLEX,  /* ADF in simplex mode */
+    OPT_SOURCE_ADF_DUPLEX,   /* ADF in duplex mode */
+
+    NUM_OPT_SOURCE
+} OPT_SOURCE;
+
+/* Color mode numbers, for internal use
+ */
+typedef enum {
+    OPT_MODE_UNKNOWN = -1, /* Unknown */
+    OPT_MODE_LINEART,      /* 1-bit black and white */
+    OPT_MODE_GRAYSCALE,    /* 8-bit gray scale */
+    OPT_MODE_COLOR,        /* RGB-24 */
+
+    NUM_OPT_MODE
+} OPT_MODE;
+
 /* String constants for certain SANE options values
  * (missed from sane/sameopt.h)
  */
 #define OPTVAL_SOURCE_PLATEN      "Flatbed"
 #define OPTVAL_SOURCE_ADF_SIMPLEX "ADF"
 #define OPTVAL_SOURCE_ADF_DUPLEX  "ADF Duplex"
+
+/* Decode OPT_SOURCE from SANE name
+ */
+OPT_SOURCE
+opt_source_from_sane (SANE_String_Const name);
+
+/* Get SANE name of OPT_SOURCE
+ */
+SANE_String_Const
+opt_source_to_sane (OPT_SOURCE source);
+
+/* Decode OPT_MODE from SANE name
+ */
+OPT_MODE
+opt_mode_from_sane (SANE_String_Const name);
+
+/* Get SANE name of OPT_MODE
+ */
+SANE_String_Const
+opt_mode_to_sane (OPT_MODE mode);
 
 /******************** Device Capabilities  ********************/
 /* Source flags
@@ -259,14 +301,12 @@ typedef struct {
  */
 typedef struct {
     /* Common capabilities */
-    SANE_String    *sources;     /* Sources, in SANE format */
-    const char     *model;       /* Device model */
-    const char     *vendor;      /* Device vendor */
+    SANE_String    *sources;            /* Sources, in SANE format */
+    const char     *model;              /* Device model */
+    const char     *vendor;             /* Device vendor */
 
     /* Sources */
-    devcaps_source *src_platen;      /* Platen (flatbed) scanner */
-    devcaps_source *src_adf_simplex; /* ADF in simplex mode */
-    devcaps_source *src_adf_duplex;  /* ADF in duplex mode */
+    devcaps_source *src[NUM_OPT_SOURCE]; /* All sources */
 } devcaps;
 
 /* Initialize Device Capabilities
