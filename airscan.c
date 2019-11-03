@@ -256,7 +256,13 @@ device_resolver_done (device *dev, const AvahiAddress *addr, uint16_t port,
 
     char str_addr[128], *url;
 
-    avahi_address_snprint(str_addr, sizeof(str_addr), addr);
+    if (addr->proto == AVAHI_PROTO_INET) {
+        avahi_address_snprint(str_addr, sizeof(str_addr), addr);
+    } else {
+        str_addr[0] = '[';
+        avahi_address_snprint(str_addr + 1, sizeof(str_addr) - 2, addr);
+        strcat(str_addr, "]");
+    }
 
     if (rs_text != NULL) {
         url = g_strdup_printf("http://%s:%d/%s/", str_addr, port,
