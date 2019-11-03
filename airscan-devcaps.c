@@ -513,8 +513,12 @@ devcaps_dump (const char *name, devcaps *caps)
 
     OPT_SOURCE opt_src;
     for (opt_src = (OPT_SOURCE) 0; opt_src < NUM_OPT_SOURCE; opt_src ++) {
-        DBG_PROTO(name, "  %s:", opt_source_to_sane(opt_src));
         devcaps_source *src = caps->src[opt_src];
+        if (src == NULL) {
+            continue;
+        }
+
+        DBG_PROTO(name, "  %s:", opt_source_to_sane(opt_src));
         DBG_PROTO(name, "    Min Width/Height: %d/%d", src->min_width, src->min_height);
         DBG_PROTO(name, "    Max Width/Height: %d/%d", src->max_width, src->max_height);
 
