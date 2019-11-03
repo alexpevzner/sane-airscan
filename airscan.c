@@ -617,6 +617,16 @@ device_http_callback(SoupSession *session, SoupMessage *msg, gpointer userdata)
 {
     (void) session;
 
+    if (DBG_ENABLED(DBG_FLG_HTTP)) {
+        SoupURI *uri = soup_message_get_uri(msg);
+        char *uri_str = soup_uri_to_string(uri, FALSE);
+
+        DBG_HTTP("%s %s: %s", msg->method, uri_str,
+                soup_status_get_phrase(msg->status_code));
+
+        g_free(uri_str);
+    }
+
     if (msg->status_code != SOUP_STATUS_CANCELLED) {
         device_http_userdata *data = userdata;
         g_ptr_array_remove(data->dev->http_pending, msg);

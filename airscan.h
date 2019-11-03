@@ -21,16 +21,21 @@ enum {
     DBG_FLG_DISCOVERY = (1 << 1), /* Device discovery debugging */
     DBG_FLG_PROTO     = (1 << 2), /* Protocol */
     DBG_FLG_DEVICE    = (1 << 3), /* Device management */
+    DBG_FLG_HTTP      = (1 << 4), /* HTTP tracing */
     DBG_FLG_ALL       = 0xff
 };
 
 extern int dbg_flags;
 
+/* Check dbg_flags
+ */
+#define DBG_ENABLED(flg)        ((flg) & dbg_flags)
+
 /* Print debug message
  */
 #define DBG_PRINT(flg, prefix, fmt, args...)                    \
     do{                                                         \
-        if ((flg) & dbg_flags) {                                \
+        if (DBG_ENABLED(flg)) {                                 \
             printf("airscan: " prefix ": " fmt "\n", ##args);   \
         }                                                       \
     } while(0)
@@ -49,8 +54,11 @@ extern int dbg_flags;
 #define DBG_PROTO(name, fmt, args...)           \
         DBG_PRINT(DBG_FLG_PROTO, "proto", "\"%s\": " fmt, name, ##args)
 
-#define DBG_DEVICE(name, fmt, args...)           \
+#define DBG_DEVICE(name, fmt, args...)          \
         DBG_PRINT(DBG_FLG_DEVICE, "proto", "\"%s\": " fmt, name, ##args)
+
+#define DBG_HTTP(fmt, args...)                  \
+        DBG_PRINT(DBG_FLG_HTTP, "http", fmt, ##args)
 
 /******************** Typed Arrays ********************/
 /* Initialize array of SANE_Word
