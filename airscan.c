@@ -244,8 +244,8 @@ device_del_callback (gpointer p)
 /* Called when AVAHI resovler is done
  */
 static void
-device_resolver_done (device *dev, const AvahiAddress *addr, uint16_t port,
-        AvahiStringList *txt)
+device_resolver_done (device *dev, AvahiIfIndex interface,
+        const AvahiAddress *addr, uint16_t port, AvahiStringList *txt)
 {
     /* Build device API URL */
     AvahiStringList *rs = avahi_string_list_find(txt, "rs");
@@ -261,7 +261,17 @@ device_resolver_done (device *dev, const AvahiAddress *addr, uint16_t port,
     } else {
         str_addr[0] = '[';
         avahi_address_snprint(str_addr + 1, sizeof(str_addr) - 2, addr);
-        strcat(str_addr, "]");
+        size_t l = strlen(str_addr);
+
+        /* Connect to link-local address requires explicit scope */
+        static char link_local[8] = {0xfe, 0x80};
+        if (!memcmp(addr->data.ipv6.address, link_local, sizeof(link_local))) {
+            // See RFC6874 for details
+            l += sprintf(str_addr + l, "%%25%d", interface);
+        }
+
+        str_addr[l++] = ']';
+        str_addr[l] = '\0';
     }
 
     if (rs_text != NULL) {
@@ -811,7 +821,7 @@ dd_avahi_resolver_callback (AvahiServiceResolver *r, AvahiIfIndex interface,
     switch (event) {
     case AVAHI_RESOLVER_FOUND:
         DBG_DISCOVERY(name, "resolver: OK");
-        device_resolver_done(dev, addr, port, txt);
+        device_resolver_done(dev, interface, addr, port, txt);
         break;
 
     case AVAHI_RESOLVER_FAILURE:
