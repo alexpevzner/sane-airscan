@@ -1,0 +1,638 @@
+/* AirScan (a.k.a. eSCL) backend for SANE
+ *
+ * Copyright (C) 2019 and up by Alexander Pevzner (pzz@apevzner.com)
+ * See LICENSE for license terms and conditions
+ *
+ * Configuration file parser
+ */
+
+#include <glib.h>
+#include <stdio.h>
+
+/***** Local types *****/
+/*
+ * Types of .INI file records
+ */
+typedef enum {
+    INIFILE_SECTION,                    /* The [section name] string */
+    INIFILE_VARIABLE,                   /* The variable = value string */
+    INIFILE_COMMAND,                    /* command param1 param2 ... */
+    INIFILE_SYNTAX                      /* The syntax error */
+} INIFILE_RECORD;
+
+/*
+ * .INI file record
+ */
+typedef struct {
+    INIFILE_RECORD      type;           /* Record type */
+    const char          *section;       /* Section name */
+    const char          *variable;      /* Variable name */
+    const char          *value;         /* Variable value */
+    const char          **tokv;         /* Value split to tokens */
+    unsigned int        tokc;           /* Count of strings in tokv */
+    const char          *file;          /* File name */
+    unsigned int        line;           /* File line */
+} inifile_record;
+
+/*
+ * .INI file (opaque)
+ */
+typedef struct {
+    const char          *file;                  /* File name */
+    unsigned int        line;                   /* File handle */
+    FILE                *fp;                    /* File pointer */
+
+    gboolean            tk_open;                /* Token is currently open */
+    GString             *tk_buffer;             /* Parser buffer, tokenized */
+    unsigned int        *tk_offsets;            /* Tokens offsets */
+    unsigned int        tk_count;               /* Tokens count */
+    unsigned int        tk_count_max;           /* Max ever allocated tokens
+                                                   count */
+
+    GString             *buffer;                /* Parser buffer */
+    GString             *section;               /* Section name string */
+    GString             *variable;              /* Variable name string */
+    GString             *value;                 /* Value string */
+    inifile_record      record;                 /* Record buffer */
+} inifile;
+
+#define INIFILE_TOKEN_ARRAY_INCREMENT   32
+
+/***** Functions *****/
+/* Open the .INI file
+ */
+inifile*
+inifile_open (const char *name)
+{
+    FILE        *fp;
+    inifile     *file;
+
+    fp = fopen(name, "r");
+    if (fp == NULL) {
+        return NULL;
+    }
+
+    file = g_new0(inifile, 1);
+    file->fp = fp;
+    file->file = g_strdup(name);
+    file->line = 1;
+    file->tk_buffer = g_string_new(NULL);
+    file->buffer = g_string_new(NULL);
+    file->section = g_string_new(NULL);
+    file->variable = g_string_new(NULL);
+    file->value = g_string_new(NULL);
+
+    return file;
+}
+
+/* Close the .INI file
+ */
+void
+inifile_close (inifile *file)
+{
+    fclose(file->fp);
+    g_free((char*) file->file);
+    g_string_free(file->tk_buffer, TRUE);
+    g_free(file->tk_offsets);
+    g_string_free(file->buffer, TRUE);
+    g_string_free(file->section, TRUE);
+    g_string_free(file->variable, TRUE);
+    g_string_free(file->value, TRUE);
+    g_free(file->record.tokv);
+}
+
+/* Rewind the .INI file
+ */
+int
+inifile_rewind (inifile *file)
+{
+    file->line = 1;
+    rewind( file->fp );
+    return 0;
+}
+
+/* Get the file name
+ */
+const char*
+inifile_get_file (inifile *file)
+{
+    return file->file;
+}
+
+/* Get the current line
+ */
+unsigned int
+inifile_get_line (inifile *file)
+{
+    return file->line;
+}
+
+/* Get next character from the file
+ */
+static inline int
+inifile_getc (inifile *file)
+{
+    int c = getc( file->fp );
+    if (c == '\n') {
+        file->line ++;
+    }
+    return c;
+}
+
+/* Push character back to stream
+ */
+static inline void
+inifile_ungetc (inifile *file, int c)
+{
+    if (c == '\n') {
+        file->line --;
+    }
+    ungetc( c, file->fp );
+}
+
+/* Get next non-space character from the file
+ */
+static inline int
+inifile_getc_nonspace (inifile *file)
+{
+    int c;
+
+    while ((c = inifile_getc( file )) != EOF && g_ascii_isspace(c))
+        ;
+
+    return c;
+}
+
+/* Read until new line or EOF
+ */
+static inline int
+inifile_getc_nl (inifile *file)
+{
+    int c;
+
+    while ((c = inifile_getc( file )) != EOF && c != '\n')
+        ;
+
+    return c;
+}
+
+/* Check for commentary character
+ */
+static inline gboolean
+inifile_iscomment (int c)
+{
+    return c == ';' || c == '#';
+}
+
+/* Check for octal digit
+ */
+static inline gboolean
+inifile_isoctal (int c)
+{
+    return '0' <= c && c <= '7';
+}
+
+/* Check for special character
+ */
+static inline gboolean
+inifile_isspecial (int c)
+{
+    return g_ascii_iscntrl( c ) ||
+           !g_ascii_isprint( c ) ||
+           c == '"' ||
+           inifile_iscomment( c );
+}
+
+/* Check for token-breaking character
+ */
+static inline gboolean
+inifile_istkbreaker (int c)
+{
+    return c == ',';
+}
+
+/*
+ * Translate hexadecimal digit character to its integer value
+ * Note, this function requires valie hexadecimal number as its argument
+ */
+static inline unsigned int
+inifile_hex2int (int c)
+{
+    if (g_ascii_isdigit(c)) {
+        return c - '0';
+    } else {
+        return g_ascii_toupper(c) - 'A' + 10;
+    }
+}
+
+/* Translate integer in the range [0..15] to hexadecimal digit
+ */
+static inline char
+inifile_int2hex (int c)
+{
+    return "0123456789abcdef"[c];
+}
+
+/* Reset tokenizer
+ */
+static inline void
+inifile_tk_reset (inifile *file)
+{
+    file->tk_open = FALSE;
+    g_string_truncate(file->tk_buffer, 0);
+    file->tk_count = 0;
+}
+
+/* Push token to token array
+ */
+static void
+inifile_tk_array_push( inifile *file )
+{
+    /* Grow array on demand */
+    if (file->tk_count == file->tk_count_max) {
+        file->tk_count_max += INIFILE_TOKEN_ARRAY_INCREMENT;
+        file->tk_offsets = g_realloc(file->tk_offsets,
+            sizeof(*file->tk_offsets) * file->tk_count_max);
+    }
+
+    /* Push token offset into array */
+    file->tk_offsets[file->tk_count ++] = file->tk_buffer->len;
+}
+
+/* Export token array to file->record
+ */
+static void
+inifile_tk_array_export( inifile *file )
+{
+    unsigned int        i;
+
+    file->record.tokv = g_realloc( file->record.tokv,
+            sizeof(*file->record.tokv) * file->tk_count_max);
+
+    file->record.tokc = file->tk_count;
+    for (i = 0; i < file->tk_count; i ++) {
+        const char      *token;
+
+        token = file->tk_buffer->str + file->tk_offsets[ i ];
+        file->record.tokv[ i ] = token;
+    }
+}
+
+/* Open token if it is not opened yet
+ */
+static void
+inifile_tk_open( inifile *file )
+{
+    if (!file->tk_open) {
+        inifile_tk_array_push( file );
+        file->tk_open = TRUE;
+    }
+}
+
+/* Close current token
+ */
+static void
+inifile_tk_close( inifile *file )
+{
+    if (file->tk_open) {
+        g_string_append_c(file->tk_buffer, '\0');
+        file->tk_open = FALSE;
+    }
+}
+
+/* Append character to token
+ */
+static inline void
+inifile_tk_append( inifile *file, int c )
+{
+    inifile_tk_open(file);
+    g_string_append_c(file->tk_buffer, c);
+}
+
+/* Strip trailing space in line currently being read
+ */
+static inline void
+inifile_strip_trailing_space( inifile *file, unsigned int *trailing_space )
+{
+    g_string_truncate( file->buffer, file->buffer->len - *trailing_space );
+    *trailing_space = 0;
+}
+
+/* Read string until either one of following is true:
+ *    - new line or EOF or read error is reached
+ *    - delimiter character is reached (if specified)
+ *
+ * If linecont parameter is TRUE, '\' at the end of line treated
+ * as line continuation character
+ */
+static int
+inifile_gets (inifile *file, char delimiter, gboolean linecont,
+        gboolean *syntax)
+{
+    int                 c;
+    unsigned int        accumulator = 0;
+    unsigned int        count = 0;
+    unsigned int        trailing_space = 0;
+    enum {
+        PRS_SKIP_SPACE,
+        PRS_BODY,
+        PRS_STRING,
+        PRS_STRING_BSLASH,
+        PRS_STRING_HEX,
+        PRS_STRING_OCTAL,
+        PRS_COMMENT
+    } state = PRS_SKIP_SPACE;
+
+    g_string_truncate( file->buffer, 0 );
+    inifile_tk_reset( file );
+
+    /* Parse the string */
+    for (;;) {
+        c = inifile_getc( file );
+
+        if (c == EOF || c == '\n') {
+            break;
+        }
+
+        if ((state == PRS_BODY || state == PRS_SKIP_SPACE) && c == delimiter) {
+            inifile_tk_close( file );
+            break;
+        }
+
+        switch( state ) {
+        case PRS_SKIP_SPACE:
+            if (g_ascii_isspace( c )) {
+                break;
+            }
+
+            state = PRS_BODY;
+            /* Fall through... */
+
+        case PRS_BODY:
+            if (c == '"') {
+                state = PRS_STRING;
+                inifile_tk_open(file);
+            } else if (inifile_iscomment(c)) {
+                state = PRS_COMMENT;
+            } else if (c == '\\' && linecont) {
+                int c2 = inifile_getc(file);
+                if( c2 == '\n' ) {
+                    inifile_strip_trailing_space(file, &trailing_space);
+                    state = PRS_SKIP_SPACE;
+                } else {
+                    inifile_ungetc(file, c);
+                }
+            } else {
+                g_string_append_c(file->buffer, c);
+            }
+
+            if (state == PRS_BODY) {
+                if (g_ascii_isspace(c)) {
+                    trailing_space ++;
+                    inifile_tk_close(file);
+                } else {
+                    trailing_space = 0;
+                    if (inifile_istkbreaker(c) ) {
+                        inifile_tk_close(file);
+                    } else {
+                        inifile_tk_append(file, c);
+                    }
+                }
+            }
+            else {
+                inifile_strip_trailing_space(file, &trailing_space);
+            }
+            break;
+
+        case PRS_STRING:
+            if (c == '\\') {
+                state = PRS_STRING_BSLASH;
+            } else if (c == '"' ) {
+                state = PRS_BODY;
+            } else {
+                g_string_append_c(file->buffer, c);
+                inifile_tk_append(file, c);
+            }
+            break;
+
+        case PRS_STRING_BSLASH:
+            if (c == 'x' || c == 'X') {
+                state = PRS_STRING_HEX;
+                accumulator = count = 0;
+            } else if (inifile_isoctal(c)) {
+                state = PRS_STRING_OCTAL;
+                accumulator = inifile_hex2int(c);
+                count = 1;
+            } else {
+                switch (c) {
+                case 'a': c = '\a'; break;
+                case 'b': c = '\b'; break;
+                case 'e': c = '\x1b'; break;
+                case 'f': c = '\f'; break;
+                case 'n': c = '\n'; break;
+                case 'r': c = '\r'; break;
+                case 't': c = '\t'; break;
+                case 'v': c = '\v'; break;
+                }
+
+                g_string_append_c(file->buffer, c);
+                inifile_tk_append(file, c);
+                state = PRS_STRING;
+            }
+            break;
+
+        case PRS_STRING_HEX:
+            if (g_ascii_isxdigit(c)) {
+                if (count != 2) {
+                    accumulator = accumulator * 16 + inifile_hex2int(c);
+                    count ++;
+                }
+            } else {
+                state = PRS_STRING;
+                inifile_ungetc(file, c);
+            }
+
+            if (state != PRS_STRING_HEX) {
+                g_string_append_c(file->buffer, accumulator);
+                inifile_tk_append(file, accumulator);
+            }
+            break;
+
+        case PRS_STRING_OCTAL:
+            if (inifile_isoctal(c)) {
+                accumulator = accumulator * 8 + inifile_hex2int(c);
+                count ++;
+                if (count == 3) {
+                    state = PRS_STRING;
+                }
+            } else {
+                state = PRS_STRING;
+                inifile_ungetc(file, c);
+            }
+
+            if (state != PRS_STRING_OCTAL) {
+                g_string_append_c(file->buffer, accumulator);
+                inifile_tk_append(file, accumulator);
+            }
+            break;
+
+        case PRS_COMMENT:
+            break;
+        }
+    }
+
+    /* Remove trailing space, if any */
+    inifile_strip_trailing_space( file, &trailing_space );
+
+    /* Set syntax error flag */
+    *syntax = FALSE;
+    if (state != PRS_SKIP_SPACE && state != PRS_BODY && state != PRS_COMMENT) {
+        *syntax = TRUE;
+    }
+
+    return c;
+}
+
+/* Finish reading the record. Performs common cleanup operations,
+ * feels record structure etc
+ */
+const inifile_record*
+inifile_read_finish (inifile *file, int last_char, INIFILE_RECORD rec_type)
+{
+    file->record.type = rec_type;
+    file->record.file = file->file;
+    file->record.section = file->section->str;
+    file->record.variable = file->record.value = NULL;
+
+    if (rec_type == INIFILE_VARIABLE || rec_type == INIFILE_COMMAND) {
+        inifile_tk_array_export(file);
+        if (rec_type == INIFILE_VARIABLE) {
+            file->record.variable = file->variable->str;
+            file->record.value = file->value->str;
+        } else {
+            g_assert(file->record.tokc);
+            file->record.variable = file->record.tokv[0];
+            file->record.tokc --;
+            if (file->record.tokc) {
+                memmove( (void*) file->record.tokv, file->record.tokv + 1,
+                    sizeof( file->record.tokv[ 0 ] ) * file->record.tokc);
+            }
+        }
+    } else {
+        file->record.tokc = 0;
+    }
+
+    if (last_char == '\n') {
+        file->record.line = file->line - 1;
+    } else {
+        file->record.line = file->line;
+        if (last_char != EOF) {
+            inifile_getc_nl( file );
+        }
+    }
+
+    return &file->record;
+}
+
+/* Read next record
+ */
+const inifile_record*
+inifile_read( inifile *file )
+{
+    int         c;
+    gboolean    syntax;
+
+    c = inifile_getc_nonspace(file);
+    while (inifile_iscomment(c) ) {
+        inifile_getc_nl(file);
+        c = inifile_getc_nonspace(file);
+    }
+
+    if( c == EOF ) {
+        return NULL;
+    }
+
+    if( c == '[' ) {
+        c = inifile_gets( file, ']', FALSE, &syntax );
+
+        if( c == ']' && !syntax )
+        {
+            g_string_assign(file->section, file->buffer->str);
+            return inifile_read_finish(file, c, INIFILE_SECTION);
+        }
+    } else if( c != '=' ) {
+        inifile_ungetc(file, c);
+
+        c = inifile_gets(file, '=', FALSE, &syntax);
+        if(c == '=' && !syntax) {
+            g_string_assign(file->variable, file->buffer->str);
+            c = inifile_gets(file, EOF, TRUE, &syntax);
+            if(!syntax) {
+                g_string_assign(file->value, file->buffer->str);
+                return inifile_read_finish(file, c, INIFILE_VARIABLE);
+            }
+        }
+        else if (!syntax) {
+            return inifile_read_finish( file, c, INIFILE_COMMAND );
+        }
+    }
+
+    return inifile_read_finish( file, c, INIFILE_SYNTAX );
+}
+
+/*
+ * Match section or variable names:
+ *   - match is case-insensitive
+ *   - difference in amount of free space is ignored
+ *   - leading and trailing space is ignored
+ */
+gboolean
+inifile_match_name (const char *n1, const char *n2)
+{
+    /* Skip leading space */
+    while (g_ascii_isspace(*n1)) {
+        n1 ++;
+    }
+
+    while (g_ascii_isspace(*n2)) {
+        n2 ++;
+    }
+
+    /* Perform the match */
+    while( *n1 && *n2 ) {
+        if (g_ascii_isspace(*n1)) {
+            if (!g_ascii_isspace(*n2)) {
+                break;
+            }
+
+            do {
+                n1 ++;
+            } while (g_ascii_isspace(*n1));
+
+            do {
+                n2 ++;
+            } while (g_ascii_isspace(*n2));
+        }
+        else if (g_ascii_toupper(*n1) == g_ascii_toupper(*n2)) {
+            n1 ++, n2 ++;
+        } else {
+            break;
+        }
+    }
+
+    /* Skip trailing space */
+    while (g_ascii_isspace(*n1)) {
+        n1 ++;
+    }
+
+    while (g_ascii_isspace(*n2)) {
+        n2 ++;
+    }
+
+    /* Check results */
+    return *n1 == '\0' && *n2 == '\0';
+}
+
+/* vim:ts=8:sw=4:et
+ */
+

@@ -1,6 +1,7 @@
 SRC	= \
 	airscan.c \
 	airscan-array.c \
+	airscan-conf.c \
 	airscan-devcaps.c \
 	airscan-math.c \
 	airscan-opt.c \
