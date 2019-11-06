@@ -6,10 +6,9 @@
  * Configuration file parser
  */
 
-#include <glib.h>
-#include <stdio.h>
+#include "airscan.h"
 
-/***** Local types *****/
+/******************** .INI-file parser ********************/
 /*
  * Types of .INI file records
  */
@@ -632,6 +631,129 @@ inifile_match_name (const char *n1, const char *n2)
     /* Check results */
     return *n1 == '\0' && *n2 == '\0';
 }
+
+/******************** Configuration file loader  ********************/
+/* Load configuration from opened inifile
+ */
+static void
+conf_load_from_ini(conf *c, inifile *ini) {
+    (void) c;
+    (void) ini;
+}
+
+/* Load configuration from the particular file
+ */
+static void
+conf_load_from_file(conf *c, const char *name)
+{
+DBG_CONF("trying %s", name);
+    inifile *ini = inifile_open(name);
+    if (ini != NULL) {
+        conf_load_from_ini(c, ini);
+        inifile_close(ini);
+    }
+}
+
+/* Load configuration from the specified directory
+ *
+ * This function uses its path parameter as its temporary
+ * buffer and doesn't guarantee to preserve its content
+ */
+static void
+conf_load_from_dir(conf *c, GString *path)
+{
+    if (path->len != 0 && path->str[path->len - 1] != '/') {
+        g_string_append_c(path, '/');
+    }
+
+    /* Load from CONFIG_AIRSCAN_CONF file */
+    size_t len = path->len;
+    g_string_append(path, CONFIG_AIRSCAN_CONF);
+    conf_load_from_file(c, path->str);
+
+    /* Scan CONFIG_AIRSCAN_D directory */
+    g_string_truncate(path, len);
+    g_string_append(path, CONFIG_AIRSCAN_D);
+    if (path->str[path->len - 1] != '/') {
+        g_string_append_c(path, '/');
+    }
+    len = path->len;
+
+    GDir *dir = g_dir_open(path->str, 0, NULL);
+    if (dir) {
+        const char *name;
+        while ((name = g_dir_read_name(dir)) != NULL) {
+            g_string_truncate(path, len);
+            g_string_append(path, name);
+            conf_load_from_file(c, path->str);
+        }
+
+        g_dir_close(dir);
+    }
+}
+
+/* Load configuration. Returns non-NULL (default configuration)
+ * even if configuration file cannot be loaded
+ */
+conf *
+conf_load (void)
+{
+    conf    *c = g_new0(conf, 1);
+    GString *dir_list = g_string_new(NULL);
+    GString *path = g_string_new(NULL);
+    char    *s;
+
+    /* Look to configuration path in environment */
+    s = getenv(CONFIG_PATH_ENV);
+    if (s != NULL) {
+        g_string_assign(dir_list, s);
+    }
+
+    /* Append default directories */
+    if (dir_list->len && dir_list->str[dir_list->len - 1] != ':') {
+        g_string_append_c(dir_list, ':');
+    }
+
+    g_string_append(dir_list, CONFIG_SANE_CONFIG_DIR);
+
+    /* Iterate over the dir_list */
+    for (s = dir_list->str; ; s ++) {
+        if (*s == ':' || *s == '\0') {
+            conf_load_from_dir(c, path);
+            g_string_truncate(path, 0);
+        } else {
+            g_string_append_c(path, *s);
+        }
+
+        if (*s == '\0') {
+            break;
+        }
+    }
+
+    /* Cleanup and exit */
+    g_string_free(dir_list, TRUE);
+    g_string_free(path, TRUE);
+
+    return c;
+}
+
+/* Free loaded configuration
+ */
+void
+conf_free (conf *c)
+{
+    conf_device *dev, *next;
+
+    for (dev = c->devices; dev; dev = next) {
+        next = dev->next;
+        g_free((char*) dev->name);
+        soup_uri_free(dev->uri);
+        g_free(dev);
+    }
+
+    g_free(c);
+}
+
 
 /* vim:ts=8:sw=4:et
  */

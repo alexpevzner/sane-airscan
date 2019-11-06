@@ -10,8 +10,23 @@
 #include <sane/sane.h>
 #include <sane/saneopts.h>
 
+#include <libsoup/soup.h>
 #include <libxml/tree.h>
 #include <stdio.h>
+
+/******************** Static configuration ********************/
+/* Configuration path in environment
+ */
+#define CONFIG_PATH_ENV         "SANE_CONFIG_DIR"
+
+/* Standard SANE configuration directory
+ */
+#define CONFIG_SANE_CONFIG_DIR  "/etc/sane.d/"
+
+/* Sane-airscan configuration file and subdirectory names
+ */
+#define CONFIG_AIRSCAN_CONF     "airscan.conf"
+#define CONFIG_AIRSCAN_D        "airscan.d"
 
 /******************** Debugging ********************/
 /* Debug flags
@@ -22,6 +37,7 @@ enum {
     DBG_FLG_PROTO     = (1 << 2), /* Protocol */
     DBG_FLG_DEVICE    = (1 << 3), /* Device management */
     DBG_FLG_HTTP      = (1 << 4), /* HTTP tracing */
+    DBG_FLG_CONF      = (1 << 5), /* Configuration file loader */
     DBG_FLG_ALL       = 0xff
 };
 
@@ -59,6 +75,9 @@ extern int dbg_flags;
 
 #define DBG_HTTP(fmt, args...)                  \
         DBG_PRINT(DBG_FLG_HTTP, "http", fmt, ##args)
+
+#define DBG_CONF(fmt, args...)                  \
+        DBG_PRINT(DBG_FLG_CONF, "conf", fmt, ##args)
 
 /******************** Typed Arrays ********************/
 /* Initialize array of SANE_Word
@@ -391,6 +410,33 @@ math_range_merge (SANE_Range *out, const SANE_Range *r1, const SANE_Range *r2);
  */
 SANE_Word
 math_range_fit(const SANE_Range *r, SANE_Word i);
+
+/******************** Configuration file loader  ********************/
+/* Device configuration, for manually added devices
+ */
+typedef struct conf_device conf_device;
+struct conf_device {
+    const char  *name; /* Device name */
+    SoupURI     *uri;  /* Device URI, parsed */
+    conf_device *next; /* Next device in the list */
+};
+
+/* Backend configuration
+ */
+typedef struct {
+    conf_device *devices; /* Manually configured devices */
+} conf;
+
+/* Load configuration. Returns non-NULL (default configuration)
+ * even if configuration file cannot be loaded
+ */
+conf *
+conf_load (void);
+
+/* Free loaded configuration
+ */
+void
+conf_free (conf *c);
 
 #endif
 

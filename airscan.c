@@ -16,8 +16,6 @@
 
 #include <glib.h>
 
-#include <libsoup/soup.h>
-
 /******************** Constants *********************/
 /* Service type to look for
  */
@@ -1078,6 +1076,8 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
     SANE_Status status;
 
     DBG_API_ENTER();
+
+    conf_load();
 
     if (version_code != NULL) {
         *version_code = SANE_VERSION_CODE (SANE_CURRENT_MAJOR,
