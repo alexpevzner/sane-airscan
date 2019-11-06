@@ -60,7 +60,7 @@ typedef struct {
 /***** Functions *****/
 /* Open the .INI file
  */
-inifile*
+static inifile*
 inifile_open (const char *name)
 {
     FILE        *fp;
@@ -86,7 +86,7 @@ inifile_open (const char *name)
 
 /* Close the .INI file
  */
-void
+static void
 inifile_close (inifile *file)
 {
     fclose(file->fp);
@@ -98,32 +98,6 @@ inifile_close (inifile *file)
     g_string_free(file->variable, TRUE);
     g_string_free(file->value, TRUE);
     g_free(file->record.tokv);
-}
-
-/* Rewind the .INI file
- */
-int
-inifile_rewind (inifile *file)
-{
-    file->line = 1;
-    rewind(file->fp);
-    return 0;
-}
-
-/* Get the file name
- */
-const char*
-inifile_get_file (inifile *file)
-{
-    return file->file;
-}
-
-/* Get the current line
- */
-unsigned int
-inifile_get_line (inifile *file)
-{
-    return file->line;
 }
 
 /* Get next character from the file
@@ -191,17 +165,6 @@ inifile_isoctal (int c)
     return '0' <= c && c <= '7';
 }
 
-/* Check for special character
- */
-static inline gboolean
-inifile_isspecial (int c)
-{
-    return g_ascii_iscntrl(c) ||
-           !g_ascii_isprint(c) ||
-           c == '"' ||
-           inifile_iscomment(c);
-}
-
 /* Check for token-breaking character
  */
 static inline gboolean
@@ -222,14 +185,6 @@ inifile_hex2int (int c)
     } else {
         return g_ascii_toupper(c) - 'A' + 10;
     }
-}
-
-/* Translate integer in the range [0..15] to hexadecimal digit
- */
-static inline char
-inifile_int2hex (int c)
-{
-    return "0123456789abcdef"[c];
 }
 
 /* Reset tokenizer
@@ -633,12 +588,91 @@ inifile_match_name (const char *n1, const char *n2)
 }
 
 /******************** Configuration file loader  ********************/
+/* Revert list of device configurations
+ */
+static conf_device*
+conf_device_list_revert (conf_device *devices)
+{
+    conf_device *prev = NULL, *next;
+
+    while (devices != NULL) {
+        next = devices->next;
+        devices->next = prev;
+        prev = devices;
+        devices = next;
+    }
+
+    return prev;
+}
+
+/* Free list of devices
+ */
+static void
+conf_device_list_free (conf_device *devices)
+{
+    while (devices != NULL) {
+        conf_device *next = devices->next;
+        g_free((char*) devices->name);
+        soup_uri_free(devices->uri);
+        g_free(devices);
+        devices = next;
+    }
+}
+
+/* Prepend device to the list. Returns updated list
+ */
+static conf_device*
+conf_device_list_prepend (conf_device *devices, const char *name, SoupURI *uri)
+{
+    conf_device *dev = g_new(conf_device, 0);
+    dev->name = g_strdup(name);
+    dev->uri = uri;
+    dev->next = devices;
+    return dev;
+}
+
+/* Find device in the list
+ */
+static conf_device*
+conf_device_list_lookup (conf_device *devices, const char *name) {
+    while (devices != NULL && strcmp(devices->name, name)) {
+        devices = devices->next;
+    }
+    return devices;
+}
+
 /* Load configuration from opened inifile
  */
 static void
-conf_load_from_ini(conf *c, inifile *ini) {
-    (void) c;
-    (void) ini;
+conf_load_from_ini(conf *c, inifile *ini)
+{
+    const inifile_record *rec;
+    while ((rec = inifile_read(ini)) != NULL) {
+        switch (rec->type) {
+        case INIFILE_SYNTAX:
+            DBG_CONF("%s:%d: syntax error", rec->file, rec->line);
+            break;
+
+        case INIFILE_VARIABLE:
+            if (inifile_match_name(rec->section, "devices")) {
+                SoupURI     *uri;
+
+                if (conf_device_list_lookup(c->devices, rec->variable) != NULL) {
+                    DBG_CONF("%s:%d: device already defined",
+                            rec->file, rec->line);
+                } else if ((uri = soup_uri_new(rec->value)) == NULL) {
+                    DBG_CONF("%s:%d: invalid URL", rec->file, rec->line);
+                } else {
+                    c->devices = conf_device_list_prepend(c->devices,
+                                rec->variable, uri);
+                }
+            }
+            break;
+
+        default:
+            break;
+        }
+    }
 }
 
 /* Load configuration from the particular file
@@ -731,6 +765,8 @@ conf_load (void)
     }
 
     /* Cleanup and exit */
+    c->devices = conf_device_list_revert(c->devices);
+
     g_string_free(dir_list, TRUE);
     g_string_free(path, TRUE);
 
@@ -742,15 +778,7 @@ conf_load (void)
 void
 conf_free (conf *c)
 {
-    conf_device *dev, *next;
-
-    for (dev = c->devices; dev; dev = next) {
-        next = dev->next;
-        g_free((char*) dev->name);
-        soup_uri_free(dev->uri);
-        g_free(dev);
-    }
-
+    conf_device_list_free(c->devices);
     g_free(c);
 }
 
