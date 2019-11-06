@@ -280,6 +280,7 @@ device_resolver_done (device *dev, AvahiIfIndex interface,
     }
 
     dev->base_url = soup_uri_new(url);
+    g_assert(dev->base_url != NULL);
     DBG_DEVICE(dev->name, "url=\"%s\"", url);
 
     /* Fetch device capabilities */
@@ -654,6 +655,7 @@ device_http_get (device *dev, const char *path,
     (void) path;
 
     SoupURI *url = soup_uri_new_with_base(dev->base_url, path);
+    g_assert(url);
     SoupMessage *msg = soup_message_new_from_uri("GET", url);
     soup_uri_free(url);
 
