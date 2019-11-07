@@ -28,6 +28,36 @@
 #define CONFIG_AIRSCAN_CONF     "airscan.conf"
 #define CONFIG_AIRSCAN_D        "airscan.d"
 
+/******************** Configuration file loader  ********************/
+/* Device configuration, for manually added devices
+ */
+typedef struct conf_device conf_device;
+struct conf_device {
+    const char  *name; /* Device name */
+    SoupURI     *uri;  /* Device URI, parsed */
+    conf_device *next; /* Next device in the list */
+};
+
+/* Backend configuration
+ */
+typedef struct {
+    int         dbg_flags; /* Combination of debug flags */
+    conf_device *devices;  /* Manually configured devices */
+} conf_data;
+
+extern conf_data conf;
+
+/* Load configuration. It updates content of a global conf variable
+ */
+void
+conf_load (void);
+
+/* Free resources, allocated by conf_load, and reset configuration
+ * data into initial state
+ */
+void
+conf_free (void);
+
 /******************** Debugging ********************/
 /* Debug flags
  */
@@ -41,11 +71,9 @@ enum {
     DBG_FLG_ALL       = 0xff
 };
 
-extern int dbg_flags;
-
 /* Check dbg_flags
  */
-#define DBG_ENABLED(flg)        ((flg) & dbg_flags)
+#define DBG_ENABLED(flg)        ((flg) & conf.dbg_flags)
 
 /* Print debug message
  */
@@ -410,33 +438,6 @@ math_range_merge (SANE_Range *out, const SANE_Range *r1, const SANE_Range *r2);
  */
 SANE_Word
 math_range_fit(const SANE_Range *r, SANE_Word i);
-
-/******************** Configuration file loader  ********************/
-/* Device configuration, for manually added devices
- */
-typedef struct conf_device conf_device;
-struct conf_device {
-    const char  *name; /* Device name */
-    SoupURI     *uri;  /* Device URI, parsed */
-    conf_device *next; /* Next device in the list */
-};
-
-/* Backend configuration
- */
-typedef struct {
-    conf_device *devices; /* Manually configured devices */
-} conf;
-
-/* Load configuration. Returns non-NULL (default configuration)
- * even if configuration file cannot be loaded
- */
-conf *
-conf_load (void);
-
-/* Free loaded configuration
- */
-void
-conf_free (conf *c);
 
 #endif
 

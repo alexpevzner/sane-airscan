@@ -588,63 +588,68 @@ inifile_match_name (const char *n1, const char *n2)
 }
 
 /******************** Configuration file loader  ********************/
-/* Revert list of device configurations
+/* Configuration data
  */
-static conf_device*
-conf_device_list_revert (conf_device *devices)
-{
-    conf_device *prev = NULL, *next;
+conf_data conf = {DBG_FLG_ALL, NULL};
 
-    while (devices != NULL) {
-        next = devices->next;
-        devices->next = prev;
-        prev = devices;
-        devices = next;
-    }
-
-    return prev;
-}
-
-/* Free list of devices
+/* Revert conf.devices list
  */
 static void
-conf_device_list_free (conf_device *devices)
+conf_device_list_revert (void)
 {
-    while (devices != NULL) {
-        conf_device *next = devices->next;
-        g_free((char*) devices->name);
-        soup_uri_free(devices->uri);
-        g_free(devices);
-        devices = next;
+    conf_device *list = conf.devices, *prev = NULL, *next;
+
+    while (list != NULL) {
+        next = list->next;
+        list->next = prev;
+        prev = list;
+        list = next;
     }
 }
 
-/* Prepend device to the list. Returns updated list
+/* Free conf.devices list
  */
-static conf_device*
-conf_device_list_prepend (conf_device *devices, const char *name, SoupURI *uri)
+static void
+conf_device_list_free (void)
+{
+    conf_device *list = conf.devices, *next;
+
+    while (list != NULL) {
+        next = list->next;
+        g_free((char*) list->name);
+        soup_uri_free(list->uri);
+        g_free(list);
+        list = next;
+    }
+}
+
+/* Prepend device conf.devices list
+ */
+static void
+conf_device_list_prepend (const char *name, SoupURI *uri)
 {
     conf_device *dev = g_new0(conf_device, 1);
     dev->name = g_strdup(name);
     dev->uri = uri;
-    dev->next = devices;
-    return dev;
+    dev->next = conf.devices;
+    conf.devices = dev;
 }
 
-/* Find device in the list
+/* Find device in conf.devices list
  */
 static conf_device*
-conf_device_list_lookup (conf_device *devices, const char *name) {
-    while (devices != NULL && strcmp(devices->name, name)) {
-        devices = devices->next;
+conf_device_list_lookup (const char *name) {
+    conf_device *dev = conf.devices;
+    while (dev != NULL && strcmp(dev->name, name)) {
+        dev = dev->next;
     }
-    return devices;
+    return dev;
 }
 
 /* Load configuration from opened inifile
  */
 static void
-conf_load_from_ini(conf *c, inifile *ini)
+conf_load_from_ini(inifile *ini)
 {
     const inifile_record *rec;
     while ((rec = inifile_read(ini)) != NULL) {
@@ -657,14 +662,13 @@ conf_load_from_ini(conf *c, inifile *ini)
             if (inifile_match_name(rec->section, "devices")) {
                 SoupURI     *uri;
 
-                if (conf_device_list_lookup(c->devices, rec->variable) != NULL) {
+                if (conf_device_list_lookup(rec->variable) != NULL) {
                     DBG_CONF("%s:%d: device already defined",
                             rec->file, rec->line);
                 } else if ((uri = soup_uri_new(rec->value)) == NULL) {
                     DBG_CONF("%s:%d: invalid URL", rec->file, rec->line);
                 } else {
-                    c->devices = conf_device_list_prepend(c->devices,
-                                rec->variable, uri);
+                    conf_device_list_prepend(rec->variable, uri);
                 }
             }
             break;
@@ -678,12 +682,12 @@ conf_load_from_ini(conf *c, inifile *ini)
 /* Load configuration from the particular file
  */
 static void
-conf_load_from_file(conf *c, const char *name)
+conf_load_from_file(const char *name)
 {
 DBG_CONF("trying %s", name);
     inifile *ini = inifile_open(name);
     if (ini != NULL) {
-        conf_load_from_ini(c, ini);
+        conf_load_from_ini(ini);
         inifile_close(ini);
     }
 }
@@ -694,7 +698,7 @@ DBG_CONF("trying %s", name);
  * buffer and doesn't guarantee to preserve its content
  */
 static void
-conf_load_from_dir(conf *c, GString *path)
+conf_load_from_dir(GString *path)
 {
     if (path->len != 0 && path->str[path->len - 1] != '/') {
         g_string_append_c(path, '/');
@@ -703,7 +707,7 @@ conf_load_from_dir(conf *c, GString *path)
     /* Load from CONFIG_AIRSCAN_CONF file */
     size_t len = path->len;
     g_string_append(path, CONFIG_AIRSCAN_CONF);
-    conf_load_from_file(c, path->str);
+    conf_load_from_file(path->str);
 
     /* Scan CONFIG_AIRSCAN_D directory */
     g_string_truncate(path, len);
@@ -719,7 +723,7 @@ conf_load_from_dir(conf *c, GString *path)
         while ((name = g_dir_read_name(dir)) != NULL) {
             g_string_truncate(path, len);
             g_string_append(path, name);
-            conf_load_from_file(c, path->str);
+            conf_load_from_file(path->str);
         }
 
         g_dir_close(dir);
@@ -729,10 +733,9 @@ conf_load_from_dir(conf *c, GString *path)
 /* Load configuration. Returns non-NULL (default configuration)
  * even if configuration file cannot be loaded
  */
-conf *
+void
 conf_load (void)
 {
-    conf    *c = g_new0(conf, 1);
     GString *dir_list = g_string_new(NULL);
     GString *path = g_string_new(NULL);
     char    *s;
@@ -753,7 +756,7 @@ conf_load (void)
     /* Iterate over the dir_list */
     for (s = dir_list->str; ; s ++) {
         if (*s == ':' || *s == '\0') {
-            conf_load_from_dir(c, path);
+            conf_load_from_dir(path);
             g_string_truncate(path, 0);
         } else {
             g_string_append_c(path, *s);
@@ -765,23 +768,22 @@ conf_load (void)
     }
 
     /* Cleanup and exit */
-    c->devices = conf_device_list_revert(c->devices);
+    conf_device_list_revert();
 
     g_string_free(dir_list, TRUE);
     g_string_free(path, TRUE);
-
-    return c;
 }
 
-/* Free loaded configuration
+/* Free resources, allocated by conf_load, and reset configuration
+ * data into initial state
  */
 void
-conf_free (conf *c)
+conf_free (void)
 {
-    conf_device_list_free(c->devices);
-    g_free(c);
+    conf_device_list_free();
+    memset(&conf, 0, sizeof(conf));
+    conf.dbg_flags = DBG_FLG_ALL;
 }
-
 
 /* vim:ts=8:sw=4:et
  */

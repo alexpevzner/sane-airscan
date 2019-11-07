@@ -35,11 +35,6 @@
  */
 #define DEVICE_DEFAULT_RESOLUTION               300
 
-/******************** Global variables ********************/
-/* Debug flags
- */
-int dbg_flags = DBG_FLG_ALL;
-
 /******************** Device management ********************/
 /* Device flags
  */
