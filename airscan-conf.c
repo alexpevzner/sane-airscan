@@ -624,7 +624,7 @@ conf_device_list_free (conf_device *devices)
 static conf_device*
 conf_device_list_prepend (conf_device *devices, const char *name, SoupURI *uri)
 {
-    conf_device *dev = g_new(conf_device, 0);
+    conf_device *dev = g_new0(conf_device, 1);
     dev->name = g_strdup(name);
     dev->uri = uri;
     dev->next = devices;
