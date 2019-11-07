@@ -39,12 +39,13 @@
 /* Device flags
  */
 enum {
-    DEVICE_RESOLVER_PENDING = (1 << 0), /* Pending service resolver */
-    DEVICE_GETCAPS_PENDING  = (1 << 1), /* Pending get scanner capabilities */
+    DEVICE_LISTED           = (1 << 0), /* Device listed in device_table */
+    DEVICE_RESOLVER_PENDING = (1 << 1), /* Pending service resolver */
     DEVICE_READY            = (1 << 2), /* Device is ready */
     DEVICE_HALTED           = (1 << 3), /* Device is halted */
-    DEVICE_INIT_WAIT        = (1 << 4)  /* Device was found during initial
+    DEVICE_INIT_WAIT        = (1 << 4), /* Device was found during initial
                                            scan and not ready yet */
+    DEVICE_ALL_FLAGS        = 0xffffffff
 };
 
 /* Device descriptor
@@ -80,7 +81,7 @@ static SoupSession *device_http_session;
 /* Forward declarations
  */
 static void
-device_del_callback (gpointer p);
+device_add_static (const char *name, SoupURI *uri);
 
 static void
 device_scanner_capabilities_callback (device *dev, SoupMessage *msg);
@@ -88,6 +89,9 @@ device_scanner_capabilities_callback (device *dev, SoupMessage *msg);
 static void
 device_http_get (device *dev, const char *path,
         void (*callback)(device*, SoupMessage*));
+
+static void
+device_table_purge (void);
 
 /* Compare device names, for device_table
  */
@@ -104,8 +108,7 @@ static SANE_Status
 device_management_init (void)
 {
     g_cond_init(&device_table_cond);
-    device_table = g_tree_new_full(device_name_compare, NULL, NULL,
-            device_del_callback);
+    device_table = g_tree_new_full(device_name_compare, NULL, NULL, NULL);
 
     return SANE_STATUS_GOOD;
 }
@@ -115,9 +118,12 @@ device_management_init (void)
 static void
 device_management_cleanup (void)
 {
-    g_cond_clear(&device_table_cond);
-    g_tree_unref(device_table);
-    device_table = NULL;
+    if (device_table != NULL) {
+        g_assert(g_tree_nnodes(device_table) == 0);
+        g_cond_clear(&device_table_cond);
+        g_tree_unref(device_table);
+        device_table = NULL;
+    }
 }
 
 /* Start devices management. Called from the airscan thread
@@ -125,7 +131,12 @@ device_management_cleanup (void)
 static void
 device_management_start (void)
 {
+    conf_device *dev_conf;
+
     device_http_session = soup_session_new();
+    for (dev_conf = conf.devices; dev_conf != NULL; dev_conf = dev_conf->next) {
+        device_add_static(dev_conf->name, dev_conf->uri);
+    }
 }
 
 /* Finish device management. Called from the airscan thread
@@ -134,6 +145,7 @@ static void
 device_management_finish (void)
 {
     soup_session_abort(device_http_session);
+    device_table_purge();
     g_object_unref(device_http_session);
     device_http_session = NULL;
 }
@@ -148,6 +160,7 @@ device_add (const char *name)
 
     dev->refcnt = 1;
     dev->name = g_strdup(name);
+    dev->flags = DEVICE_LISTED;
     devcaps_init(&dev->caps);
 
     dev->http_pending = g_ptr_array_new();
@@ -160,19 +173,6 @@ device_add (const char *name)
     g_tree_insert(device_table, (gpointer) dev->name, dev);
 
     return dev;
-}
-
-/* Del device from the table. It implicitly halts all
- * pending I/O activity
- *
- * Note, reference to the device may still exist (device
- * may be opened), so memory can be freed later, when
- * device is not used anymore
- */
-static void
-device_del (device *dev)
-{
-    g_tree_remove(device_table, dev->name);
 }
 
 /* Ref the device
@@ -191,7 +191,8 @@ device_unref (device *dev)
 {
     if (g_atomic_int_dec_and_test(&dev->refcnt)) {
         DBG_DEVICE(dev->name, "destroyed");
-        g_assert(dev->flags & DEVICE_HALTED);
+        g_assert((dev->flags & DEVICE_LISTED) == 0);
+        g_assert((dev->flags & DEVICE_HALTED) != 0);
 
         /* Release all memory */
         g_free((void*) dev->name);
@@ -207,13 +208,22 @@ device_unref (device *dev)
     }
 }
 
-/* This callback is called by GTable, when device is removed
- * from device_table, either explicitly or by table destructor
+/* Del device from the table. It implicitly halts all
+ * pending I/O activity
+ *
+ * Note, reference to the device may still exist (device
+ * may be opened), so memory can be freed later, when
+ * device is not used anymore
  */
 static void
-device_del_callback (gpointer p)
+device_del (device *dev)
 {
-    device *dev = p;
+    /* Remove device from table */
+    DBG_DEVICE(dev->name, "removed from device table");
+    g_assert((dev->flags & DEVICE_LISTED) != 0);
+
+    dev->flags &= ~DEVICE_LISTED;
+    g_tree_remove(device_table, dev->name);
 
     /* Stop all pending I/O activity */
     if (dev->resolver != NULL) {
@@ -232,6 +242,47 @@ device_del_callback (gpointer p)
 
     /* Unref the device */
     device_unref(dev);
+}
+
+/* Find device in a table
+ */
+static device*
+device_find (const char *name)
+{
+    return g_tree_lookup(device_table, name);
+}
+
+/* Add statically configured device
+ */
+static void
+device_add_static (const char *name, SoupURI *uri)
+{
+    /* Don't allow duplicate devices */
+    device *dev = device_find(name);
+    if (dev != NULL) {
+        DBG_DEVICE(name, "device already exist");
+        return;
+    }
+
+    /* Add a device */
+    dev = device_add(name);
+    dev->flags |= DEVICE_INIT_WAIT;
+    dev->base_url = soup_uri_copy(uri);
+
+    /* Make sure URI's path ends with '/' character */
+    const char *path = soup_uri_get_path(dev->base_url);
+    if (!g_str_has_suffix(path, "/")) {
+        size_t len = strlen(path);
+        char *path2 = g_alloca(len + 2);
+        memcpy(path2, path, len);
+        path2[len] = '/';
+        path2[len+1] = '\0';
+        soup_uri_set_path(dev->base_url, path2);
+    }
+
+    /* Fetch device capabilities */
+    device_http_get(dev, "ScannerCapabilities",
+            device_scanner_capabilities_callback);
 }
 
 /* Called when AVAHI resovler is done
@@ -284,14 +335,6 @@ device_resolver_done (device *dev, AvahiIfIndex interface,
     /* Fetch device capabilities */
     device_http_get(dev, "ScannerCapabilities",
             device_scanner_capabilities_callback);
-}
-
-/* Find device in a table
- */
-static device*
-device_find (const char *name)
-{
-    return g_tree_lookup(device_table, name);
 }
 
 /* Rebuild option descriptors
@@ -544,6 +587,20 @@ device_table_size (void)
     return g_tree_nnodes(device_table);
 }
 
+/* Purge device_table
+ */
+static void
+device_table_purge (void)
+{
+    size_t  sz = device_table_size(), i;
+    device  **devices = g_new0(device*, sz);
+
+    sz = device_table_collect(DEVICE_ALL_FLAGS, devices);
+    for (i = 0; i < sz; i ++) {
+        device_del(devices[i]);
+    }
+}
+
 /* Check if device table is ready, i.e., there is no DEVICE_INIT_WAIT
  * devices
  */
@@ -649,9 +706,6 @@ static void
 device_http_get (device *dev, const char *path,
         void (*callback)(device*, SoupMessage*))
 {
-    (void) dev;
-    (void) path;
-
     SoupURI *url = soup_uri_new_with_base(dev->base_url, path);
     g_assert(url);
     SoupMessage *msg = soup_message_new_from_uri("GET", url);
@@ -857,7 +911,7 @@ dd_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
 
         dev = device_add(name);
         if (dd_avahi_browser_init_wait) {
-            dev->flags = DEVICE_INIT_WAIT;
+            dev->flags |= DEVICE_INIT_WAIT;
         }
 
         /* Initiate resolver */
