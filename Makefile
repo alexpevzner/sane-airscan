@@ -31,12 +31,12 @@ CFLAGS += -Wl,--version-script=airscan.sym
 # by adding NODELETE flag to the resulting ELF shared object
 CFLAGS += -Wl,-z,nodelete
 
-all:	libsane-airscan.so test
+all:	libsane-airscan.so.1 test
 
-libsane-airscan.so: Makefile $(SRC) airscan.h airscan.sym
+libsane-airscan.so.1: Makefile $(SRC) airscan.h airscan.sym
 	@ctags -R .
-	gcc -o libsane-airscan.so -shared ${CFLAGS} $(SRC)
+	gcc -o libsane-airscan.so.1 -shared ${CFLAGS} $(SRC)
 
-test:	libsane-airscan.so test.c
+test:	libsane-airscan.so.1 test.c
 	#gcc -o test test.c -l sane
-	gcc -o test test.c libsane-airscan.so -Wl,-rpath .
+	gcc -o test test.c libsane-airscan.so.1 -Wl,-rpath .
