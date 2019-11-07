@@ -99,7 +99,7 @@ enum {
         DBG_PRINT(DBG_FLG_PROTO, "proto", "\"%s\": " fmt, name, ##args)
 
 #define DBG_DEVICE(name, fmt, args...)          \
-        DBG_PRINT(DBG_FLG_DEVICE, "proto", "\"%s\": " fmt, name, ##args)
+        DBG_PRINT(DBG_FLG_DEVICE, "dev", "\"%s\": " fmt, name, ##args)
 
 #define DBG_HTTP(fmt, args...)                  \
         DBG_PRINT(DBG_FLG_HTTP, "http", fmt, ##args)
