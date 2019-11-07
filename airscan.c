@@ -264,7 +264,10 @@ device_resolver_done (device *dev, AvahiIfIndex interface,
         /* Connect to link-local address requires explicit scope */
         static char link_local[8] = {0xfe, 0x80};
         if (!memcmp(addr->data.ipv6.address, link_local, sizeof(link_local))) {
-            // See RFC6874 for details
+            /* Percent character in the IPv6 address literal
+             * needs to be properly escaped, so it becomes %25
+             * See RFC6874 for details
+             */
             l += sprintf(str_addr + l, "%%25%d", interface);
         }
 
