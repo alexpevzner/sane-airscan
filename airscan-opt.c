@@ -79,32 +79,32 @@ opt_source_to_sane (OPT_SOURCE source)
         G_N_ELEMENTS(opt_source_name_map), (SANE_Word) source);
 }
 
-/* Name map for OPT_MODE
+/* Name map for OPT_COLORMODE
  */
 static opt_name_map
-opt_mode_name_map[] =
+opt_colormode_name_map[] =
 {
-    { SANE_VALUE_SCAN_MODE_LINEART, OPT_MODE_LINEART },
-    { SANE_VALUE_SCAN_MODE_GRAY,    OPT_MODE_GRAYSCALE },
-    { SANE_VALUE_SCAN_MODE_COLOR,   OPT_MODE_COLOR }
+    { SANE_VALUE_SCAN_MODE_LINEART, OPT_COLORMODE_LINEART },
+    { SANE_VALUE_SCAN_MODE_GRAY,    OPT_COLORMODE_GRAYSCALE },
+    { SANE_VALUE_SCAN_MODE_COLOR,   OPT_COLORMODE_COLOR }
 };
 
-/* Decode OPT_MODE from SANE name
+/* Decode OPT_COLORMODE from SANE name
  */
-OPT_MODE
-opt_mode_from_sane (SANE_String_Const name)
+OPT_COLORMODE
+opt_colormode_from_sane (SANE_String_Const name)
 {
-    return (OPT_MODE) opt_name_decode(
-        opt_mode_name_map, G_N_ELEMENTS(opt_mode_name_map), name);
+    return (OPT_COLORMODE) opt_name_decode(
+        opt_colormode_name_map, G_N_ELEMENTS(opt_colormode_name_map), name);
 }
 
-/* Get SANE name of OPT_MODE
+/* Get SANE name of OPT_COLORMODE
  */
 SANE_String_Const
-opt_mode_to_sane (OPT_MODE mode)
+opt_colormode_to_sane (OPT_COLORMODE mode)
 {
-    return opt_name_encode(opt_mode_name_map,
-        G_N_ELEMENTS(opt_mode_name_map), (SANE_Word) mode);
+    return opt_name_encode(opt_colormode_name_map,
+        G_N_ELEMENTS(opt_colormode_name_map), (SANE_Word) mode);
 }
 
 /* vim:ts=8:sw=4:et

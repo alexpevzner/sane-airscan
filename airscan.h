@@ -303,7 +303,7 @@ enum {
     /* Standard options group */
     OPT_GROUP_STANDARD,
     OPT_SCAN_RESOLUTION,
-    OPT_SCAN_MODE,              /* I.e. color/grayscale etc */
+    OPT_SCAN_COLORMODE,         /* I.e. color/grayscale etc */
     OPT_SCAN_SOURCE,            /* Platem/ADF/ADF Duplex */
 
     /* Geometry options group */
@@ -331,13 +331,13 @@ typedef enum {
 /* Color mode numbers, for internal use
  */
 typedef enum {
-    OPT_MODE_UNKNOWN = -1, /* Unknown */
-    OPT_MODE_COLOR,        /* RGB-24 */
-    OPT_MODE_GRAYSCALE,    /* 8-bit gray scale */
-    OPT_MODE_LINEART,      /* 1-bit black and white */
+    OPT_COLORMODE_UNKNOWN = -1, /* Unknown */
+    OPT_COLORMODE_COLOR,        /* RGB-24 */
+    OPT_COLORMODE_GRAYSCALE,    /* 8-bit gray scale */
+    OPT_COLORMODE_LINEART,      /* 1-bit black and white */
 
-    NUM_OPT_MODE
-} OPT_MODE;
+    NUM_OPT_COLORMODE
+} OPT_COLORMODE;
 
 /* String constants for certain SANE options values
  * (missed from sane/sameopt.h)
@@ -356,15 +356,15 @@ opt_source_from_sane (SANE_String_Const name);
 SANE_String_Const
 opt_source_to_sane (OPT_SOURCE source);
 
-/* Decode OPT_MODE from SANE name
+/* Decode OPT_COLORMODE from SANE name
  */
-OPT_MODE
-opt_mode_from_sane (SANE_String_Const name);
+OPT_COLORMODE
+opt_colormode_from_sane (SANE_String_Const name);
 
-/* Get SANE name of OPT_MODE
+/* Get SANE name of OPT_COLORMODE
  */
 SANE_String_Const
-opt_mode_to_sane (OPT_MODE mode);
+opt_colormode_to_sane (OPT_COLORMODE mode);
 
 /******************** Device Capabilities  ********************/
 /* Source flags
@@ -394,8 +394,8 @@ enum {
  */
 typedef struct {
     unsigned int flags;                    /* Source flags */
-    unsigned int modes;                    /* Set of 1 << OPT_MODE */
-    SANE_String  *sane_modes;              /* Color modes, in SANE format */
+    unsigned int colormodes;               /* Set of 1 << OPT_COLORMODE */
+    SANE_String  *sane_colormodes;         /* Color modes, in SANE format */
     SANE_Word    min_width, max_width;     /* Min/max image width */
     SANE_Word    min_height, max_height;   /* Min/max image height */
     SANE_Word    *resolutions;             /* Discrete resolutions, in DPI */
@@ -451,8 +451,8 @@ devcaps_source_choose_resolution(devcaps_source *src, SANE_Word wanted);
 
 /* Choose appropriate color mode
  */
-OPT_MODE
-devcaps_source_choose_colormode(devcaps_source *src, OPT_MODE wanted);
+OPT_COLORMODE
+devcaps_source_choose_colormode(devcaps_source *src, OPT_COLORMODE wanted);
 
 /******************** Mathematical Functions ********************/
 /* Find greatest common divisor of two positive integers

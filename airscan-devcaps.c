@@ -16,8 +16,8 @@
 static devcaps_source*
 devcaps_source_new (void)
 {
-    devcaps_source *src = g_new0(devcaps_source, 1 );
-    array_of_string_init(&src->sane_modes);
+    devcaps_source *src = g_new0(devcaps_source, 1);
+    array_of_string_init(&src->sane_colormodes);
     array_of_word_init(&src->resolutions);
     return src;
 }
@@ -28,7 +28,7 @@ static void
 devcaps_source_free (devcaps_source *src)
 {
     if (src != NULL) {
-        array_of_string_cleanup(&src->sane_modes);
+        array_of_string_cleanup(&src->sane_colormodes);
         array_of_word_cleanup(&src->resolutions);
         g_free(src);
     }
@@ -95,14 +95,14 @@ devcaps_source_choose_resolution(devcaps_source *src, SANE_Word wanted)
 
 /* Choose appropriate color mode
  */
-OPT_MODE
-devcaps_source_choose_colormode(devcaps_source *src, OPT_MODE wanted)
+OPT_COLORMODE
+devcaps_source_choose_colormode(devcaps_source *src, OPT_COLORMODE wanted)
 {
     /* Prefer wanted mode if possible and if not, try to find
      * a reasonable downgrade */
-    if (wanted != OPT_MODE_UNKNOWN) {
-        while (wanted < NUM_OPT_MODE) {
-            if ((src->modes & (1 << wanted)) != 0) {
+    if (wanted != OPT_COLORMODE_UNKNOWN) {
+        while (wanted < NUM_OPT_COLORMODE) {
+            if ((src->colormodes & (1 << wanted)) != 0) {
                 return wanted;
             }
             wanted ++;
@@ -111,9 +111,9 @@ devcaps_source_choose_colormode(devcaps_source *src, OPT_MODE wanted)
 
     /* Nothing found in a previous step. Just choose the best mode
      * supported by the scanner */
-    wanted = (OPT_MODE) 0;
-    while ((src->modes & (1 << wanted)) == 0) {
-        g_assert(wanted < NUM_OPT_MODE);
+    wanted = (OPT_COLORMODE) 0;
+    while ((src->colormodes & (1 << wanted)) == 0) {
+        g_assert(wanted < NUM_OPT_COLORMODE);
         wanted ++;
     }
 
@@ -125,29 +125,30 @@ devcaps_source_choose_colormode(devcaps_source *src, OPT_MODE wanted)
 static const char*
 devcaps_source_parse_color_modes (xml_iter *iter, devcaps_source *src)
 {
-    src->modes = 0;
-    array_of_string_reset(&src->sane_modes);
+    src->colormodes = 0;
+    array_of_string_reset(&src->sane_colormodes);
 
     xml_iter_enter(iter);
     for (; !xml_iter_end(iter); xml_iter_next(iter)) {
         if(xml_iter_node_name_match(iter, "scan:ColorMode")) {
             const char *v = xml_iter_node_value(iter);
             if (!strcmp(v, "BlackAndWhite1")) {
-                src->modes |= 1 << OPT_MODE_LINEART;
+                src->colormodes |= 1 << OPT_COLORMODE_LINEART;
             } else if (!strcmp(v, "Grayscale8")) {
-                src->modes |= 1 << OPT_MODE_GRAYSCALE;
+                src->colormodes |= 1 << OPT_COLORMODE_GRAYSCALE;
             } else if (!strcmp(v, "RGB24")) {
-                src->modes |= 1 << OPT_MODE_COLOR;
+                src->colormodes |= 1 << OPT_COLORMODE_COLOR;
             }
         }
     }
     xml_iter_leave(iter);
 
-    OPT_MODE opt_mode;
-    for (opt_mode = (OPT_MODE) 0; opt_mode < NUM_OPT_MODE; opt_mode ++) {
-        if ((src->modes & (1 << opt_mode)) != 0) {
-            array_of_string_append(&src->sane_modes,
-                    (SANE_String) opt_mode_to_sane(opt_mode));
+    OPT_COLORMODE opt_colormode;
+    for (opt_colormode = (OPT_COLORMODE) 0; opt_colormode < NUM_OPT_COLORMODE;
+            opt_colormode ++) {
+        if ((src->colormodes & (1 << opt_colormode)) != 0) {
+            array_of_string_append(&src->sane_colormodes,
+                    (SANE_String) opt_colormode_to_sane(opt_colormode));
         }
     }
 
@@ -558,8 +559,8 @@ devcaps_dump (const char *name, devcaps *caps)
         }
 
         g_string_truncate(buf, 0);
-        for (i = 0; src->sane_modes[i] != NULL; i ++) {
-            g_string_append_printf(buf, " \"%s\"", src->sane_modes[i]);
+        for (i = 0; src->sane_colormodes[i] != NULL; i ++) {
+            g_string_append_printf(buf, " \"%s\"", src->sane_colormodes[i]);
         }
         DBG_PROTO(name, "    Modes:%s", buf->str);
 

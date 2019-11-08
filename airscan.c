@@ -64,7 +64,7 @@ typedef struct {
     /* Options */
     SANE_Option_Descriptor opt_desc[NUM_OPTIONS]; /* Option descriptors */
     OPT_SOURCE             opt_src;               /* Current source */
-    OPT_MODE               opt_mode;              /* Color mode */
+    OPT_COLORMODE          opt_colormode;         /* Color mode */
     SANE_Word              opt_resolution;        /* Current resolution */
     SANE_Word              opt_tl_x, opt_tl_y;    /* Top-left x/y */
     SANE_Word              opt_br_x, opt_br_y;    /* Bottom-right x/y */
@@ -176,7 +176,7 @@ device_add (const char *name)
 
     dev->http_pending = g_ptr_array_new();
     dev->opt_src = OPT_SOURCE_UNKNOWN;
-    dev->opt_mode = OPT_MODE_UNKNOWN;
+    dev->opt_colormode = OPT_COLORMODE_UNKNOWN;
 
     DBG_DEVICE(dev->name, "created");
 
@@ -391,14 +391,14 @@ device_rebuild_opt_desc (device *dev)
     }
 
     /* OPT_SCAN_MODE */
-    desc = &dev->opt_desc[OPT_SCAN_MODE];
+    desc = &dev->opt_desc[OPT_SCAN_COLORMODE];
     desc->name = SANE_NAME_SCAN_MODE;
     desc->title = SANE_TITLE_SCAN_MODE;
     desc->type = SANE_TYPE_STRING;
-    desc->size = array_of_string_max_strlen(&src->sane_modes) + 1;
+    desc->size = array_of_string_max_strlen(&src->sane_colormodes) + 1;
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->constraint_type = SANE_CONSTRAINT_STRING_LIST;
-    desc->constraint.string_list = (SANE_String_Const*) src->sane_modes;
+    desc->constraint.string_list = (SANE_String_Const*) src->sane_colormodes;
 
     /* OPT_SCAN_SOURCE */
     desc = &dev->opt_desc[OPT_SCAN_SOURCE];
@@ -473,7 +473,8 @@ device_set_source (device *dev, OPT_SOURCE opt_src)
 
     /* Choose appropriate color mode */
     devcaps_source *src = dev->caps.src[dev->opt_src];
-    dev->opt_mode = devcaps_source_choose_colormode(src, OPT_MODE_UNKNOWN);
+    dev->opt_colormode = devcaps_source_choose_colormode(src,
+            OPT_COLORMODE_UNKNOWN);
 
     /* Adjust resolution */
     dev->opt_resolution = devcaps_source_choose_resolution(src,
@@ -505,8 +506,8 @@ device_get_option (device *dev, SANE_Int option, void *value)
         *(SANE_Word*) value = dev->opt_resolution;
         break;
 
-    case OPT_SCAN_MODE:
-        strcpy(value, opt_mode_to_sane(dev->opt_mode));
+    case OPT_SCAN_COLORMODE:
+        strcpy(value, opt_colormode_to_sane(dev->opt_colormode));
         break;
 
     case OPT_SCAN_SOURCE:
