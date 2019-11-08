@@ -7,6 +7,8 @@
 #ifndef airscan_h
 #define airscan_h
 
+#include <avahi-glib/glib-watch.h>
+
 #include <sane/sane.h>
 #include <sane/saneopts.h>
 
@@ -57,6 +59,51 @@ conf_load (void);
  */
 void
 conf_free (void);
+
+/******************** Event loop ********************/
+/* Initialize event loop
+ */
+SANE_Status
+eloop_init (void);
+
+/* Cleanup event loop
+ */
+void
+eloop_cleanup (void);
+
+/* Start event loop thread.
+ *
+ * Callback is called from the thread context twice:
+ *     callback(TRUE)  - when thread is started
+ *     callback(FALSE) - when thread is about to exit
+ */
+void
+eloop_thread_start (void (*callback)(gboolean));
+
+/* Stop event loop thread and wait until its termination
+ */
+void
+eloop_thread_stop (void);
+
+/* Acquire event loop mutex
+ */
+void
+eloop_mutex_lock (void);
+
+/* Release event loop mutex
+ */
+void
+eloop_mutex_unlock (void);
+
+/* Wait on conditional variable under the event loop mutex
+ */
+gboolean
+eloop_cond_wait (GCond *cond, gint64 timeout);
+
+/* Create AvahiGLibPoll that runs in context of the event loop
+ */
+AvahiGLibPoll*
+eloop_new_avahi_poll (void);
 
 /******************** Debugging ********************/
 /* Debug flags

@@ -3,6 +3,7 @@ SRC	= \
 	airscan-array.c \
 	airscan-conf.c \
 	airscan-devcaps.c \
+	airscan-eloop.c \
 	airscan-math.c \
 	airscan-opt.c \
 	airscan-xml.c \

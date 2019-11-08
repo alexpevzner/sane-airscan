@@ -12,7 +12,6 @@
 #include <avahi-client/client.h>
 #include <avahi-client/lookup.h>
 #include <avahi-common/error.h>
-#include <avahi-glib/glib-watch.h>
 
 #include <glib.h>
 
@@ -126,7 +125,7 @@ device_management_cleanup (void)
     }
 }
 
-/* Start devices management. Called from the airscan thread
+/* Start/stop devices management. Called from the airscan thread
  */
 static void
 device_management_start (void)
@@ -139,15 +138,27 @@ device_management_start (void)
     }
 }
 
-/* Finish device management. Called from the airscan thread
+/* Stop device management. Called from the airscan thread
  */
 static void
-device_management_finish (void)
+device_management_stop (void)
 {
     soup_session_abort(device_http_session);
     device_table_purge();
     g_object_unref(device_http_session);
     device_http_session = NULL;
+}
+
+/* Start/stop device management
+ */
+static void
+device_management_start_stop (gboolean start)
+{
+    if (start) {
+        device_management_start();
+    } else {
+        device_management_stop();
+    }
 }
 
 /* Add device to the table
@@ -720,103 +731,6 @@ device_http_get (device *dev, const char *path,
     g_ptr_array_add(dev->http_pending, msg);
 }
 
-/******************** GLIB integration ********************/
-/* GLIB stuff
- */
-static GThread *glib_thread;
-static GMainContext *glib_main_context;
-static GMainLoop *glib_main_loop;
-G_LOCK_DEFINE_STATIC(glib_main_loop);
-
-/* Forward declarations
- */
-static gint
-glib_poll_hook (GPollFD *ufds, guint nfsd, gint timeout);
-
-/* Initialize GLIB integration
- */
-static SANE_Status
-glib_init (void)
-{
-    glib_main_context = g_main_context_new();
-    glib_main_loop = g_main_loop_new(glib_main_context, FALSE);
-    g_main_context_set_poll_func(glib_main_context, glib_poll_hook);
-
-    return SANE_STATUS_GOOD;
-}
-
-/* Cleanup GLIB integration
- */
-static void
-glib_cleanup (void)
-{
-    if (glib_main_context != NULL) {
-        g_main_loop_unref(glib_main_loop);
-        glib_main_loop = NULL;
-        g_main_context_unref(glib_main_context);
-        glib_main_context = NULL;
-    }
-}
-
-/* Poll function hook
- */
-static gint
-glib_poll_hook (GPollFD *ufds, guint nfds, gint timeout)
-{
-    G_UNLOCK(glib_main_loop);
-    gint ret = g_poll(ufds, nfds, timeout);
-    G_LOCK(glib_main_loop);
-
-    return ret;
-}
-
-/* GLIB thread main function
- */
-static gpointer
-glib_thread_func (gpointer data)
-{
-    (void) data;
-
-    G_LOCK(glib_main_loop);
-
-    g_main_context_push_thread_default(glib_main_context);
-    device_management_start();
-    g_main_loop_run(glib_main_loop);
-    device_management_finish();
-
-    G_UNLOCK(glib_main_loop);
-
-    return NULL;
-}
-
-/* Start GLIB thread. All background operations (AVAHI service discovery,
- * HTTP transfers) are performed on a context of this thread
- */
-static void
-glib_thread_start (void) {
-    glib_thread = g_thread_new("airscan", glib_thread_func, NULL);
-
-    /* Wait until thread is started. Otherwise, g_main_loop_quit()
-     * might not terminate the thread
-     */
-    gulong usec = 100;
-    while (!g_main_loop_is_running(glib_main_loop)) {
-        g_usleep(usec);
-        usec += usec;
-    }
-}
-
-/* Stop GLIB thread
- */
-static void
-glib_thread_stop (void) {
-    if (glib_thread != NULL) {
-        g_main_loop_quit(glib_main_loop);
-        g_thread_join(glib_thread);
-        glib_thread = NULL;
-    }
-}
-
 /******************** Device Discovery ********************/
 /* AVAHI stuff
  */
@@ -1072,8 +986,7 @@ dd_avahi_client_restart_defer (void)
 static SANE_Status
 dd_init (void)
 {
-    dd_avahi_glib_poll = avahi_glib_poll_new(glib_main_context,
-            G_PRIORITY_DEFAULT);
+    dd_avahi_glib_poll = eloop_new_avahi_poll();
     if (dd_avahi_glib_poll == NULL) {
         return SANE_STATUS_NO_MEM;
     }
@@ -1141,7 +1054,7 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
     (void) authorize;
 
     /* Initialize all parts */
-    status = glib_init();
+    status = eloop_init();
     if (status == SANE_STATUS_GOOD) {
         device_management_init();
     }
@@ -1154,7 +1067,7 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
     }
 
     /* Start airscan thread */
-    glib_thread_start();
+    eloop_thread_start(device_management_start_stop);
 
     DBG_API_LEAVE();
 
@@ -1168,11 +1081,11 @@ sane_exit (void)
 {
     DBG_API_ENTER();
 
-    glib_thread_stop();
+    eloop_thread_stop();
 
     dd_cleanup();
     device_management_cleanup();
-    glib_cleanup();
+    eloop_cleanup();
 
     if (sane_device_list != NULL) {
         unsigned int i;
@@ -1206,7 +1119,7 @@ sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
     }
 
     /* Acquire main loop lock */
-    G_LOCK(glib_main_loop);
+    eloop_mutex_lock();
 
     /* Wait until table is ready */
     gint64 timeout = g_get_monotonic_time() +
@@ -1214,8 +1127,7 @@ sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
 
     while ((!device_table_ready() || dd_avahi_browser_init_wait) &&
             g_get_monotonic_time() < timeout) {
-        g_cond_wait_until(&device_table_cond,
-                &G_LOCK_NAME(glib_main_loop), timeout);
+        eloop_cond_wait(&device_table_cond, timeout);
     }
 
     /* Prepare response */
@@ -1237,7 +1149,7 @@ sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
     *device_list = sane_device_list;
 
     /* Cleanup and exit */
-    G_UNLOCK(glib_main_loop);
+    eloop_mutex_unlock();
 
     DBG_API_LEAVE();
 
@@ -1251,7 +1163,7 @@ sane_open (SANE_String_Const name, SANE_Handle *handle)
 {
     DBG_API_ENTER();
 
-    G_LOCK(glib_main_loop);
+    eloop_mutex_lock();
 
     device *dev = device_find(name);
     SANE_Status status = SANE_STATUS_INVAL;
@@ -1260,7 +1172,7 @@ sane_open (SANE_String_Const name, SANE_Handle *handle)
         status = SANE_STATUS_GOOD;
     }
 
-    G_UNLOCK(glib_main_loop);
+    eloop_mutex_unlock();
 
     DBG_API_LEAVE();
 
@@ -1274,9 +1186,9 @@ sane_close (SANE_Handle handle)
 {
     DBG_API_ENTER();
 
-    G_LOCK(glib_main_loop);
+    eloop_mutex_lock();
     device_unref((device*) handle);
-    G_UNLOCK(glib_main_loop);
+    eloop_mutex_unlock();
 
     DBG_API_LEAVE();
 }
@@ -1323,13 +1235,13 @@ sane_control_option (SANE_Handle handle, SANE_Int option, SANE_Action action,
         goto DONE;
     }
 
-    G_LOCK(glib_main_loop);
+    eloop_mutex_lock();
     if (action == SANE_ACTION_GET_VALUE) {
         status = device_get_option(dev, option, value);
     } else {
 
     }
-    G_UNLOCK(glib_main_loop);
+    eloop_mutex_unlock();
 
     (void) info;
 
