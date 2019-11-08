@@ -473,12 +473,8 @@ device_set_source (device *dev, OPT_SOURCE opt_src)
 
     /* Choose appropriate color mode */
     devcaps_source *src = dev->caps.src[dev->opt_src];
-    while (dev->opt_mode < NUM_OPT_MODE &&
-           (src->modes & (1 << dev->opt_mode)) == 0) {
-        dev->opt_mode ++;
-    }
-
-    g_assert(dev->opt_mode != NUM_OPT_MODE);
+    dev->opt_mode = devcaps_source_choose_colormode(src,
+                OPT_MODE_UNKNOWN);
 
     /* Adjust resolution */
     dev->opt_resolution = devcaps_source_choose_resolution(src,

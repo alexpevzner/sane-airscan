@@ -93,6 +93,33 @@ devcaps_source_choose_resolution(devcaps_source *src, SANE_Word wanted)
     }
 }
 
+/* Choose appropriate color mode
+ */
+OPT_MODE
+devcaps_source_choose_colormode(devcaps_source *src, OPT_MODE wanted)
+{
+    /* Prefer wanted mode if possible and if not, try to find
+     * a reasonable downgrade */
+    if (wanted != OPT_MODE_UNKNOWN) {
+        while (wanted < NUM_OPT_MODE) {
+            if ((src->modes & (1 << wanted)) != 0) {
+                return wanted;
+            }
+            wanted ++;
+        }
+    }
+
+    /* Nothing found in a previous step. Just choose the best mode
+     * supported by the scanner */
+    wanted = (OPT_MODE) 0;
+    while ((src->modes & (1 << wanted)) == 0) {
+        g_assert(wanted < NUM_OPT_MODE);
+        wanted ++;
+    }
+
+    return wanted;
+}
+
 /* Parse color modes. Returns NULL on success, error string otherwise
  */
 static const char*

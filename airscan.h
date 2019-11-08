@@ -449,6 +449,11 @@ devcaps_dump (const char *name, devcaps *caps);
 SANE_Word
 devcaps_source_choose_resolution(devcaps_source *src, SANE_Word wanted);
 
+/* Choose appropriate color mode
+ */
+OPT_MODE
+devcaps_source_choose_colormode(devcaps_source *src, OPT_MODE wanted);
+
 /******************** Mathematical Functions ********************/
 /* Find greatest common divisor of two positive integers
  */
