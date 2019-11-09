@@ -1,6 +1,6 @@
 # http://www.gnu.org/software/automake
 
-libsane-airscan.so
+libsane-airscan.so.1
 test
 
 tags
