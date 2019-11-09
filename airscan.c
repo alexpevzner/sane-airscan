@@ -296,6 +296,30 @@ device_add_static (const char *name, SoupURI *uri)
             device_scanner_capabilities_callback);
 }
 
+/* Device found notification -- called by ZeroConf
+ */
+void
+device_found (const char *name, zeroconf_addrinfo *addresses)
+{
+    (void) name;
+    (void) addresses;
+}
+
+/* Device removed notification -- called by ZeroConf
+ */
+void
+device_removed (const char *name)
+{
+    (void) name;
+}
+
+/* Device initial scan finished notification -- called by ZeroConf
+ */
+void
+device_init_scan_finished (void)
+{
+}
+
 /* Called when AVAHI resovler is done
  */
 static void

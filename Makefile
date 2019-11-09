@@ -7,6 +7,7 @@ SRC	= \
 	airscan-math.c \
 	airscan-opt.c \
 	airscan-xml.c \
+	airscan-zeroconf.c \
 	sane_strstatus.c
 
 CFLAGS	= -O2 -g -W -Wall -fPIC

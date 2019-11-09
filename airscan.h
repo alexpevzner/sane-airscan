@@ -7,6 +7,8 @@
 #ifndef airscan_h
 #define airscan_h
 
+#include <avahi-common/address.h>
+#include <avahi-common/strlst.h>
 #include <avahi-glib/glib-watch.h>
 
 #include <sane/sane.h>
@@ -366,7 +368,45 @@ opt_colormode_from_sane (SANE_String_Const name);
 SANE_String_Const
 opt_colormode_to_sane (OPT_COLORMODE mode);
 
-/******************** Device Capabilities  ********************/
+/******************** ZeroConf (device discovery) ********************/
+/* ZeroConf resolved address information
+ */
+typedef struct zeroconf_addrinfo zeroconf_addrinfo;
+struct zeroconf_addrinfo {
+    AvahiAddress      addr;      /* Device address */
+    uint16_t          port;      /* Device port */
+    const char        *rs;       /* "rs" portion of the TXT record */
+    AvahiIfIndex      interface; /* Interface index */
+    zeroconf_addrinfo *next;     /* Next address in the list */
+};
+
+/* Initialize ZeroConf
+ */
+SANE_Status
+zeroconf_init (void);
+
+/* Cleanup ZeroConf
+ */
+void
+zeroconf_cleanup (void);
+
+/******************** Device Management ********************/
+/* Device found notification -- called by ZeroConf
+ */
+void
+device_found (const char *name, zeroconf_addrinfo *addresses);
+
+/* Device removed notification -- called by ZeroConf
+ */
+void
+device_removed (const char *name);
+
+/* Device initial scan finished notification -- called by ZeroConf
+ */
+void
+device_init_scan_finished (void);
+
+/******************** Device Capabilities ********************/
 /* Source flags
  */
 enum {
