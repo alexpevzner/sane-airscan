@@ -75,21 +75,19 @@ sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
 {
     DBG_API_ENTER();
 
-    /* All our devices are non-local */
     if (local_only) {
+        /* All our devices are non-local */
         static const SANE_Device *empty_devlist[1] = { 0 };
         *device_list = empty_devlist;
-        return SANE_STATUS_GOOD;
+    } else {
+        eloop_mutex_lock();
+
+        device_list_free(sane_device_list);
+        sane_device_list = device_list_get();
+        *device_list = sane_device_list;
+
+        eloop_mutex_unlock();
     }
-
-    /* Acquire main loop lock */
-    eloop_mutex_lock();
-
-    device_list_free(sane_device_list);
-    sane_device_list = device_list_get();
-    *device_list = sane_device_list;
-
-    eloop_mutex_unlock();
 
     DBG_API_LEAVE();
 
@@ -138,7 +136,7 @@ const SANE_Option_Descriptor *
 sane_get_option_descriptor (SANE_Handle handle, SANE_Int option)
 {
     device *dev = (device*) handle;
-    const SANE_Option_Descriptor *desc = NULL;
+    const SANE_Option_Descriptor *desc;
 
     DBG_API_ENTER();
     desc = dev_get_option_descriptor(dev, option);
@@ -153,7 +151,7 @@ SANE_Status
 sane_control_option (SANE_Handle handle, SANE_Int option, SANE_Action action,
                      void *value, SANE_Int *info)
 {
-    SANE_Status status = SANE_STATUS_UNSUPPORTED;
+    SANE_Status status = SANE_STATUS_INVAL;
     device *dev = (device*) handle;
 
     DBG_API_ENTER();
@@ -168,11 +166,12 @@ sane_control_option (SANE_Handle handle, SANE_Int option, SANE_Action action,
         goto DONE;
     }
 
-    if (action == SANE_ACTION_SET_VALUE && SANE_OPTION_IS_SETTABLE(desc->cap)){
+    if (action == SANE_ACTION_SET_VALUE && !SANE_OPTION_IS_SETTABLE(desc->cap)){
         status = SANE_STATUS_INVAL;
         goto DONE;
     }
 
+    /* Get/set the option */
     eloop_mutex_lock();
     if (action == SANE_ACTION_GET_VALUE) {
         status = device_get_option(dev, option, value);
