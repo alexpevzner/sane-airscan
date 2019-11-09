@@ -8,9 +8,6 @@
 
 #include "airscan.h"
 
-#include <glib.h>
-#include <string.h>
-
 /* Name/value mapping entry
  */
 typedef struct {

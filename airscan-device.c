@@ -8,11 +8,6 @@
 
 #include "airscan.h"
 
-#include <stdio.h>
-#include <sys/time.h>
-
-#include <glib.h>
-
 /******************** Constants *********************/
 /* Max time to wait until device table is ready, in seconds
  */

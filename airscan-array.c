@@ -2,13 +2,12 @@
  *
  * Copyright (C) 2019 and up by Alexander Pevzner (pzz@apevzner.com)
  * See LICENSE for license terms and conditions
+ *
+ * Typed Arrays
  */
 
 #include "airscan.h"
 
-#include <glib.h>
-
-/******************** Typed Arrays ********************/
 /* Initial capacity of arrays
  */
 #define ARRAY_INITIAL_CAPACITY  4

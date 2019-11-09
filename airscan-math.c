@@ -8,8 +8,6 @@
 
 #include "airscan.h"
 
-#include <glib.h>
-
 /* Find greatest common divisor of two positive integers
  */
 SANE_Word

@@ -8,11 +8,6 @@
 
 #include "airscan.h"
 
-#include <stdio.h>
-#include <sys/time.h>
-
-#include <glib.h>
-
 /* Static variables
  */
 static const SANE_Device **sane_device_list;

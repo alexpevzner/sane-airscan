@@ -8,9 +8,6 @@
 
 #include "airscan.h"
 
-#include <glib.h>
-#include <strings.h>
-
 /* Allocate devcaps_source
  */
 static devcaps_source*

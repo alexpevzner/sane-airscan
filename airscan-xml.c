@@ -8,9 +8,6 @@
 
 #include "airscan.h"
 
-#include <glib.h>
-#include <libxml/tree.h>
-
 /* Skip dummy nodes. This is internal function, don't call directly
  */
 static void
