@@ -8,6 +8,8 @@
 
 #include "airscan.h"
 
+#include <arpa/inet.h>
+
 #include <avahi-client/client.h>
 #include <avahi-client/lookup.h>
 #include <avahi-common/error.h>
@@ -47,20 +49,11 @@ static AvahiClient *zeroconf_avahi_client;
 static AvahiServiceBrowser *zeroconf_avahi_browser;
 static SANE_Bool zeroconf_avahi_browser_init_scan;
 
-/* Forward declarations
- */
-static void
-zeroconf_addrinfo_list_free (zeroconf_addrinfo *list);
-
-static void
-zeroconf_avahi_browser_stop (void);
-
 static void
 zeroconf_avahi_client_start (void);
 
 static void
 zeroconf_avahi_client_restart_defer (void);
-
 
 /* Get current AVAHI error string
  */
@@ -235,20 +228,25 @@ zeroconf_devstate_del_all (void)
 /* Create new zeroconf_addrinfo
  */
 static zeroconf_addrinfo*
-zeroconf_addrinfo_new (const AvahiAddress *addr, uint16_t port,
-        AvahiStringList *txt, AvahiIfIndex interface)
+zeroconf_addrinfo_new (const AvahiAddress *addr, uint16_t port, const char *rs,
+        AvahiIfIndex interface)
 {
     zeroconf_addrinfo   *addrinfo = g_new0(zeroconf_addrinfo, 1);
-    AvahiStringList     *rs;
 
     addrinfo->addr = *addr;
-    addrinfo->port = port;
-    addrinfo->interface = interface;
-
-    rs = avahi_string_list_find(txt, "rs");
-    if (rs != NULL && rs->size > 3) {
-        addrinfo->rs = g_strdup((const char*) rs->text + 3);
+    if (addr->proto == AVAHI_PROTO_INET) {
+        /* 169.254.0.0/16 */
+        if ((ntohl(addr->data.ipv4.address) & 0xffff0000) == 0xa9fe0000) {
+            addrinfo->linklocal = TRUE;
+        }
+    } else {
+        static char link_local[8] = {0xfe, 0x80};
+        addrinfo->linklocal = ! memcmp(addr->data.ipv6.address,
+            link_local, sizeof(link_local));
     }
+    addrinfo->port = port;
+    addrinfo->rs = g_strdup(rs);
+    addrinfo->interface = interface;
 
     return addrinfo;
 }
@@ -262,9 +260,31 @@ zeroconf_addrinfo_free_single (zeroconf_addrinfo *addrinfo)
     g_free(addrinfo);
 }
 
-/* Free list of zeroconf_addrinfo
+/* Create a copy of zeroconf_addrinfo list
  */
-static void
+zeroconf_addrinfo*
+zeroconf_addrinfo_list_copy (zeroconf_addrinfo *list)
+{
+    zeroconf_addrinfo *newlist = NULL, *last = NULL, *addrinfo;
+
+    while (list != NULL) {
+        addrinfo = zeroconf_addrinfo_new(&list->addr, list->port, list->rs,
+                list->interface);
+        if (last != NULL) {
+            last->next = addrinfo;
+        } else {
+            newlist = addrinfo;
+        }
+        last = addrinfo;
+        list = list->next;
+    }
+
+    return newlist;
+}
+
+/* Free zeroconf_addrinfo list
+ */
+void
 zeroconf_addrinfo_list_free (zeroconf_addrinfo *list)
 {
     while (list != NULL) {
@@ -272,6 +292,23 @@ zeroconf_addrinfo_list_free (zeroconf_addrinfo *list)
         zeroconf_addrinfo_free_single(list);
         list = next;
     }
+}
+
+/* Revert zeroconf_addrinfo list
+ */
+static zeroconf_addrinfo*
+zeroconf_addrinfo_list_revert (zeroconf_addrinfo *list)
+{
+    zeroconf_addrinfo   *prev = NULL, *next;
+
+    while (list != NULL) {
+        next = list->next;
+        list->next = prev;
+        prev = list;
+        list = next;
+    }
+
+    return prev;
 }
 
 /* Prepend zeroconf_addrinfo to the list
@@ -302,12 +339,18 @@ zeroconf_avahi_resolver_callback (AvahiServiceResolver *r,
 
     zeroconf_devstate *devstate = userdata;
     zeroconf_addrinfo *addrinfo;
+    AvahiStringList   *rs;
+    const char        *rs_text = NULL;
 
     /* Handle event */
     switch (event) {
     case AVAHI_RESOLVER_FOUND:
-        DBG_DISCOVERY(name, "resolver: OK");
-        addrinfo = zeroconf_addrinfo_new(addr, port, txt, interface);
+        rs = avahi_string_list_find(txt, "rs");
+        if (rs != NULL && rs->size > 3) {
+            rs_text = (char*) (rs->text + 3);
+        }
+
+        addrinfo = zeroconf_addrinfo_new(addr, port, rs_text, interface);
         zeroconf_addrinfo_list_prepend(&devstate->addresses, addrinfo);
         break;
 
@@ -320,6 +363,28 @@ zeroconf_avahi_resolver_callback (AvahiServiceResolver *r,
     g_ptr_array_remove(devstate->resolvers, r);
 
     if (devstate->resolvers->len == 0 && devstate->addresses != NULL) {
+        devstate->addresses = zeroconf_addrinfo_list_revert(
+                devstate->addresses);
+
+
+        if (DBG_ENABLED(DBG_FLG_DISCOVERY)) {
+            zeroconf_addrinfo *addrinfo;
+            int               i = 1;
+
+            DBG_DISCOVERY(name, "device addresses:");
+
+            for (addrinfo = devstate->addresses; addrinfo != NULL;
+                    addrinfo = addrinfo->next, i ++) {
+                char buf[128];
+
+                avahi_address_snprint(buf, sizeof(buf), &addrinfo->addr);
+                DBG_DISCOVERY(name, "  %d: addr=%s", i, buf);
+                if (rs_text != NULL) {
+                    DBG_DISCOVERY(name, "  %d: rs=%s", i, rs_text);
+                }
+            }
+        }
+
         devstate->reported = TRUE;
         device_found(devstate->name, devstate->addresses);
     }
@@ -540,6 +605,14 @@ zeroconf_cleanup (void)
         zeroconf_avahi_glib_poll = NULL;
         zeroconf_avahi_browser_init_scan = FALSE;
     }
+}
+
+/* Check if initial scan still in progress
+ */
+gboolean
+zeroconf_init_scan (void)
+{
+    return zeroconf_avahi_browser_init_scan;
 }
 
 /* vim:ts=8:sw=4:et

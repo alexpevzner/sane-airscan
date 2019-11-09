@@ -374,6 +374,7 @@ opt_colormode_to_sane (OPT_COLORMODE mode);
 typedef struct zeroconf_addrinfo zeroconf_addrinfo;
 struct zeroconf_addrinfo {
     AvahiAddress      addr;      /* Device address */
+    gboolean          linklocal; /* It's a link-local address */
     uint16_t          port;      /* Device port */
     const char        *rs;       /* "rs" portion of the TXT record */
     AvahiIfIndex      interface; /* Interface index */
@@ -389,6 +390,21 @@ zeroconf_init (void);
  */
 void
 zeroconf_cleanup (void);
+
+/* Check if initial scan still in progress
+ */
+gboolean
+zeroconf_init_scan (void);
+
+/* Create a copy of zeroconf_addrinfo list
+ */
+zeroconf_addrinfo*
+zeroconf_addrinfo_list_copy (zeroconf_addrinfo *list);
+
+/* Free zeroconf_addrinfo list
+ */
+void
+zeroconf_addrinfo_list_free (zeroconf_addrinfo *list);
 
 /******************** Device Management ********************/
 /* Device found notification -- called by ZeroConf

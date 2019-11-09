@@ -9,23 +9,9 @@
 #include <stdio.h>
 #include <sys/time.h>
 
-#include <avahi-client/client.h>
-#include <avahi-client/lookup.h>
-#include <avahi-common/error.h>
-
 #include <glib.h>
 
 /******************** Constants *********************/
-/* Service type to look for
- */
-#define AIRSCAN_ZEROCONF_SERVICE_TYPE           "_uscan._tcp"
-
-/* If failed, AVAHI client will be automatically
- * restarted after the following timeout expires,
- * in seconds
- */
-#define AIRSCAN_AVAHI_CLIENT_RESTART_TIMEOUT    1
-
 /* Max time to wait until device table is ready, in seconds
  */
 #define DEVICE_TABLE_READY_TIMEOUT              5
@@ -39,7 +25,6 @@
  */
 enum {
     DEVICE_LISTED           = (1 << 0), /* Device listed in device_table */
-    DEVICE_RESOLVER_PENDING = (1 << 1), /* Pending service resolver */
     DEVICE_READY            = (1 << 2), /* Device is ready */
     DEVICE_HALTED           = (1 << 3), /* Device is halted */
     DEVICE_INIT_WAIT        = (1 << 4), /* Device was found during initial
@@ -57,7 +42,9 @@ typedef struct {
     devcaps              caps;          /* Device capabilities */
 
     /* I/O handling (AVAHI and HTTP) */
-    AvahiServiceResolver *resolver;     /* Service resolver; may be NULL */
+    zeroconf_addrinfo    *addresses;    /* Device addresses, NULL if
+                                           device was statically added */
+    zeroconf_addrinfo    *addr_current; /* Current address to probe */
     SoupURI              *base_url;     /* eSCL base URI */
     GPtrArray            *http_pending; /* Pending HTTP requests */
 
@@ -210,6 +197,8 @@ device_unref (device *dev)
 
         devcaps_cleanup(&dev->caps);
 
+        zeroconf_addrinfo_list_free(dev->addresses);
+
         if (dev->base_url != NULL) {
             soup_uri_free(dev->base_url);
         }
@@ -237,11 +226,6 @@ device_del (device *dev)
     g_tree_remove(device_table, dev->name);
 
     /* Stop all pending I/O activity */
-    if (dev->resolver != NULL) {
-        avahi_service_resolver_free(dev->resolver);
-        dev->resolver = NULL;
-    }
-
     guint i;
     for (i = 0; i < dev->http_pending->len; i ++) {
         soup_session_cancel_message(device_http_session,
@@ -296,71 +280,46 @@ device_add_static (const char *name, SoupURI *uri)
             device_scanner_capabilities_callback);
 }
 
-/* Device found notification -- called by ZeroConf
- */
-void
-device_found (const char *name, zeroconf_addrinfo *addresses)
-{
-    (void) name;
-    (void) addresses;
-}
-
-/* Device removed notification -- called by ZeroConf
- */
-void
-device_removed (const char *name)
-{
-    (void) name;
-}
-
-/* Device initial scan finished notification -- called by ZeroConf
- */
-void
-device_init_scan_finished (void)
-{
-}
-
-/* Called when AVAHI resovler is done
+/* Probe next device address
  */
 static void
-device_resolver_done (device *dev, AvahiIfIndex interface,
-        const AvahiAddress *addr, uint16_t port, AvahiStringList *txt)
+device_probe_address (device *dev, zeroconf_addrinfo *addrinfo)
 {
-    /* Build device API URL */
-    AvahiStringList *rs = avahi_string_list_find(txt, "rs");
-    const char *rs_text = NULL;
-    if (rs != NULL && rs->size > 3) {
-        rs_text = (const char*) rs->text + 3;
+    /* Cleanup after previous probe */
+    dev->addr_current = addrinfo;
+    if (dev->base_url != NULL) {
+        soup_uri_free(dev->base_url);
     }
 
+    /* Build device API URL */
     char str_addr[128], *url;
 
-    if (addr->proto == AVAHI_PROTO_INET) {
-        avahi_address_snprint(str_addr, sizeof(str_addr), addr);
+    if (addrinfo->addr.proto == AVAHI_PROTO_INET) {
+        avahi_address_snprint(str_addr, sizeof(str_addr), &addrinfo->addr);
     } else {
         str_addr[0] = '[';
-        avahi_address_snprint(str_addr + 1, sizeof(str_addr) - 2, addr);
+        avahi_address_snprint(str_addr + 1, sizeof(str_addr) - 2,
+            &addrinfo->addr);
         size_t l = strlen(str_addr);
 
         /* Connect to link-local address requires explicit scope */
-        static char link_local[8] = {0xfe, 0x80};
-        if (!memcmp(addr->data.ipv6.address, link_local, sizeof(link_local))) {
+        if (addrinfo->linklocal) {
             /* Percent character in the IPv6 address literal
              * needs to be properly escaped, so it becomes %25
              * See RFC6874 for details
              */
-            l += sprintf(str_addr + l, "%%25%d", interface);
+            l += sprintf(str_addr + l, "%%25%d", addrinfo->interface);
         }
 
         str_addr[l++] = ']';
         str_addr[l] = '\0';
     }
 
-    if (rs_text != NULL) {
-        url = g_strdup_printf("http://%s:%d/%s/", str_addr, port,
-                rs_text);
+    if (addrinfo->rs != NULL) {
+        url = g_strdup_printf("http://%s:%d/%s/", str_addr, addrinfo->port,
+                addrinfo->rs);
     } else {
-        url = g_strdup_printf("http://%s:%d/", str_addr, port);
+        url = g_strdup_printf("http://%s:%d/", str_addr, addrinfo->port);
     }
 
     dev->base_url = soup_uri_new(url);
@@ -370,6 +329,46 @@ device_resolver_done (device *dev, AvahiIfIndex interface,
     /* Fetch device capabilities */
     device_http_get(dev, "ScannerCapabilities",
             device_scanner_capabilities_callback);
+}
+
+/* Device found notification -- called by ZeroConf
+ */
+void
+device_found (const char *name, zeroconf_addrinfo *addresses)
+{
+    /* Don't allow duplicate devices */
+    device *dev = device_find(name);
+    if (dev != NULL) {
+        DBG_DEVICE(name, "device already exist");
+        return;
+    }
+
+    /* Add a device */
+    dev = device_add(name);
+    if (zeroconf_init_scan()) {
+        dev->flags |= DEVICE_INIT_WAIT;
+    }
+    dev->addresses = zeroconf_addrinfo_list_copy(addresses);
+    device_probe_address(dev, dev->addresses);
+}
+
+/* Device removed notification -- called by ZeroConf
+ */
+void
+device_removed (const char *name)
+{
+    device *dev = device_find(name);
+    if (dev) {
+        device_del(dev);
+    }
+}
+
+/* Device initial scan finished notification -- called by ZeroConf
+ */
+void
+device_init_scan_finished (void)
+{
+    g_cond_broadcast(&device_table_cond);
 }
 
 /* Rebuild option descriptors
@@ -679,7 +678,11 @@ DONE:
     }
 
     if (err != NULL) {
-        device_del(dev);
+        if (dev->addr_current != NULL && dev->addr_current->next != NULL) {
+            device_probe_address(dev, dev->addr_current->next);
+        } else {
+            device_del(dev);
+        }
     } else {
         /* Choose initial source */
         OPT_SOURCE opt_src = (OPT_SOURCE) 0;
@@ -751,305 +754,6 @@ device_http_get (device *dev, const char *path,
     g_ptr_array_add(dev->http_pending, msg);
 }
 
-/******************** Device Discovery ********************/
-/* AVAHI stuff
- */
-static AvahiGLibPoll *dd_avahi_glib_poll;
-static const AvahiPoll *dd_avahi_poll;
-static AvahiTimeout *dd_avahi_restart_timer;
-static AvahiClient *dd_avahi_client;
-static AvahiServiceBrowser *dd_avahi_browser;
-static SANE_Bool dd_avahi_browser_init_wait;
-
-/* Forward declarations
- */
-static void
-dd_cleanup (void);
-
-static void
-dd_avahi_browser_stop (void);
-
-static void
-dd_avahi_client_start (void);
-
-static void
-dd_avahi_client_restart_defer (void);
-
-
-/* Get current AVAHI error string
- */
-static const char*
-dd_avahi_strerror (void)
-{
-    return avahi_strerror(avahi_client_errno(dd_avahi_client));
-}
-
-/* AVAHI service resolver callback
- */
-static void
-dd_avahi_resolver_callback (AvahiServiceResolver *r, AvahiIfIndex interface,
-        AvahiProtocol protocol, AvahiResolverEvent event,
-        const char *name, const char *type, const char *domain,
-        const char *host_name, const AvahiAddress *addr, uint16_t port,
-        AvahiStringList *txt, AvahiLookupResultFlags flags, void *userdata)
-{
-    (void) interface;
-    (void) protocol;
-    (void) type;
-    (void) domain;
-    (void) host_name;
-    (void) flags;
-
-    device *dev = userdata;
-    dev->resolver = NULL; /* Not owned by device anymore */
-    dev->flags &= ~DEVICE_RESOLVER_PENDING;
-
-    switch (event) {
-    case AVAHI_RESOLVER_FOUND:
-        DBG_DISCOVERY(name, "resolver: OK");
-        device_resolver_done(dev, interface, addr, port, txt);
-        break;
-
-    case AVAHI_RESOLVER_FAILURE:
-        DBG_DISCOVERY(name, "resolver: %s", dd_avahi_strerror());
-        device_del(dev);
-        break;
-    }
-
-    avahi_service_resolver_free(r);
-}
-
-/* AVAHI browser callback
- */
-static void
-dd_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
-        AvahiProtocol protocol, AvahiBrowserEvent event,
-        const char *name, const char *type, const char *domain,
-        AvahiLookupResultFlags flags, void* userdata)
-{
-    (void) b;
-    (void) flags;
-    (void) userdata;
-
-    device *dev;
-
-    switch (event) {
-    case AVAHI_BROWSER_NEW:
-        DBG_DISCOVERY(name, "found");
-
-        /* Check for duplicate device */
-        if (device_find (name) ) {
-            DBG_DISCOVERY(name, "already known; ignoring");
-            break;
-        }
-
-        dev = device_add(name);
-        if (dd_avahi_browser_init_wait) {
-            dev->flags |= DEVICE_INIT_WAIT;
-        }
-
-        /* Initiate resolver */
-        AvahiServiceResolver *r;
-        r = avahi_service_resolver_new(dd_avahi_client, interface, protocol,
-                name, type, domain, AVAHI_PROTO_UNSPEC, 0,
-                dd_avahi_resolver_callback, dev);
-
-        if (r == NULL) {
-            DBG_DISCOVERY(name, "%s", dd_avahi_strerror());
-            device_del(dev);
-            dd_avahi_client_restart_defer();
-            break;
-        }
-
-        /* Attach resolver to device */
-        dev->resolver = r;
-        dev->flags |= DEVICE_RESOLVER_PENDING;
-        break;
-
-    case AVAHI_BROWSER_REMOVE:
-        DBG_DISCOVERY(name, "removed");
-        device *dev = device_find(name);
-        if (dev != NULL) {
-            device_del(dev);
-        }
-        break;
-
-    case AVAHI_BROWSER_FAILURE:
-        dd_avahi_client_restart_defer();
-        break;
-
-    case AVAHI_BROWSER_CACHE_EXHAUSTED:
-    case AVAHI_BROWSER_ALL_FOR_NOW:
-        dd_avahi_browser_init_wait = FALSE;
-        g_cond_broadcast(&device_table_cond);
-        break;
-    }
-}
-
-/* Start/restart service browser
- */
-static void
-dd_avahi_browser_start (AvahiClient *client)
-{
-    dd_avahi_browser_stop();
-
-    dd_avahi_browser = avahi_service_browser_new(client,
-            AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC,
-            AIRSCAN_ZEROCONF_SERVICE_TYPE, NULL,
-            0, dd_avahi_browser_callback, client);
-}
-
-/* Stop service browser
- */
-static void
-dd_avahi_browser_stop (void)
-{
-    if (dd_avahi_browser != NULL) {
-        avahi_service_browser_free(dd_avahi_browser);
-        dd_avahi_browser = NULL;
-    }
-}
-
-/* AVAHI client callback
- */
-static void
-dd_avahi_client_callback (AvahiClient *client, AvahiClientState state,
-        void *userdata)
-{
-    (void) userdata;
-
-    switch (state) {
-    case AVAHI_CLIENT_S_REGISTERING:
-    case AVAHI_CLIENT_S_RUNNING:
-    case AVAHI_CLIENT_S_COLLISION:
-        if (dd_avahi_browser == NULL) {
-            dd_avahi_browser_start(client);
-            if (dd_avahi_browser == NULL) {
-                dd_avahi_client_restart_defer();
-            }
-        }
-        break;
-
-    case AVAHI_CLIENT_FAILURE:
-        dd_avahi_client_restart_defer();
-        break;
-
-    case AVAHI_CLIENT_CONNECTING:
-        break;
-    }
-}
-
-/* Timer for differed AVAHI client restart
- */
-static void
-dd_avahi_restart_timer_callback(AvahiTimeout *t, void *userdata)
-{
-    (void) t;
-    (void) userdata;
-
-    dd_avahi_client_start();
-}
-
-/* Stop AVAHI client
- */
-static void
-dd_avahi_client_stop (void)
-{
-    if (dd_avahi_client != NULL) {
-        device **unresolved = g_newa(device*, device_table_size());
-        unsigned int i, count;
-
-        count = device_table_collect(DEVICE_RESOLVER_PENDING, unresolved);
-        for (i = 0; i < count; i ++) {
-                unresolved[i]->resolver = NULL;
-                device_del(unresolved[i]);
-        }
-
-        avahi_client_free(dd_avahi_client);
-        dd_avahi_client = NULL;
-    }
-}
-
-/* Start/restart the AVAHI client
- */
-static void
-dd_avahi_client_start (void)
-{
-    int error;
-
-    dd_avahi_client_stop();
-
-    dd_avahi_client = avahi_client_new (dd_avahi_poll, AVAHI_CLIENT_NO_FAIL,
-        dd_avahi_client_callback, NULL, &error);
-}
-
-/* Deferred client restart
- */
-static void
-dd_avahi_client_restart_defer (void)
-{
-        struct timeval tv;
-
-        dd_avahi_browser_stop();
-        dd_avahi_client_stop();
-
-        gettimeofday(&tv, NULL);
-        tv.tv_sec += AIRSCAN_AVAHI_CLIENT_RESTART_TIMEOUT;
-        dd_avahi_poll->timeout_update(dd_avahi_restart_timer, &tv);
-
-        dd_avahi_browser_init_wait = FALSE;
-        g_cond_broadcast(&device_table_cond);
-}
-
-/* Initialize device discovery
- */
-static SANE_Status
-dd_init (void)
-{
-    dd_avahi_glib_poll = eloop_new_avahi_poll();
-    if (dd_avahi_glib_poll == NULL) {
-        return SANE_STATUS_NO_MEM;
-    }
-
-    dd_avahi_poll = avahi_glib_poll_get(dd_avahi_glib_poll);
-
-    dd_avahi_restart_timer = dd_avahi_poll->timeout_new(dd_avahi_poll, NULL,
-            dd_avahi_restart_timer_callback, NULL);
-    if (dd_avahi_restart_timer == NULL) {
-        return SANE_STATUS_NO_MEM;
-    }
-
-    dd_avahi_client_start();
-    if (dd_avahi_client == NULL) {
-        return SANE_STATUS_NO_MEM;
-    }
-
-    dd_avahi_browser_init_wait = TRUE;
-
-    return SANE_STATUS_GOOD;
-}
-
-/* Cleanup device discovery
- */
-static void
-dd_cleanup (void)
-{
-    if (dd_avahi_glib_poll != NULL) {
-        dd_avahi_browser_stop();
-        dd_avahi_client_stop();
-
-        if (dd_avahi_restart_timer != NULL) {
-            dd_avahi_poll->timeout_free(dd_avahi_restart_timer);
-            dd_avahi_restart_timer = NULL;
-        }
-
-        avahi_glib_poll_free(dd_avahi_glib_poll);
-        dd_avahi_poll = NULL;
-        dd_avahi_glib_poll = NULL;
-        dd_avahi_browser_init_wait = FALSE;
-    }
-}
-
 /******************** SANE API ********************/
 /* Static variables
  */
@@ -1079,7 +783,7 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
         device_management_init();
     }
     if (status == SANE_STATUS_GOOD) {
-        status = dd_init();
+        status = zeroconf_init();
     }
 
     if (status != SANE_STATUS_GOOD) {
@@ -1103,7 +807,7 @@ sane_exit (void)
 
     eloop_thread_stop();
 
-    dd_cleanup();
+    zeroconf_cleanup();
     device_management_cleanup();
     eloop_cleanup();
 
@@ -1145,7 +849,7 @@ sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
     gint64 timeout = g_get_monotonic_time() +
             DEVICE_TABLE_READY_TIMEOUT * G_TIME_SPAN_SECOND;
 
-    while ((!device_table_ready() || dd_avahi_browser_init_wait) &&
+    while ((!device_table_ready() || zeroconf_init_scan()) &&
             g_get_monotonic_time() < timeout) {
         eloop_cond_wait(&device_table_cond, timeout);
     }
