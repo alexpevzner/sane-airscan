@@ -386,7 +386,7 @@ zeroconf_avahi_resolver_callback (AvahiServiceResolver *r,
         }
 
         devstate->reported = TRUE;
-        device_found(devstate->name, devstate->addresses);
+        device_found(devstate->name, devstate->init_scan, devstate->addresses);
     }
 }
 
@@ -612,7 +612,19 @@ zeroconf_cleanup (void)
 gboolean
 zeroconf_init_scan (void)
 {
-    return zeroconf_avahi_browser_init_scan;
+    if (zeroconf_avahi_browser_init_scan) {
+        return TRUE;
+    }
+
+    zeroconf_devstate *devstate;
+    for (devstate = zeroconf_devstate_list; devstate != NULL;
+            devstate = devstate->next) {
+        if (devstate->init_scan && !devstate->reported) {
+            return TRUE;
+        }
+    }
+
+    return FALSE;
 }
 
 /* vim:ts=8:sw=4:et
