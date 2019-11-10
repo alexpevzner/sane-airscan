@@ -394,11 +394,11 @@ devcaps_source_parse (xml_iter *iter, devcaps_source **out)
         src->br_y_range.min = SANE_FIX((double) src->min_height * 25.4 / 300);
         src->br_y_range.max = SANE_FIX((double) src->max_height * 25.4 / 300);
 
-        src->tl_x_range = src->br_x_range;
         src->tl_x_range.min = 0;
+        src->tl_x_range.max = src->br_x_range.max - src->br_x_range.min;
 
-        src->tl_y_range = src->br_y_range;
         src->tl_y_range.min = 0;
+        src->tl_y_range.max = src->br_y_range.max - src->br_y_range.min;
     }
 
 DONE:
