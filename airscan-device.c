@@ -416,6 +416,7 @@ device_rebuild_opt_desc (device *dev)
     desc = &dev->opt_desc[OPT_SCAN_COLORMODE];
     desc->name = SANE_NAME_SCAN_MODE;
     desc->title = SANE_TITLE_SCAN_MODE;
+    desc->desc = SANE_DESC_SCAN_MODE;
     desc->type = SANE_TYPE_STRING;
     desc->size = array_of_string_max_strlen(&src->sane_colormodes) + 1;
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
@@ -426,6 +427,7 @@ device_rebuild_opt_desc (device *dev)
     desc = &dev->opt_desc[OPT_SCAN_SOURCE];
     desc->name = SANE_NAME_SCAN_SOURCE;
     desc->title = SANE_TITLE_SCAN_SOURCE;
+    desc->desc = SANE_DESC_SCAN_SOURCE;
     desc->type = SANE_TYPE_STRING;
     desc->size = array_of_string_max_strlen(&dev->caps.sane_sources) + 1;
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
