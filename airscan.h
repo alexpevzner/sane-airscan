@@ -476,6 +476,11 @@ device_get_option (device *dev, SANE_Int option, void *value);
 SANE_Status
 device_set_option (device *dev, SANE_Int option, void *value, SANE_Word *info);
 
+/* Get current scan parameters
+ */
+SANE_Status
+device_get_parameters (device *dev, SANE_Parameters *params);
+
 /******************** Device Capabilities ********************/
 /* Source flags
  */
@@ -603,12 +608,28 @@ math_range_merge (SANE_Range *out, const SANE_Range *r1, const SANE_Range *r2);
 SANE_Word
 math_range_fit (const SANE_Range *r, SANE_Word i);
 
+/* Convert pixels to millimeters, using given resolution
+ */
+static inline SANE_Word
+math_px2mm_res (SANE_Word px, SANE_Word res)
+{
+    return SANE_FIX((double) px * 25.4 / res);
+}
+
+/* Convert millimeters to pixels, using given resolution
+ */
+static inline SANE_Word
+math_mm2px_res (SANE_Word mm, SANE_Word res)
+{
+    return (SANE_Word) (SANE_UNFIX(mm) * res / 24.6);
+}
+
 /* Convert pixels to millimeters, assuming 300 DPI
  */
 static inline SANE_Word
 math_px2mm (SANE_Word px)
 {
-    return SANE_FIX((double) px * 25.4 / 300);
+    return math_px2mm_res(px, 300);
 }
 
 /* Convert millimeters to pixels, assuming 300 DPI
@@ -616,7 +637,7 @@ math_px2mm (SANE_Word px)
 static inline SANE_Word
 math_mm2px (SANE_Word mm)
 {
-    return (SANE_Word) (SANE_UNFIX(mm) * 300 / 24.6);
+    return math_mm2px_res(mm, 300);
 }
 
 #endif

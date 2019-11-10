@@ -639,6 +639,44 @@ device_set_option (device *dev, SANE_Int option, void *value, SANE_Word *info)
     return status;
 }
 
+/* Get current scan parameters
+ */
+SANE_Status
+device_get_parameters (device *dev, SANE_Parameters *params)
+{
+    params->last_frame = SANE_TRUE;
+    params->pixels_per_line = math_mm2px_res(dev->opt_br_x - dev->opt_tl_x,
+        dev->opt_resolution);
+    params->lines = math_mm2px_res(dev->opt_br_y - dev->opt_tl_y,
+        dev->opt_resolution);
+
+    switch (dev->opt_colormode) {
+    case OPT_COLORMODE_COLOR:
+        params->format = SANE_FRAME_RGB;
+        params->depth = 8;
+        params->bytes_per_line = params->pixels_per_line * 3;
+        break;
+
+    case OPT_COLORMODE_GRAYSCALE:
+        params->format = SANE_FRAME_GRAY;
+        params->depth = 8;
+        params->bytes_per_line = params->pixels_per_line;
+        break;
+
+    case OPT_COLORMODE_LINEART:
+        params->format = SANE_FRAME_GRAY;
+        params->depth = 1;
+        params->bytes_per_line = ((params->pixels_per_line + 7) / 8) * 8;
+        break;
+
+    default:
+        g_assert(!"internal error");
+    }
+
+
+    return SANE_STATUS_GOOD;
+}
+
 /* Userdata passed to device_table_foreach_callback
  */
 typedef struct {
