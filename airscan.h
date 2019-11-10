@@ -138,8 +138,9 @@ enum {
 #define DBG_API(fmt, args...)                   \
         DBG_PRINT(DBG_FLG_API, "api", fmt, ##args)
 
-#define DBG_API_ENTER() DBG_API("%s", __FUNCTION__)
-#define DBG_API_LEAVE() DBG_API("%s -- DONE", __FUNCTION__)
+#define DBG_API_ENTER()         DBG_API("%s", __FUNCTION__)
+#define DBG_API_LEAVE(status)                   \
+        DBG_API("%s -- %s", __FUNCTION__, sane_strstatus(status))
 
 #define DBG_DISCOVERY(name, fmt, args...)       \
         DBG_PRINT(DBG_FLG_DISCOVERY, "discovery", "\"%s\": " fmt, name, ##args)
@@ -470,6 +471,11 @@ dev_get_option_descriptor (device *dev, SANE_Int option);
 SANE_Status
 device_get_option (device *dev, SANE_Int option, void *value);
 
+/* Set device option
+ */
+SANE_Status
+device_set_option (device *dev, SANE_Int option, void *value, SANE_Word *info);
+
 /******************** Device Capabilities ********************/
 /* Source flags
  */
@@ -500,8 +506,10 @@ typedef struct {
     unsigned int flags;                    /* Source flags */
     unsigned int colormodes;               /* Set of 1 << OPT_COLORMODE */
     SANE_String  *sane_colormodes;         /* Color modes, in SANE format */
-    SANE_Word    min_width, max_width;     /* Min/max image width */
-    SANE_Word    min_height, max_height;   /* Min/max image height */
+    SANE_Word    min_wid_px, max_wid_px;   /* Min/max width, in pixels */
+    SANE_Word    min_hei_px, max_hei_px;   /* Min/max height, in pixels */
+    SANE_Word    min_wid_mm, max_wid_mm;   /* Min/max width, in millimeters */
+    SANE_Word    min_hei_mm, max_hei_mm;   /* Min/max height, in millimeters */
     SANE_Word    *resolutions;             /* Discrete resolutions, in DPI */
     SANE_Range   res_range;                /* Resolutions range, in DPI */
     SANE_Range   tl_x_range, tl_y_range;   /* Top-left x/y ranges */

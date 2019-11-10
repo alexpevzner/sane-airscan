@@ -161,6 +161,7 @@ device_add (const char *name)
     dev->http_pending = g_ptr_array_new();
     dev->opt_src = OPT_SOURCE_UNKNOWN;
     dev->opt_colormode = OPT_COLORMODE_UNKNOWN;
+    dev->opt_resolution = DEVICE_DEFAULT_RESOLUTION;
 
     DBG_DEVICE(dev->name, "created");
 
@@ -450,6 +451,11 @@ device_rebuild_opt_desc (device *dev)
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
     desc->constraint.range = &src->tl_x_range;
 
+printf("++ tl_x_range: %g %g %g\n",
+        SANE_UNFIX(desc->constraint.range->min),
+        SANE_UNFIX(desc->constraint.range->max),
+        SANE_UNFIX(desc->constraint.range->quant));
+
     /* OPT_SCAN_TL_Y */
     desc = &dev->opt_desc[OPT_SCAN_TL_Y];
     desc->name = SANE_NAME_SCAN_TL_Y;
@@ -461,6 +467,10 @@ device_rebuild_opt_desc (device *dev)
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
     desc->constraint.range = &src->tl_y_range;
 
+printf("++ tl_y_range: %g %g %g\n",
+        SANE_UNFIX(desc->constraint.range->min),
+        SANE_UNFIX(desc->constraint.range->max),
+        SANE_UNFIX(desc->constraint.range->quant));
 
     /* OPT_SCAN_BR_X */
     desc = &dev->opt_desc[OPT_SCAN_BR_X];
@@ -473,6 +483,11 @@ device_rebuild_opt_desc (device *dev)
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
     desc->constraint.range = &src->br_x_range;
 
+printf("++ bt_x_range: %g %g %g\n",
+        SANE_UNFIX(desc->constraint.range->min),
+        SANE_UNFIX(desc->constraint.range->max),
+        SANE_UNFIX(desc->constraint.range->quant));
+
     /* OPT_SCAN_BR_Y */
     desc = &dev->opt_desc[OPT_SCAN_BR_Y];
     desc->name = SANE_NAME_SCAN_BR_Y;
@@ -483,25 +498,35 @@ device_rebuild_opt_desc (device *dev)
     desc->unit = SANE_UNIT_MM;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
     desc->constraint.range = &src->br_y_range;
+
+printf("++ bt_y_range: %g %g %g\n",
+        SANE_UNFIX(desc->constraint.range->min),
+        SANE_UNFIX(desc->constraint.range->max),
+        SANE_UNFIX(desc->constraint.range->quant));
 }
 
 /* Set current source. Affects many other options
  */
-static void
-device_set_source (device *dev, OPT_SOURCE opt_src)
+static SANE_Status
+device_set_source (device *dev, OPT_SOURCE opt_src, SANE_Word *info)
 {
+    devcaps_source *src = dev->caps.src[opt_src];
+
+    if (src == NULL) {
+        return SANE_STATUS_INVAL;
+    }
+
     dev->opt_src = opt_src;
 
-    /* Choose appropriate color mode */
-    devcaps_source *src = dev->caps.src[dev->opt_src];
+    /* Try to preserve current color mode */
     dev->opt_colormode = devcaps_source_choose_colormode(src,
-            OPT_COLORMODE_UNKNOWN);
+            dev->opt_colormode);
 
-    /* Adjust resolution */
+    /* Try to preserve resolution */
     dev->opt_resolution = devcaps_source_choose_resolution(src,
-            DEVICE_DEFAULT_RESOLUTION);
+            dev->opt_resolution);
 
-    /* Adjust window */
+    /* Reset window to maximum size */
     dev->opt_tl_x = 0;
     dev->opt_tl_y = 0;
 
@@ -509,6 +534,10 @@ device_set_source (device *dev, OPT_SOURCE opt_src)
     dev->opt_br_y = src->br_y_range.max;
 
     device_rebuild_opt_desc(dev);
+
+    *info = SANE_INFO_RELOAD_OPTIONS | SANE_INFO_RELOAD_PARAMS;
+
+    return SANE_STATUS_GOOD;
 }
 
 /* Get device option
@@ -549,6 +578,58 @@ device_get_option (device *dev, SANE_Int option, void *value)
 
     case OPT_SCAN_BR_Y:
         *(SANE_Word*) value = dev->opt_tl_y;
+        break;
+
+    default:
+        status = SANE_STATUS_INVAL;
+    }
+
+    return status;
+}
+
+/* Set device option
+ */
+SANE_Status
+device_set_option (device *dev, SANE_Int option, void *value, SANE_Word *info)
+{
+    SANE_Status status = SANE_STATUS_GOOD;
+    OPT_SOURCE  src;
+
+    /* Simplify life of options handlers by ensuring info != NULL  */
+    if (info == NULL) {
+        static SANE_Word unused;
+        info = &unused;
+    }
+
+    *info = 0;
+
+    /* Switch by option */
+    switch (option) {
+    case OPT_SCAN_RESOLUTION:
+        break;
+
+    case OPT_SCAN_COLORMODE:
+        break;
+
+    case OPT_SCAN_SOURCE:
+        src = opt_source_from_sane(value);
+        if (src == OPT_SOURCE_UNKNOWN) {
+            status = SANE_STATUS_INVAL;
+        } else {
+            status = device_set_source(dev, src, info);
+        }
+        break;
+
+    case OPT_SCAN_TL_X:
+        break;
+
+    case OPT_SCAN_TL_Y:
+        break;
+
+    case OPT_SCAN_BR_X:
+        break;
+
+    case OPT_SCAN_BR_Y:
         break;
 
     default:
@@ -690,7 +771,9 @@ DONE:
         }
 
         g_assert(opt_src != NUM_OPT_SOURCE);
-        device_set_source(dev, opt_src);
+
+        SANE_Word unused;
+        device_set_source(dev, opt_src, &unused);
 
         dev->flags |= DEVICE_READY;
         dev->flags &= ~DEVICE_INIT_WAIT;

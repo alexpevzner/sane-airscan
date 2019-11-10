@@ -46,7 +46,7 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
     /* Start airscan thread */
     eloop_thread_start(device_management_start_stop);
 
-    DBG_API_LEAVE();
+    DBG_API_LEAVE(status);
 
     return status;
 }
@@ -65,7 +65,7 @@ sane_exit (void)
     eloop_cleanup();
     device_list_free(sane_device_list);
 
-    DBG_API_LEAVE();
+    DBG_API_LEAVE(SANE_STATUS_GOOD);
 }
 
 /* Get list of devices
@@ -73,6 +73,8 @@ sane_exit (void)
 SANE_Status
 sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
 {
+    SANE_Status status = SANE_STATUS_GOOD;
+
     DBG_API_ENTER();
 
     if (local_only) {
@@ -89,9 +91,9 @@ sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
         eloop_mutex_unlock();
     }
 
-    DBG_API_LEAVE();
+    DBG_API_LEAVE(status);
 
-    return SANE_STATUS_GOOD;
+    return status;
 }
 
 /* Open the device
@@ -99,19 +101,20 @@ sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
 SANE_Status
 sane_open (SANE_String_Const name, SANE_Handle *handle)
 {
+    SANE_Status status = SANE_STATUS_INVAL;
+
     DBG_API_ENTER();
 
     eloop_mutex_lock();
     device *dev = device_open(name);
     eloop_mutex_unlock();
 
-    SANE_Status status = SANE_STATUS_INVAL;
     if (dev != NULL) {
         *handle = (SANE_Handle) dev;
         status = SANE_STATUS_GOOD;
     }
 
-    DBG_API_LEAVE();
+    DBG_API_LEAVE(status);
 
     return status;
 }
@@ -127,7 +130,7 @@ sane_close (SANE_Handle handle)
     device_close((device*) handle);
     eloop_mutex_unlock();
 
-    DBG_API_LEAVE();
+    DBG_API_LEAVE(SANE_STATUS_GOOD);
 }
 
 /* Get option descriptor
@@ -140,7 +143,7 @@ sane_get_option_descriptor (SANE_Handle handle, SANE_Int option)
 
     DBG_API_ENTER();
     desc = dev_get_option_descriptor(dev, option);
-    DBG_API_LEAVE();
+    DBG_API_LEAVE(desc ? SANE_STATUS_GOOD : SANE_STATUS_INVAL);
 
     return desc;
 }
@@ -174,16 +177,18 @@ sane_control_option (SANE_Handle handle, SANE_Int option, SANE_Action action,
     /* Get/set the option */
     eloop_mutex_lock();
     if (action == SANE_ACTION_GET_VALUE) {
+printf ("+++ get option %d\n", option);
         status = device_get_option(dev, option, value);
     } else {
-        // FIXME
+printf ("+++ set option %d\n", option);
+        status = device_set_option(dev, option, value, info);
     }
     eloop_mutex_unlock();
 
     (void) info;
 
 DONE:
-    DBG_API_LEAVE();
+    DBG_API_LEAVE(status);
     return status;
 }
 
@@ -192,14 +197,16 @@ DONE:
 SANE_Status
 sane_get_parameters (SANE_Handle handle, SANE_Parameters *params)
 {
+    SANE_Status status = SANE_STATUS_UNSUPPORTED;
+
     DBG_API_ENTER();
 
     (void) handle;
     (void) params;
 
-    DBG_API_LEAVE();
+    DBG_API_LEAVE(status);
 
-    return SANE_STATUS_INVAL;
+    return status;
 }
 
 /* Start scanning operation
@@ -207,13 +214,15 @@ sane_get_parameters (SANE_Handle handle, SANE_Parameters *params)
 SANE_Status
 sane_start (SANE_Handle handle)
 {
+    SANE_Status status = SANE_STATUS_UNSUPPORTED;
+
     DBG_API_ENTER();
 
     (void) handle;
 
-    DBG_API_LEAVE();
+    DBG_API_LEAVE(status);
 
-    return SANE_STATUS_INVAL;
+    return status;
 }
 
 /* Read scanned image
@@ -222,6 +231,8 @@ SANE_Status
 sane_read (SANE_Handle handle, SANE_Byte *data,
            SANE_Int max_length, SANE_Int *length)
 {
+    SANE_Status status = SANE_STATUS_UNSUPPORTED;
+
     DBG_API_ENTER();
 
     (void) handle;
@@ -229,9 +240,9 @@ sane_read (SANE_Handle handle, SANE_Byte *data,
     (void) max_length;
     (void) length;
 
-    DBG_API_LEAVE();
+    DBG_API_LEAVE(status);
 
-    return SANE_STATUS_INVAL;
+    return status;
 }
 
 /* Cancel scanning operation
@@ -243,7 +254,7 @@ sane_cancel (SANE_Handle handle)
 
     (void) handle;
 
-    DBG_API_LEAVE();
+    DBG_API_LEAVE(SANE_STATUS_GOOD);
 }
 
 /* Set I/O mode
@@ -251,14 +262,16 @@ sane_cancel (SANE_Handle handle)
 SANE_Status
 sane_set_io_mode (SANE_Handle handle, SANE_Bool non_blocking)
 {
+    SANE_Status status = SANE_STATUS_UNSUPPORTED;
+
     DBG_API_ENTER();
 
     (void) handle;
     (void) non_blocking;
 
-    DBG_API_LEAVE();
+    DBG_API_LEAVE(status);
 
-    return SANE_STATUS_GOOD;
+    return status;
 }
 
 /* Get select file descriptor
@@ -266,15 +279,17 @@ sane_set_io_mode (SANE_Handle handle, SANE_Bool non_blocking)
 SANE_Status
 sane_get_select_fd (SANE_Handle handle, SANE_Int * fd)
 {
+    SANE_Status status = SANE_STATUS_UNSUPPORTED;
+
     DBG_API_ENTER();
 
     (void) handle;
 
     *fd = -1;
 
-    DBG_API_LEAVE();
+    DBG_API_LEAVE(status);
 
-    return SANE_STATUS_UNSUPPORTED;
+    return status;
 }
 
 /******************** API aliases for libsane-dll ********************/

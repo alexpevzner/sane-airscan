@@ -355,13 +355,13 @@ devcaps_source_parse (xml_iter *iter, devcaps_source **out)
     xml_iter_enter(iter);
     for (; err == NULL && !xml_iter_end(iter); xml_iter_next(iter)) {
         if(xml_iter_node_name_match(iter, "scan:MinWidth")) {
-            err = xml_iter_node_value_uint(iter, &src->min_width);
+            err = xml_iter_node_value_uint(iter, &src->min_wid_px);
         } else if (xml_iter_node_name_match(iter, "scan:MaxWidth")) {
-            err = xml_iter_node_value_uint(iter, &src->max_width);
+            err = xml_iter_node_value_uint(iter, &src->max_wid_px);
         } else if (xml_iter_node_name_match(iter, "scan:MinHeight")) {
-            err = xml_iter_node_value_uint(iter, &src->min_height);
+            err = xml_iter_node_value_uint(iter, &src->min_hei_px);
         } else if (xml_iter_node_name_match(iter, "scan:MaxHeight")) {
-            err = xml_iter_node_value_uint(iter, &src->max_height);
+            err = xml_iter_node_value_uint(iter, &src->max_hei_px);
         } else if (xml_iter_node_name_match(iter, "scan:SettingProfiles")) {
             err = devcaps_source_parse_setting_profiles(iter, src);
         }
@@ -372,33 +372,40 @@ devcaps_source_parse (xml_iter *iter, devcaps_source **out)
         goto DONE;
     }
 
-    if (src->max_width != 0 && src->max_height != 0 )
+    if (src->max_wid_px != 0 && src->max_hei_px != 0 )
     {
         /* Validate window size */
-        if (src->min_width >= src->max_width )
+        if (src->min_wid_px >= src->max_wid_px )
         {
             err = "Invalid scan:MinWidth or scan:MaxWidth";
             goto DONE;
         }
 
-        if (src->min_height >= src->max_height)
+        if (src->min_hei_px >= src->max_hei_px)
         {
             err = "Invalid scan:MinHeight or scan:MaxHeight";
             goto DONE;
         }
 
-        /* Recompute to millimeters */
         src->flags |= DEVCAPS_SOURCE_HAS_SIZE;
-        src->br_x_range.min = math_px2mm(src->min_width);
-        src->br_x_range.max = math_px2mm(src->max_width);
-        src->br_y_range.min = math_px2mm(src->min_height);
-        src->br_y_range.max = math_px2mm(src->max_height);
+
+        /* Recompute to millimeters */
+        src->min_wid_mm = math_px2mm(src->min_wid_px);
+        src->max_wid_mm = math_px2mm(src->max_wid_px);
+        src->min_hei_mm = math_px2mm(src->min_hei_px);
+        src->max_hei_mm = math_px2mm(src->max_hei_px);
+
+        /* Set TL/BR ranges */
+        src->br_x_range.min = src->min_wid_mm;
+        src->br_x_range.max = src->max_wid_mm;
+        src->br_y_range.min = src->min_hei_mm;
+        src->br_y_range.max = src->max_hei_mm;
 
         src->tl_x_range.min = 0;
-        src->tl_x_range.max = src->br_x_range.max - src->br_x_range.min;
+        src->tl_x_range.max = src->max_wid_mm - src->min_wid_mm;
 
         src->tl_y_range.min = 0;
-        src->tl_y_range.max = src->br_y_range.max - src->br_y_range.min;
+        src->tl_y_range.max = src->max_hei_mm - src->min_hei_mm;
     }
 
 DONE:
@@ -544,8 +551,10 @@ devcaps_dump (const char *name, devcaps *caps)
         }
 
         DBG_PROTO(name, "  %s:", opt_source_to_sane(opt_src));
-        DBG_PROTO(name, "    Min Width/Height: %d/%d", src->min_width, src->min_height);
-        DBG_PROTO(name, "    Max Width/Height: %d/%d", src->max_width, src->max_height);
+        DBG_PROTO(name, "    Min window: %gx%g mm",
+                SANE_UNFIX(src->min_wid_mm), SANE_UNFIX(src->min_hei_mm));
+        DBG_PROTO(name, "    Max window: %gx%g mm",
+                SANE_UNFIX(src->max_wid_mm), SANE_UNFIX(src->max_hei_mm));
 
         if (src->flags & DEVCAPS_SOURCE_RES_DISCRETE) {
             g_string_truncate(buf, 0);
