@@ -144,13 +144,12 @@ array_of_string_max_strlen(SANE_String **a)
     size_t max_len = 0;
     SANE_String *s = *a;
 
-    for (; s != NULL; s ++) {
+    for (; *s != NULL; s ++) {
         size_t len = strlen(*s);
         if (len > max_len) {
             max_len = len;
         }
     }
-
     return max_len;
 }
 
