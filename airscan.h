@@ -593,7 +593,23 @@ math_range_merge (SANE_Range *out, const SANE_Range *r1, const SANE_Range *r2);
 /* Choose nearest integer in range
  */
 SANE_Word
-math_range_fit(const SANE_Range *r, SANE_Word i);
+math_range_fit (const SANE_Range *r, SANE_Word i);
+
+/* Convert pixels to millimeters, assuming 300 DPI
+ */
+static inline SANE_Word
+math_px2mm (SANE_Word px)
+{
+    return SANE_FIX((double) px * 25.4 / 300);
+}
+
+/* Convert millimeters to pixels, assuming 300 DPI
+ */
+static inline SANE_Word
+math_mm2px (SANE_Word mm)
+{
+    return (SANE_Word) (SANE_UNFIX(mm) * 300 / 24.6);
+}
 
 #endif
 

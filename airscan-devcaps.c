@@ -389,10 +389,10 @@ devcaps_source_parse (xml_iter *iter, devcaps_source **out)
 
         /* Recompute to millimeters */
         src->flags |= DEVCAPS_SOURCE_HAS_SIZE;
-        src->br_x_range.min = SANE_FIX((double) src->min_width * 25.4 / 300);
-        src->br_x_range.max = SANE_FIX((double) src->max_width * 25.4 / 300);
-        src->br_y_range.min = SANE_FIX((double) src->min_height * 25.4 / 300);
-        src->br_y_range.max = SANE_FIX((double) src->max_height * 25.4 / 300);
+        src->br_x_range.min = math_px2mm(src->min_width);
+        src->br_x_range.max = math_px2mm(src->max_width);
+        src->br_y_range.min = math_px2mm(src->min_height);
+        src->br_y_range.max = math_px2mm(src->max_height);
 
         src->tl_x_range.min = 0;
         src->tl_x_range.max = src->br_x_range.max - src->br_x_range.min;
