@@ -450,6 +450,9 @@ device_set_option (device *dev, SANE_Int option, void *value, SANE_Word *info);
 SANE_Status
 device_get_parameters (device *dev, SANE_Parameters *params);
 
+SANE_Status
+device_start (device *dev);
+
 /* Device found notification -- called by ZeroConf
  */
 void

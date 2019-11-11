@@ -185,6 +185,27 @@ device_find (const char *name)
     return g_tree_lookup(device_table, name);
 }
 
+/* g_tree_foreach callback for finding first device
+ */
+static gboolean
+device_first_foreach_callback (gpointer key, gpointer value, gpointer userdata)
+{
+    (void) key;
+    *(device**) userdata = (device*) value;
+    return TRUE;
+}
+
+
+/* Find a first device in a table
+ */
+static device*
+device_first (void)
+{
+    device *dev = NULL;
+    g_tree_foreach(device_table, device_first_foreach_callback, &dev);
+    return dev;
+}
+
 /* Add statically configured device
  */
 static void
@@ -716,6 +737,13 @@ device_http_perform (device *dev, const char *path,
     SoupURI *url = soup_uri_new_with_base(dev->base_url, path);
     g_assert(url);
     SoupMessage *msg = soup_message_new_from_uri(method, url);
+
+    if (DBG_ENABLED(DBG_FLG_HTTP)) {
+        char *uri_str = soup_uri_to_string(url, FALSE);
+        DBG_HTTP("%s %s", msg->method, uri_str);
+        g_free(uri_str);
+    }
+
     soup_uri_free(url);
 
     if (request != NULL) {
@@ -742,12 +770,11 @@ device_http_get (device *dev, const char *path,
 }
 
 /******************** API helpers ********************/
-/* Get list of devices, in SANE format
+/* Wait until list of devices is ready
  */
-const SANE_Device**
-device_list_get (void)
+static void
+device_list_sync (void)
 {
-    /* Wait until device table is ready */
     gint64 timeout = g_get_monotonic_time() +
             DEVICE_TABLE_READY_TIMEOUT * G_TIME_SPAN_SECOND;
 
@@ -755,6 +782,15 @@ device_list_get (void)
             g_get_monotonic_time() < timeout) {
         eloop_cond_wait(&device_table_cond, timeout);
     }
+}
+
+/* Get list of devices, in SANE format
+ */
+const SANE_Device**
+device_list_get (void)
+{
+    /* Wait until device table is ready */
+    device_list_sync();
 
     /* Build a list */
     device            **devices = g_newa(device*, device_table_size());
@@ -800,10 +836,20 @@ device_list_free (const SANE_Device **dev_list)
 device*
 device_open (const char *name)
 {
-    device *dev = device_find(name);
+    device *dev;
+
+    device_list_sync();
+
+    if (name && *name) {
+        dev = device_find(name);
+    } else {
+        dev = device_first();
+    }
+
     if (dev != NULL && (dev->flags & DEVICE_READY) != 0) {
         return device_ref(dev);
     }
+
     return NULL;
 }
 
@@ -964,6 +1010,60 @@ device_get_parameters (device *dev, SANE_Parameters *params)
         g_assert(!"internal error");
     }
 
+
+    return SANE_STATUS_GOOD;
+}
+
+/* Start scanning operation
+ */
+SANE_Status
+device_start (device *dev)
+{
+    unsigned int x_off = 0;
+    unsigned int y_off = 0;
+    unsigned int wid, hei;
+    const char   *source = "Platen";
+    const char   *colormode = "RGB24";
+    const char   *mime = "image/jpeg";
+    SANE_Word    x_resolution = 300;
+    SANE_Word    y_resolution = 300;
+
+    wid = math_mm2px(dev->opt_br_x);
+    hei = math_mm2px(dev->opt_br_y);
+
+    const char *rq = g_strdup_printf(
+        "<?xml version='1.0' encoding='UTF-8'?>\n"
+        "<scan:ScanSettings\n"
+        "    xmlns:scan=\"http://schemas.hp.com/imaging/escl/2011/05/03\"\n"
+        "    xmlns:pwg=\"http://www.pwg.org/schemas/2010/12/sm\">\n"
+        "  <pwg:Version>2.6</pwg:Version>\n"
+        "  <pwg:ScanRegions>\n"
+        "    <pwg:ScanRegion>\n"
+        "      <pwg:XOffset>%d</pwg:XOffset>\n"
+        "      <pwg:YOffset>%d</pwg:YOffset>\n"
+        "      <pwg:Width>%d</pwg:Width>\n"
+        "      <pwg:Height>%d</pwg:Height>\n"
+        "      <pwg:ContentRegionUnits>escl:ThreeHundredthsOfInches</pwg:ContentRegionUnits>\n"
+        "    </pwg:ScanRegion>\n"
+        "  </pwg:ScanRegions>\n"
+        "  <scan:InputSource>%s</scan:InputSource>\n"
+        "  <scan:ColorMode>%s</scan:ColorMode>\n"
+        "  <scan:DocumentFormatExt>%s</scan:DocumentFormatExt>\n"
+        "  <scan:XResolution>%d</scan:XResolution>\n"
+        "  <scan:YResolution>%d</scan:YResolution>\n"
+        "</scan:ScanSettings>\n",
+        x_off,
+        y_off,
+        wid,
+        hei,
+        source,
+        colormode,
+        mime,
+        x_resolution,
+        y_resolution
+    );
+
+    device_http_perform(dev, "ScanJobs", "POST", rq, NULL);
 
     return SANE_STATUS_GOOD;
 }
