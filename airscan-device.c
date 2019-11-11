@@ -386,6 +386,7 @@ device_rebuild_opt_desc (device *dev)
     desc->title = SANE_TITLE_NUM_OPTIONS;
     desc->desc = SANE_DESC_NUM_OPTIONS;
     desc->type = SANE_TYPE_INT;
+    desc->size = sizeof(SANE_Word);
     desc->cap = SANE_CAP_SOFT_DETECT;
 
     /* OPT_GROUP_STANDARD */
@@ -402,6 +403,7 @@ device_rebuild_opt_desc (device *dev)
     desc->title = SANE_TITLE_SCAN_RESOLUTION;
     desc->desc = SANE_DESC_SCAN_RESOLUTION;
     desc->type = SANE_TYPE_INT;
+    desc->size = sizeof(SANE_Word);
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_DPI;
     if ((src->flags & DEVCAPS_SOURCE_RES_DISCRETE) != 0) {
@@ -448,15 +450,11 @@ device_rebuild_opt_desc (device *dev)
     desc->title = SANE_TITLE_SCAN_TL_X;
     desc->desc = SANE_DESC_SCAN_TL_X;
     desc->type = SANE_TYPE_FIXED;
+    desc->size = sizeof(SANE_Word);
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_MM;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
     desc->constraint.range = &src->tl_x_range;
-
-printf("++ tl_x_range: %g %g %g\n",
-        SANE_UNFIX(desc->constraint.range->min),
-        SANE_UNFIX(desc->constraint.range->max),
-        SANE_UNFIX(desc->constraint.range->quant));
 
     /* OPT_SCAN_TL_Y */
     desc = &dev->opt_desc[OPT_SCAN_TL_Y];
@@ -464,15 +462,11 @@ printf("++ tl_x_range: %g %g %g\n",
     desc->title = SANE_TITLE_SCAN_TL_Y;
     desc->desc = SANE_DESC_SCAN_TL_Y;
     desc->type = SANE_TYPE_FIXED;
+    desc->size = sizeof(SANE_Word);
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_MM;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
     desc->constraint.range = &src->tl_y_range;
-
-printf("++ tl_y_range: %g %g %g\n",
-        SANE_UNFIX(desc->constraint.range->min),
-        SANE_UNFIX(desc->constraint.range->max),
-        SANE_UNFIX(desc->constraint.range->quant));
 
     /* OPT_SCAN_BR_X */
     desc = &dev->opt_desc[OPT_SCAN_BR_X];
@@ -480,15 +474,11 @@ printf("++ tl_y_range: %g %g %g\n",
     desc->title = SANE_TITLE_SCAN_BR_X;
     desc->desc = SANE_DESC_SCAN_BR_X;
     desc->type = SANE_TYPE_FIXED;
+    desc->size = sizeof(SANE_Word);
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_MM;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
     desc->constraint.range = &src->br_x_range;
-
-printf("++ bt_x_range: %g %g %g\n",
-        SANE_UNFIX(desc->constraint.range->min),
-        SANE_UNFIX(desc->constraint.range->max),
-        SANE_UNFIX(desc->constraint.range->quant));
 
     /* OPT_SCAN_BR_Y */
     desc = &dev->opt_desc[OPT_SCAN_BR_Y];
@@ -496,15 +486,11 @@ printf("++ bt_x_range: %g %g %g\n",
     desc->title = SANE_TITLE_SCAN_BR_Y;
     desc->desc = SANE_DESC_SCAN_BR_Y;
     desc->type = SANE_TYPE_FIXED;
+    desc->size = sizeof(SANE_Word);
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_MM;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
     desc->constraint.range = &src->br_y_range;
-
-printf("++ bt_y_range: %g %g %g\n",
-        SANE_UNFIX(desc->constraint.range->min),
-        SANE_UNFIX(desc->constraint.range->max),
-        SANE_UNFIX(desc->constraint.range->quant));
 }
 
 /* Set current source. Affects many other options
@@ -568,18 +554,22 @@ device_get_option (device *dev, SANE_Int option, void *value)
 
     case OPT_SCAN_TL_X:
         *(SANE_Word*) value = dev->opt_tl_x;
+        printf("++ get TL_X=%d\n", *(SANE_Word*)value);
         break;
 
     case OPT_SCAN_TL_Y:
         *(SANE_Word*) value = dev->opt_tl_y;
+        printf("++ get TL_Y=%d\n", *(SANE_Word*)value);
         break;
 
     case OPT_SCAN_BR_X:
-        *(SANE_Word*) value = dev->opt_tl_x;
+        *(SANE_Word*) value = dev->opt_br_x;
+        printf("++ get BR_X=%d\n", *(SANE_Word*)value);
         break;
 
     case OPT_SCAN_BR_Y:
-        *(SANE_Word*) value = dev->opt_tl_y;
+        *(SANE_Word*) value = dev->opt_br_y;
+        printf("++ get BR_Y=%d\n", *(SANE_Word*)value);
         break;
 
     default:
@@ -623,15 +613,27 @@ device_set_option (device *dev, SANE_Int option, void *value, SANE_Word *info)
         break;
 
     case OPT_SCAN_TL_X:
+        printf("++ set TL_X=%d\n", *(SANE_Word*)value);
+        dev->opt_tl_x = *(SANE_Word*)value;
+        *info = SANE_INFO_RELOAD_OPTIONS;
         break;
 
     case OPT_SCAN_TL_Y:
+        printf("++ set TL_Y=%d\n", *(SANE_Word*)value);
+        dev->opt_tl_y = *(SANE_Word*)value;
+        *info = SANE_INFO_RELOAD_OPTIONS;
         break;
 
     case OPT_SCAN_BR_X:
+        printf("++ set BR_X=%d\n", *(SANE_Word*)value);
+        dev->opt_br_x = *(SANE_Word*)value;
+        *info = SANE_INFO_RELOAD_OPTIONS;
         break;
 
     case OPT_SCAN_BR_Y:
+        printf("++ set BR_Y=%d\n", *(SANE_Word*)value);
+        dev->opt_br_y = *(SANE_Word*)value;
+        *info = SANE_INFO_RELOAD_OPTIONS;
         break;
 
     default:

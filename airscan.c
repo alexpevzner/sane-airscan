@@ -170,17 +170,14 @@ sane_control_option (SANE_Handle handle, SANE_Int option, SANE_Action action,
     }
 
     if (action == SANE_ACTION_SET_VALUE && !SANE_OPTION_IS_SETTABLE(desc->cap)){
-        status = SANE_STATUS_INVAL;
         goto DONE;
     }
 
     /* Get/set the option */
     eloop_mutex_lock();
     if (action == SANE_ACTION_GET_VALUE) {
-printf ("+++ get option %d\n", option);
         status = device_get_option(dev, option, value);
     } else {
-printf ("+++ set option %d\n", option);
         status = device_set_option(dev, option, value, info);
     }
     eloop_mutex_unlock();
