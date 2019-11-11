@@ -85,66 +85,6 @@ device_name_compare (gconstpointer a, gconstpointer b, gpointer userdata)
     return strcmp((const char *) a, (const char*) b);
 }
 
-/* Initialize device management
- */
-SANE_Status
-device_management_init (void)
-{
-    g_cond_init(&device_table_cond);
-    device_table = g_tree_new_full(device_name_compare, NULL, NULL, NULL);
-
-    return SANE_STATUS_GOOD;
-}
-
-/* Cleanup device management
- */
-void
-device_management_cleanup (void)
-{
-    if (device_table != NULL) {
-        g_assert(g_tree_nnodes(device_table) == 0);
-        g_cond_clear(&device_table_cond);
-        g_tree_unref(device_table);
-        device_table = NULL;
-    }
-}
-
-/* Start/stop devices management. Called from the airscan thread
- */
-static void
-device_management_start (void)
-{
-    conf_device *dev_conf;
-
-    device_http_session = soup_session_new();
-    for (dev_conf = conf.devices; dev_conf != NULL; dev_conf = dev_conf->next) {
-        device_add_static(dev_conf->name, dev_conf->uri);
-    }
-}
-
-/* Stop device management. Called from the airscan thread
- */
-static void
-device_management_stop (void)
-{
-    soup_session_abort(device_http_session);
-    device_table_purge();
-    g_object_unref(device_http_session);
-    device_http_session = NULL;
-}
-
-/* Start/stop device management
- */
-void
-device_management_start_stop (gboolean start)
-{
-    if (start) {
-        device_management_start();
-    } else {
-        device_management_stop();
-    }
-}
-
 /* Add device to the table
  */
 static device*
@@ -327,47 +267,6 @@ device_probe_address (device *dev, zeroconf_addrinfo *addrinfo)
     /* Fetch device capabilities */
     device_http_get(dev, "ScannerCapabilities",
             device_scanner_capabilities_callback);
-}
-
-/* Device found notification -- called by ZeroConf
- */
-void
-device_found (const char *name, gboolean init_scan,
-        zeroconf_addrinfo *addresses)
-{
-    /* Don't allow duplicate devices */
-    device *dev = device_find(name);
-    if (dev != NULL) {
-        DBG_DEVICE(name, "device already exist");
-        return;
-    }
-
-    /* Add a device */
-    dev = device_add(name);
-    if (init_scan) {
-        dev->flags |= DEVICE_INIT_WAIT;
-    }
-    dev->addresses = zeroconf_addrinfo_list_copy(addresses);
-    device_probe_address(dev, dev->addresses);
-}
-
-/* Device removed notification -- called by ZeroConf
- */
-void
-device_removed (const char *name)
-{
-    device *dev = device_find(name);
-    if (dev) {
-        device_del(dev);
-    }
-}
-
-/* Device initial scan finished notification -- called by ZeroConf
- */
-void
-device_init_scan_finished (void)
-{
-    g_cond_broadcast(&device_table_cond);
 }
 
 /* Rebuild option descriptors
@@ -622,147 +521,7 @@ device_set_geom (device *dev, SANE_Int option, SANE_Word val, SANE_Word *info)
     return SANE_STATUS_GOOD;
 }
 
-/* Get device option
- */
-SANE_Status
-device_get_option (device *dev, SANE_Int option, void *value)
-{
-    SANE_Status status = SANE_STATUS_GOOD;
-
-    switch (option) {
-    case OPT_NUM_OPTIONS:
-        *(SANE_Word*) value = NUM_OPTIONS;
-        break;
-
-    case OPT_SCAN_RESOLUTION:
-        *(SANE_Word*) value = dev->opt_resolution;
-        break;
-
-    case OPT_SCAN_COLORMODE:
-        strcpy(value, opt_colormode_to_sane(dev->opt_colormode));
-        break;
-
-    case OPT_SCAN_SOURCE:
-        strcpy(value, opt_source_to_sane(dev->opt_src));
-        break;
-
-    case OPT_SCAN_TL_X:
-        *(SANE_Word*) value = dev->opt_tl_x;
-        break;
-
-    case OPT_SCAN_TL_Y:
-        *(SANE_Word*) value = dev->opt_tl_y;
-        break;
-
-    case OPT_SCAN_BR_X:
-        *(SANE_Word*) value = dev->opt_br_x;
-        break;
-
-    case OPT_SCAN_BR_Y:
-        *(SANE_Word*) value = dev->opt_br_y;
-        break;
-
-    default:
-        status = SANE_STATUS_INVAL;
-    }
-
-    return status;
-}
-
-/* Set device option
- */
-SANE_Status
-device_set_option (device *dev, SANE_Int option, void *value, SANE_Word *info)
-{
-    SANE_Status    status = SANE_STATUS_GOOD;
-    OPT_SOURCE     opt_src;
-    OPT_COLORMODE  opt_colormode;
-
-    /* Simplify life of options handlers by ensuring info != NULL  */
-    if (info == NULL) {
-        static SANE_Word unused;
-        info = &unused;
-    }
-
-    *info = 0;
-
-    /* Switch by option */
-    switch (option) {
-    case OPT_SCAN_RESOLUTION:
-        status = device_set_resolution(dev, *(SANE_Word*)value, info);
-        break;
-
-    case OPT_SCAN_COLORMODE:
-        opt_colormode = opt_colormode_from_sane(value);
-        if (opt_colormode == OPT_COLORMODE_UNKNOWN) {
-            status = SANE_STATUS_INVAL;
-        } else {
-            status = device_set_colormode(dev, opt_colormode, info);
-        }
-        break;
-
-    case OPT_SCAN_SOURCE:
-        opt_src = opt_source_from_sane(value);
-        if (opt_src == OPT_SOURCE_UNKNOWN) {
-            status = SANE_STATUS_INVAL;
-        } else {
-            status = device_set_source(dev, opt_src, info);
-        }
-        break;
-
-    case OPT_SCAN_TL_X:
-    case OPT_SCAN_TL_Y:
-    case OPT_SCAN_BR_X:
-    case OPT_SCAN_BR_Y:
-        status = device_set_geom(dev, option, *(SANE_Word*)value, info);
-        break;
-
-    default:
-        status = SANE_STATUS_INVAL;
-    }
-
-    return status;
-}
-
-/* Get current scan parameters
- */
-SANE_Status
-device_get_parameters (device *dev, SANE_Parameters *params)
-{
-    SANE_Word wid = math_max(0, dev->opt_br_x - dev->opt_tl_x);
-    SANE_Word hei = math_max(0, dev->opt_br_y - dev->opt_tl_y);
-
-    params->last_frame = SANE_TRUE;
-    params->pixels_per_line = math_mm2px_res(wid, dev->opt_resolution);
-    params->lines = math_mm2px_res(hei, dev->opt_resolution);
-
-    switch (dev->opt_colormode) {
-    case OPT_COLORMODE_COLOR:
-        params->format = SANE_FRAME_RGB;
-        params->depth = 8;
-        params->bytes_per_line = params->pixels_per_line * 3;
-        break;
-
-    case OPT_COLORMODE_GRAYSCALE:
-        params->format = SANE_FRAME_GRAY;
-        params->depth = 8;
-        params->bytes_per_line = params->pixels_per_line;
-        break;
-
-    case OPT_COLORMODE_LINEART:
-        params->format = SANE_FRAME_GRAY;
-        params->depth = 1;
-        params->bytes_per_line = ((params->pixels_per_line + 7) / 8) * 8;
-        break;
-
-    default:
-        g_assert(!"internal error");
-    }
-
-
-    return SANE_STATUS_GOOD;
-}
-
+/******************** Device table operations ********************/
 /* Userdata passed to device_table_foreach_callback
  */
 typedef struct {
@@ -933,22 +692,36 @@ device_http_callback(SoupSession *session, SoupMessage *msg, gpointer userdata)
     if (msg->status_code != SOUP_STATUS_CANCELLED) {
         device_http_userdata *data = userdata;
         g_ptr_array_remove(data->dev->http_pending, msg);
-        data->callback(data->dev, msg);
+        if (data->callback != NULL) {
+            data->callback(data->dev, msg);
+        }
     }
 
     g_free(userdata);
 }
 
 /* Initiate HTTP request
+ *
+ * If request != NULL, it becomes a request message body. The
+ * memory ownership will be taken by this function, assuming
+ * request body needs to be released with g_free() after use
+ *
+ * Content type of the outgoing requests assumed to be "text/xml"
  */
 static void
-device_http_get (device *dev, const char *path,
+device_http_perform (device *dev, const char *path,
+        const char *method, const char *request,
         void (*callback)(device*, SoupMessage*))
 {
     SoupURI *url = soup_uri_new_with_base(dev->base_url, path);
     g_assert(url);
-    SoupMessage *msg = soup_message_new_from_uri("GET", url);
+    SoupMessage *msg = soup_message_new_from_uri(method, url);
     soup_uri_free(url);
+
+    if (request != NULL) {
+        soup_message_set_request(msg, "text/xml", SOUP_MEMORY_TAKE,
+                request, strlen(request));
+    }
 
     device_http_userdata *data = g_new0(device_http_userdata, 1);
     data->dev = dev;
@@ -959,6 +732,16 @@ device_http_get (device *dev, const char *path,
     g_ptr_array_add(dev->http_pending, msg);
 }
 
+/* Initiate HTTP GET request
+ */
+static void
+device_http_get (device *dev, const char *path,
+        void (*callback)(device*, SoupMessage*))
+{
+    device_http_perform(dev, path, "GET", NULL, callback);
+}
+
+/******************** API helpers ********************/
 /* Get list of devices, in SANE format
  */
 const SANE_Device**
@@ -1043,6 +826,252 @@ dev_get_option_descriptor (device *dev, SANE_Int option)
 
     return NULL;
 }
+
+/* Get device option
+ */
+SANE_Status
+device_get_option (device *dev, SANE_Int option, void *value)
+{
+    SANE_Status status = SANE_STATUS_GOOD;
+
+    switch (option) {
+    case OPT_NUM_OPTIONS:
+        *(SANE_Word*) value = NUM_OPTIONS;
+        break;
+
+    case OPT_SCAN_RESOLUTION:
+        *(SANE_Word*) value = dev->opt_resolution;
+        break;
+
+    case OPT_SCAN_COLORMODE:
+        strcpy(value, opt_colormode_to_sane(dev->opt_colormode));
+        break;
+
+    case OPT_SCAN_SOURCE:
+        strcpy(value, opt_source_to_sane(dev->opt_src));
+        break;
+
+    case OPT_SCAN_TL_X:
+        *(SANE_Word*) value = dev->opt_tl_x;
+        break;
+
+    case OPT_SCAN_TL_Y:
+        *(SANE_Word*) value = dev->opt_tl_y;
+        break;
+
+    case OPT_SCAN_BR_X:
+        *(SANE_Word*) value = dev->opt_br_x;
+        break;
+
+    case OPT_SCAN_BR_Y:
+        *(SANE_Word*) value = dev->opt_br_y;
+        break;
+
+    default:
+        status = SANE_STATUS_INVAL;
+    }
+
+    return status;
+}
+
+/* Set device option
+ */
+SANE_Status
+device_set_option (device *dev, SANE_Int option, void *value, SANE_Word *info)
+{
+    SANE_Status    status = SANE_STATUS_GOOD;
+    OPT_SOURCE     opt_src;
+    OPT_COLORMODE  opt_colormode;
+
+    /* Simplify life of options handlers by ensuring info != NULL  */
+    if (info == NULL) {
+        static SANE_Word unused;
+        info = &unused;
+    }
+
+    *info = 0;
+
+    /* Switch by option */
+    switch (option) {
+    case OPT_SCAN_RESOLUTION:
+        status = device_set_resolution(dev, *(SANE_Word*)value, info);
+        break;
+
+    case OPT_SCAN_COLORMODE:
+        opt_colormode = opt_colormode_from_sane(value);
+        if (opt_colormode == OPT_COLORMODE_UNKNOWN) {
+            status = SANE_STATUS_INVAL;
+        } else {
+            status = device_set_colormode(dev, opt_colormode, info);
+        }
+        break;
+
+    case OPT_SCAN_SOURCE:
+        opt_src = opt_source_from_sane(value);
+        if (opt_src == OPT_SOURCE_UNKNOWN) {
+            status = SANE_STATUS_INVAL;
+        } else {
+            status = device_set_source(dev, opt_src, info);
+        }
+        break;
+
+    case OPT_SCAN_TL_X:
+    case OPT_SCAN_TL_Y:
+    case OPT_SCAN_BR_X:
+    case OPT_SCAN_BR_Y:
+        status = device_set_geom(dev, option, *(SANE_Word*)value, info);
+        break;
+
+    default:
+        status = SANE_STATUS_INVAL;
+    }
+
+    return status;
+}
+
+/* Get current scan parameters
+ */
+SANE_Status
+device_get_parameters (device *dev, SANE_Parameters *params)
+{
+    SANE_Word wid = math_max(0, dev->opt_br_x - dev->opt_tl_x);
+    SANE_Word hei = math_max(0, dev->opt_br_y - dev->opt_tl_y);
+
+    params->last_frame = SANE_TRUE;
+    params->pixels_per_line = math_mm2px_res(wid, dev->opt_resolution);
+    params->lines = math_mm2px_res(hei, dev->opt_resolution);
+
+    switch (dev->opt_colormode) {
+    case OPT_COLORMODE_COLOR:
+        params->format = SANE_FRAME_RGB;
+        params->depth = 8;
+        params->bytes_per_line = params->pixels_per_line * 3;
+        break;
+
+    case OPT_COLORMODE_GRAYSCALE:
+        params->format = SANE_FRAME_GRAY;
+        params->depth = 8;
+        params->bytes_per_line = params->pixels_per_line;
+        break;
+
+    case OPT_COLORMODE_LINEART:
+        params->format = SANE_FRAME_GRAY;
+        params->depth = 1;
+        params->bytes_per_line = ((params->pixels_per_line + 7) / 8) * 8;
+        break;
+
+    default:
+        g_assert(!"internal error");
+    }
+
+
+    return SANE_STATUS_GOOD;
+}
+
+/******************** Device discovery events ********************/
+/* Device found notification -- called by ZeroConf
+ */
+void
+device_event_found (const char *name, gboolean init_scan,
+        zeroconf_addrinfo *addresses)
+{
+    /* Don't allow duplicate devices */
+    device *dev = device_find(name);
+    if (dev != NULL) {
+        DBG_DEVICE(name, "device already exist");
+        return;
+    }
+
+    /* Add a device */
+    dev = device_add(name);
+    if (init_scan) {
+        dev->flags |= DEVICE_INIT_WAIT;
+    }
+    dev->addresses = zeroconf_addrinfo_list_copy(addresses);
+    device_probe_address(dev, dev->addresses);
+}
+
+/* Device removed notification -- called by ZeroConf
+ */
+void
+device_event_removed (const char *name)
+{
+    device *dev = device_find(name);
+    if (dev) {
+        device_del(dev);
+    }
+}
+
+/* Device initial scan finished notification -- called by ZeroConf
+ */
+void
+device_event_init_scan_finished (void)
+{
+    g_cond_broadcast(&device_table_cond);
+}
+
+
+/******************** Initialization/cleanup ********************/
+/* Initialize device management
+ */
+SANE_Status
+device_management_init (void)
+{
+    g_cond_init(&device_table_cond);
+    device_table = g_tree_new_full(device_name_compare, NULL, NULL, NULL);
+
+    return SANE_STATUS_GOOD;
+}
+
+/* Cleanup device management
+ */
+void
+device_management_cleanup (void)
+{
+    if (device_table != NULL) {
+        g_assert(g_tree_nnodes(device_table) == 0);
+        g_cond_clear(&device_table_cond);
+        g_tree_unref(device_table);
+        device_table = NULL;
+    }
+}
+
+/* Start/stop devices management. Called from the airscan thread
+ */
+static void
+device_management_start (void)
+{
+    conf_device *dev_conf;
+
+    device_http_session = soup_session_new();
+    for (dev_conf = conf.devices; dev_conf != NULL; dev_conf = dev_conf->next) {
+        device_add_static(dev_conf->name, dev_conf->uri);
+    }
+}
+
+/* Stop device management. Called from the airscan thread
+ */
+static void
+device_management_stop (void)
+{
+    soup_session_abort(device_http_session);
+    device_table_purge();
+    g_object_unref(device_http_session);
+    device_http_session = NULL;
+}
+
+/* Start/stop device management
+ */
+void
+device_management_start_stop (gboolean start)
+{
+    if (start) {
+        device_management_start();
+    } else {
+        device_management_stop();
+    }
+}
+
 
 /* vim:ts=8:sw=4:et
  */

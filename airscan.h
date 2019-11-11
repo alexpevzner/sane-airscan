@@ -410,37 +410,6 @@ zeroconf_addrinfo_list_free (zeroconf_addrinfo *list);
 /******************** Device Management ********************/
 typedef struct device device;
 
-/* Initialize device management
- */
-SANE_Status
-device_management_init (void);
-
-/* Cleanup device management
- */
-void
-device_management_cleanup (void);
-
-/* Start/stop device management
- */
-void
-device_management_start_stop (gboolean start);
-
-/* Device found notification -- called by ZeroConf
- */
-void
-device_found (const char *name, gboolean init_scan,
-        zeroconf_addrinfo *addresses);
-
-/* Device removed notification -- called by ZeroConf
- */
-void
-device_removed (const char *name);
-
-/* Device initial scan finished notification -- called by ZeroConf
- */
-void
-device_init_scan_finished (void);
-
 /* Get list of devices, in SANE format
  */
 const SANE_Device**
@@ -480,6 +449,37 @@ device_set_option (device *dev, SANE_Int option, void *value, SANE_Word *info);
  */
 SANE_Status
 device_get_parameters (device *dev, SANE_Parameters *params);
+
+/* Device found notification -- called by ZeroConf
+ */
+void
+device_event_found (const char *name, gboolean init_scan,
+        zeroconf_addrinfo *addresses);
+
+/* Device removed notification -- called by ZeroConf
+ */
+void
+device_event_removed (const char *name);
+
+/* Device initial scan finished notification -- called by ZeroConf
+ */
+void
+device_event_init_scan_finished (void);
+
+/* Initialize device management
+ */
+SANE_Status
+device_management_init (void);
+
+/* Cleanup device management
+ */
+void
+device_management_cleanup (void);
+
+/* Start/stop device management
+ */
+void
+device_management_start_stop (gboolean start);
 
 /******************** Device Capabilities ********************/
 /* Source flags

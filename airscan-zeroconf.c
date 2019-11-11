@@ -147,7 +147,7 @@ zeroconf_devstate_del (const char *name)
 
     /* Delete a device state */
     if (devstate->reported) {
-        device_removed(name);
+        device_event_removed(name);
     }
 
     if (prev != NULL) {
@@ -180,7 +180,7 @@ zeroconf_devstate_list_walk (gboolean (*callback) (zeroconf_devstate *devstate))
             }
         } else {
             if (devstate->reported) {
-                device_removed(devstate->name);
+                device_event_removed(devstate->name);
             }
             zeroconf_devstate_free(devstate);
         }
@@ -386,7 +386,8 @@ zeroconf_avahi_resolver_callback (AvahiServiceResolver *r,
         }
 
         devstate->reported = TRUE;
-        device_found(devstate->name, devstate->init_scan, devstate->addresses);
+        device_event_found(devstate->name, devstate->init_scan,
+                devstate->addresses);
     }
 }
 
@@ -440,7 +441,7 @@ zeroconf_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
     case AVAHI_BROWSER_ALL_FOR_NOW:
         zeroconf_avahi_browser_init_scan = FALSE;
         zeroconf_devstate_list_walk(zeroconf_devstate_unconfirmed_del);
-        device_init_scan_finished();
+        device_event_init_scan_finished();
         break;
     }
 }
@@ -551,7 +552,7 @@ zeroconf_avahi_client_restart_defer (void)
 
     if (zeroconf_avahi_browser_init_scan) {
         zeroconf_avahi_browser_init_scan = FALSE;
-        device_init_scan_finished();
+        device_event_init_scan_finished();
     }
 }
 
