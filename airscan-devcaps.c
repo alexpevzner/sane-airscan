@@ -395,17 +395,10 @@ devcaps_source_parse (xml_iter *iter, devcaps_source **out)
         src->min_hei_mm = math_px2mm(src->min_hei_px);
         src->max_hei_mm = math_px2mm(src->max_hei_px);
 
-        /* Set TL/BR ranges */
-        src->br_x_range.min = src->min_wid_mm;
-        src->br_x_range.max = src->max_wid_mm;
-        src->br_y_range.min = src->min_hei_mm;
-        src->br_y_range.max = src->max_hei_mm;
-
-        src->tl_x_range.min = 0;
-        src->tl_x_range.max = src->max_wid_mm - src->min_wid_mm;
-
-        src->tl_y_range.min = 0;
-        src->tl_y_range.max = src->max_hei_mm - src->min_hei_mm;
+        /* Set window ranges */
+        src->win_x_range.min = src->win_y_range.min = 0;
+        src->win_x_range.max = src->max_wid_mm;
+        src->win_y_range.max = src->max_hei_mm;
     }
 
 DONE:

@@ -454,7 +454,7 @@ device_rebuild_opt_desc (device *dev)
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_MM;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
-    desc->constraint.range = &src->tl_x_range;
+    desc->constraint.range = &src->win_x_range;
 
     /* OPT_SCAN_TL_Y */
     desc = &dev->opt_desc[OPT_SCAN_TL_Y];
@@ -466,7 +466,7 @@ device_rebuild_opt_desc (device *dev)
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_MM;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
-    desc->constraint.range = &src->tl_y_range;
+    desc->constraint.range = &src->win_y_range;
 
     /* OPT_SCAN_BR_X */
     desc = &dev->opt_desc[OPT_SCAN_BR_X];
@@ -478,7 +478,7 @@ device_rebuild_opt_desc (device *dev)
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_MM;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
-    desc->constraint.range = &src->br_x_range;
+    desc->constraint.range = &src->win_x_range;
 
     /* OPT_SCAN_BR_Y */
     desc = &dev->opt_desc[OPT_SCAN_BR_Y];
@@ -490,7 +490,49 @@ device_rebuild_opt_desc (device *dev)
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_MM;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
-    desc->constraint.range = &src->br_y_range;
+    desc->constraint.range = &src->win_y_range;
+}
+
+/* Set current resolution
+ */
+static SANE_Status
+device_set_resolution (device *dev, SANE_Word opt_resolution, SANE_Word *info)
+{
+    devcaps_source *src = dev->caps.src[dev->opt_src];
+
+    if (dev->opt_resolution == opt_resolution) {
+        return SANE_STATUS_GOOD;
+    }
+
+    dev->opt_resolution = devcaps_source_choose_colormode(src, opt_resolution);
+
+    *info |= SANE_INFO_RELOAD_PARAMS;
+    if (dev->opt_resolution != opt_resolution) {
+        *info |= SANE_INFO_INEXACT;
+    }
+
+    return SANE_STATUS_GOOD;
+}
+
+/* Set color mode
+ */
+static SANE_Status
+device_set_colormode (device *dev, OPT_COLORMODE opt_colormode, SANE_Word *info)
+{
+    devcaps_source *src = dev->caps.src[dev->opt_src];
+
+    if (dev->opt_colormode == opt_colormode) {
+        return SANE_STATUS_GOOD;
+    }
+
+    if ((src->colormodes & (1 <<opt_colormode)) == 0) {
+        return SANE_STATUS_INVAL;
+    }
+
+    dev->opt_colormode = opt_colormode;
+    *info |= SANE_INFO_RELOAD_PARAMS;
+
+    return SANE_STATUS_GOOD;
 }
 
 /* Set current source. Affects many other options
@@ -502,6 +544,10 @@ device_set_source (device *dev, OPT_SOURCE opt_src, SANE_Word *info)
 
     if (src == NULL) {
         return SANE_STATUS_INVAL;
+    }
+
+    if (dev->opt_src == opt_src) {
+        return SANE_STATUS_GOOD;
     }
 
     dev->opt_src = opt_src;
@@ -518,12 +564,60 @@ device_set_source (device *dev, OPT_SOURCE opt_src, SANE_Word *info)
     dev->opt_tl_x = 0;
     dev->opt_tl_y = 0;
 
-    dev->opt_br_x = src->br_x_range.max;
-    dev->opt_br_y = src->br_y_range.max;
+    dev->opt_br_x = src->win_x_range.max;
+    dev->opt_br_y = src->win_y_range.max;
 
     device_rebuild_opt_desc(dev);
 
-    *info = SANE_INFO_RELOAD_OPTIONS | SANE_INFO_RELOAD_PARAMS;
+    *info |= SANE_INFO_RELOAD_OPTIONS | SANE_INFO_RELOAD_PARAMS;
+
+    return SANE_STATUS_GOOD;
+}
+
+/* Set geometry option
+ */
+static SANE_Status
+device_set_geom (device *dev, SANE_Int option, SANE_Word val, SANE_Word *info)
+{
+    SANE_Word      *out = NULL;
+    SANE_Range     *range = NULL;
+    devcaps_source *src = dev->caps.src[dev->opt_src];
+
+    /* Choose destination and range */
+    switch (option) {
+    case OPT_SCAN_TL_X:
+        out = &dev->opt_tl_x;
+        range = &src->win_x_range;
+        break;
+
+    case OPT_SCAN_TL_Y:
+        out = &dev->opt_tl_y;
+        range = &src->win_y_range;
+        break;
+
+    case OPT_SCAN_BR_X:
+        out = &dev->opt_br_x;
+        range = &src->win_x_range;
+        break;
+
+    case OPT_SCAN_BR_Y:
+        out = &dev->opt_br_y;
+        range = &src->win_y_range;
+        break;
+
+    default:
+        g_assert_not_reached();
+    }
+
+    /* Update option */
+    if (*out != val) {
+        *out = math_range_fit(range, val);
+        if (*out == val) {
+            *info |= SANE_INFO_RELOAD_PARAMS;
+        } else {
+            *info |= SANE_INFO_RELOAD_PARAMS | SANE_INFO_INEXACT;
+        }
+    }
 
     return SANE_STATUS_GOOD;
 }
@@ -554,22 +648,18 @@ device_get_option (device *dev, SANE_Int option, void *value)
 
     case OPT_SCAN_TL_X:
         *(SANE_Word*) value = dev->opt_tl_x;
-        printf("++ get TL_X=%d\n", *(SANE_Word*)value);
         break;
 
     case OPT_SCAN_TL_Y:
         *(SANE_Word*) value = dev->opt_tl_y;
-        printf("++ get TL_Y=%d\n", *(SANE_Word*)value);
         break;
 
     case OPT_SCAN_BR_X:
         *(SANE_Word*) value = dev->opt_br_x;
-        printf("++ get BR_X=%d\n", *(SANE_Word*)value);
         break;
 
     case OPT_SCAN_BR_Y:
         *(SANE_Word*) value = dev->opt_br_y;
-        printf("++ get BR_Y=%d\n", *(SANE_Word*)value);
         break;
 
     default:
@@ -584,8 +674,9 @@ device_get_option (device *dev, SANE_Int option, void *value)
 SANE_Status
 device_set_option (device *dev, SANE_Int option, void *value, SANE_Word *info)
 {
-    SANE_Status status = SANE_STATUS_GOOD;
-    OPT_SOURCE  src;
+    SANE_Status    status = SANE_STATUS_GOOD;
+    OPT_SOURCE     opt_src;
+    OPT_COLORMODE  opt_colormode;
 
     /* Simplify life of options handlers by ensuring info != NULL  */
     if (info == NULL) {
@@ -598,42 +689,32 @@ device_set_option (device *dev, SANE_Int option, void *value, SANE_Word *info)
     /* Switch by option */
     switch (option) {
     case OPT_SCAN_RESOLUTION:
+        status = device_set_resolution(dev, *(SANE_Word*)value, info);
         break;
 
     case OPT_SCAN_COLORMODE:
+        opt_colormode = opt_colormode_from_sane(value);
+        if (opt_colormode == OPT_COLORMODE_UNKNOWN) {
+            status = SANE_STATUS_INVAL;
+        } else {
+            status = device_set_colormode(dev, opt_colormode, info);
+        }
         break;
 
     case OPT_SCAN_SOURCE:
-        src = opt_source_from_sane(value);
-        if (src == OPT_SOURCE_UNKNOWN) {
+        opt_src = opt_source_from_sane(value);
+        if (opt_src == OPT_SOURCE_UNKNOWN) {
             status = SANE_STATUS_INVAL;
         } else {
-            status = device_set_source(dev, src, info);
+            status = device_set_source(dev, opt_src, info);
         }
         break;
 
     case OPT_SCAN_TL_X:
-        printf("++ set TL_X=%d\n", *(SANE_Word*)value);
-        dev->opt_tl_x = *(SANE_Word*)value;
-        *info = SANE_INFO_RELOAD_OPTIONS;
-        break;
-
     case OPT_SCAN_TL_Y:
-        printf("++ set TL_Y=%d\n", *(SANE_Word*)value);
-        dev->opt_tl_y = *(SANE_Word*)value;
-        *info = SANE_INFO_RELOAD_OPTIONS;
-        break;
-
     case OPT_SCAN_BR_X:
-        printf("++ set BR_X=%d\n", *(SANE_Word*)value);
-        dev->opt_br_x = *(SANE_Word*)value;
-        *info = SANE_INFO_RELOAD_OPTIONS;
-        break;
-
     case OPT_SCAN_BR_Y:
-        printf("++ set BR_Y=%d\n", *(SANE_Word*)value);
-        dev->opt_br_y = *(SANE_Word*)value;
-        *info = SANE_INFO_RELOAD_OPTIONS;
+        status = device_set_geom(dev, option, *(SANE_Word*)value, info);
         break;
 
     default:
@@ -648,11 +729,12 @@ device_set_option (device *dev, SANE_Int option, void *value, SANE_Word *info)
 SANE_Status
 device_get_parameters (device *dev, SANE_Parameters *params)
 {
+    SANE_Word wid = math_max(0, dev->opt_br_x - dev->opt_tl_x);
+    SANE_Word hei = math_max(0, dev->opt_br_y - dev->opt_tl_y);
+
     params->last_frame = SANE_TRUE;
-    params->pixels_per_line = math_mm2px_res(dev->opt_br_x - dev->opt_tl_x,
-        dev->opt_resolution);
-    params->lines = math_mm2px_res(dev->opt_br_y - dev->opt_tl_y,
-        dev->opt_resolution);
+    params->pixels_per_line = math_mm2px_res(wid, dev->opt_resolution);
+    params->lines = math_mm2px_res(hei, dev->opt_resolution);
 
     switch (dev->opt_colormode) {
     case OPT_COLORMODE_COLOR:
