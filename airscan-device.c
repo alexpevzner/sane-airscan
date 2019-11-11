@@ -1014,11 +1014,12 @@ device_get_parameters (device *dev, SANE_Parameters *params)
     return SANE_STATUS_GOOD;
 }
 
-/* Start scanning operation
+/* Start scanning operation - runs on a context of event loop thread
  */
-SANE_Status
-device_start (device *dev)
+static gboolean
+device_start_do (gpointer data)
 {
+    device      *dev = data;
     unsigned int x_off = 0;
     unsigned int y_off = 0;
     unsigned int wid, hei;
@@ -1065,6 +1066,15 @@ device_start (device *dev)
 
     device_http_perform(dev, "ScanJobs", "POST", rq, NULL);
 
+    return FALSE;
+}
+
+/* Start scanning operation
+ */
+SANE_Status
+device_start (device *dev)
+{
+    eloop_call(device_start_do, dev);
     return SANE_STATUS_GOOD;
 }
 

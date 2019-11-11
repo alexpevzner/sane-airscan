@@ -107,6 +107,11 @@ eloop_cond_wait (GCond *cond, gint64 timeout);
 AvahiGLibPoll*
 eloop_new_avahi_poll (void);
 
+/* Call function on a context of event loop thread
+ */
+void
+eloop_call (GSourceFunc func, gpointer data);
+
 /******************** Debugging ********************/
 /* Debug flags
  */

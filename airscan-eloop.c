@@ -141,5 +141,17 @@ eloop_new_avahi_poll (void)
     return avahi_glib_poll_new(eloop_glib_main_context, G_PRIORITY_DEFAULT);
 }
 
+/* Call function on a context of event loop thread
+ */
+void
+eloop_call (GSourceFunc func, gpointer data)
+{
+    GSource *source = g_idle_source_new ();
+    g_source_set_priority(source, G_PRIORITY_DEFAULT);
+    g_source_set_callback(source, func, data, NULL);
+    g_source_attach(source, eloop_glib_main_context);
+    g_source_unref(source);
+}
+
 /* vim:ts=8:sw=4:et
  */
