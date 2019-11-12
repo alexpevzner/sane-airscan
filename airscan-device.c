@@ -44,7 +44,7 @@ struct device {
     zeroconf_addrinfo    *addr_current; /* Current address to probe */
     SoupURI              *base_url;     /* eSCL base URI */
     GPtrArray            *http_pending; /* Pending HTTP requests */
-    FILE                 *trace;        /* Protocol trace */
+    trace                *trace;        /* Protocol trace */
 
     /* Options */
     SANE_Option_Descriptor opt_desc[NUM_OPTIONS]; /* Option descriptors */
@@ -696,7 +696,7 @@ DONE:
  */
 typedef struct {
     device *dev;
-    FILE   *trace;
+    trace  *trace;
     void   (*callback)(device *dev, SoupMessage *msg);
 } device_http_userdata;
 

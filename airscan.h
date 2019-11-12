@@ -648,6 +648,11 @@ math_mm2px (SANE_Word mm)
 }
 
 /******************** Protocol trace ********************/
+/* Type trace represents an opaque handle of trace
+ * file
+ */
+typedef struct trace trace;
+
 /* Initialize protocol trace. Called at backend initialization
  */
 SANE_Status
@@ -660,25 +665,25 @@ trace_cleanup (void);
 
 /* Open protocol trace
  */
-FILE*
+trace*
 trace_open (const char *device_name);
 
 /* Close protocol trace
  */
 void
-trace_close (FILE *fp);
+trace_close (trace *t);
 
 /* This hook needs to be called just before the request
  * message is scheduled for transmission
  */
 void
-trace_tx_hook (FILE *fp, SoupMessage *msg);
+trace_tx_hook (trace *t, SoupMessage *msg);
 
 /* This hook needs to be called just after message
  * transmission was completed
  */
 void
-trace_rx_hook (FILE *fp, SoupMessage *msg);
+trace_rx_hook (trace *t, SoupMessage *msg);
 
 #endif
 
