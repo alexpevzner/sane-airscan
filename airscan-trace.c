@@ -66,7 +66,7 @@ trace_open (const char *device_name)
     g_free(path);
 
     path = g_strdup_printf("%s.tar", device_name);
-    t->data = fopen(path, "w");
+    t->data = fopen(path, "wb");
     g_free(path);
 
     if (t->log != NULL && t->data != NULL) {
@@ -109,6 +109,9 @@ static void
 trace_dump_data (trace *t, SoupBuffer *buf)
 {
     tar_header hdr;
+    guint32 chsum;
+    size_t i;
+    static char pad[512];
 
     g_assert(sizeof(hdr) == 512);
     memset(&hdr, 0, sizeof(hdr));
@@ -121,6 +124,24 @@ trace_dump_data (trace *t, SoupBuffer *buf)
     sprintf(hdr.mtime, "%lo", time(NULL));
     hdr.typeflag[0] = '0';
     strcpy(hdr.magic, "ustar");
+    memcpy(hdr.version, "00", 2);
+    strcpy(hdr.devmajor, "1");
+    strcpy(hdr.devminor, "1");
+
+    memset(hdr.checksum, ' ', sizeof(hdr.checksum));
+    chsum = 0;
+    for (i = 0; i < sizeof(hdr); i ++) {
+        chsum += ((char*) &hdr)[i];
+    }
+    sprintf(hdr.checksum, "%6.6o", chsum & 0777777);
+
+    fwrite(&hdr, sizeof(hdr), 1, t->data);
+    fwrite(buf->data, buf->length, 1, t->data);
+
+    i = 512 - (buf->length & (512-1));
+    if (i != 0) {
+        fwrite(pad, i, 1, t->data);
+    }
 }
 
 
