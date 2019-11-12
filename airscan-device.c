@@ -707,7 +707,7 @@ device_http_callback(SoupSession *session, SoupMessage *msg, gpointer userdata)
 {
     device_http_userdata *data = userdata;
 
-    trace_rx_hook(data->trace, msg);
+    trace_msg_hook(data->trace, msg);
 
     (void) session;
     if (DBG_ENABLED(DBG_FLG_HTTP)) {
@@ -764,8 +764,6 @@ device_http_perform (device *dev, const char *path,
     data->dev = dev;
     data->trace = dev->trace;
     data->callback = callback;
-
-    trace_tx_hook(data->trace, msg);
 
     soup_session_queue_message(device_http_session, msg,
             device_http_callback, data);

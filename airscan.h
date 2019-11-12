@@ -673,17 +673,11 @@ trace_open (const char *device_name);
 void
 trace_close (trace *t);
 
-/* This hook needs to be called just before the request
- * message is scheduled for transmission
+/* This hook needs to be called from message
+ * completion callback
  */
 void
-trace_tx_hook (trace *t, SoupMessage *msg);
-
-/* This hook needs to be called just after message
- * transmission was completed
- */
-void
-trace_rx_hook (trace *t, SoupMessage *msg);
+trace_msg_hook (trace *t, SoupMessage *msg);
 
 #endif
 
