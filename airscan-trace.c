@@ -11,8 +11,32 @@
 /* Trace file handle
  */
 struct  trace {
-    FILE        *fp;
+    FILE         *log;   /* Log file */
+    FILE         *data;  /* Data file */
+    unsigned int index;  /* Message index */
 };
+
+/* TAR file hader
+ */
+typedef struct {
+    char name[100];
+    char mode[8];
+    char uid[8];
+    char gid[8];
+    char size[12];
+    char mtime[12];
+    char checksum[8];
+    char typeflag[1];
+    char linkname[100];
+    char magic[6];
+    char version[2];
+    char uname[32];
+    char gname[32];
+    char devmajor[8];
+    char devminor[8];
+    char prefix[155];
+    char pad[12];
+} tar_header;
 
 /* Initialize protocol trace. Called at backend initialization
  */
@@ -25,7 +49,7 @@ trace_init (void)
 /* Cleanup protocol trace. Called at backend unload
  */
 void
-trace_cleanup (void)
+trace_cleanup ()
 {
 }
 
@@ -34,18 +58,23 @@ trace_cleanup (void)
 trace*
 trace_open (const char *device_name)
 {
-    char  *path = g_strdup_printf("%s.log", device_name);
     trace *t = g_new0(trace, 1);
+    char  *path;
 
-    t->fp = fopen(path, "w");
+    path = g_strdup_printf("%s.log", device_name);
+    t->log = fopen(path, "w");
     g_free(path);
 
-    if (t->fp == NULL) {
-        g_free(t);
-        t = NULL;
+    path = g_strdup_printf("%s.tar", device_name);
+    t->data = fopen(path, "w");
+    g_free(path);
+
+    if (t->log != NULL && t->data != NULL) {
+        return t;
     }
 
-    return t;
+    trace_close(t);
+    return NULL;
 }
 
 /* Close protocol trace
@@ -54,7 +83,12 @@ void
 trace_close (trace *t)
 {
     if (t != NULL) {
-        fclose(t->fp);
+        if (t->log != NULL) {
+            fclose(t->log);
+        }
+        if (t->data != NULL) {
+            fclose(t->data);
+        }
         g_free(t);
     }
 }
@@ -66,13 +100,34 @@ trace_message_headers_foreach_callback (const char *name, const char *value,
         gpointer ptr)
 {
     trace *t = ptr;
-    fprintf(t->fp, "%s: %s\n", name, value);
+    fprintf(t->log, "%s: %s\n", name, value);
 }
+
+/* Dump data
+ */
+static void
+trace_dump_data (trace *t, SoupBuffer *buf)
+{
+    tar_header hdr;
+
+    g_assert(sizeof(hdr) == 512);
+    memset(&hdr, 0, sizeof(hdr));
+
+    sprintf(hdr.name, "%8.8d", t->index ++);
+    strcpy(hdr.mode, "644");
+    strcpy(hdr.uid, "0");
+    strcpy(hdr.gid, "0");
+    sprintf(hdr.size, "%lo", buf->length);
+    sprintf(hdr.mtime, "%lo", time(NULL));
+    hdr.typeflag[0] = '0';
+    strcpy(hdr.magic, "ustar");
+}
+
 
 /* Dump message body
  */
 static void
-trace_dump_body(trace *t, SoupMessageHeaders *hdrs, SoupMessageBody *body)
+trace_dump_body (trace *t, SoupMessageHeaders *hdrs, SoupMessageBody *body)
 {
     SoupBuffer *buf = soup_message_body_flatten(body);
     const char *content_type = soup_message_headers_get_one(hdrs, "Content-Type");
@@ -82,7 +137,8 @@ trace_dump_body(trace *t, SoupMessageHeaders *hdrs, SoupMessageBody *body)
     }
 
     if (strncmp(content_type, "text/", 5)) {
-        fprintf(t->fp, "%ld bytes of data\n", buf->length);
+        fprintf(t->log, "%ld bytes of data\n", buf->length);
+        trace_dump_data(t, buf);
     } else {
         const char *d, *end = buf->data + buf->length;
         int last = -1;
@@ -90,16 +146,16 @@ trace_dump_body(trace *t, SoupMessageHeaders *hdrs, SoupMessageBody *body)
         for (d = buf->data; d < end; d ++) {
             if (*d != '\r') {
                 last = *d;
-                putc(last, t->fp);
+                putc(last, t->log);
             }
         }
 
         if (last != '\n') {
-            putc('\n', t->fp);
+            putc('\n', t->log);
         }
     }
 
-    putc('\n', t->fp);
+    putc('\n', t->log);
 
 DONE:
     soup_buffer_free(buf);
@@ -114,21 +170,21 @@ trace_msg_hook (trace *t, SoupMessage *msg)
     SoupURI *uri = soup_message_get_uri(msg);
     char *uri_str = soup_uri_to_string(uri, FALSE);
 
-    fprintf(t->fp, "==============================\n");
+    fprintf(t->log, "==============================\n");
 
     /* Dump request */
-    fprintf(t->fp, "%s %s\n",  msg->method, uri_str);
+    fprintf(t->log, "%s %s\n",  msg->method, uri_str);
     soup_message_headers_foreach(msg->request_headers,
             trace_message_headers_foreach_callback, t);
-    fprintf(t->fp, "\n");
+    fprintf(t->log, "\n");
     trace_dump_body(t, msg->request_headers, msg->request_body);
 
     /* Dump response */
-    fprintf(t->fp, "Status: %d %s\n", msg->status_code,
+    fprintf(t->log, "Status: %d %s\n", msg->status_code,
             soup_status_get_phrase(msg->status_code));
     soup_message_headers_foreach(msg->response_headers,
         trace_message_headers_foreach_callback, t);
-    fprintf(t->fp, "\n");
+    fprintf(t->log, "\n");
     trace_dump_body(t, msg->response_headers, msg->response_body);
 
     g_free(uri_str);
