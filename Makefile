@@ -7,6 +7,7 @@ SRC	= \
 	airscan-eloop.c \
 	airscan-math.c \
 	airscan-opt.c \
+	airscan-trace.c \
 	airscan-xml.c \
 	airscan-zeroconf.c \
 	sane_strstatus.c

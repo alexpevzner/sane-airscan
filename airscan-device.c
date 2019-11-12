@@ -44,6 +44,7 @@ struct device {
     zeroconf_addrinfo    *addr_current; /* Current address to probe */
     SoupURI              *base_url;     /* eSCL base URI */
     GPtrArray            *http_pending; /* Pending HTTP requests */
+    FILE                 *trace;        /* Protocol trace */
 
     /* Options */
     SANE_Option_Descriptor opt_desc[NUM_OPTIONS]; /* Option descriptors */
@@ -99,6 +100,8 @@ device_add (const char *name)
     devcaps_init(&dev->caps);
 
     dev->http_pending = g_ptr_array_new();
+    dev->trace = trace_open(name);
+
     dev->opt_src = OPT_SOURCE_UNKNOWN;
     dev->opt_colormode = OPT_COLORMODE_UNKNOWN;
     dev->opt_resolution = DEVICE_DEFAULT_RESOLUTION;
@@ -169,6 +172,9 @@ device_del (device *dev)
         soup_session_cancel_message(device_http_session,
                 g_ptr_array_index(dev->http_pending, i), SOUP_STATUS_CANCELLED);
     }
+
+    trace_close(dev->trace);
+    dev->trace = NULL;
 
     dev->flags |= DEVICE_HALTED;
     dev->flags &= ~DEVICE_READY;
@@ -690,6 +696,7 @@ DONE:
  */
 typedef struct {
     device *dev;
+    FILE   *trace;
     void   (*callback)(device *dev, SoupMessage *msg);
 } device_http_userdata;
 
@@ -698,8 +705,11 @@ typedef struct {
 static void
 device_http_callback(SoupSession *session, SoupMessage *msg, gpointer userdata)
 {
-    (void) session;
+    device_http_userdata *data = userdata;
 
+    trace_rx_hook(data->trace, msg);
+
+    (void) session;
     if (DBG_ENABLED(DBG_FLG_HTTP)) {
         SoupURI *uri = soup_message_get_uri(msg);
         char *uri_str = soup_uri_to_string(uri, FALSE);
@@ -711,7 +721,6 @@ device_http_callback(SoupSession *session, SoupMessage *msg, gpointer userdata)
     }
 
     if (msg->status_code != SOUP_STATUS_CANCELLED) {
-        device_http_userdata *data = userdata;
         g_ptr_array_remove(data->dev->http_pending, msg);
         if (data->callback != NULL) {
             data->callback(data->dev, msg);
@@ -753,7 +762,10 @@ device_http_perform (device *dev, const char *path,
 
     device_http_userdata *data = g_new0(device_http_userdata, 1);
     data->dev = dev;
+    data->trace = dev->trace;
     data->callback = callback;
+
+    trace_tx_hook(data->trace, msg);
 
     soup_session_queue_message(device_http_session, msg,
             device_http_callback, data);

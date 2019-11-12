@@ -647,6 +647,39 @@ math_mm2px (SANE_Word mm)
     return math_mm2px_res(mm, 300);
 }
 
+/******************** Protocol trace ********************/
+/* Initialize protocol trace. Called at backend initialization
+ */
+SANE_Status
+trace_init (void);
+
+/* Cleanup protocol trace. Called at backend unload
+ */
+void
+trace_cleanup (void);
+
+/* Open protocol trace
+ */
+FILE*
+trace_open (const char *device_name);
+
+/* Close protocol trace
+ */
+void
+trace_close (FILE *fp);
+
+/* This hook needs to be called just before the request
+ * message is scheduled for transmission
+ */
+void
+trace_tx_hook (FILE *fp, SoupMessage *msg);
+
+/* This hook needs to be called just after message
+ * transmission was completed
+ */
+void
+trace_rx_hook (FILE *fp, SoupMessage *msg);
+
 #endif
 
 /* vim:ts=8:sw=4:et

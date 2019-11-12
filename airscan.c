@@ -38,6 +38,9 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
     if (status == SANE_STATUS_GOOD) {
         status = zeroconf_init();
     }
+    if (status == SANE_STATUS_GOOD) {
+        status = trace_init();
+    }
 
     if (status != SANE_STATUS_GOOD) {
         sane_exit();
@@ -60,6 +63,7 @@ sane_exit (void)
 
     eloop_thread_stop();
 
+    trace_cleanup();
     zeroconf_cleanup();
     device_management_cleanup();
     eloop_cleanup();

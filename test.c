@@ -87,6 +87,11 @@ main (int argc, char **argv)
     (void) argv;
 
     sane_init(NULL, NULL);
+    SANE_Handle handle = NULL;
+    sane_open(NULL, &handle);
+    if (handle) {
+        sane_start(handle);
+    }
     getchar();
     sane_exit();
 }
