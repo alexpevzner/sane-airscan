@@ -11,9 +11,10 @@
 /* Trace file handle
  */
 struct  trace {
-    FILE         *log;   /* Log file */
-    FILE         *data;  /* Data file */
-    unsigned int index;  /* Message index */
+    FILE         *log;      /* Log file */
+    FILE         *data;     /* Data file */
+    unsigned int index;     /* Message index */
+    char         name[100]; /* Name of last data file */
 };
 
 /* TAR file hader
@@ -103,20 +104,40 @@ trace_message_headers_foreach_callback (const char *name, const char *value,
     fprintf(t->log, "%s: %s\n", name, value);
 }
 
-/* Dump data
+/* Dump data. Returns name of file, where data was saved
  */
-static void
-trace_dump_data (trace *t, SoupBuffer *buf)
+static const char*
+trace_dump_data (trace *t, SoupBuffer *buf, const char *suffix,
+        const char *content_type)
 {
     tar_header hdr;
     guint32 chsum;
     size_t i;
     static char pad[512];
+    const char *ext;
 
     g_assert(sizeof(hdr) == 512);
     memset(&hdr, 0, sizeof(hdr));
 
-    sprintf(hdr.name, "%8.8d", t->index ++);
+    /* Guess file extension */
+    ext = "";
+    if (!strncmp(content_type, "image/", 6)) {
+        ext = content_type + 6;
+    } else if (!strncmp(content_type, "application/", 12)) {
+        ext = content_type + 12;
+    } else if (!strncmp(content_type, "text/", 5)) {
+        ext = content_type + 5;
+    }
+
+    if (!*ext) {
+        ext = "dat";
+    }
+
+    /* Make file name */
+    sprintf(t->name, "%8.8d%s.%s", t->index, suffix, ext);
+
+    /* Make tar header */
+    strcpy(hdr.name, t->name);
     strcpy(hdr.mode, "644");
     strcpy(hdr.uid, "0");
     strcpy(hdr.gid, "0");
@@ -135,20 +156,25 @@ trace_dump_data (trace *t, SoupBuffer *buf)
     }
     sprintf(hdr.checksum, "%6.6o", chsum & 0777777);
 
+    /* Write header and file data */
     fwrite(&hdr, sizeof(hdr), 1, t->data);
     fwrite(buf->data, buf->length, 1, t->data);
 
+    /* Write padding */
     i = 512 - (buf->length & (512-1));
     if (i != 0) {
         fwrite(pad, i, 1, t->data);
     }
+
+    return t->name;
 }
 
 
 /* Dump message body
  */
 static void
-trace_dump_body (trace *t, SoupMessageHeaders *hdrs, SoupMessageBody *body)
+trace_dump_body (trace *t, SoupMessageHeaders *hdrs, SoupMessageBody *body,
+        const char *data_suffix)
 {
     SoupBuffer *buf = soup_message_body_flatten(body);
     const char *content_type = soup_message_headers_get_one(hdrs, "Content-Type");
@@ -157,9 +183,13 @@ trace_dump_body (trace *t, SoupMessageHeaders *hdrs, SoupMessageBody *body)
         goto DONE;
     }
 
+    if (content_type == NULL) {
+        content_type = "";
+    }
+
     if (strncmp(content_type, "text/", 5)) {
-        fprintf(t->log, "%ld bytes of data\n", buf->length);
-        trace_dump_data(t, buf);
+        const char *name = trace_dump_data(t, buf, data_suffix, content_type);
+        fprintf(t->log, "%ld bytes of data saved as %s\n", buf->length, name);
     } else {
         const char *d, *end = buf->data + buf->length;
         int last = -1;
@@ -198,7 +228,7 @@ trace_msg_hook (trace *t, SoupMessage *msg)
     soup_message_headers_foreach(msg->request_headers,
             trace_message_headers_foreach_callback, t);
     fprintf(t->log, "\n");
-    trace_dump_body(t, msg->request_headers, msg->request_body);
+    trace_dump_body(t, msg->request_headers, msg->request_body, "-rq");
 
     /* Dump response */
     fprintf(t->log, "Status: %d %s\n", msg->status_code,
@@ -206,9 +236,10 @@ trace_msg_hook (trace *t, SoupMessage *msg)
     soup_message_headers_foreach(msg->response_headers,
         trace_message_headers_foreach_callback, t);
     fprintf(t->log, "\n");
-    trace_dump_body(t, msg->response_headers, msg->response_body);
+    trace_dump_body(t, msg->response_headers, msg->response_body, "-rsp");
 
     g_free(uri_str);
+    t->index ++;
 }
 
 /* vim:ts=8:sw=4:et
