@@ -39,6 +39,10 @@ typedef struct {
     char pad[12];
 } tar_header;
 
+/* Full block of zero bytes
+ */
+static const char zero_block[512];
+
 /* Initialize protocol trace. Called at backend initialization
  */
 SANE_Status
@@ -88,6 +92,11 @@ trace_close (trace *t)
             fclose(t->log);
         }
         if (t->data != NULL) {
+            if (t->log != NULL) {
+                /* Normal close - write tar footer */
+                fwrite(zero_block, sizeof(zero_block), 1, t->data);
+                fwrite(zero_block, sizeof(zero_block), 1, t->data);
+            }
             fclose(t->data);
         }
         g_free(t);
@@ -113,7 +122,6 @@ trace_dump_data (trace *t, SoupBuffer *buf, const char *suffix,
     tar_header hdr;
     guint32 chsum;
     size_t i;
-    static char pad[512];
     const char *ext;
 
     g_assert(sizeof(hdr) == 512);
@@ -163,7 +171,7 @@ trace_dump_data (trace *t, SoupBuffer *buf, const char *suffix,
     /* Write padding */
     i = 512 - (buf->length & (512-1));
     if (i != 0) {
-        fwrite(pad, i, 1, t->data);
+        fwrite(zero_block, i, 1, t->data);
     }
 
     return t->name;
