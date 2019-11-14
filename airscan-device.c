@@ -612,7 +612,7 @@ static void
 device_table_purge (void)
 {
     size_t  sz = device_table_size(), i;
-    device  **devices = g_new0(device*, sz);
+    device  **devices = g_newa(device*, sz);
 
     sz = device_table_collect(DEVICE_ALL_FLAGS, devices);
     for (i = 0; i < sz; i ++) {
