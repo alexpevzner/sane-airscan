@@ -14,7 +14,6 @@ struct  trace {
     FILE         *log;      /* Log file */
     FILE         *data;     /* Data file */
     unsigned int index;     /* Message index */
-    char         name[100]; /* Name of last data file */
 };
 
 /* TAR file hader
@@ -120,9 +119,10 @@ trace_message_headers_foreach_callback (const char *name, const char *value,
     fprintf(t->log, "%s: %s\n", name, value);
 }
 
-/* Dump data. Returns name of file, where data was saved
+/* Dump binary data. The data saved as a file into a .TAR archive.
+ * Returns name of file, where data was saved
  */
-static const char*
+static void
 trace_dump_data (trace *t, SoupBuffer *buf, const char *suffix,
         const char *content_type)
 {
@@ -149,10 +149,9 @@ trace_dump_data (trace *t, SoupBuffer *buf, const char *suffix,
     }
 
     /* Make file name */
-    sprintf(t->name, "%8.8d%s.%s", t->index, suffix, ext);
+    sprintf(hdr.name, "%8.8d%s.%s", t->index, suffix, ext);
 
     /* Make tar header */
-    strcpy(hdr.name, t->name);
     strcpy(hdr.mode, "644");
     strcpy(hdr.uid, "0");
     strcpy(hdr.gid, "0");
@@ -181,9 +180,31 @@ trace_dump_data (trace *t, SoupBuffer *buf, const char *suffix,
         fwrite(zero_block, i, 1, t->data);
     }
 
-    return t->name;
+    /* Put a note into the log file */
+    fprintf(t->log, "%ld bytes of data saved as %s\n", buf->length, hdr.name);
 }
 
+/* Dump text data. The data will be saved directly to the log file
+ */
+static void
+trace_dump_text (trace *t, SoupBuffer *buf, const char *content_type)
+{
+    const char *d, *end = buf->data + buf->length;
+    int last = -1;
+
+    (void) content_type;
+
+    for (d = buf->data; d < end; d ++) {
+        if (*d != '\r') {
+            last = *d;
+            putc(last, t->log);
+        }
+    }
+
+    if (last != '\n') {
+        putc('\n', t->log);
+    }
+}
 
 /* Dump message body
  */
@@ -202,23 +223,10 @@ trace_dump_body (trace *t, SoupMessageHeaders *hdrs, SoupMessageBody *body,
         content_type = "";
     }
 
-    if (strncmp(content_type, "text/", 5)) {
-        const char *name = trace_dump_data(t, buf, data_suffix, content_type);
-        fprintf(t->log, "%ld bytes of data saved as %s\n", buf->length, name);
+    if (!strncmp(content_type, "text/", 5)) {
+        trace_dump_text(t, buf, content_type);
     } else {
-        const char *d, *end = buf->data + buf->length;
-        int last = -1;
-
-        for (d = buf->data; d < end; d ++) {
-            if (*d != '\r') {
-                last = *d;
-                putc(last, t->log);
-            }
-        }
-
-        if (last != '\n') {
-            putc('\n', t->log);
-        }
+        trace_dump_data(t, buf, data_suffix, content_type);
     }
 
     putc('\n', t->log);
