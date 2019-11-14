@@ -191,27 +191,6 @@ device_find (const char *name)
     return g_tree_lookup(device_table, name);
 }
 
-/* g_tree_foreach callback for finding first device
- */
-static gboolean
-device_first_foreach_callback (gpointer key, gpointer value, gpointer userdata)
-{
-    (void) key;
-    *(device**) userdata = (device*) value;
-    return TRUE;
-}
-
-
-/* Find a first device in a table
- */
-static device*
-device_first (void)
-{
-    device *dev = NULL;
-    g_tree_foreach(device_table, device_first_foreach_callback, &dev);
-    return dev;
-}
-
 /* Add statically configured device
  */
 static void
@@ -846,14 +825,18 @@ device_list_free (const SANE_Device **dev_list)
 device*
 device_open (const char *name)
 {
-    device *dev;
+    device *dev = NULL;
 
     device_list_sync();
 
     if (name && *name) {
         dev = device_find(name);
     } else {
-        dev = device_first();
+        device          **devices = g_newa(device*, device_table_size());
+        unsigned int    count = device_table_collect(DEVICE_READY, devices);
+        if (count > 0) {
+            dev = devices[0];
+        }
     }
 
     if (dev != NULL && (dev->flags & DEVICE_READY) != 0) {
