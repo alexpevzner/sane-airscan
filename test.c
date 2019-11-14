@@ -90,7 +90,7 @@ main (int argc, char **argv)
     SANE_Handle handle = NULL;
     sane_open(NULL, &handle);
     if (handle) {
-        sane_start(handle);
+//        sane_start(handle);
     }
     getchar();
     sane_exit();
