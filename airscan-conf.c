@@ -590,7 +590,7 @@ inifile_match_name (const char *n1, const char *n2)
 /******************** Configuration file loader  ********************/
 /* Configuration data
  */
-conf_data conf = {DBG_FLG_ALL, NULL};
+conf_data conf = {DBG_FLG_ALL, NULL, NULL};
 
 /* Revert conf.devices list
  */
@@ -646,6 +646,31 @@ conf_device_list_lookup (const char *name) {
     return dev;
 }
 
+/* Expand path name
+ */
+static const char*
+conf_expand_path (const char *path)
+{
+    const char *prefix = "", *suffix = "", *home = NULL, *end;
+
+    if (path[0] == '~' && (path[1] == '\0' || path[1] == '/')) {
+        home = g_get_home_dir();
+        if (home != NULL) {
+            prefix = home;
+            path ++;
+        } else {
+            return NULL;
+        }
+    }
+
+    end = path[0] ? path : prefix;
+    suffix = g_str_has_suffix(end, "/") ? "" : "/";
+    path = g_strconcat(home, path, suffix, NULL);
+    g_free((char*) home);
+
+    return path;
+}
+
 /* Load configuration from opened inifile
  */
 static void
@@ -669,6 +694,15 @@ conf_load_from_ini(inifile *ini)
                     DBG_CONF("%s:%d: invalid URL", rec->file, rec->line);
                 } else {
                     conf_device_list_prepend(rec->variable, uri);
+                }
+            } else if (inifile_match_name(rec->section, "debug")) {
+                if (inifile_match_name(rec->variable, "trace")) {
+                    g_free((char*) conf.dbg_trace);
+                    conf.dbg_trace = conf_expand_path(rec->value);
+                    if (conf.dbg_trace == NULL) {
+                        DBG_CONF("%s:%d: failed to expand path",
+                                rec->file, rec->line);
+                    }
                 }
             }
             break;
@@ -781,6 +815,7 @@ void
 conf_free (void)
 {
     conf_device_list_free();
+    g_free((char*) conf.dbg_trace);
     memset(&conf, 0, sizeof(conf));
     conf.dbg_flags = DBG_FLG_ALL;
 }

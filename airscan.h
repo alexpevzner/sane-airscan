@@ -45,8 +45,9 @@ struct conf_device {
 /* Backend configuration
  */
 typedef struct {
-    int         dbg_flags; /* Combination of debug flags */
-    conf_device *devices;  /* Manually configured devices */
+    int         dbg_flags;  /* Combination of debug flags */
+    const char  *dbg_trace; /* Trace directory */
+    conf_device *devices;   /* Manually configured devices */
 } conf_data;
 
 extern conf_data conf;
