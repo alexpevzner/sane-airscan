@@ -63,14 +63,21 @@ trace_cleanup ()
 trace*
 trace_open (const char *device_name)
 {
-    trace *t = g_new0(trace, 1);
+    trace *t;
     char  *path;
 
-    path = g_strdup_printf("%s.log", device_name);
+    if (conf.dbg_trace == NULL) {
+        return NULL;
+    }
+
+    g_mkdir_with_parents (conf.dbg_trace, 0755);
+    t = g_new0(trace, 1);
+
+    path = g_strdup_printf("%s%s.log", conf.dbg_trace, device_name);
     t->log = fopen(path, "w");
     g_free(path);
 
-    path = g_strdup_printf("%s.tar", device_name);
+    path = g_strdup_printf("%s%s.tar", conf.dbg_trace, device_name);
     t->data = fopen(path, "wb");
     g_free(path);
 
