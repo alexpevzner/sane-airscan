@@ -646,7 +646,8 @@ conf_device_list_lookup (const char *name) {
     return dev;
 }
 
-/* Expand path name
+/* Expand path name. The returned string must be eventually
+ * released with g_free()
  */
 static const char*
 conf_expand_path (const char *path)
