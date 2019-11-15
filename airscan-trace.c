@@ -263,6 +263,9 @@ trace_msg_hook (trace *t, SoupMessage *msg)
 
     g_free(uri_str);
     t->index ++;
+
+    fflush(t->log);
+    fflush(t->data);
 }
 
 /* vim:ts=8:sw=4:et
