@@ -1161,6 +1161,7 @@ device_start_scan_job (device *dev)
         "    </pwg:ScanRegion>\n"
         "  </pwg:ScanRegions>\n"
         "  <scan:InputSource>%s</scan:InputSource>\n"
+        "  <pwg:InputSource>%s</pwg:InputSource>\n"
         "  <scan:ColorMode>%s</scan:ColorMode>\n"
         "  <scan:DocumentFormatExt>%s</scan:DocumentFormatExt>\n"
         "  <scan:XResolution>%d</scan:XResolution>\n"
@@ -1170,6 +1171,7 @@ device_start_scan_job (device *dev)
         y_off,
         wid,
         hei,
+        source,
         source,
         colormode,
         mime,
