@@ -17,6 +17,10 @@
  */
 #define DEVICE_DEFAULT_RESOLUTION               300
 
+/* How often to poll for scanner state change, in seconds
+ */
+#define DEVICE_SCAN_STATE_POLL_INTERVAL         1
+
 /******************** Device management ********************/
 /* Device flags
  */
@@ -28,6 +32,22 @@ enum {
                                            scan and not ready yet */
     DEVICE_ALL_FLAGS        = 0xffffffff
 };
+
+/* Scan states
+ */
+typedef enum {
+    DEVICE_JOB_IDLE,
+    DEVICE_JOB_STARTED,
+    DEVICE_JOB_SCANNERSTATUS_PENDING,
+    DEVICE_JOB_SCANJOBS_PENDING,
+    DEVICE_JOB_NEXTDOCUMENT_PENDING,
+    DEVICE_JOB_DELETE_PENDING,
+
+
+    DEVICE_JOB_SUCCEED,
+    DEVICE_JOB_FAILED
+
+} DEVICE_JOB_STATE;
 
 /* Device descriptor
  */
@@ -42,9 +62,14 @@ struct device {
     zeroconf_addrinfo    *addresses;    /* Device addresses, NULL if
                                            device was statically added */
     zeroconf_addrinfo    *addr_current; /* Current address to probe */
-    SoupURI              *base_url;     /* eSCL base URI */
+    SoupURI              *uri_escl;     /* eSCL base URI */
     GPtrArray            *http_pending; /* Pending HTTP requests */
     trace                *trace;        /* Protocol trace */
+
+    /* Scanning state machinery */
+    DEVICE_JOB_STATE     job_state;     /* Scan job state */
+    GString              *job_location; /* Scanned page location */
+    SANE_Status          job_status;    /* Job completion status */
 
     /* Options */
     SANE_Option_Descriptor opt_desc[NUM_OPTIONS]; /* Option descriptors */
@@ -102,6 +127,8 @@ device_add (const char *name)
     dev->http_pending = g_ptr_array_new();
     dev->trace = trace_open(name);
 
+    dev->job_location = g_string_new(NULL);
+
     dev->opt_src = OPT_SOURCE_UNKNOWN;
     dev->opt_colormode = OPT_COLORMODE_UNKNOWN;
     dev->opt_resolution = DEVICE_DEFAULT_RESOLUTION;
@@ -140,10 +167,12 @@ device_unref (device *dev)
 
         zeroconf_addrinfo_list_free(dev->addresses);
 
-        if (dev->base_url != NULL) {
-            soup_uri_free(dev->base_url);
+        if (dev->uri_escl != NULL) {
+            soup_uri_free(dev->uri_escl);
         }
+
         g_ptr_array_unref(dev->http_pending);
+        g_string_free(dev->job_location, TRUE);
 
         g_free(dev);
     }
@@ -206,17 +235,17 @@ device_add_static (const char *name, SoupURI *uri)
     /* Add a device */
     dev = device_add(name);
     dev->flags |= DEVICE_INIT_WAIT;
-    dev->base_url = soup_uri_copy(uri);
+    dev->uri_escl = soup_uri_copy(uri);
 
-    /* Make sure URI's path ends with '/' character */
-    const char *path = soup_uri_get_path(dev->base_url);
+    /* Make sure eSCL URI's path ends with '/' character */
+    const char *path = soup_uri_get_path(dev->uri_escl);
     if (!g_str_has_suffix(path, "/")) {
         size_t len = strlen(path);
         char *path2 = g_alloca(len + 2);
         memcpy(path2, path, len);
         path2[len] = '/';
         path2[len+1] = '\0';
-        soup_uri_set_path(dev->base_url, path2);
+        soup_uri_set_path(dev->uri_escl, path2);
     }
 
     /* Fetch device capabilities */
@@ -231,8 +260,8 @@ device_probe_address (device *dev, zeroconf_addrinfo *addrinfo)
 {
     /* Cleanup after previous probe */
     dev->addr_current = addrinfo;
-    if (dev->base_url != NULL) {
-        soup_uri_free(dev->base_url);
+    if (dev->uri_escl != NULL) {
+        soup_uri_free(dev->uri_escl);
     }
 
     /* Build device API URL */
@@ -266,8 +295,8 @@ device_probe_address (device *dev, zeroconf_addrinfo *addrinfo)
         url = g_strdup_printf("http://%s:%d/", str_addr, addrinfo->port);
     }
 
-    dev->base_url = soup_uri_new(url);
-    g_assert(dev->base_url != NULL);
+    dev->uri_escl = soup_uri_new(url);
+    g_assert(dev->uri_escl != NULL);
     DBG_DEVICE(dev->name, "url=\"%s\"", url);
 
     /* Fetch device capabilities */
@@ -722,7 +751,7 @@ device_http_perform (device *dev, const char *path,
         const char *method, const char *request,
         void (*callback)(device*, SoupMessage*))
 {
-    SoupURI *url = soup_uri_new_with_base(dev->base_url, path);
+    SoupURI *url = soup_uri_new_with_base(dev->uri_escl, path);
     g_assert(url);
     SoupMessage *msg = soup_message_new_from_uri(method, url);
 
@@ -1007,12 +1036,103 @@ device_get_parameters (device *dev, SANE_Parameters *params)
     return SANE_STATUS_GOOD;
 }
 
-/* Start scanning operation - runs on a context of event loop thread
+/* DELETE location callback
  */
-static gboolean
-device_start_do (gpointer data)
+static void
+device_delete_callback (device *dev, SoupMessage *msg)
 {
-    device      *dev = data;
+    (void) msg;
+
+    dev->job_state = DEVICE_JOB_SUCCEED;
+}
+
+/* GET location/NextDocument callback
+ */
+static void
+device_nextdocument_callback (device *dev, SoupMessage *msg)
+{
+    if (!SOUP_STATUS_IS_SUCCESSFUL(msg->status_code)) {
+        dev->job_state = DEVICE_JOB_FAILED;
+        dev->job_status = SANE_STATUS_IO_ERROR;
+    }
+
+    device_http_perform(dev, dev->job_location->str, "DELETE", NULL,
+            device_delete_callback);
+    dev->job_state = DEVICE_JOB_DELETE_PENDING;
+}
+
+/* ScanJobs callback
+ */
+static void
+device_scanjobs_callback (device *dev, SoupMessage *msg)
+{
+    if (msg->status_code != SOUP_STATUS_CREATED) {
+        goto FAIL;
+    }
+
+    const char *location = soup_message_headers_get_one(msg->response_headers,
+                "Location");
+    if (location == NULL) {
+        goto FAIL;
+    }
+
+    g_string_assign(dev->job_location, location);
+
+    size_t sz = dev->job_location->len;
+    if (sz == 0 || dev->job_location->str[sz-1] != '/') {
+        g_string_append_c(dev->job_location, '/');
+    }
+
+    g_string_append(dev->job_location, "NextDocument");
+    device_http_get(dev, dev->job_location->str, device_nextdocument_callback);
+    g_string_truncate(dev->job_location, sz);
+    dev->job_state = DEVICE_JOB_NEXTDOCUMENT_PENDING;
+
+    return;
+
+FAIL:
+    dev->job_state = DEVICE_JOB_FAILED;
+    dev->job_status = SANE_STATUS_IO_ERROR;
+}
+
+/* Parse ScannerStatus response.
+ *
+ * On success, returns NULL and `idle' is set to TRUE
+ * if scanner is idle
+ */
+static const char*
+device_scannerstatus_parse (xmlDoc *xml, gboolean *idle)
+{
+    const char *err = NULL;
+    xml_iter   iter = XML_ITER_INIT;
+
+    *idle = FALSE;
+
+    xml_iter_init(&iter, xmlDocGetRootElement(xml));
+    if (!xml_iter_node_name_match(&iter, "scan:ScannerStatus")) {
+        err = "XML: missed scan:ScannerStatus";
+        goto DONE;
+    }
+
+    xml_iter_enter(&iter);
+    for (; !xml_iter_end(&iter); xml_iter_next(&iter)) {
+        if (xml_iter_node_name_match(&iter, "pwg:State")) {
+            const char *state = xml_iter_node_value(&iter);
+            *idle = !strcmp(state, "Idle");
+            goto DONE;
+        }
+    }
+
+DONE:
+    xml_iter_cleanup(&iter);
+    return err;
+}
+
+/* Start scan job
+ */
+static void
+device_start_scan_job (device *dev)
+{
     unsigned int x_off = 0;
     unsigned int y_off = 0;
     unsigned int wid, hei;
@@ -1057,7 +1177,73 @@ device_start_do (gpointer data)
         y_resolution
     );
 
-    device_http_perform(dev, "ScanJobs", "POST", rq, NULL);
+    dev->job_state = DEVICE_JOB_SCANJOBS_PENDING;
+    device_http_perform(dev, "ScanJobs", "POST", rq, device_scanjobs_callback);
+}
+
+/* ScannerStatus callback
+ */
+static void
+device_scannerstatus_callback (device *dev, SoupMessage *msg)
+{
+    const char  *err = NULL;
+    gboolean    idle;
+    SANE_Status status = SANE_STATUS_IO_ERROR;
+
+    /* Check request status */
+    if (!SOUP_STATUS_IS_SUCCESSFUL(msg->status_code)) {
+        err = "failed to load ScannerStatus";
+        goto DONE;
+    }
+
+    /* Parse XML response */
+    xmlDoc     *doc = NULL;
+    SoupBuffer *buf = soup_message_body_flatten(msg->response_body);
+
+    doc = xmlParseMemory(buf->data, buf->length);
+    soup_buffer_free(buf);
+
+    if (doc == NULL) {
+        err = "failed to parse ScannerStatus response XML";
+        goto DONE;
+    }
+
+    err = device_scannerstatus_parse(doc, &idle);
+    xmlFreeDoc(doc);
+
+    if (err != NULL) {
+        goto DONE;
+    }
+
+    /* Check if scanned is idle */
+    if (!idle) {
+        err = "Scanner is busy";
+        status = SANE_STATUS_DEVICE_BUSY;
+        goto DONE;
+    }
+
+    /* Start scan job */
+    device_start_scan_job(dev);
+
+    /* Cleanup and exit */
+DONE:
+    if (err != NULL) {
+        dev->job_state = DEVICE_JOB_FAILED;
+        dev->job_status = status;
+    }
+}
+
+/* Start scanning operation - runs on a context of event loop thread
+ */
+static gboolean
+device_start_do (gpointer data)
+{
+    device      *dev = data;
+
+    g_assert(dev->job_state = DEVICE_JOB_STARTED);
+    g_assert(dev->job_location->len == 0);
+
+    device_http_get(dev, "ScannerStatus", device_scannerstatus_callback);
 
     return FALSE;
 }
@@ -1067,7 +1253,13 @@ device_start_do (gpointer data)
 SANE_Status
 device_start (device *dev)
 {
+    if (dev->job_state != DEVICE_JOB_IDLE) {
+        return SANE_STATUS_DEVICE_BUSY;
+    }
+
+    dev->job_state = DEVICE_JOB_STARTED;
     eloop_call(device_start_do, dev);
+
     return SANE_STATUS_GOOD;
 }
 
