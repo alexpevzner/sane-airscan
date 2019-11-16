@@ -764,6 +764,16 @@ device_http_perform (device *dev, const char *path,
                 request, strlen(request));
     }
 
+    /* Note, on Kyocera ECOSYS M2040dn connection keep-alive causes
+     * scanned job to remain in "Processing" state about 10 seconds
+     * after job has been actually completed, making scanner effectively
+     * busy.
+     *
+     * Looks like Kyocera firmware bug. Force connection to close
+     * as a workaround
+     */
+    soup_message_headers_append(msg->request_headers, "Connection", "close");
+
     device_http_userdata *data = g_new0(device_http_userdata, 1);
     data->dev = dev;
     data->trace = dev->trace;
