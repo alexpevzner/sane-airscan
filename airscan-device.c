@@ -40,7 +40,8 @@ typedef enum {
     DEVICE_JOB_STARTED,
     DEVICE_JOB_SCANNERSTATUS_PENDING,
     DEVICE_JOB_SCANJOBS_PENDING,
-    DEVICE_JOB_NEXTDOCUMENT_PENDING,
+    DEVICE_JOB_NEXTDOCUMENT_FIRST_PENDING,
+    DEVICE_JOB_NEXTDOCUMENT_NEXT_PENDING,
     DEVICE_JOB_DELETE_PENDING,
 
 
@@ -101,6 +102,9 @@ device_http_get (device *dev, const char *path,
 
 static void
 device_table_purge (void);
+
+static void
+device_nextdocument_get (device *dev);
 
 /* Compare device names, for device_table
  */
@@ -1038,19 +1042,48 @@ device_delete_callback (device *dev, SoupMessage *msg)
     dev->job_state = DEVICE_JOB_SUCCEED;
 }
 
-/* GET location/NextDocument callback
+/* GET ${location}/NextDocument callback
  */
 static void
 device_nextdocument_callback (device *dev, SoupMessage *msg)
 {
-    if (!SOUP_STATUS_IS_SUCCESSFUL(msg->status_code)) {
+    /* Transport error is fatal */
+    if (SOUP_STATUS_IS_TRANSPORT_ERROR(msg->status_code)) {
         dev->job_state = DEVICE_JOB_FAILED;
         dev->job_status = SANE_STATUS_IO_ERROR;
+        return;
     }
 
+    /* Try to fetch next page until previous page fetched successfully */
+    if (SOUP_STATUS_IS_SUCCESSFUL(msg->status_code)) {
+        dev->job_state = DEVICE_JOB_NEXTDOCUMENT_NEXT_PENDING;
+        device_nextdocument_get(dev);
+        return;
+    } else if (dev->job_state == DEVICE_JOB_NEXTDOCUMENT_FIRST_PENDING) {
+        dev->job_state = DEVICE_JOB_FAILED;
+        dev->job_status = SANE_STATUS_IO_ERROR;
+        return;
+    }
+
+    /* Just in case, delete the job */
     device_http_perform(dev, dev->job_location->str, "DELETE", NULL,
             device_delete_callback);
     dev->job_state = DEVICE_JOB_DELETE_PENDING;
+}
+
+/* Issue GET ${location}/NextDocument request
+ */
+static void
+device_nextdocument_get (device *dev)
+{
+    size_t sz = dev->job_location->len;
+    if (sz == 0 || dev->job_location->str[sz-1] != '/') {
+        g_string_append_c(dev->job_location, '/');
+    }
+
+    g_string_append(dev->job_location, "NextDocument");
+    device_http_get(dev, dev->job_location->str, device_nextdocument_callback);
+    g_string_truncate(dev->job_location, sz);
 }
 
 /* ScanJobs callback
@@ -1069,16 +1102,9 @@ device_scanjobs_callback (device *dev, SoupMessage *msg)
     }
 
     g_string_assign(dev->job_location, location);
+    dev->job_state = DEVICE_JOB_NEXTDOCUMENT_FIRST_PENDING;
 
-    size_t sz = dev->job_location->len;
-    if (sz == 0 || dev->job_location->str[sz-1] != '/') {
-        g_string_append_c(dev->job_location, '/');
-    }
-
-    g_string_append(dev->job_location, "NextDocument");
-    device_http_get(dev, dev->job_location->str, device_nextdocument_callback);
-    g_string_truncate(dev->job_location, sz);
-    dev->job_state = DEVICE_JOB_NEXTDOCUMENT_PENDING;
+    device_nextdocument_get(dev);
 
     return;
 
