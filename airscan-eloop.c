@@ -65,14 +65,14 @@ glib_poll_hook (GPollFD *ufds, guint nfds, gint timeout)
 static gpointer
 eloop_thread_func (gpointer data)
 {
-    void (*callback)(gboolean) = data;
+    void (*callback)(bool) = data;
 
     G_LOCK(eloop_mutex);
 
     g_main_context_push_thread_default(eloop_glib_main_context);
-    callback(TRUE);
+    callback(true);
     g_main_loop_run(eloop_glib_main_loop);
-    callback(FALSE);
+    callback(false);
 
     G_UNLOCK(eloop_mutex);
 
@@ -82,11 +82,11 @@ eloop_thread_func (gpointer data)
 /* Start event loop thread.
  *
  * Callback is called from the thread context twice:
- *     callback(TRUE)  - when thread is started
- *     callback(FALSE) - when thread is about to exit
+ *     callback(true)  - when thread is started
+ *     callback(false) - when thread is about to exit
  */
 void
-eloop_thread_start (void (*callback)(gboolean))
+eloop_thread_start (void (*callback)(bool))
 {
     eloop_thread = g_thread_new("airscan", eloop_thread_func, callback);
 
@@ -130,7 +130,7 @@ eloop_mutex_unlock (void)
 
 /* Wait on conditional variable under the event loop mutex
  */
-gboolean
+bool
 eloop_cond_wait (GCond *cond, gint64 timeout)
 {
     return g_cond_wait_until(cond, &G_LOCK_NAME(eloop_mutex), timeout);

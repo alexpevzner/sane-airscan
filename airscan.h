@@ -15,7 +15,9 @@
 #include <sane/saneopts.h>
 
 #include <libsoup/soup.h>
+
 #include <stdio.h>
+#include <stdbool.h>
 
 /******************** Static configuration ********************/
 /* Configuration path in environment
@@ -76,11 +78,11 @@ eloop_cleanup (void);
 /* Start event loop thread.
  *
  * Callback is called from the thread context twice:
- *     callback(TRUE)  - when thread is started
- *     callback(FALSE) - when thread is about to exit
+ *     callback(true)  - when thread is started
+ *     callback(false) - when thread is about to exit
  */
 void
-eloop_thread_start (void (*callback)(gboolean));
+eloop_thread_start (void (*callback)(bool));
 
 /* Stop event loop thread and wait until its termination
  */
@@ -99,7 +101,7 @@ eloop_mutex_unlock (void);
 
 /* Wait on conditional variable under the event loop mutex
  */
-gboolean
+bool
 eloop_cond_wait (GCond *cond, gint64 timeout);
 
 /* Create AvahiGLibPoll that runs in context of the event loop
@@ -268,7 +270,7 @@ xml_iter_finish (xml_iter **iter);
 
 /* Check for end-of-document condition
  */
-SANE_Bool
+bool
 xml_iter_end (xml_iter *iter);
 
 /* Shift to the next node
@@ -297,7 +299,7 @@ xml_iter_node_name (xml_iter *iter);
 
 /* Match name of the current node against the pattern
  */
-SANE_Bool
+bool
 xml_iter_node_name_match (xml_iter *iter, const char *pattern);
 
 /* Get value of the current node as text
@@ -393,7 +395,7 @@ opt_colormode_to_sane (OPT_COLORMODE mode);
 typedef struct zeroconf_addrinfo zeroconf_addrinfo;
 struct zeroconf_addrinfo {
     AvahiAddress      addr;      /* Device address */
-    gboolean          linklocal; /* It's a link-local address */
+    bool              linklocal; /* It's a link-local address */
     uint16_t          port;      /* Device port */
     const char        *rs;       /* "rs" portion of the TXT record */
     AvahiIfIndex      interface; /* Interface index */
@@ -412,7 +414,7 @@ zeroconf_cleanup (void);
 
 /* Check if initial scan still in progress
  */
-gboolean
+bool
 zeroconf_init_scan (void);
 
 /* Create a copy of zeroconf_addrinfo list
@@ -474,7 +476,7 @@ device_start (device *dev);
 /* Device found notification -- called by ZeroConf
  */
 void
-device_event_found (const char *name, gboolean init_scan,
+device_event_found (const char *name, bool init_scan,
         zeroconf_addrinfo *addresses);
 
 /* Device removed notification -- called by ZeroConf
@@ -500,7 +502,7 @@ device_management_cleanup (void);
 /* Start/stop device management
  */
 void
-device_management_start_stop (gboolean start);
+device_management_start_stop (bool start);
 
 /******************** Device Capabilities ********************/
 /* Source flags
@@ -620,7 +622,7 @@ math_max (SANE_Word a, SANE_Word b)
 
 /* Merge two ranges, if possible
  */
-SANE_Bool
+bool
 math_range_merge (SANE_Range *out, const SANE_Range *r1, const SANE_Range *r2);
 
 /* Choose nearest integer in range

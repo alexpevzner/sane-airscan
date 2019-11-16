@@ -41,7 +41,7 @@ typedef struct {
     unsigned int        line;                   /* File handle */
     FILE                *fp;                    /* File pointer */
 
-    gboolean            tk_open;                /* Token is currently open */
+    bool                tk_open;                /* Token is currently open */
     GString             *tk_buffer;             /* Parser buffer, tokenized */
     unsigned int        *tk_offsets;            /* Tokens offsets */
     unsigned int        tk_count;               /* Tokens count */
@@ -151,7 +151,7 @@ inifile_getc_nl (inifile *file)
 
 /* Check for commentary character
  */
-static inline gboolean
+static inline bool
 inifile_iscomment (int c)
 {
     return c == ';' || c == '#';
@@ -159,7 +159,7 @@ inifile_iscomment (int c)
 
 /* Check for octal digit
  */
-static inline gboolean
+static inline bool
 inifile_isoctal (int c)
 {
     return '0' <= c && c <= '7';
@@ -167,7 +167,7 @@ inifile_isoctal (int c)
 
 /* Check for token-breaking character
  */
-static inline gboolean
+static inline bool
 inifile_istkbreaker (int c)
 {
     return c == ',';
@@ -192,7 +192,7 @@ inifile_hex2int (int c)
 static inline void
 inifile_tk_reset (inifile *file)
 {
-    file->tk_open = FALSE;
+    file->tk_open = false;
     g_string_truncate(file->tk_buffer, 0);
     file->tk_count = 0;
 }
@@ -239,7 +239,7 @@ inifile_tk_open (inifile *file)
 {
     if (!file->tk_open) {
         inifile_tk_array_push(file);
-        file->tk_open = TRUE;
+        file->tk_open = true;
     }
 }
 
@@ -250,7 +250,7 @@ inifile_tk_close (inifile *file)
 {
     if (file->tk_open) {
         g_string_append_c(file->tk_buffer, '\0');
-        file->tk_open = FALSE;
+        file->tk_open = false;
     }
 }
 
@@ -276,12 +276,11 @@ inifile_strip_trailing_space (inifile *file, unsigned int *trailing_space)
  *    - new line or EOF or read error is reached
  *    - delimiter character is reached (if specified)
  *
- * If linecont parameter is TRUE, '\' at the end of line treated
+ * If linecont parameter is true, '\' at the end of line treated
  * as line continuation character
  */
 static int
-inifile_gets (inifile *file, char delimiter, gboolean linecont,
-        gboolean *syntax)
+inifile_gets (inifile *file, char delimiter, bool linecont, bool *syntax)
 {
     int                 c;
     unsigned int        accumulator = 0;
@@ -439,9 +438,9 @@ inifile_gets (inifile *file, char delimiter, gboolean linecont,
     inifile_strip_trailing_space(file, &trailing_space);
 
     /* Set syntax error flag */
-    *syntax = FALSE;
+    *syntax = false;
     if (state != PRS_SKIP_SPACE && state != PRS_BODY && state != PRS_COMMENT) {
-        *syntax = TRUE;
+        *syntax = true;
     }
 
     return c;
@@ -493,8 +492,8 @@ inifile_read_finish (inifile *file, int last_char, INIFILE_RECORD rec_type)
 const inifile_record*
 inifile_read (inifile *file)
 {
-    int         c;
-    gboolean    syntax;
+    int  c;
+    bool syntax;
 
     c = inifile_getc_nonspace(file);
     while (inifile_iscomment(c)) {
@@ -507,7 +506,7 @@ inifile_read (inifile *file)
     }
 
     if (c == '[') {
-        c = inifile_gets(file, ']', FALSE, &syntax);
+        c = inifile_gets(file, ']', false, &syntax);
 
         if (c == ']' && !syntax)
         {
@@ -517,10 +516,10 @@ inifile_read (inifile *file)
     } else if (c != '=') {
         inifile_ungetc(file, c);
 
-        c = inifile_gets(file, '=', FALSE, &syntax);
+        c = inifile_gets(file, '=', false, &syntax);
         if(c == '=' && !syntax) {
             g_string_assign(file->variable, file->buffer->str);
-            c = inifile_gets(file, EOF, TRUE, &syntax);
+            c = inifile_gets(file, EOF, true, &syntax);
             if(!syntax) {
                 g_string_assign(file->value, file->buffer->str);
                 return inifile_read_finish(file, c, INIFILE_VARIABLE);
@@ -540,7 +539,7 @@ inifile_read (inifile *file)
  *   - difference in amount of free space is ignored
  *   - leading and trailing space is ignored
  */
-gboolean
+bool
 inifile_match_name (const char *n1, const char *n2)
 {
     /* Skip leading space */

@@ -88,7 +88,7 @@ xml_iter_finish (xml_iter **iter)
 
 /* Check for end-of-document condition
  */
-SANE_Bool
+bool
 xml_iter_end (xml_iter *iter)
 {
     return iter->node == NULL;
@@ -159,7 +159,7 @@ xml_iter_node_name (xml_iter *iter)
 
 /* Match name of the current node against the pattern
  */
-SANE_Bool
+bool
 xml_iter_node_name_match (xml_iter *iter, const char *pattern)
 {
     return !g_strcmp0(xml_iter_node_name(iter), pattern);

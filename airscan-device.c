@@ -635,7 +635,7 @@ device_table_purge (void)
 /* Check if device table is ready, i.e., there is no DEVICE_INIT_WAIT
  * devices
  */
-static SANE_Bool
+static bool
 device_table_ready (void)
 {
     return device_table_collect(DEVICE_INIT_WAIT, NULL) == 0;
@@ -1115,17 +1115,16 @@ FAIL:
 
 /* Parse ScannerStatus response.
  *
- * On success, returns NULL and `idle' is set to TRUE
+ * On success, returns NULL and `idle' is set to true
  * if scanner is idle
  */
 static const char*
-device_scannerstatus_parse (const char *xml_text, size_t xml_len,
-        gboolean *idle)
+device_scannerstatus_parse (const char *xml_text, size_t xml_len, bool *idle)
 {
     const char *err = NULL;
     xml_iter   *iter;
 
-    *idle = FALSE;
+    *idle = false;
 
     err = xml_iter_begin(&iter, xml_text, xml_len);
     if (err != NULL) {
@@ -1207,7 +1206,7 @@ static void
 device_scannerstatus_callback (device *dev, SoupMessage *msg)
 {
     const char  *err = NULL;
-    gboolean    idle;
+    bool        idle;
     SANE_Status status = SANE_STATUS_IO_ERROR;
 
     /* Check request status */
@@ -1278,7 +1277,7 @@ device_start (device *dev)
 /* Device found notification -- called by ZeroConf
  */
 void
-device_event_found (const char *name, gboolean init_scan,
+device_event_found (const char *name, bool init_scan,
         zeroconf_addrinfo *addresses)
 {
     /* Don't allow duplicate devices */
@@ -1369,7 +1368,7 @@ device_management_stop (void)
 /* Start/stop device management
  */
 void
-device_management_start_stop (gboolean start)
+device_management_start_stop (bool start)
 {
     if (start) {
         device_management_start();

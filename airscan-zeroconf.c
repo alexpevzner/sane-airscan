@@ -34,9 +34,9 @@ struct zeroconf_devstate {
     GPtrArray         *resolvers;  /* Pending resolvers */
     zeroconf_addrinfo *addresses;  /* Discovered addresses */
     zeroconf_devstate *next;       /* Next devstate in the list */
-    gboolean          init_scan;   /* Device found during initial scan */
-    gboolean          reported;    /* Device reported to device manager */
-    gboolean          unconfirmed; /* Device not confirmed */
+    bool              init_scan;   /* Device found during initial scan */
+    bool              reported;    /* Device reported to device manager */
+    bool              unconfirmed; /* Device not confirmed */
 };
 
 /* Static variables
@@ -47,7 +47,7 @@ static const AvahiPoll *zeroconf_avahi_poll;
 static AvahiTimeout *zeroconf_avahi_restart_timer;
 static AvahiClient *zeroconf_avahi_client;
 static AvahiServiceBrowser *zeroconf_avahi_browser;
-static SANE_Bool zeroconf_avahi_browser_init_scan;
+static bool zeroconf_avahi_browser_init_scan;
 
 static void
 zeroconf_avahi_client_start (void);
@@ -160,11 +160,11 @@ zeroconf_devstate_del (const char *name)
 }
 
 /* Walk the device state list, applying callback to each device state
- * If callback returns TRUE, device state will remain in the list.
+ * If callback returns true, device state will remain in the list.
  * Otherwise, it will be deleted
  */
 static void
-zeroconf_devstate_list_walk (gboolean (*callback) (zeroconf_devstate *devstate))
+zeroconf_devstate_list_walk (bool (*callback) (zeroconf_devstate *devstate))
 {
     zeroconf_devstate *devstate = zeroconf_devstate_list, *prev = NULL;
 
@@ -193,21 +193,21 @@ zeroconf_devstate_list_walk (gboolean (*callback) (zeroconf_devstate *devstate))
  *   - mark reported device state as unconfirmed
  *   - delete unreported device state
  */
-static gboolean
+static bool
 zeroconf_devstate_unconfirmed_mark (zeroconf_devstate *devstate)
 {
     if (devstate->reported) {
-        devstate->unconfirmed = TRUE;
-        return TRUE;
+        devstate->unconfirmed = true;
+        return true;
     } else {
-        return FALSE;
+        return false;
     }
 }
 
 /* Callback for zeroconf_devstate_list_walk:
  *   - delete unconfirmed device
  */
-static gboolean
+static bool
 zeroconf_devstate_unconfirmed_del (zeroconf_devstate *devstate)
 {
     return !devstate->unconfirmed;
@@ -237,7 +237,7 @@ zeroconf_addrinfo_new (const AvahiAddress *addr, uint16_t port, const char *rs,
     if (addr->proto == AVAHI_PROTO_INET) {
         /* 169.254.0.0/16 */
         if ((ntohl(addr->data.ipv4.address) & 0xffff0000) == 0xa9fe0000) {
-            addrinfo->linklocal = TRUE;
+            addrinfo->linklocal = true;
         }
     } else {
         static char link_local[8] = {0xfe, 0x80};
@@ -385,7 +385,7 @@ zeroconf_avahi_resolver_callback (AvahiServiceResolver *r,
             }
         }
 
-        devstate->reported = TRUE;
+        devstate->reported = true;
         device_event_found(devstate->name, devstate->init_scan,
                 devstate->addresses);
     }
@@ -439,7 +439,7 @@ zeroconf_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
 
     case AVAHI_BROWSER_CACHE_EXHAUSTED:
     case AVAHI_BROWSER_ALL_FOR_NOW:
-        zeroconf_avahi_browser_init_scan = FALSE;
+        zeroconf_avahi_browser_init_scan = false;
         zeroconf_devstate_list_walk(zeroconf_devstate_unconfirmed_del);
         device_event_init_scan_finished();
         break;
@@ -544,14 +544,14 @@ zeroconf_avahi_client_restart_defer (void)
     struct timeval tv;
 
     zeroconf_avahi_browser_stop();
-    zeroconf_avahi_client_stop(FALSE);
+    zeroconf_avahi_client_stop(false);
 
     gettimeofday(&tv, NULL);
     tv.tv_sec += AIRSCAN_AVAHI_CLIENT_RESTART_TIMEOUT;
     zeroconf_avahi_poll->timeout_update(zeroconf_avahi_restart_timer, &tv);
 
     if (zeroconf_avahi_browser_init_scan) {
-        zeroconf_avahi_browser_init_scan = FALSE;
+        zeroconf_avahi_browser_init_scan = false;
         device_event_init_scan_finished();
     }
 }
@@ -581,7 +581,7 @@ zeroconf_init (void)
         return SANE_STATUS_NO_MEM;
     }
 
-    zeroconf_avahi_browser_init_scan = TRUE;
+    zeroconf_avahi_browser_init_scan = true;
 
     return SANE_STATUS_GOOD;
 }
@@ -604,28 +604,28 @@ zeroconf_cleanup (void)
         avahi_glib_poll_free(zeroconf_avahi_glib_poll);
         zeroconf_avahi_poll = NULL;
         zeroconf_avahi_glib_poll = NULL;
-        zeroconf_avahi_browser_init_scan = FALSE;
+        zeroconf_avahi_browser_init_scan = false;
     }
 }
 
 /* Check if initial scan still in progress
  */
-gboolean
+bool
 zeroconf_init_scan (void)
 {
     if (zeroconf_avahi_browser_init_scan) {
-        return TRUE;
+        return true;
     }
 
     zeroconf_devstate *devstate;
     for (devstate = zeroconf_devstate_list; devstate != NULL;
             devstate = devstate->next) {
         if (devstate->init_scan && !devstate->reported) {
-            return TRUE;
+            return true;
         }
     }
 
-    return FALSE;
+    return false;
 }
 
 /* vim:ts=8:sw=4:et

@@ -36,7 +36,7 @@ math_lcm (SANE_Word x, SANE_Word y)
 
 /* Check two ranges for equivalency
  */
-static inline SANE_Bool
+static inline bool
 math_range_eq (const SANE_Range *r1, const SANE_Range *r2)
 {
     return r1->min == r2->min && r1->max == r2->max && r1->quant == r2->quant;
@@ -44,7 +44,7 @@ math_range_eq (const SANE_Range *r1, const SANE_Range *r2)
 
 /* Check two ranges for overlapping
  */
-static inline SANE_Bool
+static inline bool
 math_range_ovp (const SANE_Range *r1, const SANE_Range *r2)
 {
     return r1->max >= r2->min && r2->max >= r1->min;
@@ -52,17 +52,17 @@ math_range_ovp (const SANE_Range *r1, const SANE_Range *r2)
 
 /* Merge two ranges, if possible
  */
-SANE_Bool
+bool
 math_range_merge (SANE_Range *out, const SANE_Range *r1, const SANE_Range *r2)
 {
     /* Check for trivial cases */
     if (math_range_eq(r1, r2)) {
         *out = *r1;
-        return SANE_TRUE;
+        return true;
     }
 
     if (!math_range_ovp(r1, r2)) {
-        return SANE_FALSE;
+        return false;
     }
 
     /* Ranges have equal quantization? If yes, just adjust min and max */
@@ -70,7 +70,7 @@ math_range_merge (SANE_Range *out, const SANE_Range *r1, const SANE_Range *r2)
         out->min = math_max(r1->min, r2->min);
         out->max = math_min(r1->max, r2->max);
         out->quant = r1->quant;
-        return SANE_TRUE;
+        return true;
     }
 
     /* At least one of ranges don't have quantization? */
@@ -90,7 +90,7 @@ math_range_merge (SANE_Range *out, const SANE_Range *r1, const SANE_Range *r2)
         out->min = math_range_fit(r1, r2->min);
         out->max = math_range_fit(r1, r2->max);
         out->quant = r1->quant;
-        return SANE_TRUE;
+        return true;
     }
 
     /* Now the most difficult case */
@@ -105,7 +105,7 @@ math_range_merge (SANE_Range *out, const SANE_Range *r1, const SANE_Range *r2)
         ;
 
     if (min > bounds_max) {
-        return FALSE;
+        return false;
     }
 
     for (max = min; max + quant <= bounds_max; max += quant)
@@ -115,7 +115,7 @@ math_range_merge (SANE_Range *out, const SANE_Range *r1, const SANE_Range *r2)
     out->max = max;
     out->quant = quant;
 
-    return TRUE;
+    return true;
 }
 
 /* Choose nearest integer in range
