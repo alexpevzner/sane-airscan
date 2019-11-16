@@ -30,29 +30,39 @@ __xml_iter_invalidate_cache (xml_iter *iter)
 {
     g_free((void*) iter->name);
     xmlFree((xmlChar*) iter->text);
-    g_free((void*) iter->err);
     iter->name = NULL;
     iter->text = NULL;
-    iter->err = NULL;
 }
 
-/* Initialize iterator to iterate starting from the given node
+/* Parse XML text and initialize iterator to iterate
+ * starting from the root node
+ *
+ * Returns NULL on success, or error text on a error
  */
-void
-xml_iter_init (xml_iter *iter, xmlNode *node)
+const char*
+xml_iter_begin (xml_iter *iter, const char *xml_text, size_t xml_len)
 {
-    iter->node = node;
+    memset(iter, 0, sizeof(*iter));
+
+    iter->doc = xmlParseMemory(xml_text, xml_len);
+    if (iter->doc == NULL) {
+        return "Failed to parse XML";
+    }
+
+    iter->node = xmlDocGetRootElement(iter->doc);
     __xml_iter_skip_dummy(iter);
     __xml_iter_invalidate_cache(iter);
     iter->parent = iter->node ? iter->node->parent : NULL;
+
+    return NULL;
 }
 
-
-/* Cleanup XML iterator
+/* Finish iteration, free allocated resources
  */
 void
-xml_iter_cleanup (xml_iter *iter)
+xml_iter_finish (xml_iter *iter)
 {
+    xmlFree(iter->doc);
     __xml_iter_invalidate_cache(iter);
     iter->node = NULL;
     iter->parent = NULL;
@@ -168,10 +178,8 @@ xml_iter_node_value_uint (xml_iter *iter, SANE_Word *val)
 
     v = strtoul(s, &end, 10);
     if (end == s || *end || v != (unsigned long) (SANE_Word) v) {
-        g_free((char*) iter->err);
-        iter->err = g_strdup_printf("%s: invalid numerical value",
+        return eloop_eprintf("%s: invalid numerical value",
                 xml_iter_node_name(iter));
-        return iter->err;
     }
 
     *val = (SANE_Word) v;

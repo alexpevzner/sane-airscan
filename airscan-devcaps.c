@@ -422,14 +422,18 @@ DONE:
  * Returns NULL if OK, error string otherwise
  */
 const char*
-devcaps_parse (devcaps *caps, xmlDoc *xml)
+devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
 {
     const char *err = NULL;
     char       *model = NULL, *make_and_model = NULL;
-    xml_iter   iter = XML_ITER_INIT;
+    xml_iter   iter;
 
     /* Parse capabilities XML */
-    xml_iter_init(&iter, xmlDocGetRootElement(xml));
+    err = xml_iter_begin(&iter, xml_text, xml_len);
+    if (err != NULL) {
+        goto DONE;
+    }
+
     if (!xml_iter_node_name_match(&iter, "scan:ScannerCapabilities")) {
         err = "XML: missed scan:ScannerCapabilities";
         goto DONE;
@@ -513,7 +517,7 @@ DONE:
 
     g_free(model);
     g_free(make_and_model);
-    xml_iter_cleanup(&iter);
+    xml_iter_finish(&iter);
 
     return err;
 }

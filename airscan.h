@@ -113,6 +113,23 @@ eloop_new_avahi_poll (void);
 void
 eloop_call (GSourceFunc func, gpointer data);
 
+/* Format error string, as printf() does and save result
+ * in the memory, owned by the event loop
+ *
+ * Caller should not free returned string. This is safe
+ * to use the returned string as an argument to the
+ * subsequent eloop_eprintf() call.
+ *
+ * The returned string remains valid until next call
+ * to eloop_eprintf(), which makes it usable to
+ * report errors up by the stack. However, it should
+ * not be assumed, that the string will remain valid
+ * on a next eloop roll, so don't save this string
+ * anywhere, if you need to do so, create a copy!
+ */
+const char*
+eloop_eprintf(const char *fmt, ...);
+
 /******************** Debugging ********************/
 /* Debug flags
  */
@@ -233,26 +250,25 @@ array_of_string_max_strlen(SANE_String **a);
 /* XML iterator
  */
 typedef struct {
-    xmlNode       *node;
-    xmlNode       *parent;
-    const char    *name;
-    const xmlChar *text;
-    const char    *err;
+    xmlDoc        *doc;    /* XML document */
+    xmlNode       *node;   /* Current node */
+    xmlNode       *parent; /* Parent node */
+    const char    *name;   /* Name of current node */
+    const xmlChar *text;   /* Textual value of current node */
 } xml_iter;
 
-/* Static initializer for the XML iterator
+/* Parse XML text and initialize iterator to iterate
+ * starting from the root node
+ *
+ * Returns NULL on success, or error text on a error
  */
-#define XML_ITER_INIT   {NULL, NULL, NULL, NULL, NULL}
+const char*
+xml_iter_begin (xml_iter *iter, const char *xml_text, size_t xml_len);
 
-/* Initialize iterator to iterate starting from the given node
+/* Finish iteration, free allocated resources
  */
 void
-xml_iter_init (xml_iter *iter, xmlNode *node);
-
-/* Cleanup XML iterator
- */
-void
-xml_iter_cleanup (xml_iter *iter);
+xml_iter_finish (xml_iter *iter);
 
 /* Check for end-of-document condition
  */
@@ -562,7 +578,7 @@ devcaps_reset (devcaps *caps);
  * Returns NULL if OK, error string otherwise
  */
 const char*
-devcaps_parse (devcaps *caps, xmlDoc *xml);
+devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len);
 
 /* Dump device capabilities, for debugging
  */

@@ -13,6 +13,7 @@
 static GThread *eloop_thread;
 static GMainContext *eloop_glib_main_context;
 static GMainLoop *eloop_glib_main_loop;
+static char *eloop_estring = NULL;
 G_LOCK_DEFINE_STATIC(eloop_mutex);
 
 /* Forward declarations
@@ -151,6 +152,36 @@ eloop_call (GSourceFunc func, gpointer data)
     g_source_set_callback(source, func, data, NULL);
     g_source_attach(source, eloop_glib_main_context);
     g_source_unref(source);
+}
+
+/* Format error string, as printf() does and save result
+ * in the memory, owned by the event loop
+ *
+ * Caller should not free returned string. This is safe
+ * to use the returned string as an argument to the
+ * subsequent eloop_eprintf() call.
+ *
+ * The returned string remains valid until next call
+ * to eloop_eprintf(), which makes it usable to
+ * report errors up by the stack. However, it should
+ * not be assumed, that the string will remain valid
+ * on a next eloop roll, so don't save this string
+ * anywhere, if you need to do so, create a copy!
+ */
+const char*
+eloop_eprintf(const char *fmt, ...)
+{
+    gchar *estring;
+    va_list ap;
+
+    va_start(ap, fmt);
+    estring = g_strdup_vprintf(fmt, ap);
+    va_end(ap);
+
+    g_free(eloop_estring);
+    eloop_estring = estring;
+
+    return estring;
 }
 
 /* vim:ts=8:sw=4:et

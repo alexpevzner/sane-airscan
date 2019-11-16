@@ -644,7 +644,6 @@ device_scanner_capabilities_callback (device *dev, SoupMessage *msg)
 {
     DBG_DEVICE(dev->name, "ScannerCapabilities: status=%d", msg->status_code);
 
-    xmlDoc      *doc = NULL;
     const char *err = NULL;
 
     /* Check request status */
@@ -655,25 +654,18 @@ device_scanner_capabilities_callback (device *dev, SoupMessage *msg)
 
     /* Parse XML response */
     SoupBuffer *buf = soup_message_body_flatten(msg->response_body);
-    doc = xmlParseMemory(buf->data, buf->length);
+    err = devcaps_parse(&dev->caps, buf->data, buf->length);
     soup_buffer_free(buf);
 
-    if (doc == NULL) {
-        err = "failed to parse ScannerCapabilities response XML";
+    if (err != NULL) {
+        err = eloop_eprintf("ScannerCapabilities: %s", err);
         goto DONE;
     }
 
-    err = devcaps_parse(&dev->caps, doc);
-    if (err == NULL) {
-        devcaps_dump(dev->name, &dev->caps);
-    }
+    devcaps_dump(dev->name, &dev->caps);
 
     /* Cleanup and exit */
 DONE:
-    if (doc != NULL) {
-        xmlFreeDoc(doc);
-    }
-
     if (err != NULL) {
         if (dev->addr_current != NULL && dev->addr_current->next != NULL) {
             device_probe_address(dev, dev->addr_current->next);
@@ -1101,16 +1093,16 @@ FAIL:
  * if scanner is idle
  */
 static const char*
-device_scannerstatus_parse (xmlDoc *xml, gboolean *idle)
+device_scannerstatus_parse (const char *xml_text, size_t xml_len,
+        gboolean *idle)
 {
     const char *err = NULL;
-    xml_iter   iter = XML_ITER_INIT;
+    xml_iter   iter;
 
     *idle = FALSE;
 
-    xml_iter_init(&iter, xmlDocGetRootElement(xml));
-    if (!xml_iter_node_name_match(&iter, "scan:ScannerStatus")) {
-        err = "XML: missed scan:ScannerStatus";
+    err = xml_iter_begin(&iter, xml_text, xml_len);
+    if (err != NULL) {
         goto DONE;
     }
 
@@ -1124,7 +1116,7 @@ device_scannerstatus_parse (xmlDoc *xml, gboolean *idle)
     }
 
 DONE:
-    xml_iter_cleanup(&iter);
+    xml_iter_finish(&iter);
     return err;
 }
 
@@ -1199,21 +1191,12 @@ device_scannerstatus_callback (device *dev, SoupMessage *msg)
     }
 
     /* Parse XML response */
-    xmlDoc     *doc = NULL;
     SoupBuffer *buf = soup_message_body_flatten(msg->response_body);
-
-    doc = xmlParseMemory(buf->data, buf->length);
+    err = device_scannerstatus_parse(buf->data, buf->length, &idle);
     soup_buffer_free(buf);
 
-    if (doc == NULL) {
-        err = "failed to parse ScannerStatus response XML";
-        goto DONE;
-    }
-
-    err = device_scannerstatus_parse(doc, &idle);
-    xmlFreeDoc(doc);
-
     if (err != NULL) {
+        err = eloop_eprintf("ScannerStatus: %s", err);
         goto DONE;
     }
 
