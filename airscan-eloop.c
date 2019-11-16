@@ -43,6 +43,8 @@ eloop_cleanup (void)
         eloop_glib_main_loop = NULL;
         g_main_context_unref(eloop_glib_main_context);
         eloop_glib_main_context = NULL;
+        g_free(eloop_estring);
+        eloop_estring = NULL;
     }
 }
 
