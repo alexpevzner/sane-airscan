@@ -1097,7 +1097,7 @@ device_scannerstatus_parse (const char *xml_text, size_t xml_len,
         gboolean *idle)
 {
     const char *err = NULL;
-    xml_iter   iter;
+    xml_iter   *iter;
 
     *idle = FALSE;
 
@@ -1106,10 +1106,10 @@ device_scannerstatus_parse (const char *xml_text, size_t xml_len,
         goto DONE;
     }
 
-    xml_iter_enter(&iter);
-    for (; !xml_iter_end(&iter); xml_iter_next(&iter)) {
-        if (xml_iter_node_name_match(&iter, "pwg:State")) {
-            const char *state = xml_iter_node_value(&iter);
+    xml_iter_enter(iter);
+    for (; !xml_iter_end(iter); xml_iter_next(iter)) {
+        if (xml_iter_node_name_match(iter, "pwg:State")) {
+            const char *state = xml_iter_node_value(iter);
             *idle = !strcmp(state, "Idle");
             goto DONE;
         }

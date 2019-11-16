@@ -15,7 +15,6 @@
 #include <sane/saneopts.h>
 
 #include <libsoup/soup.h>
-#include <libxml/tree.h>
 #include <stdio.h>
 
 /******************** Static configuration ********************/
@@ -249,26 +248,23 @@ array_of_string_max_strlen(SANE_String **a);
 /******************** XML utilities ********************/
 /* XML iterator
  */
-typedef struct {
-    xmlDoc        *doc;    /* XML document */
-    xmlNode       *node;   /* Current node */
-    xmlNode       *parent; /* Parent node */
-    const char    *name;   /* Name of current node */
-    const xmlChar *text;   /* Textual value of current node */
-} xml_iter;
+typedef struct xml_iter xml_iter;
 
 /* Parse XML text and initialize iterator to iterate
  * starting from the root node
  *
- * Returns NULL on success, or error text on a error
+ * On success, saves newly constructed iterator into
+ * the iter parameter and returns NULL
+ *
+ * On a error, returns a error text
  */
 const char*
-xml_iter_begin (xml_iter *iter, const char *xml_text, size_t xml_len);
+xml_iter_begin (xml_iter **iter, const char *xml_text, size_t xml_len);
 
 /* Finish iteration, free allocated resources
  */
 void
-xml_iter_finish (xml_iter *iter);
+xml_iter_finish (xml_iter **iter);
 
 /* Check for end-of-document condition
  */

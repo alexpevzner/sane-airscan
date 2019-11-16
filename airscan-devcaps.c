@@ -426,7 +426,7 @@ devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
 {
     const char *err = NULL;
     char       *model = NULL, *make_and_model = NULL;
-    xml_iter   iter;
+    xml_iter   *iter;
 
     /* Parse capabilities XML */
     err = xml_iter_begin(&iter, xml_text, xml_len);
@@ -434,40 +434,40 @@ devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
         goto DONE;
     }
 
-    if (!xml_iter_node_name_match(&iter, "scan:ScannerCapabilities")) {
+    if (!xml_iter_node_name_match(iter, "scan:ScannerCapabilities")) {
         err = "XML: missed scan:ScannerCapabilities";
         goto DONE;
     }
 
-    xml_iter_enter(&iter);
-    for (; !xml_iter_end(&iter); xml_iter_next(&iter)) {
-        if (xml_iter_node_name_match(&iter, "pwg:ModelName")) {
+    xml_iter_enter(iter);
+    for (; !xml_iter_end(iter); xml_iter_next(iter)) {
+        if (xml_iter_node_name_match(iter, "pwg:ModelName")) {
             g_free(model);
-            model = g_strdup(xml_iter_node_value(&iter));
-        } else if (xml_iter_node_name_match(&iter, "pwg:MakeAndModel")) {
+            model = g_strdup(xml_iter_node_value(iter));
+        } else if (xml_iter_node_name_match(iter, "pwg:MakeAndModel")) {
             g_free(make_and_model);
-            make_and_model = g_strdup(xml_iter_node_value(&iter));
-        } else if (xml_iter_node_name_match(&iter, "scan:Platen")) {
-            xml_iter_enter(&iter);
-            if (xml_iter_node_name_match(&iter, "scan:PlatenInputCaps")) {
-                err = devcaps_source_parse(&iter,
+            make_and_model = g_strdup(xml_iter_node_value(iter));
+        } else if (xml_iter_node_name_match(iter, "scan:Platen")) {
+            xml_iter_enter(iter);
+            if (xml_iter_node_name_match(iter, "scan:PlatenInputCaps")) {
+                err = devcaps_source_parse(iter,
                     &caps->src[OPT_SOURCE_PLATEN]);
             }
-            xml_iter_leave(&iter);
-        } else if (xml_iter_node_name_match(&iter, "scan:Adf")) {
-            xml_iter_enter(&iter);
-            while (!xml_iter_end(&iter)) {
-                if (xml_iter_node_name_match(&iter, "scan:AdfSimplexInputCaps")) {
-                    err = devcaps_source_parse(&iter,
+            xml_iter_leave(iter);
+        } else if (xml_iter_node_name_match(iter, "scan:Adf")) {
+            xml_iter_enter(iter);
+            while (!xml_iter_end(iter)) {
+                if (xml_iter_node_name_match(iter, "scan:AdfSimplexInputCaps")) {
+                    err = devcaps_source_parse(iter,
                         &caps->src[OPT_SOURCE_ADF_SIMPLEX]);
-                } else if (xml_iter_node_name_match(&iter,
+                } else if (xml_iter_node_name_match(iter,
                         "scan:AdfDuplexInputCaps")) {
-                    err = devcaps_source_parse(&iter,
+                    err = devcaps_source_parse(iter,
                         &caps->src[OPT_SOURCE_ADF_DUPLEX]);
                 }
-                xml_iter_next(&iter);
+                xml_iter_next(iter);
             }
-            xml_iter_leave(&iter);
+            xml_iter_leave(iter);
         }
 
         if (err != NULL) {

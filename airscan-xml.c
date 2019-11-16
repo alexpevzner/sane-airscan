@@ -8,6 +8,18 @@
 
 #include "airscan.h"
 
+#include <libxml/tree.h>
+
+/* XML iterator
+ */
+struct xml_iter {
+    xmlDoc        *doc;    /* XML document */
+    xmlNode       *node;   /* Current node */
+    xmlNode       *parent; /* Parent node */
+    const char    *name;   /* Name of current node */
+    const xmlChar *text;   /* Textual value of current node */
+};
+
 /* Skip dummy nodes. This is internal function, don't call directly
  */
 static void
@@ -40,19 +52,20 @@ __xml_iter_invalidate_cache (xml_iter *iter)
  * Returns NULL on success, or error text on a error
  */
 const char*
-xml_iter_begin (xml_iter *iter, const char *xml_text, size_t xml_len)
+xml_iter_begin (xml_iter **iter, const char *xml_text, size_t xml_len)
 {
-    memset(iter, 0, sizeof(*iter));
+    *iter = g_new0(xml_iter, 1);
 
-    iter->doc = xmlParseMemory(xml_text, xml_len);
-    if (iter->doc == NULL) {
+    (*iter)->doc = xmlParseMemory(xml_text, xml_len);
+    if ((*iter)->doc == NULL) {
+        xml_iter_finish(iter);
         return "Failed to parse XML";
     }
 
-    iter->node = xmlDocGetRootElement(iter->doc);
-    __xml_iter_skip_dummy(iter);
-    __xml_iter_invalidate_cache(iter);
-    iter->parent = iter->node ? iter->node->parent : NULL;
+    (*iter)->node = xmlDocGetRootElement((*iter)->doc);
+    __xml_iter_skip_dummy(*iter);
+    __xml_iter_invalidate_cache(*iter);
+    (*iter)->parent = (*iter)->node ? (*iter)->node->parent : NULL;
 
     return NULL;
 }
@@ -60,12 +73,17 @@ xml_iter_begin (xml_iter *iter, const char *xml_text, size_t xml_len)
 /* Finish iteration, free allocated resources
  */
 void
-xml_iter_finish (xml_iter *iter)
+xml_iter_finish (xml_iter **iter)
 {
-    xmlFree(iter->doc);
-    __xml_iter_invalidate_cache(iter);
-    iter->node = NULL;
-    iter->parent = NULL;
+    if (*iter) {
+        if ((*iter)->doc) {
+            xmlFree((*iter)->doc);
+        }
+        __xml_iter_invalidate_cache(*iter);
+
+        g_free(*iter);
+        *iter = NULL;
+    }
 }
 
 /* Check for end-of-document condition
