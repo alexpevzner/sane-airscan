@@ -65,7 +65,7 @@ struct device {
                                            device was statically added */
     zeroconf_addrinfo    *addr_current; /* Current address to probe */
     SoupURI              *uri_escl;     /* eSCL base URI */
-    GPtrArray            *http_pending; /* Pending HTTP requests */
+    SoupMessage          *http_pending; /* Pending HTTP requests, NULL if none */
     trace                *trace;        /* Protocol trace */
 
     /* Scanning state machinery */
@@ -130,7 +130,6 @@ device_add (const char *name)
     dev->flags = DEVICE_LISTED;
     devcaps_init(&dev->caps);
 
-    dev->http_pending = g_ptr_array_new();
     dev->trace = trace_open(name);
 
     dev->job_location = g_string_new(NULL);
@@ -166,6 +165,7 @@ device_unref (device *dev)
         g_assert((dev->flags & DEVICE_LISTED) == 0);
         g_assert((dev->flags & DEVICE_HALTED) != 0);
         g_assert((dev->flags & DEVICE_OPENED) == 0);
+        g_assert(dev->http_pending == NULL);
 
         /* Release all memory */
         g_free((void*) dev->name);
@@ -178,7 +178,6 @@ device_unref (device *dev)
             soup_uri_free(dev->uri_escl);
         }
 
-        g_ptr_array_unref(dev->http_pending);
         g_string_free(dev->job_location, TRUE);
 
         g_free(dev);
@@ -203,10 +202,10 @@ device_del (device *dev)
     g_tree_remove(device_table, dev->name);
 
     /* Stop all pending I/O activity */
-    guint i;
-    for (i = 0; i < dev->http_pending->len; i ++) {
-        soup_session_cancel_message(device_http_session,
-                g_ptr_array_index(dev->http_pending, i), SOUP_STATUS_CANCELLED);
+    if (dev->http_pending != NULL) {
+        soup_session_cancel_message(device_http_session, dev->http_pending,
+                SOUP_STATUS_CANCELLED);
+        dev->http_pending = NULL;
     }
 
     trace_close(dev->trace);
@@ -728,7 +727,9 @@ device_http_callback(SoupSession *session, SoupMessage *msg, gpointer userdata)
     }
 
     if (msg->status_code != SOUP_STATUS_CANCELLED) {
-        g_ptr_array_remove(data->dev->http_pending, msg);
+        g_assert(data->dev->http_pending == msg);
+        data->dev->http_pending = NULL;
+
         if (data->callback != NULL) {
             data->callback(data->dev, msg);
         }
@@ -784,7 +785,9 @@ device_http_perform (device *dev, const char *path,
 
     soup_session_queue_message(device_http_session, msg,
             device_http_callback, data);
-    g_ptr_array_add(dev->http_pending, msg);
+
+    g_assert(dev->http_pending == NULL);
+    dev->http_pending = msg;
 }
 
 /* Initiate HTTP GET request
