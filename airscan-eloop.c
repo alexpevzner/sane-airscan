@@ -8,6 +8,9 @@
 
 #include "airscan.h"
 
+#include <glib-unix.h>
+#include <sys/eventfd.h>
+
 /* Static variables
  */
 static GThread *eloop_thread;
@@ -154,6 +157,74 @@ eloop_call (GSourceFunc func, gpointer data)
     g_source_set_callback(source, func, data, NULL);
     g_source_attach(source, eloop_glib_main_context);
     g_source_unref(source);
+}
+
+/* Event notifier. Calls user-defined function on a context
+ * of event loop thread, when event is triggered. This is
+ * safe to trigger the event from a context of any thread
+ * or even from a signal handler
+ */
+struct eloop_event {
+    int     efd;                /* Underlying eventfd */
+    void    (*callback)(void*); /* user-defined callback */
+    void    *data;              /* callback's argument */
+    GSource *source;            /* Underlying GSource */
+};
+
+/* eloop_event GSource callback
+ */
+gboolean
+eloop_event_callback (gpointer data)
+{
+    eloop_event *event = data;
+    uint64_t unused;
+
+    read(event->efd, &unused, sizeof(unused));
+    event->callback(event->data);
+    return G_SOURCE_CONTINUE;
+}
+
+/* Create new event notifier. May return NULL
+ */
+eloop_event*
+eloop_event_new (void (*callback)(void *), void *data)
+{
+    eloop_event *event = g_new0(eloop_event, 1);
+    int         efd;
+
+    efd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+    if (efd< 0) {
+        return NULL;
+    }
+
+    event = g_new0(eloop_event, 1);
+    event->efd = efd;
+    event->callback = callback;
+    event->data = data;
+    event->source = g_unix_fd_source_new(efd, G_IO_IN);
+
+    g_source_set_callback(event->source, eloop_event_callback, event, NULL);
+    g_source_attach(event->source, eloop_glib_main_context);
+
+    return event;
+}
+
+/* Destroy event notifier
+ */
+void
+eloop_event_free (eloop_event *event)
+{
+    g_source_destroy(event->source);
+    g_source_unref(event->source);
+}
+
+/* Trigger an event
+ */
+void
+eloop_event_trigger (eloop_event *event)
+{
+    uint64_t c = 1;
+    write(event->efd, &c, sizeof(c));
 }
 
 /* Format error string, as printf() does and save result

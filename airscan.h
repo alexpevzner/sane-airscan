@@ -114,6 +114,28 @@ eloop_new_avahi_poll (void);
 void
 eloop_call (GSourceFunc func, gpointer data);
 
+/* Event notifier. Calls user-defined function on a context
+ * of event loop thread, when event is triggered. This is
+ * safe to trigger the event from a context of any thread
+ * or even from a signal handler
+ */
+typedef struct eloop_event eloop_event;
+
+/* Create new event notifier. May return NULL
+ */
+eloop_event*
+eloop_event_new (void (*callback)(void *), void *data);
+
+/* Destroy event notifier
+ */
+void
+eloop_event_free (eloop_event *event);
+
+/* Trigger an event
+ */
+void
+eloop_event_trigger (eloop_event *event);
+
 /* Format error string, as printf() does and save result
  * in the memory, owned by the event loop
  *
