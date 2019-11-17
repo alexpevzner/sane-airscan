@@ -6,7 +6,20 @@
 
 #include <sane/sane.h>
 
+#include <signal.h>
 #include <stdio.h>
+#include <stdbool.h>
+
+SANE_Handle handle;
+
+void
+sigint_handler (int unused)
+{
+    (void) unused;
+    if (handle != NULL) {
+        sane_cancel (handle);
+    }
+}
 
 void
 main (int argc, char **argv)
@@ -14,13 +27,21 @@ main (int argc, char **argv)
     (void) argc;
     (void) argv;
 
+    struct sigaction act = {
+        .sa_handler = sigint_handler,
+    };
+
+    sigaction(SIGINT, &act, NULL);
+
     sane_init(NULL, NULL);
-    SANE_Handle handle = NULL;
     sane_open(NULL, &handle);
     if (handle) {
         sane_start(handle);
     }
-    getchar();
+
+    while (getchar() != '\n')
+        ;
+
     sane_exit();
 }
 

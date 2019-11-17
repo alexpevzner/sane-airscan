@@ -495,6 +495,11 @@ device_get_parameters (device *dev, SANE_Parameters *params);
 SANE_Status
 device_start (device *dev);
 
+/* Cancel scanning operation
+ */
+void
+device_cancel (device *dev);
+
 /* Device found notification -- called by ZeroConf
  */
 void

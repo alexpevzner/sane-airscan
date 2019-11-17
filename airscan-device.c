@@ -69,9 +69,10 @@ struct device {
     trace                *trace;        /* Protocol trace */
 
     /* Scanning state machinery */
-    DEVICE_JOB_STATE     job_state;     /* Scan job state */
-    GString              *job_location; /* Scanned page location */
-    SANE_Status          job_status;    /* Job completion status */
+    DEVICE_JOB_STATE     job_state;         /* Scan job state */
+    GString              *job_location;     /* Scanned page location */
+    SANE_Status          job_status;        /* Job completion status */
+    eloop_event          *job_cancel_event; /* Cancel event */
 
     /* Options */
     SANE_Option_Descriptor opt_desc[NUM_OPTIONS]; /* Option descriptors */
@@ -857,6 +858,16 @@ device_list_free (const SANE_Device **dev_list)
     }
 }
 
+/* Cancel event callback
+ */
+static void
+device_cancel_callback (void *data)
+{
+    device *dev = data;
+
+    DBG_DEVICE(dev->name, "Cancel");
+}
+
 /* Open a device
  */
 SANE_Status
@@ -864,9 +875,11 @@ device_open (const char *name, device **out)
 {
     device *dev = NULL;
 
-    device_list_sync();
+    *out = NULL;
 
     /* Find a device */
+    device_list_sync();
+
     if (name && *name) {
         dev = device_find(name);
     } else {
@@ -887,6 +900,11 @@ device_open (const char *name, device **out)
     }
 
     /* Proceed with open */
+    dev->job_cancel_event = eloop_event_new(device_cancel_callback, dev);
+    if (dev->job_cancel_event == NULL) {
+        return SANE_STATUS_NO_MEM;
+    }
+
     dev->flags |= DEVICE_OPENED;
     *out = device_ref(dev);
 
@@ -899,6 +917,8 @@ void
 device_close (device *dev)
 {
     if ((dev->flags & DEVICE_OPENED) != 0) {
+        eloop_event_free(dev->job_cancel_event);
+        dev->job_cancel_event = NULL;
         dev->flags &= ~DEVICE_OPENED;
         device_unref(dev);
     }
@@ -1296,6 +1316,16 @@ device_start (device *dev)
     eloop_call(device_start_do, dev);
 
     return SANE_STATUS_GOOD;
+}
+
+/* Cancel scanning operation
+ */
+void
+device_cancel (device *dev)
+{
+    if (dev->job_cancel_event != NULL) {
+        eloop_event_trigger(dev->job_cancel_event);
+    }
 }
 
 /******************** Device discovery events ********************/

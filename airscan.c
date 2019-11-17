@@ -256,11 +256,8 @@ sane_read (SANE_Handle handle, SANE_Byte *data,
 void
 sane_cancel (SANE_Handle handle)
 {
-    DBG_API_ENTER();
-
-    (void) handle;
-
-    DBG_API_LEAVE(SANE_STATUS_GOOD);
+    device *dev = handle;
+    device_cancel(dev);
 }
 
 /* Set I/O mode
