@@ -105,17 +105,17 @@ sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
 SANE_Status
 sane_open (SANE_String_Const name, SANE_Handle *handle)
 {
-    SANE_Status status = SANE_STATUS_INVAL;
+    SANE_Status status;
+    device *dev;
 
     DBG_API_ENTER();
 
     eloop_mutex_lock();
-    device *dev = device_open(name);
+    status = device_open(name, &dev);
     eloop_mutex_unlock();
 
     if (dev != NULL) {
         *handle = (SANE_Handle) dev;
-        status = SANE_STATUS_GOOD;
     }
 
     DBG_API_LEAVE(status);

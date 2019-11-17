@@ -464,8 +464,8 @@ device_list_free (const SANE_Device **dev_list);
 
 /* Open a device
  */
-device*
-device_open (const char *name);
+SANE_Status
+device_open (const char *name, device **out);
 
 /* Close the device
  */

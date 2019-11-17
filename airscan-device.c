@@ -30,6 +30,7 @@ enum {
     DEVICE_HALTED           = (1 << 3), /* Device is halted */
     DEVICE_INIT_WAIT        = (1 << 4), /* Device was found during initial
                                            scan and not ready yet */
+    DEVICE_OPENED           = (1 << 5), /* Device currently opened */
     DEVICE_ALL_FLAGS        = 0xffffffff
 };
 
@@ -163,6 +164,7 @@ device_unref (device *dev)
         DBG_DEVICE(dev->name, "destroyed");
         g_assert((dev->flags & DEVICE_LISTED) == 0);
         g_assert((dev->flags & DEVICE_HALTED) != 0);
+        g_assert((dev->flags & DEVICE_OPENED) == 0);
 
         /* Release all memory */
         g_free((void*) dev->name);
@@ -857,13 +859,14 @@ device_list_free (const SANE_Device **dev_list)
 
 /* Open a device
  */
-device*
-device_open (const char *name)
+SANE_Status
+device_open (const char *name, device **out)
 {
     device *dev = NULL;
 
     device_list_sync();
 
+    /* Find a device */
     if (name && *name) {
         dev = device_find(name);
     } else {
@@ -874,11 +877,20 @@ device_open (const char *name)
         }
     }
 
-    if (dev != NULL && (dev->flags & DEVICE_READY) != 0) {
-        return device_ref(dev);
+    if (dev == NULL || (dev->flags & DEVICE_READY) == 0) {
+        return SANE_STATUS_INVAL;
     }
 
-    return NULL;
+    /* Check device state */
+    if ((dev->flags & DEVICE_OPENED) != 0) {
+        return SANE_STATUS_DEVICE_BUSY;
+    }
+
+    /* Proceed with open */
+    dev->flags |= DEVICE_OPENED;
+    *out = device_ref(dev);
+
+    return SANE_STATUS_GOOD;
 }
 
 /* Close the device
@@ -886,7 +898,10 @@ device_open (const char *name)
 void
 device_close (device *dev)
 {
-    device_unref(dev);
+    if ((dev->flags & DEVICE_OPENED) != 0) {
+        dev->flags &= ~DEVICE_OPENED;
+        device_unref(dev);
+    }
 }
 
 /* Get option descriptor
