@@ -165,10 +165,10 @@ eloop_call (GSourceFunc func, gpointer data)
  * or even from a signal handler
  */
 struct eloop_event {
+    GSource source;             /* Underlying GSource */
     int     efd;                /* Underlying eventfd */
     void    (*callback)(void*); /* user-defined callback */
     void    *data;              /* callback's argument */
-    GSource *source;            /* Underlying GSource */
 };
 
 /* eloop_event GSource callback
@@ -184,27 +184,40 @@ eloop_event_callback (gpointer data)
     return G_SOURCE_CONTINUE;
 }
 
+/* eloop_event source dispatch function
+ */
+static gboolean
+eloop_event_source_dispatch (GSource *source, GSourceFunc callback,
+    gpointer data)
+{
+    (void) source;
+    return callback(data);
+}
+
 /* Create new event notifier. May return NULL
  */
 eloop_event*
 eloop_event_new (void (*callback)(void *), void *data)
 {
-    eloop_event *event = g_new0(eloop_event, 1);
-    int         efd;
+    eloop_event         *event;
+    int                 efd;
+    static GSourceFuncs funcs = {
+        .dispatch = eloop_event_source_dispatch,
+    };
 
     efd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
     if (efd< 0) {
         return NULL;
     }
 
-    event = g_new0(eloop_event, 1);
+    event = (eloop_event*) g_source_new(&funcs, sizeof(eloop_event));
     event->efd = efd;
     event->callback = callback;
     event->data = data;
-    event->source = g_unix_fd_source_new(efd, G_IO_IN);
 
-    g_source_set_callback(event->source, eloop_event_callback, event, NULL);
-    g_source_attach(event->source, eloop_glib_main_context);
+    g_source_add_unix_fd(&event->source, event->efd, G_IO_IN);
+    g_source_set_callback(&event->source, eloop_event_callback, event, NULL);
+    g_source_attach(&event->source, eloop_glib_main_context);
 
     return event;
 }
@@ -214,8 +227,8 @@ eloop_event_new (void (*callback)(void *), void *data)
 void
 eloop_event_free (eloop_event *event)
 {
-    g_source_destroy(event->source);
-    g_source_unref(event->source);
+    g_source_destroy(&event->source);
+    g_source_unref(&event->source);
 }
 
 /* Trigger an event
