@@ -807,6 +807,14 @@ device_http_cancel (device *dev)
     if (dev->http_pending != NULL) {
         soup_session_cancel_message(device_http_session, dev->http_pending,
                 SOUP_STATUS_CANCELLED);
+
+        /* Note, if message processing already finished,
+         * soup_session_cancel_message() will do literally nothing,
+         * and in particular will not update message status,
+         * but we rely on a fact that status of cancelled
+         * messages is set properly
+         */
+        soup_message_set_status(dev->http_pending, SOUP_STATUS_CANCELLED);
         dev->http_pending = NULL;
     }
 }
