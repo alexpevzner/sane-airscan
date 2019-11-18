@@ -103,6 +103,9 @@ device_http_get (device *dev, const char *path,
         void (*callback)(device*, SoupMessage*));
 
 static void
+device_http_cancel (device *dev);
+
+static void
 device_table_purge (void);
 
 static void
@@ -202,12 +205,7 @@ device_del (device *dev)
     g_tree_remove(device_table, dev->name);
 
     /* Stop all pending I/O activity */
-    if (dev->http_pending != NULL) {
-        soup_session_cancel_message(device_http_session, dev->http_pending,
-                SOUP_STATUS_CANCELLED);
-        dev->http_pending = NULL;
-    }
-
+    device_http_cancel(dev);
     trace_close(dev->trace);
     dev->trace = NULL;
 
@@ -703,17 +701,17 @@ DONE:
 typedef struct {
     device *dev;
     trace  *trace;
-    void   (*callback)(device *dev, SoupMessage *msg);
-} device_http_userdata;
+    void   (*func)(device *dev, SoupMessage *msg);
+} device_http_callback_data;
 
-/* HTTP request completion callback
+/* HTTP request completion callback. Performs required
+ * cleanup operations and dispatches control to the
+ * actual handler.
  */
 static void
 device_http_callback(SoupSession *session, SoupMessage *msg, gpointer userdata)
 {
-    device_http_userdata *data = userdata;
-
-    trace_msg_hook(data->trace, msg);
+    device_http_callback_data *data = userdata;
 
     (void) session;
     if (DBG_ENABLED(DBG_FLG_HTTP)) {
@@ -730,8 +728,10 @@ device_http_callback(SoupSession *session, SoupMessage *msg, gpointer userdata)
         g_assert(data->dev->http_pending == msg);
         data->dev->http_pending = NULL;
 
-        if (data->callback != NULL) {
-            data->callback(data->dev, msg);
+        trace_msg_hook(data->trace, msg);
+
+        if (data->func != NULL) {
+            data->func(data->dev, msg);
         }
     }
 
@@ -778,10 +778,10 @@ device_http_perform (device *dev, const char *path,
      */
     soup_message_headers_append(msg->request_headers, "Connection", "close");
 
-    device_http_userdata *data = g_new0(device_http_userdata, 1);
+    device_http_callback_data *data = g_new0(device_http_callback_data, 1);
     data->dev = dev;
     data->trace = dev->trace;
-    data->callback = callback;
+    data->func = callback;
 
     soup_session_queue_message(device_http_session, msg,
             device_http_callback, data);
@@ -797,6 +797,18 @@ device_http_get (device *dev, const char *path,
         void (*callback)(device*, SoupMessage*))
 {
     device_http_perform(dev, path, "GET", NULL, callback);
+}
+
+/* Cancel currently pending HTTP request, if any
+ */
+static void
+device_http_cancel (device *dev)
+{
+    if (dev->http_pending != NULL) {
+        soup_session_cancel_message(device_http_session, dev->http_pending,
+                SOUP_STATUS_CANCELLED);
+        dev->http_pending = NULL;
+    }
 }
 
 /******************** API helpers ********************/
