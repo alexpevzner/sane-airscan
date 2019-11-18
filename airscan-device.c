@@ -1232,10 +1232,12 @@ device_start_scan_job (device *dev)
     unsigned int y_off = 0;
     unsigned int wid, hei;
     const char   *source = "Platen";
+    //const char   *source = "Feeder";
     const char   *colormode = "RGB24";
     const char   *mime = "image/jpeg";
     SANE_Word    x_resolution = 300;
     SANE_Word    y_resolution = 300;
+    bool         duplex = false;
 
     wid = math_mm2px(dev->opt_br_x);
     hei = math_mm2px(dev->opt_br_y);
@@ -1261,6 +1263,7 @@ device_start_scan_job (device *dev)
         "  <scan:DocumentFormatExt>%s</scan:DocumentFormatExt>\n"
         "  <scan:XResolution>%d</scan:XResolution>\n"
         "  <scan:YResolution>%d</scan:YResolution>\n"
+        "  <scan:Duplex>%s</scan:Duplex>\n"
         "</scan:ScanSettings>\n",
         x_off,
         y_off,
@@ -1271,7 +1274,8 @@ device_start_scan_job (device *dev)
         colormode,
         mime,
         x_resolution,
-        y_resolution
+        y_resolution,
+        duplex ? "true" : "false"
     );
 
     device_job_state_set(dev, DEVICE_JOB_SCANJOBS_PENDING, SANE_STATUS_GOOD);
