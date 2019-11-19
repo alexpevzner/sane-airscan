@@ -39,15 +39,12 @@ enum {
 typedef enum {
     DEVICE_JOB_IDLE,
     DEVICE_JOB_STARTED,
-    DEVICE_JOB_SCANNERSTATUS_PENDING,
-    DEVICE_JOB_SCANJOBS_PENDING,
-    DEVICE_JOB_NEXTDOCUMENT_FIRST_PENDING,
-    DEVICE_JOB_NEXTDOCUMENT_NEXT_PENDING,
-    DEVICE_JOB_DELETE_PENDING,
+    DEVICE_JOB_CHECK_STATUS,
+    DEVICE_JOB_REQUESTING,
+    DEVICE_JOB_LOADING,
+    DEVICE_JOB_CLEANING_UP,
 
-
-    DEVICE_JOB_SUCCEED,
-    DEVICE_JOB_FAILED
+    DEVICE_JOB_DONE
 
 } DEVICE_JOB_STATE;
 
@@ -72,6 +69,7 @@ struct device {
     DEVICE_JOB_STATE     job_state;         /* Scan job state */
     SANE_Status          job_status;        /* Job completion status */
     GString              *job_location;     /* Scanned page location */
+    GPtrArray            *job_images;       /* Array of SoupBuffer* */
     eloop_event          *job_cancel_event; /* Cancel event */
 
     /* Options */
@@ -136,6 +134,7 @@ device_add (const char *name)
     dev->trace = trace_open(name);
 
     dev->job_location = g_string_new(NULL);
+    dev->job_images = g_ptr_array_new();
 
     dev->opt_src = OPT_SOURCE_UNKNOWN;
     dev->opt_colormode = OPT_COLORMODE_UNKNOWN;
@@ -182,6 +181,7 @@ device_unref (device *dev)
         }
 
         g_string_free(dev->job_location, TRUE);
+        g_ptr_array_free(dev->job_images, TRUE);
 
         g_free(dev);
     }
@@ -1103,9 +1103,17 @@ device_get_parameters (device *dev, SANE_Parameters *params)
 /* Set job_state (and job_status)
  */
 static void
-device_job_state_set (device *dev, DEVICE_JOB_STATE state, SANE_Status status)
+device_job_set_state (device *dev, DEVICE_JOB_STATE state)
 {
     dev->job_state = state;
+}
+
+/* Set job status. If status already set, it will not be
+ * changed
+ */
+static void
+device_job_set_status (device *dev, SANE_Status status)
+{
     if (dev->job_status == SANE_STATUS_GOOD) {
         dev->job_status = status;
     }
@@ -1118,7 +1126,7 @@ device_delete_callback (device *dev, SoupMessage *msg)
 {
     (void) msg;
 
-    device_job_state_set(dev, DEVICE_JOB_SUCCEED, SANE_STATUS_GOOD);
+    device_job_set_state(dev, DEVICE_JOB_DONE);
 }
 
 /* GET ${location}/NextDocument callback
@@ -1128,25 +1136,25 @@ device_nextdocument_callback (device *dev, SoupMessage *msg)
 {
     /* Transport error is fatal */
     if (SOUP_STATUS_IS_TRANSPORT_ERROR(msg->status_code)) {
-        device_job_state_set(dev, DEVICE_JOB_FAILED, SANE_STATUS_IO_ERROR);
+        device_job_set_state(dev, DEVICE_JOB_DONE);
+        device_job_set_status(dev, SANE_STATUS_IO_ERROR);
         return;
     }
 
     /* Try to fetch next page until previous page fetched successfully */
     if (SOUP_STATUS_IS_SUCCESSFUL(msg->status_code)) {
-        device_job_state_set(dev, DEVICE_JOB_NEXTDOCUMENT_NEXT_PENDING,
-                SANE_STATUS_GOOD);
+        SoupBuffer *buf = soup_message_body_flatten(msg->response_body);
+        g_ptr_array_add(dev->job_images, buf);
         device_nextdocument_get(dev);
-        return;
-    } else if (dev->job_state == DEVICE_JOB_NEXTDOCUMENT_FIRST_PENDING) {
-        device_job_state_set(dev, DEVICE_JOB_FAILED, SANE_STATUS_IO_ERROR);
-        return;
+    } else if (dev->job_images->len == 0) {
+        device_job_set_state(dev, DEVICE_JOB_DONE);
+        device_job_set_status(dev, SANE_STATUS_IO_ERROR);
+    } else {
+        /* Just in case, delete the job */
+        device_http_perform(dev, dev->job_location->str, "DELETE", NULL,
+                device_delete_callback);
+        device_job_set_state(dev, DEVICE_JOB_CLEANING_UP);
     }
-
-    /* Just in case, delete the job */
-    device_http_perform(dev, dev->job_location->str, "DELETE", NULL,
-            device_delete_callback);
-    device_job_state_set(dev, DEVICE_JOB_DELETE_PENDING, SANE_STATUS_GOOD);
 }
 
 /* Issue GET ${location}/NextDocument request
@@ -1180,15 +1188,15 @@ device_scanjobs_callback (device *dev, SoupMessage *msg)
     }
 
     g_string_assign(dev->job_location, location);
-    device_job_state_set(dev, DEVICE_JOB_NEXTDOCUMENT_FIRST_PENDING,
-            SANE_STATUS_GOOD);
+    device_job_set_state(dev, DEVICE_JOB_LOADING);
 
     device_nextdocument_get(dev);
 
     return;
 
 FAIL:
-    device_job_state_set(dev, DEVICE_JOB_FAILED, SANE_STATUS_IO_ERROR);
+    device_job_set_state(dev, DEVICE_JOB_DONE);
+    device_job_set_status(dev, SANE_STATUS_IO_ERROR);
 }
 
 /* Parse ScannerStatus response.
@@ -1278,7 +1286,7 @@ device_start_scan_job (device *dev)
         duplex ? "true" : "false"
     );
 
-    device_job_state_set(dev, DEVICE_JOB_SCANJOBS_PENDING, SANE_STATUS_GOOD);
+    device_job_set_state(dev, DEVICE_JOB_REQUESTING);
     device_http_perform(dev, "ScanJobs", "POST", rq, device_scanjobs_callback);
 }
 
@@ -1320,7 +1328,8 @@ device_scannerstatus_callback (device *dev, SoupMessage *msg)
     /* Cleanup and exit */
 DONE:
     if (err != NULL) {
-        device_job_state_set(dev, DEVICE_JOB_FAILED, status);
+        device_job_set_state(dev, DEVICE_JOB_DONE);
+        device_job_set_status(dev, status);
     }
 }
 
@@ -1333,6 +1342,7 @@ device_start_do (gpointer data)
 
     g_assert(dev->job_location->len == 0);
 
+    device_job_set_state(dev, DEVICE_JOB_CHECK_STATUS);
     device_http_get(dev, "ScannerStatus", device_scannerstatus_callback);
 
     return FALSE;
@@ -1347,7 +1357,7 @@ device_start (device *dev)
         return SANE_STATUS_DEVICE_BUSY;
     }
 
-    device_job_state_set(dev, DEVICE_JOB_STARTED, SANE_STATUS_GOOD);
+    device_job_set_state(dev, DEVICE_JOB_STARTED);
     eloop_call(device_start_do, dev);
 
     return SANE_STATUS_GOOD;
