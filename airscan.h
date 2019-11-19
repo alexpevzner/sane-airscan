@@ -101,8 +101,13 @@ eloop_mutex_unlock (void);
 
 /* Wait on conditional variable under the event loop mutex
  */
+void
+eloop_cond_wait (GCond *cond);
+
+/* eloop_cond_wait() with timeout in seconds
+ */
 bool
-eloop_cond_wait (GCond *cond, gint64 timeout);
+eloop_cond_wait_until (GCond *cond, gint64 timeout);
 
 /* Create AvahiGLibPoll that runs in context of the event loop
  */

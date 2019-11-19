@@ -133,8 +133,16 @@ eloop_mutex_unlock (void)
 
 /* Wait on conditional variable under the event loop mutex
  */
+void
+eloop_cond_wait (GCond *cond)
+{
+    return g_cond_wait(cond, &G_LOCK_NAME(eloop_mutex));
+}
+
+/* eloop_cond_wait() with timeout
+ */
 bool
-eloop_cond_wait (GCond *cond, gint64 timeout)
+eloop_cond_wait_until (GCond *cond, gint64 timeout)
 {
     return g_cond_wait_until(cond, &G_LOCK_NAME(eloop_mutex), timeout);
 }

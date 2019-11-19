@@ -71,6 +71,7 @@ struct device {
     GString              *job_location;     /* Scanned page location */
     GPtrArray            *job_images;       /* Array of SoupBuffer* */
     eloop_event          *job_cancel_event; /* Cancel event */
+    GCond                job_state_cond;    /* Signaled when state changed */
 
     /* Options */
     SANE_Option_Descriptor opt_desc[NUM_OPTIONS]; /* Option descriptors */
@@ -135,6 +136,7 @@ device_add (const char *name)
 
     dev->job_location = g_string_new(NULL);
     dev->job_images = g_ptr_array_new();
+    g_cond_init(&dev->job_state_cond);
 
     dev->opt_src = OPT_SOURCE_UNKNOWN;
     dev->opt_colormode = OPT_COLORMODE_UNKNOWN;
@@ -182,6 +184,7 @@ device_unref (device *dev)
 
         g_string_free(dev->job_location, TRUE);
         g_ptr_array_free(dev->job_images, TRUE);
+        g_cond_clear(&dev->job_state_cond);
 
         g_free(dev);
     }
@@ -830,7 +833,7 @@ device_list_sync (void)
 
     while ((!device_table_ready() || zeroconf_init_scan()) &&
             g_get_monotonic_time() < timeout) {
-        eloop_cond_wait(&device_table_cond, timeout);
+        eloop_cond_wait_until(&device_table_cond, timeout);
     }
 }
 
@@ -1106,6 +1109,7 @@ static void
 device_job_set_state (device *dev, DEVICE_JOB_STATE state)
 {
     dev->job_state = state;
+    g_cond_broadcast(&dev->job_state_cond);
 }
 
 /* Set job status. If status already set, it will not be
@@ -1358,9 +1362,22 @@ device_start (device *dev)
     }
 
     device_job_set_state(dev, DEVICE_JOB_STARTED);
+    dev->job_status = SANE_STATUS_GOOD;
     eloop_call(device_start_do, dev);
 
-    return SANE_STATUS_GOOD;
+    for (;;) {
+        switch (dev->job_state) {
+        case DEVICE_JOB_LOADING:
+            return SANE_STATUS_GOOD;
+
+        case DEVICE_JOB_DONE:
+            device_job_set_state(dev, DEVICE_JOB_IDLE);
+            return dev->job_status;
+
+        default:
+            eloop_cond_wait(&dev->job_state_cond);
+        }
+    }
 }
 
 /* Cancel scanning operation
