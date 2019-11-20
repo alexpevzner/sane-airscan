@@ -93,9 +93,6 @@ static SoupSession *device_http_session;
 /* Forward declarations
  */
 static void
-device_add_static (const char *name, SoupURI *uri);
-
-static void
 device_scanner_capabilities_callback (device *dev, SoupMessage *msg);
 
 static void
@@ -110,9 +107,6 @@ device_job_set_state (device *dev, DEVICE_JOB_STATE state);
 
 static void
 device_job_set_status (device *dev, SANE_Status status);
-
-static void
-device_table_purge (void);
 
 static void
 device_escl_load_page (device *dev);
