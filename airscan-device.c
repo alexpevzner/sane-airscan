@@ -71,6 +71,7 @@ struct device {
     GString              *job_location;     /* Scanned page location */
     GPtrArray            *job_images;       /* Array of SoupBuffer* */
     eloop_event          *job_cancel_event; /* Cancel event */
+    bool                 job_cancel_rq;     /* Cancel requested */
     GCond                job_state_cond;    /* Signaled when state changed */
 
     /* Options */
@@ -105,10 +106,16 @@ static void
 device_http_cancel (device *dev);
 
 static void
+device_job_set_state (device *dev, DEVICE_JOB_STATE state);
+
+static void
+device_job_set_status (device *dev, SANE_Status status);
+
+static void
 device_table_purge (void);
 
 static void
-device_nextdocument_get (device *dev);
+device_escl_load_page (device *dev);
 
 /* Compare device names, for device_table
  */
@@ -822,6 +829,320 @@ device_http_cancel (device *dev)
     }
 }
 
+/******************** ESCL protocol ********************/
+/* HTTP DELETE ${dev->job_location} callback
+ */
+static void
+device_escl_delete_callback (device *dev, SoupMessage *msg)
+{
+    (void) msg;
+
+    device_job_set_state(dev, DEVICE_JOB_DONE);
+}
+
+/* ESCL: delete current job
+ *
+ * HTTP DELETE ${dev->job_location}
+ */
+static void
+device_escl_delete (device *dev)
+{
+    device_http_perform(dev, dev->job_location->str, "DELETE", NULL,
+            device_escl_delete_callback);
+}
+
+/* HTTP GET ${dev->job_location}/NextDocument callback
+ */
+static void
+device_escl_load_page_callback (device *dev, SoupMessage *msg)
+{
+    /* Transport error is fatal */
+    if (SOUP_STATUS_IS_TRANSPORT_ERROR(msg->status_code)) {
+        device_job_set_state(dev, DEVICE_JOB_DONE);
+        device_job_set_status(dev, SANE_STATUS_IO_ERROR);
+        return;
+    }
+
+    /* Try to fetch next page until previous page fetched successfully */
+    if (SOUP_STATUS_IS_SUCCESSFUL(msg->status_code)) {
+        SoupBuffer *buf = soup_message_body_flatten(msg->response_body);
+        g_ptr_array_add(dev->job_images, buf);
+        device_escl_load_page(dev);
+    } else if (dev->job_images->len == 0) {
+        device_job_set_state(dev, DEVICE_JOB_DONE);
+        device_job_set_status(dev, SANE_STATUS_IO_ERROR);
+    } else {
+        /* Just in case, delete the job */
+        device_job_set_state(dev, DEVICE_JOB_CLEANING_UP);
+        device_escl_delete(dev);
+    }
+}
+
+/* ESCL: load next page
+ *
+ * HTTP GET ${dev->job_location}/NextDocument request
+ */
+static void
+device_escl_load_page (device *dev)
+{
+    size_t sz = dev->job_location->len;
+    if (sz == 0 || dev->job_location->str[sz-1] != '/') {
+        g_string_append_c(dev->job_location, '/');
+    }
+
+    g_string_append(dev->job_location, "NextDocument");
+    device_http_get(dev, dev->job_location->str, device_escl_load_page_callback);
+    g_string_truncate(dev->job_location, sz);
+}
+
+/* * HTTP POST ${dev->uri_escl}/ScanJobs callback
+ */
+static void
+device_escl_start_scan_callback (device *dev, SoupMessage *msg)
+{
+    const char *location;
+
+    if (msg->status_code != SOUP_STATUS_CREATED) {
+        goto FAIL;
+    }
+
+    location = soup_message_headers_get_one(msg->response_headers, "Location");
+    if (location == NULL) {
+        goto FAIL;
+    }
+
+    g_string_assign(dev->job_location, location);
+
+    if (dev->job_cancel_rq) {
+        device_job_set_state(dev, DEVICE_JOB_CLEANING_UP);
+        device_job_set_status(dev, SANE_STATUS_CANCELLED);
+        device_escl_delete(dev);
+    } else {
+        device_job_set_state(dev, DEVICE_JOB_LOADING);
+        device_escl_load_page(dev);
+    }
+
+    return;
+
+FAIL:
+    device_job_set_state(dev, DEVICE_JOB_DONE);
+    device_job_set_status(dev, SANE_STATUS_IO_ERROR);
+}
+
+/* ESCL: start scanning
+ *
+ * HTTP POST ${dev->uri_escl}/ScanJobs
+ */
+static void
+device_escl_start_scan (device *dev)
+{
+    unsigned int x_off = 0;
+    unsigned int y_off = 0;
+    unsigned int wid, hei;
+    const char   *source = "Platen";
+    //const char   *source = "Feeder";
+    const char   *colormode = "RGB24";
+    const char   *mime = "image/jpeg";
+    SANE_Word    x_resolution = 300;
+    SANE_Word    y_resolution = 300;
+    bool         duplex = false;
+
+    wid = math_mm2px(dev->opt_br_x);
+    hei = math_mm2px(dev->opt_br_y);
+
+    const char *rq = g_strdup_printf(
+        "<?xml version='1.0' encoding='UTF-8'?>\n"
+        "<scan:ScanSettings\n"
+        "    xmlns:scan=\"http://schemas.hp.com/imaging/escl/2011/05/03\"\n"
+        "    xmlns:pwg=\"http://www.pwg.org/schemas/2010/12/sm\">\n"
+        "  <pwg:Version>2.6</pwg:Version>\n"
+        "  <pwg:ScanRegions>\n"
+        "    <pwg:ScanRegion>\n"
+        "      <pwg:XOffset>%d</pwg:XOffset>\n"
+        "      <pwg:YOffset>%d</pwg:YOffset>\n"
+        "      <pwg:Width>%d</pwg:Width>\n"
+        "      <pwg:Height>%d</pwg:Height>\n"
+        "      <pwg:ContentRegionUnits>escl:ThreeHundredthsOfInches</pwg:ContentRegionUnits>\n"
+        "    </pwg:ScanRegion>\n"
+        "  </pwg:ScanRegions>\n"
+        "  <scan:InputSource>%s</scan:InputSource>\n"
+        "  <pwg:InputSource>%s</pwg:InputSource>\n"
+        "  <scan:ColorMode>%s</scan:ColorMode>\n"
+        "  <scan:DocumentFormatExt>%s</scan:DocumentFormatExt>\n"
+        "  <scan:XResolution>%d</scan:XResolution>\n"
+        "  <scan:YResolution>%d</scan:YResolution>\n"
+        "  <scan:Duplex>%s</scan:Duplex>\n"
+        "</scan:ScanSettings>\n",
+        x_off,
+        y_off,
+        wid,
+        hei,
+        source,
+        source,
+        colormode,
+        mime,
+        x_resolution,
+        y_resolution,
+        duplex ? "true" : "false"
+    );
+
+    device_job_set_state(dev, DEVICE_JOB_REQUESTING);
+    device_http_perform(dev, "ScanJobs", "POST", rq,
+            device_escl_start_scan_callback);
+}
+
+
+/* Parse ScannerStatus response.
+ *
+ * On success, returns NULL and `idle' is set to true
+ * if scanner is idle
+ */
+static const char*
+device_escl_scannerstatus_parse (const char *xml_text, size_t xml_len, bool *idle)
+{
+    const char *err = NULL;
+    xml_iter   *iter;
+
+    *idle = false;
+
+    err = xml_iter_begin(&iter, xml_text, xml_len);
+    if (err != NULL) {
+        goto DONE;
+    }
+
+    xml_iter_enter(iter);
+    for (; !xml_iter_end(iter); xml_iter_next(iter)) {
+        if (xml_iter_node_name_match(iter, "pwg:State")) {
+            const char *state = xml_iter_node_value(iter);
+            *idle = !strcmp(state, "Idle");
+            goto DONE;
+        }
+    }
+
+DONE:
+    xml_iter_finish(&iter);
+    return err;
+}
+
+
+/* HTTP POST ${dev->uri_escl}/ScannerStatus callback
+ */
+static void
+device_escl_get_scannerstatus_callback (device *dev, SoupMessage *msg)
+{
+    const char  *err = NULL;
+    bool        idle;
+    SANE_Status status = SANE_STATUS_IO_ERROR;
+
+    /* Check request status */
+    if (!SOUP_STATUS_IS_SUCCESSFUL(msg->status_code)) {
+        err = "failed to load ScannerStatus";
+        goto DONE;
+    }
+
+    /* Parse XML response */
+    SoupBuffer *buf = soup_message_body_flatten(msg->response_body);
+    err = device_escl_scannerstatus_parse(buf->data, buf->length, &idle);
+    soup_buffer_free(buf);
+
+    if (err != NULL) {
+        err = eloop_eprintf("ScannerStatus: %s", err);
+        goto DONE;
+    }
+
+    /* Check if scanned is idle */
+    if (!idle) {
+        err = "Scanner is busy";
+        status = SANE_STATUS_DEVICE_BUSY;
+        goto DONE;
+    }
+
+    /* Start scan job */
+    device_escl_start_scan(dev);
+
+    /* Cleanup and exit */
+DONE:
+    if (err != NULL) {
+        device_job_set_state(dev, DEVICE_JOB_DONE);
+        device_job_set_status(dev, status);
+    }
+}
+
+/* ESCL: get scanner status
+ *
+ * HTTP POST ${dev->uri_escl}/ScannerStatus
+ */
+static void
+device_escl_get_scannerstatus (device *dev)
+{
+    device_http_get(dev, "ScannerStatus",
+            device_escl_get_scannerstatus_callback);
+}
+
+/******************** Scan Job management ********************/
+/* Set job_state (and job_status)
+ */
+static void
+device_job_set_state (device *dev, DEVICE_JOB_STATE state)
+{
+    dev->job_state = state;
+    g_cond_broadcast(&dev->job_state_cond);
+}
+
+/* Set job status. If status already set, it will not be
+ * changed
+ */
+static void
+device_job_set_status (device *dev, SANE_Status status)
+{
+    if (dev->job_status == SANE_STATUS_GOOD) {
+        dev->job_status = status;
+    }
+}
+
+/* Cancel the job
+ */
+static void
+device_job_cancel (void *data)
+{
+    device *dev = data;
+
+    DBG_DEVICE(dev->name, "Cancel");
+
+    if (dev->job_cancel_rq) {
+        return; /* We are working on it */
+    }
+
+
+    switch (dev->job_state) {
+    case DEVICE_JOB_IDLE:
+    case DEVICE_JOB_DONE:
+        /* Nothing to do */
+        break;
+
+    case DEVICE_JOB_STARTED:
+    case DEVICE_JOB_REQUESTING:
+        dev->job_cancel_rq = true;
+        break;
+
+    case DEVICE_JOB_CHECK_STATUS:
+        device_http_cancel(dev);
+        device_job_set_state(dev, DEVICE_JOB_DONE);
+        device_job_set_status(dev, SANE_STATUS_CANCELLED);
+        break;
+
+    case DEVICE_JOB_LOADING:
+        device_http_cancel(dev);
+        device_job_set_state(dev, DEVICE_JOB_CLEANING_UP);
+        device_escl_delete(dev);
+        /* Fall through... */
+
+    case DEVICE_JOB_CLEANING_UP:
+        device_job_set_status(dev, SANE_STATUS_CANCELLED);
+        break;
+    }
+}
+
 /******************** API helpers ********************/
 /* Wait until list of devices is ready
  */
@@ -884,16 +1205,6 @@ device_list_free (const SANE_Device **dev_list)
     }
 }
 
-/* Cancel event callback
- */
-static void
-device_cancel_callback (void *data)
-{
-    device *dev = data;
-
-    DBG_DEVICE(dev->name, "Cancel");
-}
-
 /* Open a device
  */
 SANE_Status
@@ -926,7 +1237,7 @@ device_open (const char *name, device **out)
     }
 
     /* Proceed with open */
-    dev->job_cancel_event = eloop_event_new(device_cancel_callback, dev);
+    dev->job_cancel_event = eloop_event_new(device_job_cancel, dev);
     if (dev->job_cancel_event == NULL) {
         return SANE_STATUS_NO_MEM;
     }
@@ -1103,240 +1414,6 @@ device_get_parameters (device *dev, SANE_Parameters *params)
     return SANE_STATUS_GOOD;
 }
 
-/* Set job_state (and job_status)
- */
-static void
-device_job_set_state (device *dev, DEVICE_JOB_STATE state)
-{
-    dev->job_state = state;
-    g_cond_broadcast(&dev->job_state_cond);
-}
-
-/* Set job status. If status already set, it will not be
- * changed
- */
-static void
-device_job_set_status (device *dev, SANE_Status status)
-{
-    if (dev->job_status == SANE_STATUS_GOOD) {
-        dev->job_status = status;
-    }
-}
-
-/* DELETE location callback
- */
-static void
-device_delete_callback (device *dev, SoupMessage *msg)
-{
-    (void) msg;
-
-    device_job_set_state(dev, DEVICE_JOB_DONE);
-}
-
-/* GET ${location}/NextDocument callback
- */
-static void
-device_nextdocument_callback (device *dev, SoupMessage *msg)
-{
-    /* Transport error is fatal */
-    if (SOUP_STATUS_IS_TRANSPORT_ERROR(msg->status_code)) {
-        device_job_set_state(dev, DEVICE_JOB_DONE);
-        device_job_set_status(dev, SANE_STATUS_IO_ERROR);
-        return;
-    }
-
-    /* Try to fetch next page until previous page fetched successfully */
-    if (SOUP_STATUS_IS_SUCCESSFUL(msg->status_code)) {
-        SoupBuffer *buf = soup_message_body_flatten(msg->response_body);
-        g_ptr_array_add(dev->job_images, buf);
-        device_nextdocument_get(dev);
-    } else if (dev->job_images->len == 0) {
-        device_job_set_state(dev, DEVICE_JOB_DONE);
-        device_job_set_status(dev, SANE_STATUS_IO_ERROR);
-    } else {
-        /* Just in case, delete the job */
-        device_http_perform(dev, dev->job_location->str, "DELETE", NULL,
-                device_delete_callback);
-        device_job_set_state(dev, DEVICE_JOB_CLEANING_UP);
-    }
-}
-
-/* Issue GET ${location}/NextDocument request
- */
-static void
-device_nextdocument_get (device *dev)
-{
-    size_t sz = dev->job_location->len;
-    if (sz == 0 || dev->job_location->str[sz-1] != '/') {
-        g_string_append_c(dev->job_location, '/');
-    }
-
-    g_string_append(dev->job_location, "NextDocument");
-    device_http_get(dev, dev->job_location->str, device_nextdocument_callback);
-    g_string_truncate(dev->job_location, sz);
-}
-
-/* ScanJobs callback
- */
-static void
-device_scanjobs_callback (device *dev, SoupMessage *msg)
-{
-    if (msg->status_code != SOUP_STATUS_CREATED) {
-        goto FAIL;
-    }
-
-    const char *location = soup_message_headers_get_one(msg->response_headers,
-                "Location");
-    if (location == NULL) {
-        goto FAIL;
-    }
-
-    g_string_assign(dev->job_location, location);
-    device_job_set_state(dev, DEVICE_JOB_LOADING);
-
-    device_nextdocument_get(dev);
-
-    return;
-
-FAIL:
-    device_job_set_state(dev, DEVICE_JOB_DONE);
-    device_job_set_status(dev, SANE_STATUS_IO_ERROR);
-}
-
-/* Parse ScannerStatus response.
- *
- * On success, returns NULL and `idle' is set to true
- * if scanner is idle
- */
-static const char*
-device_scannerstatus_parse (const char *xml_text, size_t xml_len, bool *idle)
-{
-    const char *err = NULL;
-    xml_iter   *iter;
-
-    *idle = false;
-
-    err = xml_iter_begin(&iter, xml_text, xml_len);
-    if (err != NULL) {
-        goto DONE;
-    }
-
-    xml_iter_enter(iter);
-    for (; !xml_iter_end(iter); xml_iter_next(iter)) {
-        if (xml_iter_node_name_match(iter, "pwg:State")) {
-            const char *state = xml_iter_node_value(iter);
-            *idle = !strcmp(state, "Idle");
-            goto DONE;
-        }
-    }
-
-DONE:
-    xml_iter_finish(&iter);
-    return err;
-}
-
-/* Start scan job
- */
-static void
-device_start_scan_job (device *dev)
-{
-    unsigned int x_off = 0;
-    unsigned int y_off = 0;
-    unsigned int wid, hei;
-    const char   *source = "Platen";
-    //const char   *source = "Feeder";
-    const char   *colormode = "RGB24";
-    const char   *mime = "image/jpeg";
-    SANE_Word    x_resolution = 300;
-    SANE_Word    y_resolution = 300;
-    bool         duplex = false;
-
-    wid = math_mm2px(dev->opt_br_x);
-    hei = math_mm2px(dev->opt_br_y);
-
-    const char *rq = g_strdup_printf(
-        "<?xml version='1.0' encoding='UTF-8'?>\n"
-        "<scan:ScanSettings\n"
-        "    xmlns:scan=\"http://schemas.hp.com/imaging/escl/2011/05/03\"\n"
-        "    xmlns:pwg=\"http://www.pwg.org/schemas/2010/12/sm\">\n"
-        "  <pwg:Version>2.6</pwg:Version>\n"
-        "  <pwg:ScanRegions>\n"
-        "    <pwg:ScanRegion>\n"
-        "      <pwg:XOffset>%d</pwg:XOffset>\n"
-        "      <pwg:YOffset>%d</pwg:YOffset>\n"
-        "      <pwg:Width>%d</pwg:Width>\n"
-        "      <pwg:Height>%d</pwg:Height>\n"
-        "      <pwg:ContentRegionUnits>escl:ThreeHundredthsOfInches</pwg:ContentRegionUnits>\n"
-        "    </pwg:ScanRegion>\n"
-        "  </pwg:ScanRegions>\n"
-        "  <scan:InputSource>%s</scan:InputSource>\n"
-        "  <pwg:InputSource>%s</pwg:InputSource>\n"
-        "  <scan:ColorMode>%s</scan:ColorMode>\n"
-        "  <scan:DocumentFormatExt>%s</scan:DocumentFormatExt>\n"
-        "  <scan:XResolution>%d</scan:XResolution>\n"
-        "  <scan:YResolution>%d</scan:YResolution>\n"
-        "  <scan:Duplex>%s</scan:Duplex>\n"
-        "</scan:ScanSettings>\n",
-        x_off,
-        y_off,
-        wid,
-        hei,
-        source,
-        source,
-        colormode,
-        mime,
-        x_resolution,
-        y_resolution,
-        duplex ? "true" : "false"
-    );
-
-    device_job_set_state(dev, DEVICE_JOB_REQUESTING);
-    device_http_perform(dev, "ScanJobs", "POST", rq, device_scanjobs_callback);
-}
-
-/* ScannerStatus callback
- */
-static void
-device_scannerstatus_callback (device *dev, SoupMessage *msg)
-{
-    const char  *err = NULL;
-    bool        idle;
-    SANE_Status status = SANE_STATUS_IO_ERROR;
-
-    /* Check request status */
-    if (!SOUP_STATUS_IS_SUCCESSFUL(msg->status_code)) {
-        err = "failed to load ScannerStatus";
-        goto DONE;
-    }
-
-    /* Parse XML response */
-    SoupBuffer *buf = soup_message_body_flatten(msg->response_body);
-    err = device_scannerstatus_parse(buf->data, buf->length, &idle);
-    soup_buffer_free(buf);
-
-    if (err != NULL) {
-        err = eloop_eprintf("ScannerStatus: %s", err);
-        goto DONE;
-    }
-
-    /* Check if scanned is idle */
-    if (!idle) {
-        err = "Scanner is busy";
-        status = SANE_STATUS_DEVICE_BUSY;
-        goto DONE;
-    }
-
-    /* Start scan job */
-    device_start_scan_job(dev);
-
-    /* Cleanup and exit */
-DONE:
-    if (err != NULL) {
-        device_job_set_state(dev, DEVICE_JOB_DONE);
-        device_job_set_status(dev, status);
-    }
-}
-
 /* Start scanning operation - runs on a context of event loop thread
  */
 static gboolean
@@ -1346,8 +1423,13 @@ device_start_do (gpointer data)
 
     g_assert(dev->job_location->len == 0);
 
-    device_job_set_state(dev, DEVICE_JOB_CHECK_STATUS);
-    device_http_get(dev, "ScannerStatus", device_scannerstatus_callback);
+    if (dev->job_cancel_rq) {
+        device_job_set_state(dev, DEVICE_JOB_DONE);
+        device_job_set_status(dev, SOUP_STATUS_CANCELLED);
+    } else {
+        device_job_set_state(dev, DEVICE_JOB_CHECK_STATUS);
+        device_escl_get_scannerstatus(dev);
+    }
 
     return FALSE;
 }
@@ -1363,6 +1445,8 @@ device_start (device *dev)
 
     device_job_set_state(dev, DEVICE_JOB_STARTED);
     dev->job_status = SANE_STATUS_GOOD;
+    dev->job_cancel_rq = false;
+
     eloop_call(device_start_do, dev);
 
     for (;;) {
