@@ -936,7 +936,9 @@ device_escl_start_scan (device *dev)
     const char   *source = "Platen";
     //const char   *source = "Feeder";
     const char   *colormode = "RGB24";
+    //const char   *colormode = "BlackAndWhite1";
     const char   *mime = "image/jpeg";
+    //const char   *mime = "application/pdf";
     SANE_Word    x_resolution = 300;
     SANE_Word    y_resolution = 300;
     bool         duplex = false;
