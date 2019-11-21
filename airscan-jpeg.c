@@ -8,10 +8,15 @@
 
 #include "airscan.h"
 
+#include <jpeglib.h>
+
 /* JPEG image decoder
  */
 typedef struct {
-    image_decoder decoder; /* Base class */
+    image_decoder                 decoder;  /* Base class */
+    struct jpeg_decompress_struct cinfo;    /* libjpeg decoder */
+    struct jpeg_error_mgr         jerr;     /* libjpeg error manager */
+    JDIMENSION                    num_rows; /* Num of rows left to read */
 } image_decoder_jpeg;
 
 /* Free JPEG decoder
@@ -21,6 +26,7 @@ image_decoder_jpeg_free (image_decoder *decoder)
 {
     image_decoder_jpeg *jpeg = (image_decoder_jpeg*) decoder;
 
+    jpeg_destroy_decompress(&jpeg->cinfo);
     g_free(jpeg);
 }
 
@@ -30,11 +36,24 @@ static bool
 image_decoder_jpeg_begin (image_decoder *decoder, const void *data,
         size_t size)
 {
-    (void) decoder;
-    (void) data;
-    (void) size;
+    image_decoder_jpeg *jpeg = (image_decoder_jpeg*) decoder;
+    int                rc;
 
-    return false;
+    jpeg_mem_src(&jpeg->cinfo, data, size);
+    rc = jpeg_read_header(&jpeg->cinfo, true);
+    if (rc != JPEG_HEADER_OK) {
+        jpeg_abort((j_common_ptr) &jpeg->cinfo);
+        return false;
+    }
+
+    if (jpeg->cinfo.num_components != 1) {
+        jpeg->cinfo.out_color_space = JCS_RGB;
+    }
+
+    jpeg_start_decompress(&jpeg->cinfo);
+    jpeg->num_rows = jpeg->cinfo.image_height;
+
+    return true;
 }
 
 /* Reset JPEG decoder
@@ -42,7 +61,9 @@ image_decoder_jpeg_begin (image_decoder *decoder, const void *data,
 static void
 image_decoder_jpeg_reset (image_decoder *decoder)
 {
-    (void) decoder;
+    image_decoder_jpeg *jpeg = (image_decoder_jpeg*) decoder;
+
+    jpeg_abort((j_common_ptr) &jpeg->cinfo);
 }
 
 /* Get image parameters
@@ -50,8 +71,19 @@ image_decoder_jpeg_reset (image_decoder *decoder)
 static void
 image_decoder_jpeg_get_params (image_decoder *decoder, SANE_Parameters *params)
 {
-    (void) decoder;
-    (void) params;
+    image_decoder_jpeg *jpeg = (image_decoder_jpeg*) decoder;
+
+    params->pixels_per_line = jpeg->cinfo.image_width;
+    params->lines = jpeg->cinfo.image_height;
+    params->depth = 9;
+
+    if (jpeg->cinfo.num_components == 1) {
+        params->format = SANE_FRAME_GRAY;
+        params->bytes_per_line = params->pixels_per_line;
+    } else {
+        params->format = SANE_FRAME_RGB;
+        params->bytes_per_line = params->pixels_per_line * 3;
+    }
 }
 
 /* Set clipping window
@@ -59,8 +91,19 @@ image_decoder_jpeg_get_params (image_decoder *decoder, SANE_Parameters *params)
 static void
 image_decoder_jpeg_set_window (image_decoder *decoder, image_window *win)
 {
-    (void) decoder;
-    (void) win;
+    image_decoder_jpeg *jpeg = (image_decoder_jpeg*) decoder;
+    JDIMENSION         x_off = win->x_off;
+    JDIMENSION         wid = win->wid;
+
+    jpeg_crop_scanline(&jpeg->cinfo, &x_off, &wid);
+    if (win->y_off > 0) {
+        jpeg_skip_scanlines(&jpeg->cinfo, win->y_off);
+    }
+
+    jpeg->num_rows = win->hei;
+
+    win->x_off = x_off;
+    win->wid = wid;
 }
 
 /* Read next row of image
@@ -68,9 +111,20 @@ image_decoder_jpeg_set_window (image_decoder *decoder, image_window *win)
 static bool
 image_decoder_jpeg_read_row (image_decoder *decoder, void *buffer)
 {
-    (void) decoder;
-    (void) buffer;
-    return false;
+    image_decoder_jpeg *jpeg = (image_decoder_jpeg*) decoder;
+    JSAMPROW           rows[1] = {buffer};
+
+    if (!jpeg->num_rows) {
+        return false;
+    }
+
+    if (jpeg_read_scanlines(&jpeg->cinfo, rows, 1) == 0) {
+        return false;
+    }
+
+    jpeg->num_rows --;
+
+    return true;
 }
 
 /* Create JPEG image decoder
@@ -86,6 +140,9 @@ image_decoder_jpeg_new (void)
     jpeg->decoder.get_params = image_decoder_jpeg_get_params;
     jpeg->decoder.set_window = image_decoder_jpeg_set_window;
     jpeg->decoder.read_row = image_decoder_jpeg_read_row;
+
+    jpeg->cinfo.err = jpeg_std_error(&jpeg->jerr);
+    jpeg_create_decompress(&jpeg->cinfo);
 
     return &jpeg->decoder;
 }
