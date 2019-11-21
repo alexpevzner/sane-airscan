@@ -9,7 +9,6 @@
 #include "airscan.h"
 
 #include <glib-unix.h>
-#include <sys/eventfd.h>
 
 /* Static variables
  */
@@ -173,8 +172,8 @@ eloop_call (GSourceFunc func, gpointer data)
  * or even from a signal handler
  */
 struct eloop_event {
-    GSource source;             /* Underlying GSource */
-    int     efd;                /* Underlying eventfd */
+    GSource  source;            /* Underlying GSource */
+    pollable *p;                /* Underlying pollable event */
     void    (*callback)(void*); /* user-defined callback */
     void    *data;              /* callback's argument */
 };
@@ -185,10 +184,10 @@ gboolean
 eloop_event_callback (gpointer data)
 {
     eloop_event *event = data;
-    uint64_t unused;
 
-    read(event->efd, &unused, sizeof(unused));
+    pollable_reset(event->p);
     event->callback(event->data);
+
     return G_SOURCE_CONTINUE;
 }
 
@@ -208,22 +207,22 @@ eloop_event*
 eloop_event_new (void (*callback)(void *), void *data)
 {
     eloop_event         *event;
-    int                 efd;
+    pollable            *p;
     static GSourceFuncs funcs = {
         .dispatch = eloop_event_source_dispatch,
     };
 
-    efd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
-    if (efd< 0) {
+    p = pollable_new();
+    if (p == NULL) {
         return NULL;
     }
 
     event = (eloop_event*) g_source_new(&funcs, sizeof(eloop_event));
-    event->efd = efd;
+    event->p = p;
     event->callback = callback;
     event->data = data;
 
-    g_source_add_unix_fd(&event->source, event->efd, G_IO_IN);
+    g_source_add_unix_fd(&event->source, pollable_get_fd(event->p), G_IO_IN);
     g_source_set_callback(&event->source, eloop_event_callback, event, NULL);
     g_source_attach(&event->source, eloop_glib_main_context);
 
@@ -244,8 +243,7 @@ eloop_event_free (eloop_event *event)
 void
 eloop_event_trigger (eloop_event *event)
 {
-    uint64_t c = 1;
-    write(event->efd, &c, sizeof(c));
+    pollable_signal(event->p);
 }
 
 /* Format error string, as printf() does and save result

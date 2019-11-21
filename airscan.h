@@ -64,6 +64,48 @@ conf_load (void);
 void
 conf_free (void);
 
+/******************** Pollable events ********************/
+/* The pollable event
+ *
+ * Pollable events allow to wait until some event happens
+ * and can be used in combination with select()/poll()
+ * system calls
+ */
+typedef struct pollable pollable;
+
+/* Create new pollable event
+ */
+pollable*
+pollable_new (void);
+
+/* Free pollable event
+ */
+void
+pollable_free (pollable *p);
+
+/* Get file descriptor for poll()/select().
+ *
+ * When pollable event becomes "ready", this file descriptor
+ * becomes readable from the select/poll point of view
+ */
+int
+pollable_get_fd (pollable *p);
+
+/* Make pollable event "ready"
+ */
+void
+pollable_signal (pollable *p);
+
+/* Make pollable event "not ready"
+ */
+void
+pollable_reset (pollable *p);
+
+/* Wait until pollable event is ready
+ */
+void
+pollable_wait (pollable *p);
+
 /******************** Event loop ********************/
 /* Initialize event loop
  */

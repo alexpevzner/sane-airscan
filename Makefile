@@ -8,6 +8,7 @@ SRC	= \
 	airscan-jpeg.c \
 	airscan-math.c \
 	airscan-opt.c \
+	airscan-pollable.c \
 	airscan-trace.c \
 	airscan-xml.c \
 	airscan-zeroconf.c \
