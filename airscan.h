@@ -639,19 +639,18 @@ typedef struct {
  */
 typedef struct image_decoder image_decoder;
 struct image_decoder {
-    void        (*free) (image_decoder *decoder);
-    SANE_Status (*begin) (image_decoder *decoder, const void *data,
-            size_t size);
-    void        (*reset) (image_decoder *decoder);
-    void        (*get_params) (image_decoder *decoder, SANE_Parameters *params);
-    void        (*set_window) (image_decoder *decoder, image_window *win);
-    void        (*read_row) (image_decoder *decoder, void *buffer);
+    void (*free) (image_decoder *decoder);
+    bool (*begin) (image_decoder *decoder, const void *data, size_t size);
+    void (*reset) (image_decoder *decoder);
+    void (*get_params) (image_decoder *decoder, SANE_Parameters *params);
+    void (*set_window) (image_decoder *decoder, image_window *win);
+    bool (*read_row) (image_decoder *decoder, void *buffer);
 };
 
 /* Create JPEG image decoder
  */
 image_decoder*
-image_decoder_new_jpeg (void);
+image_decoder_jpeg_new (void);
 
 /* Free image decoder
  */
@@ -663,7 +662,7 @@ image_decoder_free (image_decoder *decoder)
 
 /* Begin image decoding
  */
-static inline SANE_Status
+static inline bool
 image_decoder_begin (image_decoder *decoder, const void *data, size_t size)
 {
     return decoder->begin(decoder, data, size);
@@ -712,10 +711,10 @@ image_decoder_set_window (image_decoder *decoder, image_window *win)
 /* Read next row of image. Decoder may safely assume the provided
  * buffer is big enough to keep the entire row
  */
-static inline void
+static inline bool
 image_decoder_read_row (image_decoder *decoder, void *buffer)
 {
-    decoder->read_row(decoder, buffer);
+    return decoder->read_row(decoder, buffer);
 }
 
 /******************** Mathematical Functions ********************/
