@@ -625,6 +625,99 @@ devcaps_source_choose_resolution(devcaps_source *src, SANE_Word wanted);
 OPT_COLORMODE
 devcaps_source_choose_colormode(devcaps_source *src, OPT_COLORMODE wanted);
 
+/******************** Image decoding ********************/
+/* The window withing the image
+ *
+ * Note, all sized and coordinates are in pixels
+ */
+typedef struct {
+    int x_off, y_off;  /* Top-left corner offset */
+    int wid, hei;      /* Image width and height */
+} image_window;
+
+/* Image decoder, with virtual methods
+ */
+typedef struct image_decoder image_decoder;
+struct image_decoder {
+    void        (*free) (image_decoder *decoder);
+    SANE_Status (*begin) (image_decoder *decoder, const void *data,
+            size_t size);
+    void        (*reset) (image_decoder *decoder);
+    void        (*get_params) (image_decoder *decoder, SANE_Parameters *params);
+    void        (*set_window) (image_decoder *decoder, image_window *win);
+    void        (*read_row) (image_decoder *decoder, void *buffer);
+};
+
+/* Create JPEG image decoder
+ */
+image_decoder*
+image_decoder_new_jpeg (void);
+
+/* Free image decoder
+ */
+static inline void
+image_decoder_free (image_decoder *decoder)
+{
+    decoder->free(decoder);
+}
+
+/* Begin image decoding
+ */
+static inline SANE_Status
+image_decoder_begin (image_decoder *decoder, const void *data, size_t size)
+{
+    return decoder->begin(decoder, data, size);
+}
+
+/* Reset image decoder after use. After reset, decoding of the
+ * another image can be started
+ */
+static inline void
+image_decoder_reset (image_decoder *decoder)
+{
+    decoder->reset(decoder);
+}
+
+/* Get image parameters. Can be called at any time between
+ * image_decoder_begin() and image_decoder_reset()
+ *
+ * Decoder must return an actual image parameters, regardless
+ * of clipping window set by image_decoder_set_window()
+ *
+ * Note, decoder should not fill params->last_frame
+ */
+static inline void
+image_decoder_get_params (image_decoder *decoder, SANE_Parameters *params)
+{
+    decoder->get_params(decoder, params);
+}
+
+/* Set window within the image. Only part of image that fits the
+ * window needs to be decoded. Decoder may assume that window is
+ * always within the actual image boundaries
+ *
+ * Note, if decoder cannot handle exact window boundaries, it
+ * it must update window to keep actual values
+ *
+ * In particular, if decoder doesn't implement image clipping
+ * at all, it is safe that decoder will simply set window boundaries
+ * to contain an entire image
+ */
+static inline void
+image_decoder_set_window (image_decoder *decoder, image_window *win)
+{
+    decoder->set_window(decoder, win);
+}
+
+/* Read next row of image. Decoder may safely assume the provided
+ * buffer is big enough to keep the entire row
+ */
+static inline void
+image_decoder_read_row (image_decoder *decoder, void *buffer)
+{
+    decoder->read_row(decoder, buffer);
+}
+
 /******************** Mathematical Functions ********************/
 /* Find greatest common divisor of two positive integers
  */
