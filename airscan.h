@@ -660,7 +660,8 @@ image_decoder_free (image_decoder *decoder)
     decoder->free(decoder);
 }
 
-/* Begin image decoding
+/* Begin image decoding. Decoder may assume that provided data
+ * buffer remains valid during a whole decoding cycle
  */
 static inline bool
 image_decoder_begin (image_decoder *decoder, const void *data, size_t size)
