@@ -32,7 +32,7 @@ image_decoder_jpeg_free (image_decoder *decoder)
 
 /* Begin JPEG decoding
  */
-static bool
+static IMAGE_STATUS
 image_decoder_jpeg_begin (image_decoder *decoder, const void *data,
         size_t size)
 {
@@ -43,7 +43,7 @@ image_decoder_jpeg_begin (image_decoder *decoder, const void *data,
     rc = jpeg_read_header(&jpeg->cinfo, true);
     if (rc != JPEG_HEADER_OK) {
         jpeg_abort((j_common_ptr) &jpeg->cinfo);
-        return false;
+        return IMAGE_ERROR;
     }
 
     if (jpeg->cinfo.num_components != 1) {
@@ -53,7 +53,7 @@ image_decoder_jpeg_begin (image_decoder *decoder, const void *data,
     jpeg_start_decompress(&jpeg->cinfo);
     jpeg->num_rows = jpeg->cinfo.image_height;
 
-    return true;
+    return IMAGE_OK;
 }
 
 /* Reset JPEG decoder
@@ -108,23 +108,23 @@ image_decoder_jpeg_set_window (image_decoder *decoder, image_window *win)
 
 /* Read next row of image
  */
-static bool
+static IMAGE_STATUS
 image_decoder_jpeg_read_row (image_decoder *decoder, void *buffer)
 {
     image_decoder_jpeg *jpeg = (image_decoder_jpeg*) decoder;
     JSAMPROW           rows[1] = {buffer};
 
     if (!jpeg->num_rows) {
-        return false;
+        return IMAGE_EOF;
     }
 
     if (jpeg_read_scanlines(&jpeg->cinfo, rows, 1) == 0) {
-        return false;
+        return IMAGE_ERROR;
     }
 
     jpeg->num_rows --;
 
-    return true;
+    return IMAGE_OK;
 }
 
 /* Create JPEG image decoder

@@ -594,7 +594,7 @@ enum {
 
     /* Supported document formats */
     DEVCAPS_SOURCE_FMT_JPEG = (1 << 9),  /* JPEG image */
-    DEVCAPS_SOURCE_FMT_PNG  = (1 << 10),  /* PNG image */
+    DEVCAPS_SOURCE_FMT_PNG  = (1 << 10), /* PNG image */
     DEVCAPS_SOURCE_FMT_PDF  = (1 << 11), /* PDF image */
 
     /* Miscellaneous flags */
@@ -668,6 +668,14 @@ OPT_COLORMODE
 devcaps_source_choose_colormode(devcaps_source *src, OPT_COLORMODE wanted);
 
 /******************** Image decoding ********************/
+/* Image decoding status
+ */
+typedef enum {
+    IMAGE_ERROR = -1, /* Decoding error */
+    IMAGE_EOF,        /* End of "file" */
+    IMAGE_OK          /* No error */
+} IMAGE_STATUS;
+
 /* The window withing the image
  *
  * Note, all sized and coordinates are in pixels
@@ -681,12 +689,14 @@ typedef struct {
  */
 typedef struct image_decoder image_decoder;
 struct image_decoder {
-    void (*free) (image_decoder *decoder);
-    bool (*begin) (image_decoder *decoder, const void *data, size_t size);
-    void (*reset) (image_decoder *decoder);
-    void (*get_params) (image_decoder *decoder, SANE_Parameters *params);
-    void (*set_window) (image_decoder *decoder, image_window *win);
-    bool (*read_row) (image_decoder *decoder, void *buffer);
+    void         (*free) (image_decoder *decoder);
+    IMAGE_STATUS (*begin) (image_decoder *decoder, const void *data,
+                         size_t size);
+    void         (*reset) (image_decoder *decoder);
+    void         (*get_params) (image_decoder *decoder,
+                         SANE_Parameters *params);
+    void         (*set_window) (image_decoder *decoder, image_window *win);
+    IMAGE_STATUS (*read_row) (image_decoder *decoder, void *buffer);
 };
 
 /* Create JPEG image decoder
@@ -705,7 +715,7 @@ image_decoder_free (image_decoder *decoder)
 /* Begin image decoding. Decoder may assume that provided data
  * buffer remains valid during a whole decoding cycle
  */
-static inline bool
+static inline IMAGE_STATUS
 image_decoder_begin (image_decoder *decoder, const void *data, size_t size)
 {
     return decoder->begin(decoder, data, size);
@@ -754,7 +764,7 @@ image_decoder_set_window (image_decoder *decoder, image_window *win)
 /* Read next row of image. Decoder may safely assume the provided
  * buffer is big enough to keep the entire row
  */
-static inline bool
+static inline IMAGE_STATUS
 image_decoder_read_row (image_decoder *decoder, void *buffer)
 {
     return decoder->read_row(decoder, buffer);
