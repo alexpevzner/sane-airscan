@@ -75,7 +75,7 @@ image_decoder_jpeg_get_params (image_decoder *decoder, SANE_Parameters *params)
 
     params->pixels_per_line = jpeg->cinfo.image_width;
     params->lines = jpeg->cinfo.image_height;
-    params->depth = 9;
+    params->depth = 8;
 
     if (jpeg->cinfo.num_components == 1) {
         params->format = SANE_FRAME_GRAY;
