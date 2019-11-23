@@ -69,7 +69,7 @@ struct device {
     DEVICE_JOB_STATE     job_state;         /* Scan job state */
     SANE_Status          job_status;        /* Job completion status */
     GString              *job_location;     /* Scanned page location */
-    GPtrArray            *job_images;       /* Array of SoupBuffer* */
+    GPtrArray            *job_image_array;  /* Array of SoupBuffer* */
     eloop_event          *job_cancel_event; /* Cancel event */
     bool                 job_cancel_rq;     /* Cancel requested */
     GCond                job_state_cond;    /* Signaled when state changed */
@@ -136,7 +136,7 @@ device_add (const char *name)
     dev->trace = trace_open(name);
 
     dev->job_location = g_string_new(NULL);
-    dev->job_images = g_ptr_array_new();
+    dev->job_image_array = g_ptr_array_new();
     g_cond_init(&dev->job_state_cond);
 
     dev->opt_src = OPT_SOURCE_UNKNOWN;
@@ -184,7 +184,7 @@ device_unref (device *dev)
         }
 
         g_string_free(dev->job_location, TRUE);
-        g_ptr_array_free(dev->job_images, TRUE);
+        g_ptr_array_free(dev->job_image_array, TRUE);
         g_cond_clear(&dev->job_state_cond);
 
         g_free(dev);
@@ -860,9 +860,9 @@ device_escl_load_page_callback (device *dev, SoupMessage *msg)
     /* Try to fetch next page until previous page fetched successfully */
     if (SOUP_STATUS_IS_SUCCESSFUL(msg->status_code)) {
         SoupBuffer *buf = soup_message_body_flatten(msg->response_body);
-        g_ptr_array_add(dev->job_images, buf);
+        g_ptr_array_add(dev->job_image_array, buf);
         device_escl_load_page(dev);
-    } else if (dev->job_images->len == 0) {
+    } else if (dev->job_image_array->len == 0) {
         device_job_set_state(dev, DEVICE_JOB_DONE);
         device_job_set_status(dev, SANE_STATUS_IO_ERROR);
     } else {
