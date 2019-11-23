@@ -217,7 +217,7 @@ sane_get_parameters (SANE_Handle handle, SANE_Parameters *params)
 SANE_Status
 sane_start (SANE_Handle handle)
 {
-    SANE_Status status = SANE_STATUS_UNSUPPORTED;
+    SANE_Status status;
     device *dev = (device*) handle;
 
     DBG_API_ENTER();
@@ -234,17 +234,16 @@ sane_start (SANE_Handle handle)
 /* Read scanned image
  */
 SANE_Status
-sane_read (SANE_Handle handle, SANE_Byte *data,
-           SANE_Int max_length, SANE_Int *length)
+sane_read (SANE_Handle handle, SANE_Byte *data, SANE_Int max_len, SANE_Int *len)
 {
     SANE_Status status = SANE_STATUS_UNSUPPORTED;
+    device *dev = (device*) handle;
 
     DBG_API_ENTER();
 
-    (void) handle;
-    (void) data;
-    (void) max_length;
-    (void) length;
+    eloop_mutex_lock();
+    status = device_read(dev, data, max_len, len);
+    eloop_mutex_unlock();
 
     DBG_API_LEAVE(status);
 

@@ -547,6 +547,11 @@ device_start (device *dev);
 void
 device_cancel (device *dev);
 
+/* Read scanned image
+ */
+SANE_Status
+device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len);
+
 /* Device found notification -- called by ZeroConf
  */
 void
