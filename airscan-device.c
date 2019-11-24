@@ -71,6 +71,7 @@ struct device {
     GString              *job_location;     /* Scanned page location */
     eloop_event          *job_cancel_event; /* Cancel event */
     bool                 job_cancel_rq;     /* Cancel requested */
+    unsigned int         job_images_cnt;    /* How many images received */
     GCond                job_state_cond;    /* Signaled when state changed */
 
     /* Read machinery */
@@ -116,6 +117,9 @@ device_job_set_state (device *dev, DEVICE_JOB_STATE state);
 
 static void
 device_job_set_status (device *dev, SANE_Status status);
+
+static void
+device_job_abort (device *dev, SANE_Status status);
 
 static void
 device_escl_load_page (device *dev);
@@ -883,9 +887,8 @@ device_escl_load_page_callback (device *dev, SoupMessage *msg)
         SoupBuffer *buf = soup_message_body_flatten(msg->response_body);
         device_read_push(dev, buf);
         device_escl_load_page(dev);
-    } else if (dev->read_images->len == 0) {
-        device_job_set_state(dev, DEVICE_JOB_DONE);
-        device_job_set_status(dev, SANE_STATUS_IO_ERROR);
+    } else if (dev->job_images_cnt == 0) {
+        device_job_abort(dev, SANE_STATUS_IO_ERROR);
     } else {
         /* Just in case, delete the job */
         device_job_set_state(dev, DEVICE_JOB_CLEANING_UP);
@@ -1096,11 +1099,31 @@ device_escl_get_scannerstatus (device *dev)
 }
 
 /******************** Scan Job management ********************/
-/* Set job_state (and job_status)
+/* Get job state name, for debugging
+ */
+static inline const char*
+device_job_state_name (DEVICE_JOB_STATE state)
+{
+    switch (state) {
+    case DEVICE_JOB_IDLE:         return "JOB_IDLE";
+    case DEVICE_JOB_STARTED:      return "JOB_STARTED";
+    case DEVICE_JOB_CHECK_STATUS: return "JOB_CHECK_STATUS";
+    case DEVICE_JOB_REQUESTING:   return "JOB_REQUESTING";
+    case DEVICE_JOB_LOADING:      return "JOB_LOADING";
+    case DEVICE_JOB_CLEANING_UP:  return "JOB_CLEANING_UP";
+    case DEVICE_JOB_DONE:         return "JOB_DONE";
+    }
+
+    return "UNKNOWN";
+}
+
+/* Set job_state
  */
 static void
 device_job_set_state (device *dev, DEVICE_JOB_STATE state)
 {
+    DBG_DEVICE(dev->name, "job_state=%s", device_job_state_name(state));
+
     dev->job_state = state;
     g_cond_broadcast(&dev->job_state_cond);
     device_read_state_change(dev);
@@ -1113,6 +1136,7 @@ static void
 device_job_set_status (device *dev, SANE_Status status)
 {
     if (dev->job_status == SANE_STATUS_GOOD) {
+        DBG_DEVICE(dev->name, "job_status=%s", sane_strstatus(status));
         dev->job_status = status;
     }
 }
@@ -1122,6 +1146,8 @@ device_job_set_status (device *dev, SANE_Status status)
 static void
 device_job_abort (device *dev, SANE_Status status)
 {
+    DBG_DEVICE(dev->name, "job aborted: %s", sane_strstatus(status));
+
     if (dev->job_cancel_rq) {
         return; /* We are working on it */
     }
@@ -1469,6 +1495,7 @@ device_start (device *dev)
     device_job_set_state(dev, DEVICE_JOB_STARTED);
     dev->job_status = SANE_STATUS_GOOD;
     dev->job_cancel_rq = false;
+    dev->job_images_cnt = 0;
 
     eloop_call(device_start_do, dev);
 
@@ -1561,6 +1588,8 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
     SANE_Int     len;
     IMAGE_STATUS img_sts;
 
+    *len_out = 0; /* Must return 0, if status is not GOOD */
+
     /* Check device state */
     if (dev->job_state == DEVICE_JOB_IDLE) {
         return SANE_STATUS_INVAL;
@@ -1574,7 +1603,9 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
     /* Wait until device is ready */
 WAIT:
     while (device_read_would_block(dev)) {
+        eloop_mutex_unlock();
         pollable_wait(dev->read_pollable);
+        eloop_mutex_lock();
     }
 
     if (dev->job_status != SANE_STATUS_GOOD) {
@@ -1609,6 +1640,7 @@ WAIT:
         if (dev->read_line_off == dev->read_line_size) {
             img_sts = image_decoder_read_row(dev->read_decoder_jpeg,
                 dev->read_line);
+            dev->read_line_off = 0;
         } else {
             SANE_Int sz = math_min(max_len - len,
                 dev->read_line_size - dev->read_line_off);
@@ -1620,7 +1652,17 @@ WAIT:
         }
     }
 
-    return SANE_STATUS_UNSUPPORTED;
+    if (img_sts == IMAGE_ERROR) {
+        return SANE_STATUS_IO_ERROR;
+    }
+
+    *len_out = len;
+
+    if (img_sts == IMAGE_EOF || len == 0) {
+        return SANE_STATUS_EOF;
+    }
+
+    return SANE_STATUS_GOOD;
 }
 
 /******************** Device discovery events ********************/
