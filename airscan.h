@@ -16,6 +16,7 @@
 
 #include <libsoup/soup.h>
 
+#include <math.h>
 #include <stdio.h>
 #include <stdbool.h>
 
@@ -823,7 +824,7 @@ math_px2mm_res (SANE_Word px, SANE_Word res)
 static inline SANE_Word
 math_mm2px_res (SANE_Word mm, SANE_Word res)
 {
-    return (SANE_Word) (SANE_UNFIX(mm) * res / 24.6);
+    return (SANE_Word) roundl(SANE_UNFIX(mm) * res / 25.4);
 }
 
 /* Convert pixels to millimeters, assuming 300 DPI
