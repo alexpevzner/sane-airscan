@@ -125,7 +125,7 @@ device_job_abort (device *dev, SANE_Status status);
 static void
 device_escl_load_page (device *dev);
 
-static void
+static bool
 device_read_push (device *dev);
 
 static void
@@ -892,15 +892,19 @@ device_escl_load_page_callback (device *dev, SoupMessage *msg)
         g_ptr_array_add(dev->job_images, buf);
         dev->job_images_received ++;
 
+        if (dev->job_images_received == 1) {
+            if (!device_read_push(dev)) {
+                device_job_abort(dev, SANE_STATUS_IO_ERROR);
+                return;
+            }
+        }
+
         if (dev->opt_src == OPT_SOURCE_PLATEN) {
             device_escl_cleanup(dev);
         } else {
             device_escl_load_page(dev);
         }
 
-        if (dev->job_images_received == 1) {
-            device_read_push(dev);
-        }
     } else if (dev->job_images_received == 0) {
         device_job_abort(dev, SANE_STATUS_IO_ERROR);
     } else {
@@ -1515,11 +1519,22 @@ device_start (device *dev)
     if (dev->job_state != DEVICE_JOB_IDLE) {
         if (dev->job_images->len != 0) {
             /* We have more buffered images */
-            device_read_push(dev);
-            return SANE_STATUS_GOOD;
-        } else if (dev->job_state != DEVICE_JOB_DONE) {
-            /* Just wait until previous job completion */
+            if (device_read_push(dev)) {
+                return SANE_STATUS_GOOD;
+            }
+
+            device_job_set_status(dev, SANE_STATUS_IO_ERROR);
+            device_cancel(dev);
+        }
+
+        /* Just wait until previous job completion */
+        while (dev->job_state != DEVICE_JOB_DONE) {
             eloop_cond_wait(&dev->job_state_cond);
+        }
+
+        if (dev->job_status != SANE_STATUS_GOOD) {
+            device_job_set_state(dev, DEVICE_JOB_IDLE);
+            return dev->job_status;
         }
     }
 
@@ -1555,13 +1570,33 @@ device_cancel (device *dev)
 }
 
 /******************** Read machinery ********************/
-/* Push next image to reader
+/* Push next image to reader. Returns false, if image
+ * decoding cannot be started
  */
-static void
+static bool
 device_read_push (device *dev)
 {
+    SANE_Parameters params;
+    IMAGE_STATUS    image_status;
+
     dev->read_image = g_ptr_array_remove_index(dev->job_images, 0);
+
+    /* Start new image decoding */
+    image_status = image_decoder_begin(dev->read_decoder_jpeg,
+            dev->read_image->data, dev->read_image->length);
+
+    if (image_status != IMAGE_OK) {
+        return false;
+    }
+
+    /* Allocate line buffer */
+    image_decoder_get_params(dev->read_decoder_jpeg, &params);
+    dev->read_line = g_malloc(params.bytes_per_line);
+    dev->read_line_size = params.bytes_per_line;
+    dev->read_line_off = params.bytes_per_line;
+
     pollable_signal(dev->read_pollable);
+    return true;
 }
 
 /* Notify read machinery on job state change
@@ -1616,25 +1651,6 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
 
     if (dev->job_status == SANE_STATUS_CANCELLED || dev->read_image == NULL) {
         goto DONE;
-    }
-
-    /* Start new image? */
-    if (dev->read_line == NULL) {
-        SANE_Parameters params;
-
-        /* Start new image */
-        image_status = image_decoder_begin(dev->read_decoder_jpeg,
-                dev->read_image->data, dev->read_image->length);
-        if (image_status != IMAGE_OK) {
-            device_job_set_status(dev, SANE_STATUS_IO_ERROR);
-            goto DONE;
-        }
-
-        /* Allocate line buffer */
-        image_decoder_get_params(dev->read_decoder_jpeg, &params);
-        dev->read_line = g_malloc(params.bytes_per_line);
-        dev->read_line_size = params.bytes_per_line;
-        dev->read_line_off = params.bytes_per_line;
     }
 
     /* Read line by line */
