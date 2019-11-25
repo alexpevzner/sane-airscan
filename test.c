@@ -40,6 +40,8 @@ check (SANE_Status status, const char *operation)
 void
 main (void)
 {
+    SANE_Parameters params;
+
     struct sigaction act = {
         .sa_handler = sigint_handler,
     };
@@ -48,6 +50,8 @@ main (void)
 
     TRY(sane_init, NULL, NULL);
     TRY(sane_open, "", &handle);
+    TRY(sane_get_parameters, handle, &params);
+    printf("image size: %dx%d\n", params.pixels_per_line, params.lines);
     TRY(sane_start,handle);
 
     SANE_Status s;
@@ -60,9 +64,9 @@ main (void)
             break;
         }
 
-        printf("Got %d bytes of data\n", len);
         count += len;
     }
+    printf("Got %d bytes of data\n", count);
 
     getchar();
 
