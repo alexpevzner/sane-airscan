@@ -31,6 +31,7 @@ enum {
     DEVICE_INIT_WAIT        = (1 << 4), /* Device was found during initial
                                            scan and not ready yet */
     DEVICE_OPENED           = (1 << 5), /* Device currently opened */
+    DEVICE_SCANNING         = (1 << 6), /* Scan in progress */
     DEVICE_ALL_FLAGS        = 0xffffffff
 };
 
@@ -66,20 +67,20 @@ struct device {
     trace                *trace;        /* Protocol trace */
 
     /* Scanning state machinery */
-    DEVICE_JOB_STATE     job_state;         /* Scan job state */
-    SANE_Status          job_status;        /* Job completion status */
-    GString              *job_location;     /* Scanned page location */
-    eloop_event          *job_cancel_event; /* Cancel event */
-    bool                 job_cancel_rq;     /* Cancel requested */
-    unsigned int         job_images_cnt;    /* How many images received */
-    GCond                job_state_cond;    /* Signaled when state changed */
+    DEVICE_JOB_STATE     job_state;           /* Scan job state */
+    SANE_Status          job_status;          /* Job completion status */
+    GString              *job_location;       /* Scanned page location */
+    eloop_event          *job_cancel_event;   /* Cancel event */
+    bool                 job_cancel_rq;       /* Cancel requested */
+    GPtrArray            *job_images;         /* Array of SoupBuffer* */
+    unsigned int         job_images_received; /* How many images received */
+    GCond                job_state_cond;      /* Signaled when state changed */
 
     /* Read machinery */
-    GPtrArray            *read_images;       /* Array of SoupBuffer* */
     image_decoder        *read_decoder_jpeg; /* JPEG decoder */
     pollable             *read_pollable;     /* Signalled when read won't
                                                 block */
-    SoupBuffer           *read_current;      /* Current image */
+    SoupBuffer           *read_image;        /* Current image */
     SANE_Byte            *read_line;         /* Single-line buffer */
     size_t               read_line_size;     /* Size of single line */
     size_t               read_line_off;      /* Offset in the line */
@@ -125,7 +126,7 @@ static void
 device_escl_load_page (device *dev);
 
 static void
-device_read_push (device *dev, SoupBuffer *buf);
+device_read_push (device *dev);
 
 static void
 device_read_state_change (device *dev);
@@ -156,8 +157,8 @@ device_add (const char *name)
 
     dev->job_location = g_string_new(NULL);
     g_cond_init(&dev->job_state_cond);
+    dev->job_images = g_ptr_array_new();
 
-    dev->read_images = g_ptr_array_new();
     dev->read_decoder_jpeg = image_decoder_jpeg_new();
     dev->read_pollable = pollable_new();
 
@@ -207,8 +208,8 @@ device_unref (device *dev)
 
         g_string_free(dev->job_location, TRUE);
         g_cond_clear(&dev->job_state_cond);
+        g_ptr_array_free(dev->job_images, TRUE);
 
-        g_ptr_array_free(dev->read_images, TRUE);
         image_decoder_free(dev->read_decoder_jpeg);
         pollable_free(dev->read_pollable);
 
@@ -852,7 +853,7 @@ device_http_cancel (device *dev)
 /* HTTP DELETE ${dev->job_location} callback
  */
 static void
-device_escl_delete_callback (device *dev, SoupMessage *msg)
+device_escl_cleanup_callback (device *dev, SoupMessage *msg)
 {
     (void) msg;
 
@@ -864,10 +865,12 @@ device_escl_delete_callback (device *dev, SoupMessage *msg)
  * HTTP DELETE ${dev->job_location}
  */
 static void
-device_escl_delete (device *dev)
+device_escl_cleanup (device *dev)
 {
+    device_job_set_state(dev, DEVICE_JOB_CLEANING_UP);
+
     device_http_perform(dev, dev->job_location->str, "DELETE", NULL,
-            device_escl_delete_callback);
+            device_escl_cleanup_callback);
 }
 
 /* HTTP GET ${dev->job_location}/NextDocument callback
@@ -885,14 +888,23 @@ device_escl_load_page_callback (device *dev, SoupMessage *msg)
     /* Try to fetch next page until previous page fetched successfully */
     if (SOUP_STATUS_IS_SUCCESSFUL(msg->status_code)) {
         SoupBuffer *buf = soup_message_body_flatten(msg->response_body);
-        device_read_push(dev, buf);
-        device_escl_load_page(dev);
-    } else if (dev->job_images_cnt == 0) {
+
+        g_ptr_array_add(dev->job_images, buf);
+        dev->job_images_received ++;
+
+        if (dev->opt_src == OPT_SOURCE_PLATEN) {
+            device_escl_cleanup(dev);
+        } else {
+            device_escl_load_page(dev);
+        }
+
+        if (dev->job_images_received == 1) {
+            device_read_push(dev);
+        }
+    } else if (dev->job_images_received == 0) {
         device_job_abort(dev, SANE_STATUS_IO_ERROR);
     } else {
-        /* Just in case, delete the job */
-        device_job_set_state(dev, DEVICE_JOB_CLEANING_UP);
-        device_escl_delete(dev);
+        device_escl_cleanup(dev);
     }
 }
 
@@ -907,8 +919,10 @@ device_escl_load_page (device *dev)
     if (sz == 0 || dev->job_location->str[sz-1] != '/') {
         g_string_append_c(dev->job_location, '/');
     }
-
     g_string_append(dev->job_location, "NextDocument");
+
+    device_job_set_state(dev, DEVICE_JOB_LOADING);
+
     device_http_get(dev, dev->job_location->str, device_escl_load_page_callback);
     g_string_truncate(dev->job_location, sz);
 }
@@ -932,11 +946,9 @@ device_escl_start_scan_callback (device *dev, SoupMessage *msg)
     g_string_assign(dev->job_location, location);
 
     if (dev->job_cancel_rq) {
-        device_job_set_state(dev, DEVICE_JOB_CLEANING_UP);
         device_job_set_status(dev, SANE_STATUS_CANCELLED);
-        device_escl_delete(dev);
+        device_escl_cleanup(dev);
     } else {
-        device_job_set_state(dev, DEVICE_JOB_LOADING);
         device_escl_load_page(dev);
     }
 
@@ -1094,6 +1106,8 @@ DONE:
 static void
 device_escl_get_scannerstatus (device *dev)
 {
+    device_job_set_state(dev, DEVICE_JOB_CHECK_STATUS);
+
     device_http_get(dev, "ScannerStatus",
             device_escl_get_scannerstatus_callback);
 }
@@ -1122,11 +1136,13 @@ device_job_state_name (DEVICE_JOB_STATE state)
 static void
 device_job_set_state (device *dev, DEVICE_JOB_STATE state)
 {
-    DBG_DEVICE(dev->name, "job_state=%s", device_job_state_name(state));
+    if (dev->job_state != state) {
+        DBG_DEVICE(dev->name, "job_state=%s", device_job_state_name(state));
 
-    dev->job_state = state;
-    g_cond_broadcast(&dev->job_state_cond);
-    device_read_state_change(dev);
+        dev->job_state = state;
+        g_cond_broadcast(&dev->job_state_cond);
+        device_read_state_change(dev);
+    }
 }
 
 /* Set job status. If status already set, it will not be
@@ -1135,7 +1151,8 @@ device_job_set_state (device *dev, DEVICE_JOB_STATE state)
 static void
 device_job_set_status (device *dev, SANE_Status status)
 {
-    if (dev->job_status == SANE_STATUS_GOOD) {
+    if (dev->job_status == SANE_STATUS_GOOD ||
+        status == SANE_STATUS_CANCELLED) {
         DBG_DEVICE(dev->name, "job_status=%s", sane_strstatus(status));
         dev->job_status = status;
     }
@@ -1170,8 +1187,7 @@ device_job_abort (device *dev, SANE_Status status)
         device_job_set_status(dev, status);
 
         if (dev->job_state == DEVICE_JOB_LOADING) {
-            device_job_set_state(dev, DEVICE_JOB_CLEANING_UP);
-            device_escl_delete(dev);
+            device_escl_cleanup(dev);
         } else if (dev->job_state != DEVICE_JOB_CLEANING_UP) {
             device_job_set_state(dev, DEVICE_JOB_DONE);
         }
@@ -1476,7 +1492,6 @@ device_start_do (gpointer data)
         device_job_set_state(dev, DEVICE_JOB_DONE);
         device_job_set_status(dev, SOUP_STATUS_CANCELLED);
     } else {
-        device_job_set_state(dev, DEVICE_JOB_CHECK_STATUS);
         device_escl_get_scannerstatus(dev);
     }
 
@@ -1488,30 +1503,45 @@ device_start_do (gpointer data)
 SANE_Status
 device_start (device *dev)
 {
-    if (dev->job_state != DEVICE_JOB_IDLE) {
+    /* Already scanning? */
+    if ((dev->flags & DEVICE_SCANNING) != 0) {
         return SANE_STATUS_DEVICE_BUSY;
     }
 
-    device_job_set_state(dev, DEVICE_JOB_STARTED);
-    dev->job_status = SANE_STATUS_GOOD;
-    dev->job_cancel_rq = false;
-    dev->job_images_cnt = 0;
+    dev->flags |= DEVICE_SCANNING;
 
-    eloop_call(device_start_do, dev);
-
-    for (;;) {
-        switch (dev->job_state) {
-        case DEVICE_JOB_LOADING:
+    /* Previous multi-page scan job may still be running. Check
+     * its state */
+    if (dev->job_state != DEVICE_JOB_IDLE) {
+        if (dev->job_images->len != 0) {
+            /* We have more buffered images */
+            device_read_push(dev);
             return SANE_STATUS_GOOD;
-
-        case DEVICE_JOB_DONE:
-            device_job_set_state(dev, DEVICE_JOB_IDLE);
-            return dev->job_status;
-
-        default:
+        } else if (dev->job_state != DEVICE_JOB_DONE) {
+            /* Just wait until previous job completion */
             eloop_cond_wait(&dev->job_state_cond);
         }
     }
+
+    /* Start new scan job */
+    device_job_set_state(dev, DEVICE_JOB_STARTED);
+    dev->job_status = SANE_STATUS_GOOD;
+    dev->job_cancel_rq = false;
+    dev->job_images_received = 0;
+
+    eloop_call(device_start_do, dev);
+
+    /* And wait until it reaches "LOADING" state */
+    while (dev->job_state != DEVICE_JOB_LOADING) {
+        if (dev->job_state == DEVICE_JOB_DONE) {
+            device_job_set_state(dev, DEVICE_JOB_IDLE);
+            return dev->job_status;
+        }
+
+        eloop_cond_wait(&dev->job_state_cond);
+    }
+
+    return SANE_STATUS_GOOD;
 }
 
 /* Cancel scanning operation
@@ -1525,12 +1555,12 @@ device_cancel (device *dev)
 }
 
 /******************** Read machinery ********************/
-/* Push next image into read_images array
+/* Push next image to reader
  */
 static void
-device_read_push (device *dev, SoupBuffer *buf)
+device_read_push (device *dev)
 {
-    g_ptr_array_add(dev->read_images, buf);
+    dev->read_image = g_ptr_array_remove_index(dev->job_images, 0);
     pollable_signal(dev->read_pollable);
 }
 
@@ -1557,41 +1587,18 @@ device_read_state_change (device *dev)
     }
 }
 
-/* Finish with read
- */
-static void
-device_read_finish (device *dev)
-{
-    (void) dev;
-}
-
-/* Check if read should block
- */
-static bool
-device_read_would_block (device *dev)
-{
-    if (dev->job_status != SANE_STATUS_GOOD) {
-        /* If status is not GOOD, wait until job is done */
-        return dev->job_state != DEVICE_JOB_DONE;
-    } else {
-        /* Otherwise, wait until data is available */
-        return dev->read_images->len == 0;
-    }
-
-}
-
 /* Read scanned image
  */
 SANE_Status
 device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
 {
-    SANE_Int     len;
-    IMAGE_STATUS img_sts;
+    SANE_Int     len = 0;
+    IMAGE_STATUS image_status = IMAGE_OK;
 
     *len_out = 0; /* Must return 0, if status is not GOOD */
 
     /* Check device state */
-    if (dev->job_state == DEVICE_JOB_IDLE) {
+    if ((dev->flags & DEVICE_SCANNING) == 0) {
         return SANE_STATUS_INVAL;
     }
 
@@ -1601,30 +1608,26 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
     }
 
     /* Wait until device is ready */
-WAIT:
-    while (device_read_would_block(dev)) {
+    while (dev->read_image == NULL && dev->job_state != DEVICE_JOB_DONE) {
         eloop_mutex_unlock();
         pollable_wait(dev->read_pollable);
         eloop_mutex_lock();
     }
 
-    if (dev->job_status != SANE_STATUS_GOOD) {
-        device_read_finish(dev);
-        return dev->job_status;
+    if (dev->job_status == SANE_STATUS_CANCELLED || dev->read_image == NULL) {
+        goto DONE;
     }
 
     /* Start new image? */
-    if (dev->read_current == NULL) {
+    if (dev->read_line == NULL) {
         SANE_Parameters params;
 
-        dev->read_current = g_ptr_array_remove_index(dev->read_images, 0);
-
         /* Start new image */
-        img_sts = image_decoder_begin(dev->read_decoder_jpeg,
-                dev->read_current->data, dev->read_current->length);
-        if (img_sts != IMAGE_OK) {
-            device_job_abort(dev, SANE_STATUS_IO_ERROR);
-            goto WAIT;
+        image_status = image_decoder_begin(dev->read_decoder_jpeg,
+                dev->read_image->data, dev->read_image->length);
+        if (image_status != IMAGE_OK) {
+            device_job_set_status(dev, SANE_STATUS_IO_ERROR);
+            goto DONE;
         }
 
         /* Allocate line buffer */
@@ -1635,12 +1638,14 @@ WAIT:
     }
 
     /* Read line by line */
-    img_sts = IMAGE_OK;
-    for (len = 0; img_sts == IMAGE_OK && len < max_len; ) {
+    image_status = IMAGE_OK;
+    for (len = 0; image_status == IMAGE_OK && len < max_len; ) {
         if (dev->read_line_off == dev->read_line_size) {
-            img_sts = image_decoder_read_row(dev->read_decoder_jpeg,
+            image_status = image_decoder_read_row(dev->read_decoder_jpeg,
                 dev->read_line);
-            dev->read_line_off = 0;
+            if (image_status == IMAGE_OK) {
+                dev->read_line_off = 0;
+            }
         } else {
             SANE_Int sz = math_min(max_len - len,
                 dev->read_line_size - dev->read_line_off);
@@ -1652,17 +1657,32 @@ WAIT:
         }
     }
 
-    if (img_sts == IMAGE_ERROR) {
-        return SANE_STATUS_IO_ERROR;
+    /* Cleanup and exit */
+DONE:
+    if (image_status == IMAGE_ERROR) {
+        device_job_set_status(dev, SANE_STATUS_IO_ERROR);
+        device_cancel(dev);
+        len = 0;
     }
 
-    *len_out = len;
+    if (dev->job_status == SANE_STATUS_CANCELLED) {
+        len = 0;
+    }
 
-    if (img_sts == IMAGE_EOF || len == 0) {
+    if (len > 0) {
+        *len_out = len;
+        return SANE_STATUS_GOOD;
+    }
+
+    if (image_status == IMAGE_EOF) {
         return SANE_STATUS_EOF;
     }
 
-    return SANE_STATUS_GOOD;
+    dev->flags &= ~DEVICE_SCANNING;
+    g_free(dev->read_line);
+    dev->read_line = NULL;
+
+    return dev->job_status;
 }
 
 /******************** Device discovery events ********************/
