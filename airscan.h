@@ -740,8 +740,6 @@ image_decoder_reset (image_decoder *decoder)
  *
  * Decoder must return an actual image parameters, regardless
  * of clipping window set by image_decoder_set_window()
- *
- * Note, decoder should not fill params->last_frame
  */
 static inline void
 image_decoder_get_params (image_decoder *decoder, SANE_Parameters *params)

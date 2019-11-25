@@ -73,6 +73,7 @@ image_decoder_jpeg_get_params (image_decoder *decoder, SANE_Parameters *params)
 {
     image_decoder_jpeg *jpeg = (image_decoder_jpeg*) decoder;
 
+    params->last_frame = SANE_TRUE;
     params->pixels_per_line = jpeg->cinfo.image_width;
     params->lines = jpeg->cinfo.image_height;
     params->depth = 8;
