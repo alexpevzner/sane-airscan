@@ -198,14 +198,16 @@ DONE:
 SANE_Status
 sane_get_parameters (SANE_Handle handle, SANE_Parameters *params)
 {
-    SANE_Status status = SANE_STATUS_UNSUPPORTED;
+    SANE_Status status = SANE_STATUS_GOOD;
     device *dev = (device*) handle;
 
     DBG_API_ENTER();
 
-    eloop_mutex_lock();
-    status = device_get_parameters(dev, params);
-    eloop_mutex_unlock();
+    if (params != NULL) {
+        eloop_mutex_lock();
+        status = device_get_parameters(dev, params);
+        eloop_mutex_unlock();
+    }
 
     DBG_API_LEAVE(status);
 
