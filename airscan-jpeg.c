@@ -13,10 +13,10 @@
 /* JPEG image decoder
  */
 typedef struct {
-    image_decoder                 decoder;  /* Base class */
-    struct jpeg_decompress_struct cinfo;    /* libjpeg decoder */
-    struct jpeg_error_mgr         jerr;     /* libjpeg error manager */
-    JDIMENSION                    num_rows; /* Num of rows left to read */
+    image_decoder                 decoder;   /* Base class */
+    struct jpeg_decompress_struct cinfo;     /* libjpeg decoder */
+    struct jpeg_error_mgr         jerr;      /* libjpeg error manager */
+    JDIMENSION                    num_lines; /* Num of lines left to read */
 } image_decoder_jpeg;
 
 /* Free JPEG decoder
@@ -51,7 +51,7 @@ image_decoder_jpeg_begin (image_decoder *decoder, const void *data,
     }
 
     jpeg_start_decompress(&jpeg->cinfo);
-    jpeg->num_rows = jpeg->cinfo.image_height;
+    jpeg->num_lines = jpeg->cinfo.image_height;
 
     return IMAGE_OK;
 }
@@ -101,29 +101,29 @@ image_decoder_jpeg_set_window (image_decoder *decoder, image_window *win)
         jpeg_skip_scanlines(&jpeg->cinfo, win->y_off);
     }
 
-    jpeg->num_rows = win->hei;
+    jpeg->num_lines = win->hei;
 
     win->x_off = x_off;
     win->wid = wid;
 }
 
-/* Read next row of image
+/* Read next line of image
  */
 static IMAGE_STATUS
-image_decoder_jpeg_read_row (image_decoder *decoder, void *buffer)
+image_decoder_jpeg_read_line (image_decoder *decoder, void *buffer)
 {
     image_decoder_jpeg *jpeg = (image_decoder_jpeg*) decoder;
-    JSAMPROW           rows[1] = {buffer};
+    JSAMPROW           lines[1] = {buffer};
 
-    if (!jpeg->num_rows) {
+    if (!jpeg->num_lines) {
         return IMAGE_EOF;
     }
 
-    if (jpeg_read_scanlines(&jpeg->cinfo, rows, 1) == 0) {
+    if (jpeg_read_scanlines(&jpeg->cinfo, lines, 1) == 0) {
         return IMAGE_ERROR;
     }
 
-    jpeg->num_rows --;
+    jpeg->num_lines --;
 
     return IMAGE_OK;
 }
@@ -140,7 +140,7 @@ image_decoder_jpeg_new (void)
     jpeg->decoder.reset = image_decoder_jpeg_reset;
     jpeg->decoder.get_params = image_decoder_jpeg_get_params;
     jpeg->decoder.set_window = image_decoder_jpeg_set_window;
-    jpeg->decoder.read_row = image_decoder_jpeg_read_row;
+    jpeg->decoder.read_line = image_decoder_jpeg_read_line;
 
     jpeg->cinfo.err = jpeg_std_error(&jpeg->jerr);
     jpeg_create_decompress(&jpeg->cinfo);

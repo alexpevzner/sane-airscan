@@ -702,7 +702,7 @@ struct image_decoder {
     void         (*get_params) (image_decoder *decoder,
                          SANE_Parameters *params);
     void         (*set_window) (image_decoder *decoder, image_window *win);
-    IMAGE_STATUS (*read_row) (image_decoder *decoder, void *buffer);
+    IMAGE_STATUS (*read_line) (image_decoder *decoder, void *buffer);
 };
 
 /* Create JPEG image decoder
@@ -765,13 +765,13 @@ image_decoder_set_window (image_decoder *decoder, image_window *win)
     decoder->set_window(decoder, win);
 }
 
-/* Read next row of image. Decoder may safely assume the provided
- * buffer is big enough to keep the entire row
+/* Read next line of image. Decoder may safely assume the provided
+ * buffer is big enough to keep the entire line
  */
 static inline IMAGE_STATUS
-image_decoder_read_row (image_decoder *decoder, void *buffer)
+image_decoder_read_line (image_decoder *decoder, void *buffer)
 {
-    return decoder->read_row(decoder, buffer);
+    return decoder->read_line(decoder, buffer);
 }
 
 /******************** Mathematical Functions ********************/

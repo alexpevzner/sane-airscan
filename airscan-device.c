@@ -1672,7 +1672,7 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
     image_status = IMAGE_OK;
     for (len = 0; image_status == IMAGE_OK && len < max_len; ) {
         if (dev->read_line_off == dev->read_line_size) {
-            image_status = image_decoder_read_row(dev->read_decoder_jpeg,
+            image_status = image_decoder_read_line(dev->read_decoder_jpeg,
                 dev->read_line);
             if (image_status == IMAGE_OK) {
                 dev->read_line_off = 0;
