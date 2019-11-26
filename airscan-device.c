@@ -92,6 +92,7 @@ struct device {
     SANE_Word              opt_resolution;        /* Current resolution */
     SANE_Word              opt_tl_x, opt_tl_y;    /* Top-left x/y */
     SANE_Word              opt_br_x, opt_br_y;    /* Bottom-right x/y */
+    SANE_Parameters        opt_params;            /* Scan parameters */
 };
 
 /* Static variables
@@ -461,6 +462,44 @@ device_rebuild_opt_desc (device *dev)
     desc->constraint.range = &src->win_y_range;
 }
 
+/* Update scan parameters, according to the currently set
+ * scan options
+ */
+static void
+device_update_params (device *dev)
+{
+    SANE_Word wid = math_max(0, dev->opt_br_x - dev->opt_tl_x);
+    SANE_Word hei = math_max(0, dev->opt_br_y - dev->opt_tl_y);
+
+    dev->opt_params.last_frame = SANE_TRUE;
+    dev->opt_params.pixels_per_line = math_mm2px_res(wid, dev->opt_resolution);
+    dev->opt_params.lines = math_mm2px_res(hei, dev->opt_resolution);
+
+    switch (dev->opt_colormode) {
+    case OPT_COLORMODE_COLOR:
+        dev->opt_params.format = SANE_FRAME_RGB;
+        dev->opt_params.depth = 8;
+        dev->opt_params.bytes_per_line = dev->opt_params.pixels_per_line * 3;
+        break;
+
+    case OPT_COLORMODE_GRAYSCALE:
+        dev->opt_params.format = SANE_FRAME_GRAY;
+        dev->opt_params.depth = 8;
+        dev->opt_params.bytes_per_line = dev->opt_params.pixels_per_line;
+        break;
+
+    case OPT_COLORMODE_LINEART:
+        dev->opt_params.format = SANE_FRAME_GRAY;
+        dev->opt_params.depth = 1;
+        dev->opt_params.bytes_per_line =
+                ((dev->opt_params.pixels_per_line + 7) / 8) * 8;
+        break;
+
+    default:
+        g_assert(!"internal error");
+    }
+}
+
 /* Set current resolution
  */
 static SANE_Status
@@ -718,6 +757,7 @@ DONE:
 
         SANE_Word unused;
         device_set_source(dev, opt_src, &unused);
+        device_update_params(dev);
 
         dev->flags |= DEVICE_READY;
         dev->flags &= ~DEVICE_INIT_WAIT;
@@ -1441,6 +1481,11 @@ device_set_option (device *dev, SANE_Int option, void *value, SANE_Word *info)
         status = SANE_STATUS_INVAL;
     }
 
+    /* Update scan parameters, if needed */
+    if ((*info & SANE_INFO_RELOAD_PARAMS) != 0) {
+        device_update_params(dev);
+    }
+
     return status;
 }
 
@@ -1449,37 +1494,7 @@ device_set_option (device *dev, SANE_Int option, void *value, SANE_Word *info)
 SANE_Status
 device_get_parameters (device *dev, SANE_Parameters *params)
 {
-    SANE_Word wid = math_max(0, dev->opt_br_x - dev->opt_tl_x);
-    SANE_Word hei = math_max(0, dev->opt_br_y - dev->opt_tl_y);
-
-    params->last_frame = SANE_TRUE;
-    params->pixels_per_line = math_mm2px_res(wid, dev->opt_resolution);
-    params->lines = math_mm2px_res(hei, dev->opt_resolution);
-
-    switch (dev->opt_colormode) {
-    case OPT_COLORMODE_COLOR:
-        params->format = SANE_FRAME_RGB;
-        params->depth = 8;
-        params->bytes_per_line = params->pixels_per_line * 3;
-        break;
-
-    case OPT_COLORMODE_GRAYSCALE:
-        params->format = SANE_FRAME_GRAY;
-        params->depth = 8;
-        params->bytes_per_line = params->pixels_per_line;
-        break;
-
-    case OPT_COLORMODE_LINEART:
-        params->format = SANE_FRAME_GRAY;
-        params->depth = 1;
-        params->bytes_per_line = ((params->pixels_per_line + 7) / 8) * 8;
-        break;
-
-    default:
-        g_assert(!"internal error");
-    }
-
-
+    *params = dev->opt_params;
     return SANE_STATUS_GOOD;
 }
 
