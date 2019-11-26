@@ -146,7 +146,11 @@ sane_get_option_descriptor (SANE_Handle handle, SANE_Int option)
     const SANE_Option_Descriptor *desc;
 
     DBG_API_ENTER();
+
+    eloop_mutex_lock();
     desc = device_get_option_descriptor(dev, option);
+    eloop_mutex_unlock();
+
     DBG_API_LEAVE(desc ? SANE_STATUS_GOOD : SANE_STATUS_INVAL);
 
     return desc;
@@ -164,6 +168,8 @@ sane_control_option (SANE_Handle handle, SANE_Int option, SANE_Action action,
 
     DBG_API_ENTER();
 
+    eloop_mutex_lock();
+
     /* Roughly validate arguments */
     if (dev == NULL || value == NULL) {
         goto DONE;
@@ -179,18 +185,17 @@ sane_control_option (SANE_Handle handle, SANE_Int option, SANE_Action action,
     }
 
     /* Get/set the option */
-    eloop_mutex_lock();
     if (action == SANE_ACTION_GET_VALUE) {
         status = device_get_option(dev, option, value);
     } else {
         status = device_set_option(dev, option, value, info);
     }
-    eloop_mutex_unlock();
-
-    (void) info;
 
 DONE:
+    eloop_mutex_unlock();
+
     DBG_API_LEAVE(status);
+
     return status;
 }
 
@@ -259,6 +264,10 @@ void
 sane_cancel (SANE_Handle handle)
 {
     device *dev = handle;
+
+    /* Note, no mutex lock here. We can be called from
+     * signal handler. device_cancel() properly handles it
+     */
     device_cancel(dev);
 }
 
