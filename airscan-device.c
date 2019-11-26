@@ -1028,6 +1028,15 @@ device_escl_start_scan (device *dev)
     wid = math_mm2px(dev->opt_br_x);
     hei = math_mm2px(dev->opt_br_y);
 
+    trace_printf(dev->trace, "==============================");
+    trace_printf(dev->trace, "Starting scan, using the following parameters:");
+    trace_printf(dev->trace, "  source:         %s", source);
+    trace_printf(dev->trace, "  colormode:      %s", colormode);
+    trace_printf(dev->trace, "  image size:     %dx%d", wid, hei);
+    trace_printf(dev->trace, "  image X offset: %d", math_mm2px(dev->opt_tl_x));
+    trace_printf(dev->trace, "  image Y offset: %d", math_mm2px(dev->opt_tl_y));
+    trace_printf(dev->trace, "");
+
     const char *rq = g_strdup_printf(
         "<?xml version='1.0' encoding='UTF-8'?>\n"
         "<scan:ScanSettings\n"

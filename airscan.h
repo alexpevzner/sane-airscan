@@ -875,6 +875,11 @@ trace_close (trace *t);
 void
 trace_msg_hook (trace *t, SoupMessage *msg);
 
+/* Printf to the trace log
+ */
+void
+trace_printf (trace *t, const char *fmt, ...);
+
 #endif
 
 /* vim:ts=8:sw=4:et

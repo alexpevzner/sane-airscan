@@ -8,6 +8,8 @@
 
 #include "airscan.h"
 
+#include <stdarg.h>
+
 /* Trace file handle
  */
 struct  trace {
@@ -241,31 +243,48 @@ DONE:
 void
 trace_msg_hook (trace *t, SoupMessage *msg)
 {
-    SoupURI *uri = soup_message_get_uri(msg);
-    char *uri_str = soup_uri_to_string(uri, FALSE);
+    if (t != NULL) {
+        SoupURI *uri = soup_message_get_uri(msg);
+        char *uri_str = soup_uri_to_string(uri, FALSE);
 
-    fprintf(t->log, "==============================\n");
+        fprintf(t->log, "==============================\n");
 
-    /* Dump request */
-    fprintf(t->log, "%s %s\n",  msg->method, uri_str);
-    soup_message_headers_foreach(msg->request_headers,
+        /* Dump request */
+        fprintf(t->log, "%s %s\n",  msg->method, uri_str);
+        soup_message_headers_foreach(msg->request_headers,
+                trace_message_headers_foreach_callback, t);
+        fprintf(t->log, "\n");
+        trace_dump_body(t, msg->request_headers, msg->request_body, "-rq");
+
+        /* Dump response */
+        fprintf(t->log, "Status: %d %s\n", msg->status_code,
+                soup_status_get_phrase(msg->status_code));
+        soup_message_headers_foreach(msg->response_headers,
             trace_message_headers_foreach_callback, t);
-    fprintf(t->log, "\n");
-    trace_dump_body(t, msg->request_headers, msg->request_body, "-rq");
+        fprintf(t->log, "\n");
+        trace_dump_body(t, msg->response_headers, msg->response_body, "-rsp");
 
-    /* Dump response */
-    fprintf(t->log, "Status: %d %s\n", msg->status_code,
-            soup_status_get_phrase(msg->status_code));
-    soup_message_headers_foreach(msg->response_headers,
-        trace_message_headers_foreach_callback, t);
-    fprintf(t->log, "\n");
-    trace_dump_body(t, msg->response_headers, msg->response_body, "-rsp");
+        g_free(uri_str);
+        t->index ++;
 
-    g_free(uri_str);
-    t->index ++;
+        fflush(t->log);
+        fflush(t->data);
+    }
+}
 
-    fflush(t->log);
-    fflush(t->data);
+/* Printf to the trace log
+ */
+void
+trace_printf (trace *t, const char *fmt, ...)
+{
+    if (t != NULL) {
+        va_list ap;
+        va_start(ap, fmt);
+        vfprintf(t->log, fmt, ap);
+        putc('\n', t->log);
+        fflush(t->log);
+        va_end(ap);
+    }
 }
 
 /* vim:ts=8:sw=4:et
