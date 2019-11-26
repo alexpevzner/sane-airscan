@@ -24,7 +24,7 @@ opt_name_decode (const opt_name_map map[], size_t map_size,
     size_t i;
     for (i = 0; i < map_size; i ++) {
         if (!strcmp(map[i].name, name)) {
-            return (SANE_Word) i;
+            return map[i].value;
         }
     }
 
