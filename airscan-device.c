@@ -83,7 +83,7 @@ struct device {
     SoupBuffer           *read_image;        /* Current image */
     SANE_Parameters      read_params;        /* Actual image parameters */
     SANE_Byte            *read_line_buf;     /* Single-line buffer */
-    size_t               read_line_num;      /* Current image line 0-based */
+    SANE_Int             read_line_num;      /* Current image line 0-based */
     size_t               read_line_size;     /* Logical size of single line */
     size_t               read_line_off;      /* Offset in the line */
 
@@ -510,7 +510,7 @@ device_set_resolution (device *dev, SANE_Word opt_resolution, SANE_Word *info)
         return SANE_STATUS_GOOD;
     }
 
-    dev->opt_resolution = devcaps_source_choose_colormode(src, opt_resolution);
+    dev->opt_resolution = devcaps_source_choose_resolution(src, opt_resolution);
 
     *info |= SANE_INFO_RELOAD_PARAMS;
     if (dev->opt_resolution != opt_resolution) {
@@ -1032,6 +1032,7 @@ device_escl_start_scan (device *dev)
     trace_printf(dev->trace, "  image size:     %dx%d", wid, hei);
     trace_printf(dev->trace, "  image X offset: %d", math_mm2px(dev->opt_tl_x));
     trace_printf(dev->trace, "  image Y offset: %d", math_mm2px(dev->opt_tl_y));
+    trace_printf(dev->trace, "  resolution:     %d", dev->opt_resolution);
     trace_printf(dev->trace, "");
 
     const char *rq = g_strdup_printf(
@@ -1675,9 +1676,9 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
     image_status = IMAGE_OK;
     for (len = 0; image_status == IMAGE_OK && len < max_len; ) {
         if (dev->read_line_off == dev->read_line_size) {
-            if (dev->read_line_num == (size_t) dev->opt_params.lines) {
+            if (dev->read_line_num == dev->opt_params.lines) {
                 image_status = IMAGE_EOF;
-            } else if (dev->read_line_num >= (size_t) dev->read_params.lines) {
+            } else if (dev->read_line_num >= dev->read_params.lines) {
                 image_status = IMAGE_OK;
                 memset(dev->read_line_buf, 0xff, dev->read_line_size);
             } else {
