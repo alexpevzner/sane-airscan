@@ -131,9 +131,6 @@ device_escl_load_page (device *dev);
 static bool
 device_read_push (device *dev);
 
-static void
-device_read_state_change (device *dev);
-
 /* Compare device names, for device_table
  */
 static int
@@ -1196,7 +1193,6 @@ device_job_set_state (device *dev, DEVICE_JOB_STATE state)
 
         dev->job_state = state;
         g_cond_broadcast(&dev->job_state_cond);
-        device_read_state_change(dev);
     }
 }
 
@@ -1258,7 +1254,9 @@ device_job_cancel_event_callback (void *data)
     device *dev = data;
 
     DBG_DEVICE(dev->name, "Cancel");
-    device_job_abort(dev, SANE_STATUS_CANCELLED);
+    if ((dev->flags & DEVICE_SCANNING) != 0) {
+        device_job_abort(dev, SANE_STATUS_CANCELLED);
+    }
 }
 
 /******************** API helpers ********************/
@@ -1516,8 +1514,6 @@ device_start_do (gpointer data)
 {
     device      *dev = data;
 
-    g_assert(dev->job_location->len == 0);
-
     if (dev->job_cancel_rq) {
         device_job_set_state(dev, DEVICE_JOB_DONE);
         device_job_set_status(dev, SOUP_STATUS_CANCELLED);
@@ -1538,7 +1534,9 @@ device_start (device *dev)
         return SANE_STATUS_DEVICE_BUSY;
     }
 
+    /* Update state */
     dev->flags |= DEVICE_SCANNING;
+    pollable_reset(dev->read_pollable);
 
     /* Previous multi-page scan job may still be running. Check
      * its state */
@@ -1559,8 +1557,7 @@ device_start (device *dev)
         }
 
         if (dev->job_status != SANE_STATUS_GOOD) {
-            device_job_set_state(dev, DEVICE_JOB_IDLE);
-            return dev->job_status;
+            goto FAIL;
         }
     }
 
@@ -1575,14 +1572,20 @@ device_start (device *dev)
     /* And wait until it reaches "LOADING" state */
     while (dev->job_state != DEVICE_JOB_LOADING) {
         if (dev->job_state == DEVICE_JOB_DONE) {
-            device_job_set_state(dev, DEVICE_JOB_IDLE);
-            return dev->job_status;
+            goto FAIL;
         }
 
         eloop_cond_wait(&dev->job_state_cond);
     }
 
     return SANE_STATUS_GOOD;
+
+    /* Cleanup after error */
+FAIL:
+    device_job_set_state(dev, DEVICE_JOB_IDLE);
+    dev->flags &= ~DEVICE_SCANNING;
+
+    return dev->job_status;
 }
 
 /* Cancel scanning operation
@@ -1629,29 +1632,6 @@ device_read_push (device *dev)
 
     pollable_signal(dev->read_pollable);
     return true;
-}
-
-/* Notify read machinery on job state change
- */
-static void
-device_read_state_change (device *dev)
-{
-    switch (dev->job_state) {
-    case DEVICE_JOB_IDLE:
-        pollable_reset(dev->read_pollable);
-        break;
-
-    case DEVICE_JOB_STARTED:
-    case DEVICE_JOB_CHECK_STATUS:
-    case DEVICE_JOB_REQUESTING:
-    case DEVICE_JOB_LOADING:
-    case DEVICE_JOB_CLEANING_UP:
-        break;
-
-    case DEVICE_JOB_DONE:
-        pollable_signal(dev->read_pollable);
-        break;
-    }
 }
 
 /* Read scanned image
@@ -1737,15 +1717,19 @@ DONE:
         return SANE_STATUS_GOOD;
     }
 
-    if (image_status == IMAGE_EOF) {
-        return SANE_STATUS_EOF;
-    }
-
+    /* Scan and read finished - cleanup device */
     dev->flags &= ~DEVICE_SCANNING;
+    image_decoder_reset(dev->read_decoder_jpeg);
+    soup_buffer_free(dev->read_image);
+    dev->read_image = NULL;
     g_free(dev->read_line_buf);
     dev->read_line_buf = NULL;
 
-    return dev->job_status;
+    if (image_status == IMAGE_EOF) {
+        return SANE_STATUS_EOF;
+    } else {
+        return dev->job_status;
+    }
 }
 
 /******************** Device discovery events ********************/
