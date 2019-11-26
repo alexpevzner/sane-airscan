@@ -84,7 +84,7 @@ struct device {
     SANE_Parameters      read_params;        /* Actual image parameters */
     SANE_Byte            *read_line_buf;     /* Single-line buffer */
     size_t               read_line_num;      /* Current image line 0-based */
-    size_t               read_line_size;     /* Size of single line */
+    size_t               read_line_size;     /* Logical size of single line */
     size_t               read_line_off;      /* Offset in the line */
 
     /* Options */
@@ -1603,7 +1603,7 @@ static bool
 device_read_push (device *dev)
 {
     IMAGE_STATUS image_status;
-    size_t       bytes_per_line;
+    size_t       line_capacity;
 
     dev->read_image = g_ptr_array_remove_index(dev->job_images, 0);
 
@@ -1617,15 +1617,15 @@ device_read_push (device *dev)
 
     /* Allocate line buffer */
     image_decoder_get_params(dev->read_decoder_jpeg, &dev->read_params);
-    bytes_per_line = math_max(dev->opt_params.bytes_per_line,
+    line_capacity = math_max(dev->opt_params.bytes_per_line,
             dev->read_params.bytes_per_line);
 
-    dev->read_line_buf = g_malloc(bytes_per_line);
-    memset(dev->read_line_buf, 0xff, bytes_per_line);
+    dev->read_line_buf = g_malloc(line_capacity);
+    memset(dev->read_line_buf, 0xff, line_capacity);
 
     dev->read_line_num = 0;
-    dev->read_line_size = bytes_per_line;
-    dev->read_line_off = bytes_per_line;
+    dev->read_line_size = dev->opt_params.bytes_per_line;
+    dev->read_line_off = dev->read_line_size;
 
     pollable_signal(dev->read_pollable);
     return true;
