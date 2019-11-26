@@ -235,6 +235,7 @@ void
 eloop_event_free (eloop_event *event)
 {
     g_source_destroy(&event->source);
+    pollable_free(event->p);
     g_source_unref(&event->source);
 }
 
