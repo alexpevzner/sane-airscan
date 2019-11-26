@@ -523,7 +523,7 @@ device_close (device *dev);
 /* Get option descriptor
  */
 const SANE_Option_Descriptor*
-dev_get_option_descriptor (device *dev, SANE_Int option);
+device_get_option_descriptor (device *dev, SANE_Int option);
 
 /* Get device option
  */

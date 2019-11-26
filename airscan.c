@@ -146,7 +146,7 @@ sane_get_option_descriptor (SANE_Handle handle, SANE_Int option)
     const SANE_Option_Descriptor *desc;
 
     DBG_API_ENTER();
-    desc = dev_get_option_descriptor(dev, option);
+    desc = device_get_option_descriptor(dev, option);
     DBG_API_LEAVE(desc ? SANE_STATUS_GOOD : SANE_STATUS_INVAL);
 
     return desc;
@@ -160,6 +160,7 @@ sane_control_option (SANE_Handle handle, SANE_Int option, SANE_Action action,
 {
     SANE_Status status = SANE_STATUS_INVAL;
     device *dev = (device*) handle;
+    const SANE_Option_Descriptor *desc;
 
     DBG_API_ENTER();
 
@@ -168,7 +169,7 @@ sane_control_option (SANE_Handle handle, SANE_Int option, SANE_Action action,
         goto DONE;
     }
 
-    const SANE_Option_Descriptor *desc = dev_get_option_descriptor(dev, option);
+    desc = device_get_option_descriptor(dev, option);
     if (desc == NULL) {
         goto DONE;
     }
