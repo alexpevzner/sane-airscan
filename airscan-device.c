@@ -81,7 +81,9 @@ struct device {
     pollable             *read_pollable;     /* Signalled when read won't
                                                 block */
     SoupBuffer           *read_image;        /* Current image */
-    SANE_Byte            *read_line;         /* Single-line buffer */
+    SANE_Parameters      read_params;        /* Actual image parameters */
+    SANE_Byte            *read_line_buf;     /* Single-line buffer */
+    size_t               read_line_num;      /* Current image line 0-based */
     size_t               read_line_size;     /* Size of single line */
     size_t               read_line_off;      /* Offset in the line */
 
@@ -1591,8 +1593,8 @@ device_cancel (device *dev)
 static bool
 device_read_push (device *dev)
 {
-    SANE_Parameters params;
-    IMAGE_STATUS    image_status;
+    IMAGE_STATUS image_status;
+    size_t       bytes_per_line;
 
     dev->read_image = g_ptr_array_remove_index(dev->job_images, 0);
 
@@ -1605,10 +1607,16 @@ device_read_push (device *dev)
     }
 
     /* Allocate line buffer */
-    image_decoder_get_params(dev->read_decoder_jpeg, &params);
-    dev->read_line = g_malloc(params.bytes_per_line);
-    dev->read_line_size = params.bytes_per_line;
-    dev->read_line_off = params.bytes_per_line;
+    image_decoder_get_params(dev->read_decoder_jpeg, &dev->read_params);
+    bytes_per_line = math_max(dev->opt_params.bytes_per_line,
+            dev->read_params.bytes_per_line);
+
+    dev->read_line_buf = g_malloc(bytes_per_line);
+    memset(dev->read_line_buf, 0xff, bytes_per_line);
+
+    dev->read_line_num = 0;
+    dev->read_line_size = bytes_per_line;
+    dev->read_line_off = bytes_per_line;
 
     pollable_signal(dev->read_pollable);
     return true;
@@ -1668,20 +1676,35 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
         goto DONE;
     }
 
-    /* Read line by line */
+    /* Read line by line
+     *
+     * Note, actual image size, returned by device, may be slightly different
+     * from an image size, computed according to scan options and requested
+     * from device. So here we adjust actual image to fit the expected (and
+     * promised) parameters.
+     */
     image_status = IMAGE_OK;
     for (len = 0; image_status == IMAGE_OK && len < max_len; ) {
         if (dev->read_line_off == dev->read_line_size) {
-            image_status = image_decoder_read_line(dev->read_decoder_jpeg,
-                dev->read_line);
+            if (dev->read_line_num == (size_t) dev->opt_params.lines) {
+                image_status = IMAGE_EOF;
+            } else if (dev->read_line_num >= (size_t) dev->read_params.lines) {
+                image_status = IMAGE_OK;
+                memset(dev->read_line_buf, 0xff, dev->read_line_size);
+            } else {
+                image_status = image_decoder_read_line(dev->read_decoder_jpeg,
+                    dev->read_line_buf);
+            }
+
             if (image_status == IMAGE_OK) {
                 dev->read_line_off = 0;
+                dev->read_line_num ++;
             }
         } else {
             SANE_Int sz = math_min(max_len - len,
                 dev->read_line_size - dev->read_line_off);
 
-            memcpy(data, dev->read_line + dev->read_line_off, sz);
+            memcpy(data, dev->read_line_buf + dev->read_line_off, sz);
             data += sz;
             dev->read_line_off += sz;
             len += sz;
@@ -1710,8 +1733,8 @@ DONE:
     }
 
     dev->flags &= ~DEVICE_SCANNING;
-    g_free(dev->read_line);
-    dev->read_line = NULL;
+    g_free(dev->read_line_buf);
+    dev->read_line_buf = NULL;
 
     return dev->job_status;
 }
