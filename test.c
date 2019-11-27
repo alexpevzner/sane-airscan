@@ -11,6 +11,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "airscan.h"
+
 SANE_Handle handle;
 
 void
@@ -37,7 +39,7 @@ check (SANE_Status status, const char *operation)
         check(s, #func);                \
     } while(0)
 
-void
+int
 main (void)
 {
     SANE_Parameters params;
@@ -50,12 +52,13 @@ main (void)
 
     TRY(sane_init, NULL, NULL);
     TRY(sane_open, "", &handle);
+    TRY(sane_control_option, handle, OPT_SCAN_SOURCE, SANE_ACTION_SET_VALUE, OPTVAL_SOURCE_ADF_SIMPLEX, NULL);
     TRY(sane_get_parameters, handle, &params);
     printf("image size: %dx%d\n", params.pixels_per_line, params.lines);
     TRY(sane_start,handle);
 
     SANE_Status s;
-    char        buf[65536];
+    SANE_Byte   buf[65536];
     int         len, count = 0;
 
     for (;;) {
@@ -72,6 +75,8 @@ main (void)
 
     sane_close(handle);
     sane_exit();
+
+    return 0;
 }
 
 /* vim:ts=8:sw=4:et

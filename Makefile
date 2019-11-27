@@ -45,4 +45,4 @@ libsane-airscan.so.1: Makefile $(SRC) airscan.h airscan.sym
 
 test:	libsane-airscan.so.1 test.c
 	#gcc -o test test.c -l sane
-	gcc -o test test.c libsane-airscan.so.1 -Wl,-rpath .
+	gcc -o test test.c libsane-airscan.so.1 -Wl,-rpath . ${CFLAGS}
