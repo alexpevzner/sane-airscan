@@ -55,7 +55,7 @@ pollable_get_fd (pollable *p)
 void
 pollable_signal (pollable *p)
 {
-    uint64_t c = 1;
+    static uint64_t c = 1;
     write(p->efd, &c, sizeof(c));
 }
 
