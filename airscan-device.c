@@ -56,7 +56,7 @@ struct device {
     volatile gint        refcnt;        /* Reference counter */
     const char           *name;         /* Device name */
     unsigned int         flags;         /* Device flags */
-    devcaps              caps;          /* Device capabilities */
+    devopt               opt;           /* Device options */
 
     /* I/O handling (AVAHI and HTTP) */
     zeroconf_addrinfo    *addresses;    /* Device addresses, NULL if
@@ -86,15 +86,6 @@ struct device {
     SANE_Int             read_line_num;      /* Current image line 0-based */
     size_t               read_line_size;     /* Logical size of single line */
     size_t               read_line_off;      /* Offset in the line */
-
-    /* Options */
-    SANE_Option_Descriptor opt_desc[NUM_OPTIONS]; /* Option descriptors */
-    OPT_SOURCE             opt_src;               /* Current source */
-    OPT_COLORMODE          opt_colormode;         /* Color mode */
-    SANE_Word              opt_resolution;        /* Current resolution */
-    SANE_Word              opt_tl_x, opt_tl_y;    /* Top-left x/y */
-    SANE_Word              opt_br_x, opt_br_y;    /* Bottom-right x/y */
-    SANE_Parameters        opt_params;            /* Scan parameters */
 };
 
 /* Static variables
@@ -151,7 +142,7 @@ device_add (const char *name)
     dev->refcnt = 1;
     dev->name = g_strdup(name);
     dev->flags = DEVICE_LISTED;
-    devcaps_init(&dev->caps);
+    devopt_init(&dev->opt);
 
     dev->trace = trace_open(name);
 
@@ -161,10 +152,6 @@ device_add (const char *name)
 
     dev->read_decoder_jpeg = image_decoder_jpeg_new();
     dev->read_pollable = pollable_new();
-
-    dev->opt_src = OPT_SOURCE_UNKNOWN;
-    dev->opt_colormode = OPT_COLORMODE_UNKNOWN;
-    dev->opt_resolution = DEVICE_DEFAULT_RESOLUTION;
 
     DBG_DEVICE(dev->name, "created");
 
@@ -198,7 +185,7 @@ device_unref (device *dev)
         /* Release all memory */
         g_free((void*) dev->name);
 
-        devcaps_cleanup(&dev->caps);
+        devopt_cleanup(&dev->opt);
 
         zeroconf_addrinfo_list_free(dev->addresses);
 
@@ -338,296 +325,6 @@ device_probe_address (device *dev, zeroconf_addrinfo *addrinfo)
             device_scanner_capabilities_callback);
 }
 
-/* Rebuild option descriptors
- */
-static void
-device_rebuild_opt_desc (device *dev)
-{
-    SANE_Option_Descriptor *desc;
-    devcaps_source         *src = dev->caps.src[dev->opt_src];
-
-    memset(dev->opt_desc, 0, sizeof(dev->opt_desc));
-
-    /* OPT_NUM_OPTIONS */
-    desc = &dev->opt_desc[OPT_NUM_OPTIONS];
-    desc->name = SANE_NAME_NUM_OPTIONS;
-    desc->title = SANE_TITLE_NUM_OPTIONS;
-    desc->desc = SANE_DESC_NUM_OPTIONS;
-    desc->type = SANE_TYPE_INT;
-    desc->size = sizeof(SANE_Word);
-    desc->cap = SANE_CAP_SOFT_DETECT;
-
-    /* OPT_GROUP_STANDARD */
-    desc = &dev->opt_desc[OPT_GROUP_STANDARD];
-    desc->name = SANE_NAME_STANDARD;
-    desc->title = SANE_TITLE_STANDARD;
-    desc->desc = SANE_DESC_STANDARD;
-    desc->type = SANE_TYPE_GROUP;
-    desc->cap = 0;
-
-    /* OPT_SCAN_RESOLUTION */
-    desc = &dev->opt_desc[OPT_SCAN_RESOLUTION];
-    desc->name = SANE_NAME_SCAN_RESOLUTION;
-    desc->title = SANE_TITLE_SCAN_RESOLUTION;
-    desc->desc = SANE_DESC_SCAN_RESOLUTION;
-    desc->type = SANE_TYPE_INT;
-    desc->size = sizeof(SANE_Word);
-    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
-    desc->unit = SANE_UNIT_DPI;
-    if ((src->flags & DEVCAPS_SOURCE_RES_DISCRETE) != 0) {
-        desc->constraint_type = SANE_CONSTRAINT_WORD_LIST;
-        desc->constraint.word_list = src->resolutions;
-    } else {
-        desc->constraint_type = SANE_CONSTRAINT_RANGE;
-        desc->constraint.range = &src->res_range;
-    }
-
-    /* OPT_SCAN_MODE */
-    desc = &dev->opt_desc[OPT_SCAN_COLORMODE];
-    desc->name = SANE_NAME_SCAN_MODE;
-    desc->title = SANE_TITLE_SCAN_MODE;
-    desc->desc = SANE_DESC_SCAN_MODE;
-    desc->type = SANE_TYPE_STRING;
-    desc->size = array_of_string_max_strlen(&src->sane_colormodes) + 1;
-    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
-    desc->constraint_type = SANE_CONSTRAINT_STRING_LIST;
-    desc->constraint.string_list = (SANE_String_Const*) src->sane_colormodes;
-
-    /* OPT_SCAN_SOURCE */
-    desc = &dev->opt_desc[OPT_SCAN_SOURCE];
-    desc->name = SANE_NAME_SCAN_SOURCE;
-    desc->title = SANE_TITLE_SCAN_SOURCE;
-    desc->desc = SANE_DESC_SCAN_SOURCE;
-    desc->type = SANE_TYPE_STRING;
-    desc->size = array_of_string_max_strlen(&dev->caps.sane_sources) + 1;
-    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
-    desc->constraint_type = SANE_CONSTRAINT_STRING_LIST;
-    desc->constraint.string_list = (SANE_String_Const*) dev->caps.sane_sources;
-
-    /* OPT_GROUP_GEOMETRY */
-    desc = &dev->opt_desc[OPT_GROUP_GEOMETRY];
-    desc->name = SANE_NAME_GEOMETRY;
-    desc->title = SANE_TITLE_GEOMETRY;
-    desc->desc = SANE_DESC_GEOMETRY;
-    desc->type = SANE_TYPE_GROUP;
-    desc->cap = 0;
-
-    /* OPT_SCAN_TL_X */
-    desc = &dev->opt_desc[OPT_SCAN_TL_X];
-    desc->name = SANE_NAME_SCAN_TL_X;
-    desc->title = SANE_TITLE_SCAN_TL_X;
-    desc->desc = SANE_DESC_SCAN_TL_X;
-    desc->type = SANE_TYPE_FIXED;
-    desc->size = sizeof(SANE_Word);
-    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
-    desc->unit = SANE_UNIT_MM;
-    desc->constraint_type = SANE_CONSTRAINT_RANGE;
-    desc->constraint.range = &src->win_x_range;
-
-    /* OPT_SCAN_TL_Y */
-    desc = &dev->opt_desc[OPT_SCAN_TL_Y];
-    desc->name = SANE_NAME_SCAN_TL_Y;
-    desc->title = SANE_TITLE_SCAN_TL_Y;
-    desc->desc = SANE_DESC_SCAN_TL_Y;
-    desc->type = SANE_TYPE_FIXED;
-    desc->size = sizeof(SANE_Word);
-    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
-    desc->unit = SANE_UNIT_MM;
-    desc->constraint_type = SANE_CONSTRAINT_RANGE;
-    desc->constraint.range = &src->win_y_range;
-
-    /* OPT_SCAN_BR_X */
-    desc = &dev->opt_desc[OPT_SCAN_BR_X];
-    desc->name = SANE_NAME_SCAN_BR_X;
-    desc->title = SANE_TITLE_SCAN_BR_X;
-    desc->desc = SANE_DESC_SCAN_BR_X;
-    desc->type = SANE_TYPE_FIXED;
-    desc->size = sizeof(SANE_Word);
-    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
-    desc->unit = SANE_UNIT_MM;
-    desc->constraint_type = SANE_CONSTRAINT_RANGE;
-    desc->constraint.range = &src->win_x_range;
-
-    /* OPT_SCAN_BR_Y */
-    desc = &dev->opt_desc[OPT_SCAN_BR_Y];
-    desc->name = SANE_NAME_SCAN_BR_Y;
-    desc->title = SANE_TITLE_SCAN_BR_Y;
-    desc->desc = SANE_DESC_SCAN_BR_Y;
-    desc->type = SANE_TYPE_FIXED;
-    desc->size = sizeof(SANE_Word);
-    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
-    desc->unit = SANE_UNIT_MM;
-    desc->constraint_type = SANE_CONSTRAINT_RANGE;
-    desc->constraint.range = &src->win_y_range;
-}
-
-/* Update scan parameters, according to the currently set
- * scan options
- */
-static void
-device_update_params (device *dev)
-{
-    SANE_Word wid = math_max(0, dev->opt_br_x - dev->opt_tl_x);
-    SANE_Word hei = math_max(0, dev->opt_br_y - dev->opt_tl_y);
-
-    dev->opt_params.last_frame = SANE_TRUE;
-    dev->opt_params.pixels_per_line = math_mm2px_res(wid, dev->opt_resolution);
-    dev->opt_params.lines = math_mm2px_res(hei, dev->opt_resolution);
-
-    switch (dev->opt_colormode) {
-    case OPT_COLORMODE_COLOR:
-        dev->opt_params.format = SANE_FRAME_RGB;
-        dev->opt_params.depth = 8;
-        dev->opt_params.bytes_per_line = dev->opt_params.pixels_per_line * 3;
-        break;
-
-    case OPT_COLORMODE_GRAYSCALE:
-        dev->opt_params.format = SANE_FRAME_GRAY;
-        dev->opt_params.depth = 8;
-        dev->opt_params.bytes_per_line = dev->opt_params.pixels_per_line;
-        break;
-
-    case OPT_COLORMODE_LINEART:
-        dev->opt_params.format = SANE_FRAME_GRAY;
-        dev->opt_params.depth = 1;
-        dev->opt_params.bytes_per_line =
-                ((dev->opt_params.pixels_per_line + 7) / 8) * 8;
-        break;
-
-    default:
-        g_assert(!"internal error");
-    }
-}
-
-/* Set current resolution
- */
-static SANE_Status
-device_set_resolution (device *dev, SANE_Word opt_resolution, SANE_Word *info)
-{
-    devcaps_source *src = dev->caps.src[dev->opt_src];
-
-    if (dev->opt_resolution == opt_resolution) {
-        return SANE_STATUS_GOOD;
-    }
-
-    dev->opt_resolution = devcaps_source_choose_resolution(src, opt_resolution);
-
-    *info |= SANE_INFO_RELOAD_PARAMS;
-    if (dev->opt_resolution != opt_resolution) {
-        *info |= SANE_INFO_INEXACT;
-    }
-
-    return SANE_STATUS_GOOD;
-}
-
-/* Set color mode
- */
-static SANE_Status
-device_set_colormode (device *dev, OPT_COLORMODE opt_colormode, SANE_Word *info)
-{
-    devcaps_source *src = dev->caps.src[dev->opt_src];
-
-    if (dev->opt_colormode == opt_colormode) {
-        return SANE_STATUS_GOOD;
-    }
-
-    if ((src->colormodes & (1 <<opt_colormode)) == 0) {
-        return SANE_STATUS_INVAL;
-    }
-
-    dev->opt_colormode = opt_colormode;
-    *info |= SANE_INFO_RELOAD_PARAMS;
-
-    return SANE_STATUS_GOOD;
-}
-
-/* Set current source. Affects many other options
- */
-static SANE_Status
-device_set_source (device *dev, OPT_SOURCE opt_src, SANE_Word *info)
-{
-    devcaps_source *src = dev->caps.src[opt_src];
-
-    if (src == NULL) {
-        return SANE_STATUS_INVAL;
-    }
-
-    if (dev->opt_src == opt_src) {
-        return SANE_STATUS_GOOD;
-    }
-
-    dev->opt_src = opt_src;
-
-    /* Try to preserve current color mode */
-    dev->opt_colormode = devcaps_source_choose_colormode(src,
-            dev->opt_colormode);
-
-    /* Try to preserve resolution */
-    dev->opt_resolution = devcaps_source_choose_resolution(src,
-            dev->opt_resolution);
-
-    /* Reset window to maximum size */
-    dev->opt_tl_x = 0;
-    dev->opt_tl_y = 0;
-
-    dev->opt_br_x = src->win_x_range.max;
-    dev->opt_br_y = src->win_y_range.max;
-
-    device_rebuild_opt_desc(dev);
-
-    *info |= SANE_INFO_RELOAD_OPTIONS | SANE_INFO_RELOAD_PARAMS;
-
-    return SANE_STATUS_GOOD;
-}
-
-/* Set geometry option
- */
-static SANE_Status
-device_set_geom (device *dev, SANE_Int option, SANE_Word val, SANE_Word *info)
-{
-    SANE_Word      *out = NULL;
-    SANE_Range     *range = NULL;
-    devcaps_source *src = dev->caps.src[dev->opt_src];
-
-    /* Choose destination and range */
-    switch (option) {
-    case OPT_SCAN_TL_X:
-        out = &dev->opt_tl_x;
-        range = &src->win_x_range;
-        break;
-
-    case OPT_SCAN_TL_Y:
-        out = &dev->opt_tl_y;
-        range = &src->win_y_range;
-        break;
-
-    case OPT_SCAN_BR_X:
-        out = &dev->opt_br_x;
-        range = &src->win_x_range;
-        break;
-
-    case OPT_SCAN_BR_Y:
-        out = &dev->opt_br_y;
-        range = &src->win_y_range;
-        break;
-
-    default:
-        g_assert_not_reached();
-    }
-
-    /* Update option */
-    if (*out != val) {
-        *out = math_range_fit(range, val);
-        if (*out == val) {
-            *info |= SANE_INFO_RELOAD_PARAMS;
-        } else {
-            *info |= SANE_INFO_RELOAD_PARAMS | SANE_INFO_INEXACT;
-        }
-    }
-
-    return SANE_STATUS_GOOD;
-}
-
 /******************** Device table operations ********************/
 /* Userdata passed to device_table_foreach_callback
  */
@@ -726,7 +423,7 @@ device_scanner_capabilities_callback (device *dev, SoupMessage *msg)
 
     /* Parse XML response */
     SoupBuffer *buf = soup_message_body_flatten(msg->response_body);
-    err = devcaps_parse(&dev->caps, buf->data, buf->length);
+    err = devopt_import_caps(&dev->opt, buf->data, buf->length);
     soup_buffer_free(buf);
 
     if (err != NULL) {
@@ -734,7 +431,7 @@ device_scanner_capabilities_callback (device *dev, SoupMessage *msg)
         goto DONE;
     }
 
-    devcaps_dump(dev->name, &dev->caps);
+    devcaps_dump(dev->name, &dev->opt.caps);
 
     /* Cleanup and exit */
 DONE:
@@ -745,19 +442,6 @@ DONE:
             device_del(dev);
         }
     } else {
-        /* Choose initial source */
-        OPT_SOURCE opt_src = (OPT_SOURCE) 0;
-        while (opt_src < NUM_OPT_SOURCE &&
-                (dev->caps.src[opt_src]) == NULL) {
-            opt_src ++;
-        }
-
-        g_assert(opt_src != NUM_OPT_SOURCE);
-
-        SANE_Word unused;
-        device_set_source(dev, opt_src, &unused);
-        device_update_params(dev);
-
         dev->flags |= DEVICE_READY;
         dev->flags &= ~DEVICE_INIT_WAIT;
     }
@@ -988,7 +672,7 @@ device_escl_check_status_callback (device *dev, SoupMessage *msg)
     /* Decode scanner status */
     if (device_status != SANE_STATUS_GOOD) {
         status = device_status;
-    } else if (dev->opt_src == OPT_SOURCE_PLATEN) {
+    } else if (dev->opt.src == OPT_SOURCE_PLATEN) {
         status = device_status;
         if (status == SANE_STATUS_GOOD) {
             status = SANE_STATUS_DEVICE_BUSY;
@@ -1060,7 +744,7 @@ device_escl_load_page_callback (device *dev, SoupMessage *msg)
             }
         }
 
-        if (dev->opt_src == OPT_SOURCE_PLATEN) {
+        if (dev->opt.src == OPT_SOURCE_PLATEN) {
             device_escl_cleanup(dev);
         } else {
             device_escl_load_page(dev);
@@ -1151,14 +835,14 @@ device_escl_start_scan (device *dev)
     bool         duplex = false;
     const char   *mime = "image/jpeg";
     //const char   *mime = "application/pdf";
-    SANE_Word    x_resolution = dev->opt_resolution;
-    SANE_Word    y_resolution = dev->opt_resolution;
+    SANE_Word    x_resolution = dev->opt.resolution;
+    SANE_Word    y_resolution = dev->opt.resolution;
 
     /* Prepare parameters */
-    wid = math_mm2px(dev->opt_br_x);
-    hei = math_mm2px(dev->opt_br_y);
+    wid = math_mm2px(dev->opt.br_x);
+    hei = math_mm2px(dev->opt.br_y);
 
-    switch (dev->opt_src) {
+    switch (dev->opt.src) {
     case OPT_SOURCE_PLATEN:      source = "Platen"; duplex = false; break;
     case OPT_SOURCE_ADF_SIMPLEX: source = "Feeder"; duplex = false; break;
     case OPT_SOURCE_ADF_DUPLEX:  source = "Feeder"; duplex = true; break;
@@ -1168,7 +852,7 @@ device_escl_start_scan (device *dev)
     }
 
 
-    switch (dev->opt_colormode) {
+    switch (dev->opt.colormode) {
     case OPT_COLORMODE_COLOR:     colormode = "RGB24"; break;
     case OPT_COLORMODE_GRAYSCALE: colormode = "Grayscale8"; break;
     case OPT_COLORMODE_LINEART:   colormode = "BlackAndWhite1"; break;
@@ -1183,9 +867,9 @@ device_escl_start_scan (device *dev)
     trace_printf(dev->trace, "  source:         %s", source);
     trace_printf(dev->trace, "  colormode:      %s", colormode);
     trace_printf(dev->trace, "  image size:     %dx%d", wid, hei);
-    trace_printf(dev->trace, "  image X offset: %d", math_mm2px(dev->opt_tl_x));
-    trace_printf(dev->trace, "  image Y offset: %d", math_mm2px(dev->opt_tl_y));
-    trace_printf(dev->trace, "  resolution:     %d", dev->opt_resolution);
+    trace_printf(dev->trace, "  image X offset: %d", math_mm2px(dev->opt.tl_x));
+    trace_printf(dev->trace, "  image Y offset: %d", math_mm2px(dev->opt.tl_y));
+    trace_printf(dev->trace, "  resolution:     %d", dev->opt.resolution);
     trace_printf(dev->trace, "");
 
     /* Send request to device */
@@ -1369,8 +1053,8 @@ device_list_get (void)
         dev_list[i] = info;
 
         info->name = g_strdup(devices[i]->name);
-        info->vendor = g_strdup(devices[i]->caps.vendor);
-        info->model = g_strdup(devices[i]->caps.model);
+        info->vendor = g_strdup(devices[i]->opt.caps.vendor);
+        info->model = g_strdup(devices[i]->opt.caps.model);
         info->type = "eSCL network scanner";
     }
 
@@ -1461,7 +1145,7 @@ const SANE_Option_Descriptor*
 device_get_option_descriptor (device *dev, SANE_Int option)
 {
     if (0 <= option && option < NUM_OPTIONS) {
-        return &dev->opt_desc[option];
+        return &dev->opt.desc[option];
     }
 
     return NULL;
@@ -1472,46 +1156,7 @@ device_get_option_descriptor (device *dev, SANE_Int option)
 SANE_Status
 device_get_option (device *dev, SANE_Int option, void *value)
 {
-    SANE_Status status = SANE_STATUS_GOOD;
-
-    switch (option) {
-    case OPT_NUM_OPTIONS:
-        *(SANE_Word*) value = NUM_OPTIONS;
-        break;
-
-    case OPT_SCAN_RESOLUTION:
-        *(SANE_Word*) value = dev->opt_resolution;
-        break;
-
-    case OPT_SCAN_COLORMODE:
-        strcpy(value, opt_colormode_to_sane(dev->opt_colormode));
-        break;
-
-    case OPT_SCAN_SOURCE:
-        strcpy(value, opt_source_to_sane(dev->opt_src));
-        break;
-
-    case OPT_SCAN_TL_X:
-        *(SANE_Word*) value = dev->opt_tl_x;
-        break;
-
-    case OPT_SCAN_TL_Y:
-        *(SANE_Word*) value = dev->opt_tl_y;
-        break;
-
-    case OPT_SCAN_BR_X:
-        *(SANE_Word*) value = dev->opt_br_x;
-        break;
-
-    case OPT_SCAN_BR_Y:
-        *(SANE_Word*) value = dev->opt_br_y;
-        break;
-
-    default:
-        status = SANE_STATUS_INVAL;
-    }
-
-    return status;
+    return devopt_get_option(&dev->opt, option, value);
 }
 
 /* Set device option
@@ -1519,59 +1164,7 @@ device_get_option (device *dev, SANE_Int option, void *value)
 SANE_Status
 device_set_option (device *dev, SANE_Int option, void *value, SANE_Word *info)
 {
-    SANE_Status    status = SANE_STATUS_GOOD;
-    OPT_SOURCE     opt_src;
-    OPT_COLORMODE  opt_colormode;
-
-    /* Simplify life of options handlers by ensuring info != NULL  */
-    if (info == NULL) {
-        static SANE_Word unused;
-        info = &unused;
-    }
-
-    *info = 0;
-
-    /* Switch by option */
-    switch (option) {
-    case OPT_SCAN_RESOLUTION:
-        status = device_set_resolution(dev, *(SANE_Word*)value, info);
-        break;
-
-    case OPT_SCAN_COLORMODE:
-        opt_colormode = opt_colormode_from_sane(value);
-        if (opt_colormode == OPT_COLORMODE_UNKNOWN) {
-            status = SANE_STATUS_INVAL;
-        } else {
-            status = device_set_colormode(dev, opt_colormode, info);
-        }
-        break;
-
-    case OPT_SCAN_SOURCE:
-        opt_src = opt_source_from_sane(value);
-        if (opt_src == OPT_SOURCE_UNKNOWN) {
-            status = SANE_STATUS_INVAL;
-        } else {
-            status = device_set_source(dev, opt_src, info);
-        }
-        break;
-
-    case OPT_SCAN_TL_X:
-    case OPT_SCAN_TL_Y:
-    case OPT_SCAN_BR_X:
-    case OPT_SCAN_BR_Y:
-        status = device_set_geom(dev, option, *(SANE_Word*)value, info);
-        break;
-
-    default:
-        status = SANE_STATUS_INVAL;
-    }
-
-    /* Update scan parameters, if needed */
-    if ((*info & SANE_INFO_RELOAD_PARAMS) != 0) {
-        device_update_params(dev);
-    }
-
-    return status;
+    return devopt_set_option(&dev->opt, option, value, info);
 }
 
 /* Get current scan parameters
@@ -1579,7 +1172,7 @@ device_set_option (device *dev, SANE_Int option, void *value, SANE_Word *info)
 SANE_Status
 device_get_parameters (device *dev, SANE_Parameters *params)
 {
-    *params = dev->opt_params;
+    *params = dev->opt.params;
     return SANE_STATUS_GOOD;
 }
 
@@ -1697,14 +1290,14 @@ device_read_push (device *dev)
 
     /* Allocate line buffer */
     image_decoder_get_params(dev->read_decoder_jpeg, &dev->read_params);
-    line_capacity = math_max(dev->opt_params.bytes_per_line,
+    line_capacity = math_max(dev->opt.params.bytes_per_line,
             dev->read_params.bytes_per_line);
 
     dev->read_line_buf = g_malloc(line_capacity);
     memset(dev->read_line_buf, 0xff, line_capacity);
 
     dev->read_line_num = 0;
-    dev->read_line_size = dev->opt_params.bytes_per_line;
+    dev->read_line_size = dev->opt.params.bytes_per_line;
     dev->read_line_off = dev->read_line_size;
 
     pollable_signal(dev->read_pollable);
@@ -1758,7 +1351,7 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
      */
     for (len = 0; status == SANE_STATUS_GOOD && len < max_len; ) {
         if (dev->read_line_off == dev->read_line_size) {
-            if (dev->read_line_num == dev->opt_params.lines) {
+            if (dev->read_line_num == dev->opt.params.lines) {
                 status = SANE_STATUS_EOF;
             } else if (dev->read_line_num >= dev->read_params.lines) {
                 memset(dev->read_line_buf, 0xff, dev->read_line_size);

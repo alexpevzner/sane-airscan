@@ -4,6 +4,7 @@ SRC	= \
 	airscan-conf.c \
 	airscan-devcaps.c \
 	airscan-device.c \
+	airscan-devops.c \
 	airscan-eloop.c \
 	airscan-jpeg.c \
 	airscan-math.c \

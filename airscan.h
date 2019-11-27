@@ -23,16 +23,20 @@
 /******************** Static configuration ********************/
 /* Configuration path in environment
  */
-#define CONFIG_PATH_ENV         "SANE_CONFIG_DIR"
+#define CONFIG_PATH_ENV                 "SANE_CONFIG_DIR"
 
 /* Standard SANE configuration directory
  */
-#define CONFIG_SANE_CONFIG_DIR  "/etc/sane.d/"
+#define CONFIG_SANE_CONFIG_DIR          "/etc/sane.d/"
 
 /* Sane-airscan configuration file and subdirectory names
  */
-#define CONFIG_AIRSCAN_CONF     "airscan.conf"
-#define CONFIG_AIRSCAN_D        "airscan.d"
+#define CONFIG_AIRSCAN_CONF             "airscan.conf"
+#define CONFIG_AIRSCAN_D                "airscan.d"
+
+/* Default resolution, DPI
+ */
+#define CONFIG_DEFAULT_RESOLUTION       300
 
 /******************** Configuration file loader  ********************/
 /* Device configuration, for manually added devices
@@ -459,6 +463,121 @@ opt_colormode_from_sane (SANE_String_Const name);
 SANE_String_Const
 opt_colormode_to_sane (OPT_COLORMODE mode);
 
+/******************** Device Capabilities ********************/
+/* Source flags
+ */
+enum {
+    /* Supported Intents */
+    DEVCAPS_SOURCE_INTENT_DOCUMENT      = (1 << 3),
+    DEVCAPS_SOURCE_INTENT_TXT_AND_GRAPH = (1 << 4),
+    DEVCAPS_SOURCE_INTENT_PHOTO         = (1 << 5),
+    DEVCAPS_SOURCE_INTENT_PREVIEW       = (1 << 6),
+
+    /* How resolutions are defined */
+    DEVCAPS_SOURCE_RES_DISCRETE = (1 << 7), /* Discrete resolutions */
+    DEVCAPS_SOURCE_RES_RANGE    = (1 << 8), /* Range of resolutions */
+
+    /* Supported document formats */
+    DEVCAPS_SOURCE_FMT_JPEG = (1 << 9),  /* JPEG image */
+    DEVCAPS_SOURCE_FMT_PNG  = (1 << 10), /* PNG image */
+    DEVCAPS_SOURCE_FMT_PDF  = (1 << 11), /* PDF image */
+
+    /* Miscellaneous flags */
+    DEVCAPS_SOURCE_HAS_SIZE = (1 << 12), /* min_width, max_height and
+                                            derivatives are valid */
+};
+
+/* Source Capabilities (each device may contain multiple sources)
+ */
+typedef struct {
+    unsigned int flags;                    /* Source flags */
+    unsigned int colormodes;               /* Set of 1 << OPT_COLORMODE */
+    SANE_String  *sane_colormodes;         /* Color modes, in SANE format */
+    SANE_Word    min_wid_px, max_wid_px;   /* Min/max width, in pixels */
+    SANE_Word    min_hei_px, max_hei_px;   /* Min/max height, in pixels */
+    SANE_Word    min_wid_mm, max_wid_mm;   /* Min/max width, in millimeters */
+    SANE_Word    min_hei_mm, max_hei_mm;   /* Min/max height, in millimeters */
+    SANE_Word    *resolutions;             /* Discrete resolutions, in DPI */
+    SANE_Range   res_range;                /* Resolutions range, in DPI */
+    SANE_Range   win_x_range, win_y_range; /* Window x/y ranges, in mm */
+} devcaps_source;
+
+/* Device Capabilities
+ */
+typedef struct {
+    /* Device identification */
+    const char     *model;              /* Device model */
+    const char     *vendor;             /* Device vendor */
+
+    /* Sources */
+    SANE_String    *sane_sources;        /* Sources, in SANE format */
+    devcaps_source *src[NUM_OPT_SOURCE]; /* Missed sources are NULL */
+} devcaps;
+
+/* Initialize Device Capabilities
+ */
+void
+devcaps_init (devcaps *caps);
+
+/* Cleanup Device Capabilities
+ */
+void
+devcaps_cleanup (devcaps *caps);
+
+/* Parse device capabilities. devcaps structure must be initialized
+ * before calling this function.
+ *
+ * Returns NULL if OK, error string otherwise
+ */
+const char*
+devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len);
+
+/* Dump device capabilities, for debugging
+ */
+void
+devcaps_dump (const char *name, devcaps *caps);
+
+/******************** Device options ********************/
+/* Scan options
+ */
+typedef struct {
+    devcaps                caps;              /* Device capabilities */
+    SANE_Option_Descriptor desc[NUM_OPTIONS]; /* Option descriptors */
+    OPT_SOURCE             src;               /* Current source */
+    OPT_COLORMODE          colormode;         /* Color mode */
+    SANE_Word              resolution;        /* Current resolution */
+    SANE_Word              tl_x, tl_y;        /* Top-left x/y */
+    SANE_Word              br_x, br_y;        /* Bottom-right x/y */
+    SANE_Parameters        params;            /* Scan parameters */
+} devopt;
+
+/* Initialize device options
+ */
+void
+devopt_init (devopt *opt);
+
+/* Cleanup device options
+ */
+void
+devopt_cleanup (devopt *opt);
+
+/* Parse device capabilities, and set default options values
+ *
+ * Returns NULL if OK, error string otherwise
+ */
+const char*
+devopt_import_caps (devopt *opt, const char *xml_text, size_t xml_len);
+
+/* Set device option
+ */
+SANE_Status
+devopt_set_option (devopt *opt, SANE_Int option, void *value, SANE_Word *info);
+
+/* Get device option
+ */
+SANE_Status
+devopt_get_option (devopt *opt, SANE_Int option, void *value);
+
 /******************** ZeroConf (device discovery) ********************/
 /* ZeroConf resolved address information
  */
@@ -583,95 +702,6 @@ device_management_cleanup (void);
  */
 void
 device_management_start_stop (bool start);
-
-/******************** Device Capabilities ********************/
-/* Source flags
- */
-enum {
-    /* Supported Intents */
-    DEVCAPS_SOURCE_INTENT_DOCUMENT      = (1 << 3),
-    DEVCAPS_SOURCE_INTENT_TXT_AND_GRAPH = (1 << 4),
-    DEVCAPS_SOURCE_INTENT_PHOTO         = (1 << 5),
-    DEVCAPS_SOURCE_INTENT_PREVIEW       = (1 << 6),
-
-    /* How resolutions are defined */
-    DEVCAPS_SOURCE_RES_DISCRETE = (1 << 7), /* Discrete resolutions */
-    DEVCAPS_SOURCE_RES_RANGE    = (1 << 8), /* Range of resolutions */
-
-    /* Supported document formats */
-    DEVCAPS_SOURCE_FMT_JPEG = (1 << 9),  /* JPEG image */
-    DEVCAPS_SOURCE_FMT_PNG  = (1 << 10), /* PNG image */
-    DEVCAPS_SOURCE_FMT_PDF  = (1 << 11), /* PDF image */
-
-    /* Miscellaneous flags */
-    DEVCAPS_SOURCE_HAS_SIZE = (1 << 12), /* min_width, max_height and
-                                            derivatives are valid */
-};
-
-/* Source Capabilities (each device may contain multiple sources)
- */
-typedef struct {
-    unsigned int flags;                    /* Source flags */
-    unsigned int colormodes;               /* Set of 1 << OPT_COLORMODE */
-    SANE_String  *sane_colormodes;         /* Color modes, in SANE format */
-    SANE_Word    min_wid_px, max_wid_px;   /* Min/max width, in pixels */
-    SANE_Word    min_hei_px, max_hei_px;   /* Min/max height, in pixels */
-    SANE_Word    min_wid_mm, max_wid_mm;   /* Min/max width, in millimeters */
-    SANE_Word    min_hei_mm, max_hei_mm;   /* Min/max height, in millimeters */
-    SANE_Word    *resolutions;             /* Discrete resolutions, in DPI */
-    SANE_Range   res_range;                /* Resolutions range, in DPI */
-    SANE_Range   win_x_range, win_y_range; /* Window x/y ranges, in mm */
-} devcaps_source;
-
-/* Device Capabilities
- */
-typedef struct {
-    /* Device identification */
-    const char     *model;              /* Device model */
-    const char     *vendor;             /* Device vendor */
-
-    /* Sources */
-    SANE_String    *sane_sources;        /* Sources, in SANE format */
-    devcaps_source *src[NUM_OPT_SOURCE]; /* Missed sources are NULL */
-} devcaps;
-
-/* Initialize Device Capabilities
- */
-void
-devcaps_init (devcaps *caps);
-
-/* Cleanup Device Capabilities
- */
-void
-devcaps_cleanup (devcaps *caps);
-
-/* Reset Device Capabilities into initial state
- */
-void
-devcaps_reset (devcaps *caps);
-
-/* Parse device capabilities. devcaps structure must be initialized
- * before calling this function.
- *
- * Returns NULL if OK, error string otherwise
- */
-const char*
-devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len);
-
-/* Dump device capabilities, for debugging
- */
-void
-devcaps_dump (const char *name, devcaps *caps);
-
-/* Choose appropriate scanner resolution
- */
-SANE_Word
-devcaps_source_choose_resolution(devcaps_source *src, SANE_Word wanted);
-
-/* Choose appropriate color mode
- */
-OPT_COLORMODE
-devcaps_source_choose_colormode(devcaps_source *src, OPT_COLORMODE wanted);
 
 /******************** Image decoding ********************/
 /* Image decoding status

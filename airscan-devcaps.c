@@ -56,65 +56,12 @@ devcaps_cleanup (devcaps *caps)
 
 /* Reset Device Capabilities into initial state
  */
-void
+static void
 devcaps_reset (devcaps *caps)
 {
     devcaps_cleanup(caps);
     memset(caps, 0, sizeof(*caps));
     devcaps_init(caps);
-}
-
-/* Choose appropriate scanner resolution
- */
-SANE_Word
-devcaps_source_choose_resolution(devcaps_source *src, SANE_Word wanted)
-{
-    if (src->flags & DEVCAPS_SOURCE_RES_DISCRETE) {
-        SANE_Word res = src->resolutions[1];
-        SANE_Word delta = (SANE_Word) labs(wanted - res);
-        size_t i, end = array_of_word_len(&src->resolutions) + 1;
-
-        for (i = 2; i < end; i ++) {
-            SANE_Word res2 = src->resolutions[i];
-            SANE_Word delta2 = (SANE_Word) labs(wanted - res2);
-
-            if (delta2 <= delta) {
-                res = res2;
-                delta = delta2;
-            }
-        }
-
-        return res;
-    } else {
-        return math_range_fit(&src->res_range, wanted);
-    }
-}
-
-/* Choose appropriate color mode
- */
-OPT_COLORMODE
-devcaps_source_choose_colormode(devcaps_source *src, OPT_COLORMODE wanted)
-{
-    /* Prefer wanted mode if possible and if not, try to find
-     * a reasonable downgrade */
-    if (wanted != OPT_COLORMODE_UNKNOWN) {
-        while (wanted < NUM_OPT_COLORMODE) {
-            if ((src->colormodes & (1 << wanted)) != 0) {
-                return wanted;
-            }
-            wanted ++;
-        }
-    }
-
-    /* Nothing found in a previous step. Just choose the best mode
-     * supported by the scanner */
-    wanted = (OPT_COLORMODE) 0;
-    while ((src->colormodes & (1 << wanted)) == 0) {
-        g_assert(wanted < NUM_OPT_COLORMODE);
-        wanted ++;
-    }
-
-    return wanted;
 }
 
 /* Parse color modes. Returns NULL on success, error string otherwise
