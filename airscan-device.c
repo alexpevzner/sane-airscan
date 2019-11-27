@@ -1261,7 +1261,7 @@ device_job_set_state (device *dev, DEVICE_JOB_STATE state)
         g_cond_broadcast(&dev->job_state_cond);
 
         if (dev->job_state == DEVICE_JOB_DONE) {
-            if (dev->job_images_received == 0) {
+            if ((dev->flags & DEVICE_SCANNING) != 0) {
                 pollable_signal(dev->read_pollable);
             }
         }
@@ -1717,7 +1717,7 @@ SANE_Status
 device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
 {
     SANE_Int     len = 0;
-    IMAGE_STATUS image_status = IMAGE_OK;
+    SANE_Status  status = SANE_STATUS_GOOD;
 
     *len_out = 0; /* Must return 0, if status is not GOOD */
 
@@ -1738,7 +1738,14 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
         eloop_mutex_lock();
     }
 
-    if (dev->job_status == SANE_STATUS_CANCELLED || dev->read_image == NULL) {
+    if (dev->job_status == SANE_STATUS_CANCELLED) {
+        status = SANE_STATUS_CANCELLED;
+        goto DONE;
+    }
+
+    if (dev->read_image == NULL) {
+        status = dev->job_status;
+        g_assert(status != SANE_STATUS_GOOD);
         goto DONE;
     }
 
@@ -1749,20 +1756,24 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
      * from device. So here we adjust actual image to fit the expected (and
      * promised) parameters.
      */
-    image_status = IMAGE_OK;
-    for (len = 0; image_status == IMAGE_OK && len < max_len; ) {
+    for (len = 0; status == SANE_STATUS_GOOD && len < max_len; ) {
         if (dev->read_line_off == dev->read_line_size) {
             if (dev->read_line_num == dev->opt_params.lines) {
-                image_status = IMAGE_EOF;
+                status = SANE_STATUS_EOF;
             } else if (dev->read_line_num >= dev->read_params.lines) {
-                image_status = IMAGE_OK;
                 memset(dev->read_line_buf, 0xff, dev->read_line_size);
             } else {
-                image_status = image_decoder_read_line(dev->read_decoder_jpeg,
+                IMAGE_STATUS s;
+
+                s = image_decoder_read_line(dev->read_decoder_jpeg,
                     dev->read_line_buf);
+
+                if (s != IMAGE_OK) {
+                    status = SANE_STATUS_IO_ERROR;
+                }
             }
 
-            if (image_status == IMAGE_OK) {
+            if (status == SANE_STATUS_GOOD) {
                 dev->read_line_off = 0;
                 dev->read_line_num ++;
             }
@@ -1777,19 +1788,18 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
         }
     }
 
-    /* Cleanup and exit */
-DONE:
-    if (image_status == IMAGE_ERROR) {
+    if (status == SANE_STATUS_IO_ERROR) {
         device_job_set_status(dev, SANE_STATUS_IO_ERROR);
         device_cancel(dev);
-        len = 0;
     }
 
-    if (dev->job_status == SANE_STATUS_CANCELLED) {
-        len = 0;
+    /* Cleanup and exit */
+DONE:
+    if (status == SANE_STATUS_EOF && len > 0) {
+        status = SANE_STATUS_GOOD;
     }
 
-    if (len > 0) {
+    if (status == SANE_STATUS_GOOD) {
         *len_out = len;
         return SANE_STATUS_GOOD;
     }
@@ -1804,11 +1814,7 @@ DONE:
     g_free(dev->read_line_buf);
     dev->read_line_buf = NULL;
 
-    if (image_status == IMAGE_EOF) {
-        return SANE_STATUS_EOF;
-    } else {
-        return dev->job_status;
-    }
+    return status;
 }
 
 /******************** Device discovery events ********************/
