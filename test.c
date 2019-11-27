@@ -52,7 +52,7 @@ main (void)
 
     TRY(sane_init, NULL, NULL);
     TRY(sane_open, "", &handle);
-    TRY(sane_control_option, handle, OPT_SCAN_SOURCE, SANE_ACTION_SET_VALUE, OPTVAL_SOURCE_ADF_SIMPLEX, NULL);
+    //TRY(sane_control_option, handle, OPT_SCAN_SOURCE, SANE_ACTION_SET_VALUE, OPTVAL_SOURCE_ADF_SIMPLEX, NULL);
     TRY(sane_get_parameters, handle, &params);
     printf("image size: %dx%d\n", params.pixels_per_line, params.lines);
     TRY(sane_start,handle);
