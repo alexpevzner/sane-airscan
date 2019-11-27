@@ -1012,19 +1012,38 @@ device_escl_start_scan (device *dev)
     unsigned int x_off = 0;
     unsigned int y_off = 0;
     unsigned int wid, hei;
-    const char   *source = "Platen";
-    //const char   *source = "Feeder";
-    const char   *colormode = "RGB24";
-    //const char   *colormode = "BlackAndWhite1";
+    const char   *source = NULL;
+    const char   *colormode = NULL;
+    bool         duplex = false;
     const char   *mime = "image/jpeg";
     //const char   *mime = "application/pdf";
-    SANE_Word    x_resolution = 300;
-    SANE_Word    y_resolution = 300;
-    bool         duplex = false;
+    SANE_Word    x_resolution = dev->opt_resolution;
+    SANE_Word    y_resolution = dev->opt_resolution;
 
+    /* Prepare parameters */
     wid = math_mm2px(dev->opt_br_x);
     hei = math_mm2px(dev->opt_br_y);
 
+    switch (dev->opt_src) {
+    case OPT_SOURCE_PLATEN:      source = "Platen"; duplex = false; break;
+    case OPT_SOURCE_ADF_SIMPLEX: source = "Feeder"; duplex = false; break;
+    case OPT_SOURCE_ADF_DUPLEX:  source = "Feeder"; duplex = true; break;
+
+    default:
+        g_assert_not_reached();
+    }
+
+
+    switch (dev->opt_colormode) {
+    case OPT_COLORMODE_COLOR:     colormode = "RGB24"; break;
+    case OPT_COLORMODE_GRAYSCALE: colormode = "Grayscale8"; break;
+    case OPT_COLORMODE_LINEART:   colormode = "BlackAndWhite1"; break;
+
+    default:
+        g_assert_not_reached();
+    }
+
+    /* Dump parameters */
     trace_printf(dev->trace, "==============================");
     trace_printf(dev->trace, "Starting scan, using the following parameters:");
     trace_printf(dev->trace, "  source:         %s", source);
@@ -1035,6 +1054,7 @@ device_escl_start_scan (device *dev)
     trace_printf(dev->trace, "  resolution:     %d", dev->opt_resolution);
     trace_printf(dev->trace, "");
 
+    /* Send request to device */
     const char *rq = g_strdup_printf(
         "<?xml version='1.0' encoding='UTF-8'?>\n"
         "<scan:ScanSettings\n"
