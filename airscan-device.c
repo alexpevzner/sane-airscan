@@ -445,6 +445,7 @@ DONE:
     g_cond_broadcast(&device_table_cond);
 }
 
+/******************** HTTP operations ********************/
 /* User data, associated with each HTTP message
  */
 typedef struct {
@@ -579,7 +580,7 @@ device_escl_cleanup_callback (device *dev, SoupMessage *msg)
     device_job_set_state(dev, DEVICE_JOB_DONE);
 }
 
-/* ESCL: delete current job
+/* ESCL: cleanup after scan (delete current job)
  *
  * HTTP DELETE ${dev->job_location}
  */
@@ -638,7 +639,6 @@ DONE:
     xml_iter_finish(&iter);
     return err;
 }
-
 
 /* HTTP POST ${dev->uri_escl}/ScannerStatus callback
  */
@@ -701,7 +701,7 @@ DONE:
     }
 }
 
-/* ESCL: get scanner status
+/* ESCL: chech scanner status (used after failed scan reques to clarify reasons)
  *
  * HTTP POST ${dev->uri_escl}/ScannerStatus
  */
@@ -769,7 +769,7 @@ device_escl_load_page (device *dev)
     g_string_truncate(dev->job_location, sz);
 }
 
-/* * HTTP POST ${dev->uri_escl}/ScanJobs callback
+/* HTTP POST ${dev->uri_escl}/ScanJobs callback
  */
 static void
 device_escl_start_scan_callback (device *dev, SoupMessage *msg)
@@ -1453,7 +1453,6 @@ device_event_init_scan_finished (void)
     g_cond_broadcast(&device_table_cond);
 }
 
-
 /******************** Initialization/cleanup ********************/
 /* Initialize device management
  */
@@ -1514,7 +1513,6 @@ device_management_start_stop (bool start)
         device_management_stop();
     }
 }
-
 
 /* vim:ts=8:sw=4:et
  */
