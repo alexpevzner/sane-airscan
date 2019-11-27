@@ -13,10 +13,6 @@
  */
 #define DEVICE_TABLE_READY_TIMEOUT              5
 
-/* Default resolution, DPI
- */
-#define DEVICE_DEFAULT_RESOLUTION               300
-
 /* How often to poll for scanner state change, in seconds
  */
 #define DEVICE_SCAN_STATE_POLL_INTERVAL         1
@@ -1201,6 +1197,11 @@ device_start (device *dev)
     /* Already scanning? */
     if ((dev->flags & DEVICE_SCANNING) != 0) {
         return SANE_STATUS_DEVICE_BUSY;
+    }
+
+    /* Don's start if window is not valid */
+    if (dev->opt.params.lines == 0 || dev->opt.params.pixels_per_line == 0) {
+        return SANE_STATUS_INVAL;
     }
 
     /* Update state */
