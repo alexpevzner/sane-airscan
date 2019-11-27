@@ -13,6 +13,14 @@ network configuration etc.
 Unfortunately, Linux doesn't support AirScan, and the goal of this
 project is to fix this situation.
 
+### Installation
+```
+git clone https://github.com/alexpevzner/sane-airscan.git
+cd sane-airscan
+make
+make install
+```
+
 ## References
 
 [kno10/python-scan-eSCL](https://github.com/kno10/python-scan-eSCL)
