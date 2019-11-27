@@ -1,5 +1,7 @@
-# sane-airscan
-AirScan (a.k.a. eSCL) backend for sane
+# sane-airscan -- Linux support of Apple AirScan (eSCL) compatible document scanners
+
+
+
 
 ## References
 
