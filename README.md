@@ -14,6 +14,19 @@ Unfortunately, Linux doesn't support AirScan, and the goal of this
 project is to fix this situation.
 
 ### Installation
+#### Install required libraries - Fedora and similar
+```
+dnf install avahi-devel
+dnf install avahi-glib-devel
+dnf install glib2-devel
+dnf install libjpeg-turbo-devel
+dnf install libsoup-devel
+dnf install libxml2-devel
+
+dnf install avahi-devel avahi-glib-devel glib2-devel libjpeg-turbo-devel libsoup-devel libxml2-devel
+
+```
+#### Download, build and install sane-airscan
 ```
 git clone https://github.com/alexpevzner/sane-airscan.git
 cd sane-airscan
