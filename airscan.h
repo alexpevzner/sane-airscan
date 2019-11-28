@@ -495,8 +495,6 @@ typedef struct {
     SANE_String  *sane_colormodes;         /* Color modes, in SANE format */
     SANE_Word    min_wid_px, max_wid_px;   /* Min/max width, in pixels */
     SANE_Word    min_hei_px, max_hei_px;   /* Min/max height, in pixels */
-    SANE_Word    min_wid_mm, max_wid_mm;   /* Min/max width, in millimeters */
-    SANE_Word    min_hei_mm, max_hei_mm;   /* Min/max height, in millimeters */
     SANE_Word    *resolutions;             /* Discrete resolutions, in DPI */
     SANE_Range   res_range;                /* Resolutions range, in DPI */
     SANE_Range   win_x_range, win_y_range; /* Window x/y ranges, in mm */

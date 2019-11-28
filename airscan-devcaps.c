@@ -336,16 +336,10 @@ devcaps_source_parse (xml_iter *iter, devcaps_source **out)
 
         src->flags |= DEVCAPS_SOURCE_HAS_SIZE;
 
-        /* Recompute to millimeters */
-        src->min_wid_mm = math_px2mm(src->min_wid_px);
-        src->max_wid_mm = math_px2mm(src->max_wid_px);
-        src->min_hei_mm = math_px2mm(src->min_hei_px);
-        src->max_hei_mm = math_px2mm(src->max_hei_px);
-
         /* Set window ranges */
         src->win_x_range.min = src->win_y_range.min = 0;
-        src->win_x_range.max = src->max_wid_mm;
-        src->win_y_range.max = src->max_hei_mm;
+        src->win_x_range.max = math_px2mm(src->max_wid_px);
+        src->win_y_range.max = math_px2mm(src->max_hei_px);
     }
 
 DONE:
@@ -495,10 +489,10 @@ devcaps_dump (const char *name, devcaps *caps)
         }
 
         DBG_PROTO(name, "  %s:", opt_source_to_sane(opt_src));
-        DBG_PROTO(name, "    Min window: %gx%g mm",
-                SANE_UNFIX(src->min_wid_mm), SANE_UNFIX(src->min_hei_mm));
-        DBG_PROTO(name, "    Max window: %gx%g mm",
-                SANE_UNFIX(src->max_wid_mm), SANE_UNFIX(src->max_hei_mm));
+        DBG_PROTO(name, "    Min window: %dx%d",
+                src->min_wid_px, src->min_hei_px);
+        DBG_PROTO(name, "    Max window: %dx%d",
+                src->max_wid_px, src->max_hei_px);
 
         if (src->flags & DEVCAPS_SOURCE_RES_DISCRETE) {
             g_string_truncate(buf, 0);
