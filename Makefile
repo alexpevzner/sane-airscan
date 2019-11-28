@@ -41,7 +41,7 @@ CFLAGS += -Wl,-z,nodelete
 all:	libsane-airscan.so.1 test
 
 libsane-airscan.so.1: Makefile $(SRC) airscan.h airscan.sym
-	@ctags -R .
+	-ctags -R .
 	gcc -o libsane-airscan.so.1 -shared ${CFLAGS} $(SRC)
 
 test:	libsane-airscan.so.1 test.c
