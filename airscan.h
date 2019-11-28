@@ -483,7 +483,7 @@ enum {
     DEVCAPS_SOURCE_FMT_PDF  = (1 << 11), /* PDF image */
 
     /* Miscellaneous flags */
-    DEVCAPS_SOURCE_HAS_SIZE = (1 << 12), /* min_width, max_height and
+    DEVCAPS_SOURCE_HAS_SIZE = (1 << 12), /* max_width, max_height and
                                             derivatives are valid */
 };
 
