@@ -128,6 +128,14 @@ image_decoder_jpeg_read_line (image_decoder *decoder, void *buffer)
     return true;
 }
 
+/* Dummy "output error message" callback for JPEG decoder
+ */
+static void
+image_decoder_jpeg_output_message (j_common_ptr cinfo)
+{
+    (void) cinfo;
+}
+
 /* Create JPEG image decoder
  */
 image_decoder*
@@ -143,6 +151,7 @@ image_decoder_jpeg_new (void)
     jpeg->decoder.read_line = image_decoder_jpeg_read_line;
 
     jpeg->cinfo.err = jpeg_std_error(&jpeg->jerr);
+    jpeg->jerr.output_message = image_decoder_jpeg_output_message;
     jpeg_create_decompress(&jpeg->cinfo);
 
     return &jpeg->decoder;
