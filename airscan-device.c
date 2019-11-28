@@ -13,10 +13,6 @@
  */
 #define DEVICE_TABLE_READY_TIMEOUT              5
 
-/* How often to poll for scanner state change, in seconds
- */
-#define DEVICE_SCAN_STATE_POLL_INTERVAL         1
-
 /******************** Device management ********************/
 /* Device flags
  */
