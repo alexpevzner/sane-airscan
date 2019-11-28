@@ -704,14 +704,6 @@ void
 device_management_start_stop (bool start);
 
 /******************** Image decoding ********************/
-/* Image decoding status
- */
-typedef enum {
-    IMAGE_ERROR = -1, /* Decoding error */
-    IMAGE_EOF,        /* End of "file" */
-    IMAGE_OK          /* No error */
-} IMAGE_STATUS;
-
 /* The window withing the image
  *
  * Note, all sized and coordinates are in pixels
@@ -725,14 +717,12 @@ typedef struct {
  */
 typedef struct image_decoder image_decoder;
 struct image_decoder {
-    void         (*free) (image_decoder *decoder);
-    IMAGE_STATUS (*begin) (image_decoder *decoder, const void *data,
-                         size_t size);
-    void         (*reset) (image_decoder *decoder);
-    void         (*get_params) (image_decoder *decoder,
-                         SANE_Parameters *params);
-    void         (*set_window) (image_decoder *decoder, image_window *win);
-    IMAGE_STATUS (*read_line) (image_decoder *decoder, void *buffer);
+    void (*free) (image_decoder *decoder);
+    bool (*begin) (image_decoder *decoder, const void *data, size_t size);
+    void (*reset) (image_decoder *decoder);
+    void (*get_params) (image_decoder *decoder, SANE_Parameters *params);
+    void (*set_window) (image_decoder *decoder, image_window *win);
+    bool (*read_line) (image_decoder *decoder, void *buffer);
 };
 
 /* Create JPEG image decoder
@@ -751,7 +741,7 @@ image_decoder_free (image_decoder *decoder)
 /* Begin image decoding. Decoder may assume that provided data
  * buffer remains valid during a whole decoding cycle
  */
-static inline IMAGE_STATUS
+static inline bool
 image_decoder_begin (image_decoder *decoder, const void *data, size_t size)
 {
     return decoder->begin(decoder, data, size);
@@ -798,7 +788,7 @@ image_decoder_set_window (image_decoder *decoder, image_window *win)
 /* Read next line of image. Decoder may safely assume the provided
  * buffer is big enough to keep the entire line
  */
-static inline IMAGE_STATUS
+static inline bool
 image_decoder_read_line (image_decoder *decoder, void *buffer)
 {
     return decoder->read_line(decoder, buffer);

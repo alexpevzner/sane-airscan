@@ -1276,33 +1276,32 @@ device_cancel (device *dev)
 static bool
 device_read_push (device *dev)
 {
-    IMAGE_STATUS image_status;
-    size_t       line_capacity;
+    bool   ok;
+    size_t line_capacity;
 
     dev->read_image = g_ptr_array_remove_index(dev->job_images, 0);
 
     /* Start new image decoding */
-    image_status = image_decoder_begin(dev->read_decoder_jpeg,
+    ok = image_decoder_begin(dev->read_decoder_jpeg,
             dev->read_image->data, dev->read_image->length);
 
-    if (image_status != IMAGE_OK) {
-        return false;
+    /* Allocate line buffer */
+    if (ok) {
+        image_decoder_get_params(dev->read_decoder_jpeg, &dev->read_params);
+        line_capacity = math_max(dev->opt.params.bytes_per_line,
+                dev->read_params.bytes_per_line);
+
+        dev->read_line_buf = g_malloc(line_capacity);
+        memset(dev->read_line_buf, 0xff, line_capacity);
+
+        dev->read_line_num = 0;
+        dev->read_line_size = dev->opt.params.bytes_per_line;
+        dev->read_line_off = dev->read_line_size;
+
+        pollable_signal(dev->read_pollable);
     }
 
-    /* Allocate line buffer */
-    image_decoder_get_params(dev->read_decoder_jpeg, &dev->read_params);
-    line_capacity = math_max(dev->opt.params.bytes_per_line,
-            dev->read_params.bytes_per_line);
-
-    dev->read_line_buf = g_malloc(line_capacity);
-    memset(dev->read_line_buf, 0xff, line_capacity);
-
-    dev->read_line_num = 0;
-    dev->read_line_size = dev->opt.params.bytes_per_line;
-    dev->read_line_off = dev->read_line_size;
-
-    pollable_signal(dev->read_pollable);
-    return true;
+    return ok;
 }
 
 /* Read scanned image
@@ -1357,12 +1356,12 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
             } else if (dev->read_line_num >= dev->read_params.lines) {
                 memset(dev->read_line_buf, 0xff, dev->read_line_size);
             } else {
-                IMAGE_STATUS s;
+                bool ok;
 
-                s = image_decoder_read_line(dev->read_decoder_jpeg,
+                ok = image_decoder_read_line(dev->read_decoder_jpeg,
                     dev->read_line_buf);
 
-                if (s != IMAGE_OK) {
+                if (!ok) {
                     status = SANE_STATUS_IO_ERROR;
                 }
             }
