@@ -52,5 +52,8 @@ install: all
 	install -D dll.conf $(PREFIX)/etc/sane.d/dll.d/airscan
 	install -s -D -t $(PREFIX)/$(LIBDIR)/sane $(BACKEND) 
 
+clean:
+	rm -f test $(BACKEND)
+
 test:	$(BACKEND) test.c
 	gcc -o test test.c $(BACKEND) -Wl,-rpath . ${CFLAGS}
