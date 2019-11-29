@@ -1,3 +1,7 @@
+CONFDIR = /etc/sane.d
+LIBDIR = `pkg-config --variable=libdir sane-backends`
+BACKEND = libsane-airscan.so.1
+
 SRC	= \
 	airscan.c \
 	airscan-array.c \
@@ -23,9 +27,6 @@ CFLAGS += `pkg-config --cflags --libs libsoup-2.4`
 CFLAGS += `pkg-config --cflags --libs libxml-2.0`
 CFLAGS += -Wl,--version-script=airscan.sym
 
-LIBDIR = `pkg-config --variable=libdir sane-backends`
-BACKEND = libsane-airscan.so.1
-
 # This magic is a workaround for libsoup bug.
 #
 # We are linked against libsoup. If SANE backend goes unloaded
@@ -48,8 +49,10 @@ $(BACKEND): Makefile $(SRC) airscan.h airscan.sym
 	gcc -o $(BACKEND) -shared ${CFLAGS} $(SRC)
 
 install: all
-	install -D -t $(PREFIX)/etc/sane.d airscan.conf
-	install -D dll.conf $(PREFIX)/etc/sane.d/dll.d/airscan
+	mkdir -p $(PREFIX)$(CONFDIR)
+	mkdir -p $(PREFIX)$(CONFDIR)/dll.d
+	cp -n airscan.conf $(PREFIX)$(CONFDIR)
+	cp -n dll.conf $(PREFIX)$(CONFDIR)/dll.d/airscan
 	install -s -D -t $(PREFIX)/$(LIBDIR)/sane $(BACKEND) 
 
 clean:
