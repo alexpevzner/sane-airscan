@@ -23,6 +23,9 @@ CFLAGS += `pkg-config --cflags --libs libsoup-2.4`
 CFLAGS += `pkg-config --cflags --libs libxml-2.0`
 CFLAGS += -Wl,--version-script=airscan.sym
 
+LIBDIR = `pkg-config --variable=libdir sane-backends`
+BACKEND = libsane-airscan.so.1
+
 # This magic is a workaround for libsoup bug.
 #
 # We are linked against libsoup. If SANE backend goes unloaded
@@ -38,12 +41,16 @@ CFLAGS += -Wl,--version-script=airscan.sym
 # by adding NODELETE flag to the resulting ELF shared object
 CFLAGS += -Wl,-z,nodelete
 
-all:	libsane-airscan.so.1 test
+all:	$(BACKEND) test
 
-libsane-airscan.so.1: Makefile $(SRC) airscan.h airscan.sym
+$(BACKEND): Makefile $(SRC) airscan.h airscan.sym
 	-ctags -R .
-	gcc -o libsane-airscan.so.1 -shared ${CFLAGS} $(SRC)
+	gcc -o $(BACKEND) -shared ${CFLAGS} $(SRC)
 
-test:	libsane-airscan.so.1 test.c
-	#gcc -o test test.c -l sane
-	gcc -o test test.c libsane-airscan.so.1 -Wl,-rpath . ${CFLAGS}
+install: all
+	install -D -t $(PREFIX)/etc/sane.d airscan.conf
+	install -D dll.conf $(PREFIX)/etc/sane.d/dll.d/airscan
+	install -s -D -t $(PREFIX)/$(LIBDIR)/sane $(BACKEND) 
+
+test:	$(BACKEND) test.c
+	gcc -o test test.c $(BACKEND) -Wl,-rpath . ${CFLAGS}
