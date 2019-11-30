@@ -16,11 +16,11 @@ project is to fix this situation.
 ### Installation
 #### Install required libraries - Fedora and similar
 ```
-dnf install avahi-devel avahi-glib-devel glib2-devel libjpeg-turbo-devel libsoup-devel libxml2-devel
+dnf install avahi-devel avahi-glib-devel gcc git glib2-devel libjpeg-turbo-devel libsoup-devel libxml2-devel make sane-backends-devel
 ```
 #### Install required libraries - Ububtu, Debian and similar
 ```
-TODO
+apt-get install libavahi-client-dev libavahi-glib-dev gcc git libglib2.0-dev libjpeg-turbo8-dev libsane-dev libsoup2.4-dev libxml2-dev make pkg-config
 ```
 #### Download, build and install sane-airscan
 ```
