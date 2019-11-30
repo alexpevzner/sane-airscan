@@ -77,7 +77,10 @@ struct device {
     SANE_Byte            *read_line_buf;     /* Single-line buffer */
     SANE_Int             read_line_num;      /* Current image line 0-based */
     size_t               read_line_size;     /* Logical size of single line */
-    size_t               read_line_off;      /* Offset in the line */
+    size_t               read_line_off;      /* Current offset in the line */
+    SANE_Int             read_skip_lines;    /* How many lines to skip */
+    size_t               read_skip_bytes;    /* How many bytes to skip at line
+                                                beginning */
 };
 
 /* Static variables
@@ -1281,7 +1284,12 @@ device_read_push (device *dev)
     ok = image_decoder_begin(dev->read_decoder_jpeg,
             dev->read_image->data, dev->read_image->length);
 
-    /* Allocate line buffer */
+    /* Initialize image decoding
+     *
+     * Here we set line width to match computed parameters rather
+     * that actual image width. Comments to device_read_decode_line()
+     * explain why
+     */
     if (ok) {
         image_decoder_get_params(dev->read_decoder_jpeg, &dev->read_params);
         line_capacity = math_max(dev->opt.params.bytes_per_line,
@@ -1298,6 +1306,46 @@ device_read_push (device *dev)
     }
 
     return ok;
+}
+
+/* Decode next image line
+ *
+ * Note, actual image size, returned by device, may be slightly different
+ * from an image size, computed according to scan options and requested
+ * from device. So here we adjust actual image to fit the expected (and
+ * promised) parameters.
+ *
+ * Alternatively, we could make it problem of frontend. But fronends
+ * expect image parameters to be accurate just after sane_start() returns,
+ * so at this case sane_start() will have to wait a long time until image
+ * is fully available. Taking in account that some popular frontends
+ * (read "xsane") doesn't allow to cancel scanning before sane_start()
+ * return, it is not good from the user experience perspective.
+ */
+static SANE_Status
+device_read_decode_line (device *dev)
+{
+    const SANE_Int n = dev->read_line_num;
+
+    if (n == dev->opt.params.lines) {
+        return SANE_STATUS_EOF;
+    }
+
+    if (n < dev->read_skip_lines || n == dev->read_params.lines) {
+        memset(dev->read_line_buf, 0xff, dev->read_line_size);
+    } else {
+        bool ok = image_decoder_read_line(dev->read_decoder_jpeg,
+                dev->read_line_buf);
+
+        if (!ok) {
+            return SANE_STATUS_IO_ERROR;
+        }
+    }
+
+    dev->read_line_off = dev->read_skip_bytes;
+    dev->read_line_num ++;
+
+    return SANE_STATUS_GOOD;
 }
 
 /* Read scanned image
@@ -1338,34 +1386,10 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
         goto DONE;
     }
 
-    /* Read line by line
-     *
-     * Note, actual image size, returned by device, may be slightly different
-     * from an image size, computed according to scan options and requested
-     * from device. So here we adjust actual image to fit the expected (and
-     * promised) parameters.
-     */
+    /* Read line by line */
     for (len = 0; status == SANE_STATUS_GOOD && len < max_len; ) {
         if (dev->read_line_off == dev->read_line_size) {
-            if (dev->read_line_num == dev->opt.params.lines) {
-                status = SANE_STATUS_EOF;
-            } else if (dev->read_line_num >= dev->read_params.lines) {
-                memset(dev->read_line_buf, 0xff, dev->read_line_size);
-            } else {
-                bool ok;
-
-                ok = image_decoder_read_line(dev->read_decoder_jpeg,
-                    dev->read_line_buf);
-
-                if (!ok) {
-                    status = SANE_STATUS_IO_ERROR;
-                }
-            }
-
-            if (status == SANE_STATUS_GOOD) {
-                dev->read_line_off = 0;
-                dev->read_line_num ++;
-            }
+            status = device_read_decode_line (dev);
         } else {
             SANE_Int sz = math_min(max_len - len,
                 dev->read_line_size - dev->read_line_off);
