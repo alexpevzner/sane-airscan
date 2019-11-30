@@ -11,6 +11,8 @@
 #include <sys/eventfd.h>
 #include <poll.h>
 
+#pragma GCC diagnostic ignored "-Wunused-result"
+
 /* The pollable event
  */
 struct pollable {
@@ -56,7 +58,7 @@ void
 pollable_signal (pollable *p)
 {
     static uint64_t c = 1;
-    (void) write(p->efd, &c, sizeof(c));
+    write(p->efd, &c, sizeof(c));
 }
 
 /* Make pollable event "not ready"
@@ -66,7 +68,7 @@ pollable_reset (pollable *p)
 {
     uint64_t unused;
 
-    (void) read(p->efd, &unused, sizeof(unused));
+    read(p->efd, &unused, sizeof(unused));
 }
 
 /* Wait until pollable event is ready
