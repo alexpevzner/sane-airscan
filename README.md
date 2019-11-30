@@ -15,12 +15,20 @@ project is to fix this situation.
 
 ### Installation
 #### Install required libraries - Fedora and similar
+As root, execute the following commands:
 ```
-dnf install avahi-devel avahi-glib-devel gcc git glib2-devel libjpeg-turbo-devel libsoup-devel libxml2-devel make sane-backends-devel
+dnf install gcc git make pkgconf-pkg-config
+dnf install avahi-devel avahi-glib-devel
+dnf install glib2-devel libsoup-devel libxml2-devel
+dnf install libjpeg-turbo-devel sane-backends-devel
 ```
-#### Install required libraries - Ububtu, Debian and similar
+#### Install required libraries - Ubuntu, Debian and similar
+As root, execute the following commands:
 ```
-apt-get install libavahi-client-dev libavahi-glib-dev gcc git libglib2.0-dev libjpeg-turbo8-dev libsane-dev libsoup2.4-dev libxml2-dev make pkg-config
+apt-get install libavahi-client-dev libavahi-glib-dev
+apt-get install gcc git make pkg-config
+apt-get install libglib2.0-dev libsoup2.4-dev libxml2-dev
+apt-get install libjpeg-turbo8-dev libsane-dev
 ```
 #### Download, build and install sane-airscan
 ```
