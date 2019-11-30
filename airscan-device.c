@@ -867,42 +867,32 @@ device_escl_start_scan (device *dev)
     trace_printf(dev->trace, "  resolution:     %d", dev->opt.resolution);
     trace_printf(dev->trace, "");
 
+    /* Build scan request */
+    xml_wr *xml = xml_wr_begin("scan:ScanSettings");
+
+    xml_wr_add_text(xml, "pwg:Version", "2.6");
+
+    xml_wr_enter(xml, "pwg:ScanRegions");
+    xml_wr_enter(xml, "pwg:ScanRegion");
+    xml_wr_add_uint(xml, "pwg:XOffset", x_off);
+    xml_wr_add_uint(xml, "pwg:YOffset", y_off);
+    xml_wr_add_uint(xml, "pwg:Width", wid);
+    xml_wr_add_uint(xml, "pwg:Height", hei);
+    xml_wr_add_text(xml, "pwg:ContentRegionUnits",
+            "escl:ThreeHundredthsOfInches");
+    xml_wr_leave(xml); /* pwg:ScanRegion */
+    xml_wr_leave(xml); /* pwg:ScanRegions */
+
+    xml_wr_add_text(xml, "scan:InputSource", source);
+    xml_wr_add_text(xml, "pwg:InputSource", source);
+    xml_wr_add_text(xml, "scan:ColorMode", colormode);
+    xml_wr_add_text(xml, "scan:DocumentFormatExt", mime);
+    xml_wr_add_uint(xml, "scan:XResolution", x_resolution);
+    xml_wr_add_uint(xml, "scan:YResolution", y_resolution);
+    xml_wr_add_bool(xml, "scan:Duplex", duplex);
+
     /* Send request to device */
-    const char *rq = g_strdup_printf(
-        "<?xml version='1.0' encoding='UTF-8'?>\n"
-        "<scan:ScanSettings\n"
-        "    xmlns:scan=\"http://schemas.hp.com/imaging/escl/2011/05/03\"\n"
-        "    xmlns:pwg=\"http://www.pwg.org/schemas/2010/12/sm\">\n"
-        "  <pwg:Version>2.6</pwg:Version>\n"
-        "  <pwg:ScanRegions>\n"
-        "    <pwg:ScanRegion>\n"
-        "      <pwg:XOffset>%d</pwg:XOffset>\n"
-        "      <pwg:YOffset>%d</pwg:YOffset>\n"
-        "      <pwg:Width>%d</pwg:Width>\n"
-        "      <pwg:Height>%d</pwg:Height>\n"
-        "      <pwg:ContentRegionUnits>escl:ThreeHundredthsOfInches</pwg:ContentRegionUnits>\n"
-        "    </pwg:ScanRegion>\n"
-        "  </pwg:ScanRegions>\n"
-        "  <scan:InputSource>%s</scan:InputSource>\n"
-        "  <pwg:InputSource>%s</pwg:InputSource>\n"
-        "  <scan:ColorMode>%s</scan:ColorMode>\n"
-        "  <scan:DocumentFormatExt>%s</scan:DocumentFormatExt>\n"
-        "  <scan:XResolution>%d</scan:XResolution>\n"
-        "  <scan:YResolution>%d</scan:YResolution>\n"
-        "  <scan:Duplex>%s</scan:Duplex>\n"
-        "</scan:ScanSettings>\n",
-        x_off,
-        y_off,
-        wid,
-        hei,
-        source,
-        source,
-        colormode,
-        mime,
-        x_resolution,
-        y_resolution,
-        duplex ? "true" : "false"
-    );
+    const char *rq = xml_wr_finish (xml);
 
     device_job_set_state(dev, DEVICE_JOB_REQUESTING);
     device_http_perform(dev, "ScanJobs", "POST", rq,

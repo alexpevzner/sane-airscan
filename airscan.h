@@ -391,6 +391,46 @@ xml_rd_node_value (xml_rd *xml);
 const char*
 xml_rd_node_value_uint (xml_rd *xml, SANE_Word *val);
 
+/* XML writer
+ */
+typedef struct xml_wr xml_wr;
+
+/* Begin writing XML document. Root node will be created automatically
+ */
+xml_wr*
+xml_wr_begin (const char *root);
+
+/* Finish writing, generate document string.
+ * Caller must g_free() this string after use
+ */
+const char*
+xml_wr_finish (xml_wr *xml);
+
+/* Add node with textual value
+ */
+void
+xml_wr_add_text (xml_wr *xml, const char *name, const char *value);
+
+/* Add node with unsigned integer value
+ */
+void
+xml_wr_add_uint (xml_wr *xml, const char *name, unsigned int value);
+
+/* Add node with boolean value
+ */
+void
+xml_wr_add_bool (xml_wr *xml, const char *name, bool value);
+
+/* Create node with children and enter newly added node
+ */
+void
+xml_wr_enter (xml_wr *xml, const char *name);
+
+/* Leave the current node
+ */
+void
+xml_wr_leave (xml_wr *xml);
+
 /******************** Sane Options********************/
 /* Options numbers, for internal use
  */
