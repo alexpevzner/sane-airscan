@@ -56,7 +56,7 @@ void
 pollable_signal (pollable *p)
 {
     static uint64_t c = 1;
-    write(p->efd, &c, sizeof(c));
+    (void) write(p->efd, &c, sizeof(c));
 }
 
 /* Make pollable event "not ready"
@@ -66,7 +66,7 @@ pollable_reset (pollable *p)
 {
     uint64_t unused;
 
-    read(p->efd, &unused, sizeof(unused));
+    (void) read(p->efd, &unused, sizeof(unused));
 }
 
 /* Wait until pollable event is ready
