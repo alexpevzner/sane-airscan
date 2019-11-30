@@ -322,74 +322,74 @@ size_t
 array_of_string_max_strlen(SANE_String **a);
 
 /******************** XML utilities ********************/
-/* XML iterator
+/* XML reader
  */
-typedef struct xml_iter xml_iter;
+typedef struct xml_rd xml_rd;
 
-/* Parse XML text and initialize iterator to iterate
+/* Parse XML text and initialize reader to iterate
  * starting from the root node
  *
- * On success, saves newly constructed iterator into
- * the iter parameter and returns NULL
+ * On success, saves newly constructed readrr into
+ * the xml parameter and returns NULL
  *
  * On a error, returns a error text
  */
 const char*
-xml_iter_begin (xml_iter **iter, const char *xml_text, size_t xml_len);
+xml_rd_begin (xml_rd **xml, const char *xml_text, size_t xml_len);
 
-/* Finish iteration, free allocated resources
+/* Finish reading, free allocated resources
  */
 void
-xml_iter_finish (xml_iter **iter);
+xml_rd_finish (xml_rd **xml);
 
 /* Check for end-of-document condition
  */
 bool
-xml_iter_end (xml_iter *iter);
+xml_rd_end (xml_rd *xml);
 
 /* Shift to the next node
  */
 void
-xml_iter_next (xml_iter *iter);
+xml_rd_next (xml_rd *xml);
 
 /* Enter the current node - iterate its children
  */
 void
-xml_iter_enter (xml_iter *iter);
+xml_rd_enter (xml_rd *xml);
 
 /* Leave the current node - return to its parent
  */
 void
-xml_iter_leave (xml_iter *iter);
+xml_rd_leave (xml_rd *xml);
 
 /* Get name of the current node.
  *
- * The returned string remains valid, until iterator is cleaned up
+ * The returned string remains valid, until reader is cleaned up
  * or current node is changed (by set/next/enter/leave operations).
  * You don't need to free this string explicitly
  */
 const char*
-xml_iter_node_name (xml_iter *iter);
+xml_rd_node_name (xml_rd *xml);
 
 /* Match name of the current node against the pattern
  */
 bool
-xml_iter_node_name_match (xml_iter *iter, const char *pattern);
+xml_rd_node_name_match (xml_rd *xml, const char *pattern);
 
 /* Get value of the current node as text
  *
- * The returned string remains valid, until iterator is cleaned up
+ * The returned string remains valid, until reader is cleaned up
  * or current node is changed (by set/next/enter/leave operations).
  * You don't need to free this string explicitly
  */
 const char*
-xml_iter_node_value (xml_iter *iter);
+xml_rd_node_value (xml_rd *xml);
 
 /* Get value of the current node as unsigned integer
  * Returns error string, NULL if OK
  */
 const char*
-xml_iter_node_value_uint (xml_iter *iter, SANE_Word *val);
+xml_rd_node_value_uint (xml_rd *xml, SANE_Word *val);
 
 /******************** Sane Options********************/
 /* Options numbers, for internal use

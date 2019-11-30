@@ -67,15 +67,15 @@ devcaps_reset (devcaps *caps)
 /* Parse color modes. Returns NULL on success, error string otherwise
  */
 static const char*
-devcaps_source_parse_color_modes (xml_iter *iter, devcaps_source *src)
+devcaps_source_parse_color_modes (xml_rd *xml, devcaps_source *src)
 {
     src->colormodes = 0;
     array_of_string_reset(&src->sane_colormodes);
 
-    xml_iter_enter(iter);
-    for (; !xml_iter_end(iter); xml_iter_next(iter)) {
-        if(xml_iter_node_name_match(iter, "scan:ColorMode")) {
-            const char *v = xml_iter_node_value(iter);
+    xml_rd_enter(xml);
+    for (; !xml_rd_end(xml); xml_rd_next(xml)) {
+        if(xml_rd_node_name_match(xml, "scan:ColorMode")) {
+            const char *v = xml_rd_node_value(xml);
             if (!strcmp(v, "BlackAndWhite1")) {
                 src->colormodes |= 1 << OPT_COLORMODE_LINEART;
             } else if (!strcmp(v, "Grayscale8")) {
@@ -85,7 +85,7 @@ devcaps_source_parse_color_modes (xml_iter *iter, devcaps_source *src)
             }
         }
     }
-    xml_iter_leave(iter);
+    xml_rd_leave(xml);
 
     OPT_COLORMODE opt_colormode;
     for (opt_colormode = (OPT_COLORMODE) 0; opt_colormode < NUM_OPT_COLORMODE;
@@ -102,13 +102,13 @@ devcaps_source_parse_color_modes (xml_iter *iter, devcaps_source *src)
 /* Parse document formats. Returns NULL on success, error string otherwise
  */
 static const char*
-devcaps_source_parse_document_formats (xml_iter *iter, devcaps_source *src)
+devcaps_source_parse_document_formats (xml_rd *xml, devcaps_source *src)
 {
-    xml_iter_enter(iter);
-    for (; !xml_iter_end(iter); xml_iter_next(iter)) {
-        if(xml_iter_node_name_match(iter, "pwg:DocumentFormat") ||
-           xml_iter_node_name_match(iter, "scan:DocumentFormatExt")) {
-            const char *v = xml_iter_node_value(iter);
+    xml_rd_enter(xml);
+    for (; !xml_rd_end(xml); xml_rd_next(xml)) {
+        if(xml_rd_node_name_match(xml, "pwg:DocumentFormat") ||
+           xml_rd_node_name_match(xml, "scan:DocumentFormatExt")) {
+            const char *v = xml_rd_node_value(xml);
             if (!strcasecmp(v, "image/jpeg")) {
                 src->flags |= DEVCAPS_SOURCE_FMT_JPEG;
             } else if (!strcasecmp(v, "image/png")) {
@@ -118,7 +118,7 @@ devcaps_source_parse_document_formats (xml_iter *iter, devcaps_source *src)
             }
         }
     }
-    xml_iter_leave(iter);
+    xml_rd_leave(xml);
 
     return NULL;
 }
@@ -127,33 +127,33 @@ devcaps_source_parse_document_formats (xml_iter *iter, devcaps_source *src)
  * Returns NULL on success, error string otherwise
  */
 static const char*
-devcaps_source_parse_discrete_resolutions (xml_iter *iter, devcaps_source *src)
+devcaps_source_parse_discrete_resolutions (xml_rd *xml, devcaps_source *src)
 {
     const char *err = NULL;
 
     array_of_word_reset(&src->resolutions);
 
-    xml_iter_enter(iter);
-    for (; err == NULL && !xml_iter_end(iter); xml_iter_next(iter)) {
-        if (xml_iter_node_name_match(iter, "scan:DiscreteResolution")) {
+    xml_rd_enter(xml);
+    for (; err == NULL && !xml_rd_end(xml); xml_rd_next(xml)) {
+        if (xml_rd_node_name_match(xml, "scan:DiscreteResolution")) {
             SANE_Word x = 0, y = 0;
-            xml_iter_enter(iter);
-            for (; err == NULL && !xml_iter_end(iter); xml_iter_next(iter)) {
-                if (xml_iter_node_name_match(iter, "scan:XResolution")) {
-                    err = xml_iter_node_value_uint(iter, &x);
-                } else if (xml_iter_node_name_match(iter,
+            xml_rd_enter(xml);
+            for (; err == NULL && !xml_rd_end(xml); xml_rd_next(xml)) {
+                if (xml_rd_node_name_match(xml, "scan:XResolution")) {
+                    err = xml_rd_node_value_uint(xml, &x);
+                } else if (xml_rd_node_name_match(xml,
                         "scan:YResolution")) {
-                    err = xml_iter_node_value_uint(iter, &y);
+                    err = xml_rd_node_value_uint(xml, &y);
                 }
             }
-            xml_iter_leave(iter);
+            xml_rd_leave(xml);
 
             if (x && y && x == y) {
                 array_of_word_append(&src->resolutions, x);
             }
         }
     }
-    xml_iter_leave(iter);
+    xml_rd_leave(xml);
 
     if (array_of_word_len((&src->resolutions)) > 0) {
         src->flags |= DEVCAPS_SOURCE_RES_DISCRETE;
@@ -167,35 +167,35 @@ devcaps_source_parse_discrete_resolutions (xml_iter *iter, devcaps_source *src)
  * Returns NULL on success, error string otherwise
  */
 static const char*
-devcaps_source_parse_resolutions_range (xml_iter *iter, devcaps_source *src)
+devcaps_source_parse_resolutions_range (xml_rd *xml, devcaps_source *src)
 {
     const char *err = NULL;
     SANE_Range range_x = {0, 0, 0}, range_y = {0, 0, 0};
 
-    xml_iter_enter(iter);
-    for (; err == NULL && !xml_iter_end(iter); xml_iter_next(iter)) {
+    xml_rd_enter(xml);
+    for (; err == NULL && !xml_rd_end(xml); xml_rd_next(xml)) {
         SANE_Range *range = NULL;
-        if (xml_iter_node_name_match(iter, "scan:XResolution")) {
+        if (xml_rd_node_name_match(xml, "scan:XResolution")) {
             range = &range_x;
-        } else if (xml_iter_node_name_match(iter, "scan:XResolution")) {
+        } else if (xml_rd_node_name_match(xml, "scan:XResolution")) {
             range = &range_y;
         }
 
         if (range != NULL) {
-            xml_iter_enter(iter);
-            for (; err == NULL && !xml_iter_end(iter); xml_iter_next(iter)) {
-                if (xml_iter_node_name_match(iter, "scan:Min")) {
-                    err = xml_iter_node_value_uint(iter, &range->min);
-                } else if (xml_iter_node_name_match(iter, "scan:Max")) {
-                    err = xml_iter_node_value_uint(iter, &range->max);
-                } else if (xml_iter_node_name_match(iter, "scan:Step")) {
-                    err = xml_iter_node_value_uint(iter, &range->quant);
+            xml_rd_enter(xml);
+            for (; err == NULL && !xml_rd_end(xml); xml_rd_next(xml)) {
+                if (xml_rd_node_name_match(xml, "scan:Min")) {
+                    err = xml_rd_node_value_uint(xml, &range->min);
+                } else if (xml_rd_node_name_match(xml, "scan:Max")) {
+                    err = xml_rd_node_value_uint(xml, &range->max);
+                } else if (xml_rd_node_name_match(xml, "scan:Step")) {
+                    err = xml_rd_node_value_uint(xml, &range->quant);
                 }
             }
-            xml_iter_leave(iter);
+            xml_rd_leave(xml);
         }
     }
-    xml_iter_leave(iter);
+    xml_rd_leave(xml);
 
     if (range_x.min > range_x.max) {
         err = "Invalid scan:XResolution range";
@@ -233,19 +233,19 @@ DONE:
  * Returns NULL on success, error string otherwise
  */
 static const char*
-devcaps_source_parse_resolutions (xml_iter *iter, devcaps_source *src)
+devcaps_source_parse_resolutions (xml_rd *xml, devcaps_source *src)
 {
     const char *err = NULL;
 
-    xml_iter_enter(iter);
-    for (; err == NULL && !xml_iter_end(iter); xml_iter_next(iter)) {
-        if (xml_iter_node_name_match(iter, "scan:DiscreteResolutions")) {
-            err = devcaps_source_parse_discrete_resolutions(iter, src);
-        } else if (xml_iter_node_name_match(iter, "scan:ResolutionRange")) {
-            err = devcaps_source_parse_resolutions_range(iter, src);
+    xml_rd_enter(xml);
+    for (; err == NULL && !xml_rd_end(xml); xml_rd_next(xml)) {
+        if (xml_rd_node_name_match(xml, "scan:DiscreteResolutions")) {
+            err = devcaps_source_parse_discrete_resolutions(xml, src);
+        } else if (xml_rd_node_name_match(xml, "scan:ResolutionRange")) {
+            err = devcaps_source_parse_resolutions_range(xml, src);
         }
     }
-    xml_iter_leave(iter);
+    xml_rd_leave(xml);
 
     /* Prefer discrete resolution, if both are provided */
     if (src->flags & DEVCAPS_SOURCE_RES_DISCRETE) {
@@ -263,29 +263,29 @@ devcaps_source_parse_resolutions (xml_iter *iter, devcaps_source *src)
  * Returns NULL on success, error string otherwise
  */
 static const char*
-devcaps_source_parse_setting_profiles (xml_iter *iter, devcaps_source *src)
+devcaps_source_parse_setting_profiles (xml_rd *xml, devcaps_source *src)
 {
     const char *err = NULL;
 
-    xml_iter_enter(iter);
-    for (; err == NULL && !xml_iter_end(iter); xml_iter_next(iter)) {
-        if (xml_iter_node_name_match(iter, "scan:SettingProfile")) {
-            xml_iter_enter(iter);
-            for (; err == NULL && !xml_iter_end(iter); xml_iter_next(iter)) {
-                if (xml_iter_node_name_match(iter, "scan:ColorModes")) {
-                    err = devcaps_source_parse_color_modes(iter, src);
-                } else if (xml_iter_node_name_match(iter,
+    xml_rd_enter(xml);
+    for (; err == NULL && !xml_rd_end(xml); xml_rd_next(xml)) {
+        if (xml_rd_node_name_match(xml, "scan:SettingProfile")) {
+            xml_rd_enter(xml);
+            for (; err == NULL && !xml_rd_end(xml); xml_rd_next(xml)) {
+                if (xml_rd_node_name_match(xml, "scan:ColorModes")) {
+                    err = devcaps_source_parse_color_modes(xml, src);
+                } else if (xml_rd_node_name_match(xml,
                         "scan:DocumentFormats")) {
-                    err = devcaps_source_parse_document_formats(iter, src);
-                } else if (xml_iter_node_name_match(iter,
+                    err = devcaps_source_parse_document_formats(xml, src);
+                } else if (xml_rd_node_name_match(xml,
                         "scan:SupportedResolutions")) {
-                    err = devcaps_source_parse_resolutions(iter, src);
+                    err = devcaps_source_parse_resolutions(xml, src);
                 }
             }
-            xml_iter_leave(iter);
+            xml_rd_leave(xml);
         }
     }
-    xml_iter_leave(iter);
+    xml_rd_leave(xml);
 
     return err;
 }
@@ -294,26 +294,26 @@ devcaps_source_parse_setting_profiles (xml_iter *iter, devcaps_source *src)
 /* Parse source capabilities. Returns NULL on success, error string otherwise
  */
 static const char*
-devcaps_source_parse (xml_iter *iter, devcaps_source **out)
+devcaps_source_parse (xml_rd *xml, devcaps_source **out)
 {
     devcaps_source *src = devcaps_source_new();
     const char *err = NULL;
 
-    xml_iter_enter(iter);
-    for (; err == NULL && !xml_iter_end(iter); xml_iter_next(iter)) {
-        if(xml_iter_node_name_match(iter, "scan:MinWidth")) {
-            err = xml_iter_node_value_uint(iter, &src->min_wid_px);
-        } else if (xml_iter_node_name_match(iter, "scan:MaxWidth")) {
-            err = xml_iter_node_value_uint(iter, &src->max_wid_px);
-        } else if (xml_iter_node_name_match(iter, "scan:MinHeight")) {
-            err = xml_iter_node_value_uint(iter, &src->min_hei_px);
-        } else if (xml_iter_node_name_match(iter, "scan:MaxHeight")) {
-            err = xml_iter_node_value_uint(iter, &src->max_hei_px);
-        } else if (xml_iter_node_name_match(iter, "scan:SettingProfiles")) {
-            err = devcaps_source_parse_setting_profiles(iter, src);
+    xml_rd_enter(xml);
+    for (; err == NULL && !xml_rd_end(xml); xml_rd_next(xml)) {
+        if(xml_rd_node_name_match(xml, "scan:MinWidth")) {
+            err = xml_rd_node_value_uint(xml, &src->min_wid_px);
+        } else if (xml_rd_node_name_match(xml, "scan:MaxWidth")) {
+            err = xml_rd_node_value_uint(xml, &src->max_wid_px);
+        } else if (xml_rd_node_name_match(xml, "scan:MinHeight")) {
+            err = xml_rd_node_value_uint(xml, &src->min_hei_px);
+        } else if (xml_rd_node_name_match(xml, "scan:MaxHeight")) {
+            err = xml_rd_node_value_uint(xml, &src->max_hei_px);
+        } else if (xml_rd_node_name_match(xml, "scan:SettingProfiles")) {
+            err = devcaps_source_parse_setting_profiles(xml, src);
         }
     }
-    xml_iter_leave(iter);
+    xml_rd_leave(xml);
 
     if (err != NULL) {
         goto DONE;
@@ -367,48 +367,47 @@ devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
 {
     const char *err = NULL;
     char       *model = NULL, *make_and_model = NULL;
-    xml_iter   *iter;
+    xml_rd   *xml;
 
     /* Parse capabilities XML */
-    err = xml_iter_begin(&iter, xml_text, xml_len);
+    err = xml_rd_begin(&xml, xml_text, xml_len);
     if (err != NULL) {
         goto DONE;
     }
 
-    if (!xml_iter_node_name_match(iter, "scan:ScannerCapabilities")) {
+    if (!xml_rd_node_name_match(xml, "scan:ScannerCapabilities")) {
         err = "XML: missed scan:ScannerCapabilities";
         goto DONE;
     }
 
-    xml_iter_enter(iter);
-    for (; !xml_iter_end(iter); xml_iter_next(iter)) {
-        if (xml_iter_node_name_match(iter, "pwg:ModelName")) {
+    xml_rd_enter(xml);
+    for (; !xml_rd_end(xml); xml_rd_next(xml)) {
+        if (xml_rd_node_name_match(xml, "pwg:ModelName")) {
             g_free(model);
-            model = g_strdup(xml_iter_node_value(iter));
-        } else if (xml_iter_node_name_match(iter, "pwg:MakeAndModel")) {
+            model = g_strdup(xml_rd_node_value(xml));
+        } else if (xml_rd_node_name_match(xml, "pwg:MakeAndModel")) {
             g_free(make_and_model);
-            make_and_model = g_strdup(xml_iter_node_value(iter));
-        } else if (xml_iter_node_name_match(iter, "scan:Platen")) {
-            xml_iter_enter(iter);
-            if (xml_iter_node_name_match(iter, "scan:PlatenInputCaps")) {
-                err = devcaps_source_parse(iter,
-                    &caps->src[OPT_SOURCE_PLATEN]);
+            make_and_model = g_strdup(xml_rd_node_value(xml));
+        } else if (xml_rd_node_name_match(xml, "scan:Platen")) {
+            xml_rd_enter(xml);
+            if (xml_rd_node_name_match(xml, "scan:PlatenInputCaps")) {
+                err = devcaps_source_parse(xml, &caps->src[OPT_SOURCE_PLATEN]);
             }
-            xml_iter_leave(iter);
-        } else if (xml_iter_node_name_match(iter, "scan:Adf")) {
-            xml_iter_enter(iter);
-            while (!xml_iter_end(iter)) {
-                if (xml_iter_node_name_match(iter, "scan:AdfSimplexInputCaps")) {
-                    err = devcaps_source_parse(iter,
+            xml_rd_leave(xml);
+        } else if (xml_rd_node_name_match(xml, "scan:Adf")) {
+            xml_rd_enter(xml);
+            while (!xml_rd_end(xml)) {
+                if (xml_rd_node_name_match(xml, "scan:AdfSimplexInputCaps")) {
+                    err = devcaps_source_parse(xml,
                         &caps->src[OPT_SOURCE_ADF_SIMPLEX]);
-                } else if (xml_iter_node_name_match(iter,
+                } else if (xml_rd_node_name_match(xml,
                         "scan:AdfDuplexInputCaps")) {
-                    err = devcaps_source_parse(iter,
+                    err = devcaps_source_parse(xml,
                         &caps->src[OPT_SOURCE_ADF_DUPLEX]);
                 }
-                xml_iter_next(iter);
+                xml_rd_next(xml);
             }
-            xml_iter_leave(iter);
+            xml_rd_leave(xml);
         }
 
         if (err != NULL) {
@@ -458,7 +457,7 @@ DONE:
 
     g_free(model);
     g_free(make_and_model);
-    xml_iter_finish(&iter);
+    xml_rd_finish(&xml);
 
     return err;
 }

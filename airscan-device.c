@@ -602,30 +602,30 @@ device_escl_scannerstatus_parse (const char *xml_text, size_t xml_len,
         SANE_Status *device_status, SANE_Status *adf_status)
 {
     const char *err = NULL;
-    xml_iter   *iter;
+    xml_rd     *xml;
 
     *device_status = SANE_STATUS_GOOD;
     *adf_status = SANE_STATUS_GOOD;
 
-    err = xml_iter_begin(&iter, xml_text, xml_len);
+    err = xml_rd_begin(&xml, xml_text, xml_len);
     if (err != NULL) {
         goto DONE;
     }
 
-    if (!xml_iter_node_name_match(iter, "scan:ScannerStatus")) {
+    if (!xml_rd_node_name_match(xml, "scan:ScannerStatus")) {
         err = "XML: missed scan:ScannerStatus";
         goto DONE;
     }
 
-    xml_iter_enter(iter);
-    for (; !xml_iter_end(iter); xml_iter_next(iter)) {
-        if (xml_iter_node_name_match(iter, "pwg:State")) {
-            const char *state = xml_iter_node_value(iter);
+    xml_rd_enter(xml);
+    for (; !xml_rd_end(xml); xml_rd_next(xml)) {
+        if (xml_rd_node_name_match(xml, "pwg:State")) {
+            const char *state = xml_rd_node_value(xml);
             if (!strcmp(state, "Idle")) {
                 *device_status = SANE_STATUS_GOOD;
             }
-        } else if (xml_iter_node_name_match(iter, "scan:AdfState")) {
-            const char *state = xml_iter_node_value(iter);
+        } else if (xml_rd_node_name_match(xml, "scan:AdfState")) {
+            const char *state = xml_rd_node_value(xml);
             if (!strcmp(state, "ScannerAdfProcessing")) {
                 *adf_status = SANE_STATUS_NO_DOCS;
             } else if (!strcmp(state, "ScannerAdfLoaded")) {
@@ -635,7 +635,7 @@ device_escl_scannerstatus_parse (const char *xml_text, size_t xml_len,
     }
 
 DONE:
-    xml_iter_finish(&iter);
+    xml_rd_finish(&xml);
     return err;
 }
 

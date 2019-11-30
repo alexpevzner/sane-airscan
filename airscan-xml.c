@@ -10,9 +10,9 @@
 
 #include <libxml/tree.h>
 
-/* XML iterator
+/* XML reader
  */
-struct xml_iter {
+struct xml_rd {
     xmlDoc        *doc;    /* XML document */
     xmlNode       *node;   /* Current node */
     xmlNode       *parent; /* Parent node */
@@ -23,172 +23,172 @@ struct xml_iter {
 /* Skip dummy nodes. This is internal function, don't call directly
  */
 static void
-__xml_iter_skip_dummy (xml_iter *iter)
+__xml_rd_skip_dummy (xml_rd *xml)
 {
-    xmlNode *node = iter->node;
+    xmlNode *node = xml->node;
 
     while (node  != NULL &&
            (node->type == XML_COMMENT_NODE || xmlIsBlankNode (node))) {
         node = node->next;
     }
 
-    iter->node = node;
+    xml->node = node;
 }
 
 /* Invalidate cached data. This is internal function, don't call directly
  */
 static void
-__xml_iter_invalidate_cache (xml_iter *iter)
+__xml_rd_invalidate_cache (xml_rd *xml)
 {
-    g_free((void*) iter->name);
-    xmlFree((xmlChar*) iter->text);
-    iter->name = NULL;
-    iter->text = NULL;
+    g_free((void*) xml->name);
+    xmlFree((xmlChar*) xml->text);
+    xml->name = NULL;
+    xml->text = NULL;
 }
 
-/* Parse XML text and initialize iterator to iterate
+/* Parse XML text and initialize reader to iterate
  * starting from the root node
  *
  * Returns NULL on success, or error text on a error
  */
 const char*
-xml_iter_begin (xml_iter **iter, const char *xml_text, size_t xml_len)
+xml_rd_begin (xml_rd **xml, const char *xml_text, size_t xml_len)
 {
-    *iter = g_new0(xml_iter, 1);
+    *xml = g_new0(xml_rd, 1);
 
-    (*iter)->doc = xmlParseMemory(xml_text, xml_len);
-    if ((*iter)->doc == NULL) {
-        xml_iter_finish(iter);
+    (*xml)->doc = xmlParseMemory(xml_text, xml_len);
+    if ((*xml)->doc == NULL) {
+        xml_rd_finish(xml);
         return "Failed to parse XML";
     }
 
-    (*iter)->node = xmlDocGetRootElement((*iter)->doc);
-    __xml_iter_skip_dummy(*iter);
-    __xml_iter_invalidate_cache(*iter);
-    (*iter)->parent = (*iter)->node ? (*iter)->node->parent : NULL;
+    (*xml)->node = xmlDocGetRootElement((*xml)->doc);
+    __xml_rd_skip_dummy(*xml);
+    __xml_rd_invalidate_cache(*xml);
+    (*xml)->parent = (*xml)->node ? (*xml)->node->parent : NULL;
 
     return NULL;
 }
 
-/* Finish iteration, free allocated resources
+/* Finish reading, free allocated resources
  */
 void
-xml_iter_finish (xml_iter **iter)
+xml_rd_finish (xml_rd **xml)
 {
-    if (*iter) {
-        if ((*iter)->doc) {
-            xmlFree((*iter)->doc);
+    if (*xml) {
+        if ((*xml)->doc) {
+            xmlFree((*xml)->doc);
         }
-        __xml_iter_invalidate_cache(*iter);
+        __xml_rd_invalidate_cache(*xml);
 
-        g_free(*iter);
-        *iter = NULL;
+        g_free(*xml);
+        *xml = NULL;
     }
 }
 
 /* Check for end-of-document condition
  */
 bool
-xml_iter_end (xml_iter *iter)
+xml_rd_end (xml_rd *xml)
 {
-    return iter->node == NULL;
+    return xml->node == NULL;
 }
 
 /* Shift to the next node
  */
 void
-xml_iter_next (xml_iter *iter)
+xml_rd_next (xml_rd *xml)
 {
-    if (iter->node) {
-        iter->node = iter->node->next;
-        __xml_iter_skip_dummy(iter);
-        __xml_iter_invalidate_cache(iter);
+    if (xml->node) {
+        xml->node = xml->node->next;
+        __xml_rd_skip_dummy(xml);
+        __xml_rd_invalidate_cache(xml);
     }
 }
 
 /* Enter the current node - iterate its children
  */
 void
-xml_iter_enter (xml_iter *iter)
+xml_rd_enter (xml_rd *xml)
 {
-    if (iter->node) {
-        iter->parent = iter->node;
-        iter->node = iter->node->children;
-        __xml_iter_skip_dummy(iter);
-        __xml_iter_invalidate_cache(iter);
+    if (xml->node) {
+        xml->parent = xml->node;
+        xml->node = xml->node->children;
+        __xml_rd_skip_dummy(xml);
+        __xml_rd_invalidate_cache(xml);
     }
 }
 
 /* Leave the current node - return to its parent
  */
 void
-xml_iter_leave (xml_iter *iter)
+xml_rd_leave (xml_rd *xml)
 {
-    iter->node = iter->parent;
-    if (iter->node) {
-        iter->parent = iter->node->parent;
+    xml->node = xml->parent;
+    if (xml->node) {
+        xml->parent = xml->node->parent;
     }
-    __xml_iter_invalidate_cache(iter);
+    __xml_rd_invalidate_cache(xml);
 }
 
 /* Get name of the current node.
  *
- * The returned string remains valid, until iterator is cleaned up
+ * The returned string remains valid, until reader is cleaned up
  * or current node is changed (by set/next/enter/leave operations).
  * You don't need to free this string explicitly
  */
 const char*
-xml_iter_node_name (xml_iter *iter)
+xml_rd_node_name (xml_rd *xml)
 {
     const char *prefix = NULL;
 
-    if (iter->name == NULL && iter->node != NULL) {
-        if (iter->node->ns != NULL) {
-            prefix = (const char*) iter->node->ns->prefix;
+    if (xml->name == NULL && xml->node != NULL) {
+        if (xml->node->ns != NULL) {
+            prefix = (const char*) xml->node->ns->prefix;
         }
 
         if (prefix != NULL) {
-            iter->name = g_strconcat(prefix, ":", iter->node->name, NULL);
+            xml->name = g_strconcat(prefix, ":", xml->node->name, NULL);
         } else {
-            iter->name = g_strdup((const char*) iter->node->name);
+            xml->name = g_strdup((const char*) xml->node->name);
         }
     }
 
-    return iter->name;
+    return xml->name;
 }
 
 /* Match name of the current node against the pattern
  */
 bool
-xml_iter_node_name_match (xml_iter *iter, const char *pattern)
+xml_rd_node_name_match (xml_rd *xml, const char *pattern)
 {
-    return !g_strcmp0(xml_iter_node_name(iter), pattern);
+    return !g_strcmp0(xml_rd_node_name(xml), pattern);
 }
 
 /* Get value of the current node as text
  *
- * The returned string remains valid, until iterator is cleaned up
+ * The returned string remains valid, until reader is cleaned up
  * or current node is changed (by set/next/enter/leave operations).
  * You don't need to free this string explicitly
  */
 const char*
-xml_iter_node_value (xml_iter *iter)
+xml_rd_node_value (xml_rd *xml)
 {
-    if (iter->text == NULL && iter->node != NULL) {
-        iter->text = xmlNodeGetContent(iter->node);
-        g_strstrip((char*) iter->text);
+    if (xml->text == NULL && xml->node != NULL) {
+        xml->text = xmlNodeGetContent(xml->node);
+        g_strstrip((char*) xml->text);
     }
 
-    return (const char*) iter->text;
+    return (const char*) xml->text;
 }
 
 /* Get value of the current node as unsigned integer
  * Returns error string, NULL if OK
  */
 const char*
-xml_iter_node_value_uint (xml_iter *iter, SANE_Word *val)
+xml_rd_node_value_uint (xml_rd *xml, SANE_Word *val)
 {
-    const char *s = xml_iter_node_value(iter);
+    const char *s = xml_rd_node_value(xml);
     char *end;
     unsigned long v;
 
@@ -197,7 +197,7 @@ xml_iter_node_value_uint (xml_iter *iter, SANE_Word *val)
     v = strtoul(s, &end, 10);
     if (end == s || *end || v != (unsigned long) (SANE_Word) v) {
         return eloop_eprintf("%s: invalid numerical value",
-                xml_iter_node_name(iter));
+                xml_rd_node_name(xml));
     }
 
     *val = (SANE_Word) v;
