@@ -337,9 +337,9 @@ devcaps_source_parse (xml_rd *xml, devcaps_source **out)
         src->flags |= DEVCAPS_SOURCE_HAS_SIZE;
 
         /* Set window ranges */
-        src->win_x_range.min = src->win_y_range.min = 0;
-        src->win_x_range.max = math_px2mm(src->max_wid_px);
-        src->win_y_range.max = math_px2mm(src->max_hei_px);
+        src->win_x_range_mm.min = src->win_y_range_mm.min = 0;
+        src->win_x_range_mm.max = math_px2mm(src->max_wid_px);
+        src->win_y_range_mm.max = math_px2mm(src->max_hei_px);
     }
 
 DONE:

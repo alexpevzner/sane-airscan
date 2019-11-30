@@ -530,14 +530,15 @@ enum {
 /* Source Capabilities (each device may contain multiple sources)
  */
 typedef struct {
-    unsigned int flags;                    /* Source flags */
-    unsigned int colormodes;               /* Set of 1 << OPT_COLORMODE */
-    SANE_String  *sane_colormodes;         /* Color modes, in SANE format */
-    SANE_Word    min_wid_px, max_wid_px;   /* Min/max width, in pixels */
-    SANE_Word    min_hei_px, max_hei_px;   /* Min/max height, in pixels */
-    SANE_Word    *resolutions;             /* Discrete resolutions, in DPI */
-    SANE_Range   res_range;                /* Resolutions range, in DPI */
-    SANE_Range   win_x_range, win_y_range; /* Window x/y ranges, in mm */
+    unsigned int flags;                  /* Source flags */
+    unsigned int colormodes;             /* Set of 1 << OPT_COLORMODE */
+    SANE_String  *sane_colormodes;       /* Color modes, in SANE format */
+    SANE_Word    min_wid_px, max_wid_px; /* Min/max width, in pixels */
+    SANE_Word    min_hei_px, max_hei_px; /* Min/max height, in pixels */
+    SANE_Word    *resolutions;           /* Discrete resolutions, in DPI */
+    SANE_Range   res_range;              /* Resolutions range, in DPI */
+    SANE_Range   win_x_range_mm;         /* Window x range, in mm */
+    SANE_Range   win_y_range_mm;         /* Window y range, in mm */
 } devcaps_source;
 
 /* Device Capabilities

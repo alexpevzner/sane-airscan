@@ -184,7 +184,7 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_MM;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
-    desc->constraint.range = &src->win_x_range;
+    desc->constraint.range = &src->win_x_range_mm;
 
     /* OPT_SCAN_TL_Y */
     desc = &opt->desc[OPT_SCAN_TL_Y];
@@ -196,7 +196,7 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_MM;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
-    desc->constraint.range = &src->win_y_range;
+    desc->constraint.range = &src->win_y_range_mm;
 
     /* OPT_SCAN_BR_X */
     desc = &opt->desc[OPT_SCAN_BR_X];
@@ -208,7 +208,7 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_MM;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
-    desc->constraint.range = &src->win_x_range;
+    desc->constraint.range = &src->win_x_range_mm;
 
     /* OPT_SCAN_BR_Y */
     desc = &opt->desc[OPT_SCAN_BR_Y];
@@ -220,7 +220,7 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_MM;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
-    desc->constraint.range = &src->win_y_range;
+    desc->constraint.range = &src->win_y_range_mm;
 }
 
 /* Update scan parameters, according to the currently set
@@ -328,8 +328,8 @@ devopt_set_source (devopt *opt, OPT_SOURCE opt_src, SANE_Word *info)
     opt->tl_x = 0;
     opt->tl_y = 0;
 
-    opt->br_x = src->win_x_range.max;
-    opt->br_y = src->win_y_range.max;
+    opt->br_x = src->win_x_range_mm.max;
+    opt->br_y = src->win_y_range_mm.max;
 
     *info |= SANE_INFO_RELOAD_OPTIONS | SANE_INFO_RELOAD_PARAMS;
 
@@ -349,22 +349,22 @@ devopt_set_geom (devopt *opt, SANE_Int option, SANE_Word val, SANE_Word *info)
     switch (option) {
     case OPT_SCAN_TL_X:
         out = &opt->tl_x;
-        range = &src->win_x_range;
+        range = &src->win_x_range_mm;
         break;
 
     case OPT_SCAN_TL_Y:
         out = &opt->tl_y;
-        range = &src->win_y_range;
+        range = &src->win_y_range_mm;
         break;
 
     case OPT_SCAN_BR_X:
         out = &opt->br_x;
-        range = &src->win_x_range;
+        range = &src->win_x_range_mm;
         break;
 
     case OPT_SCAN_BR_Y:
         out = &opt->br_y;
-        range = &src->win_y_range;
+        range = &src->win_y_range_mm;
         break;
 
     default:
@@ -406,8 +406,8 @@ devopt_import_caps (devopt *opt, const char *xml_text, size_t xml_len)
     src = opt->caps.src[opt->src];
     opt->tl_x = 0;
     opt->tl_y = 0;
-    opt->br_x = src->win_x_range.max;
-    opt->br_y = src->win_y_range.max;
+    opt->br_x = src->win_x_range_mm.max;
+    opt->br_y = src->win_y_range_mm.max;
 
     devopt_rebuild_opt_desc(opt);
     devopt_update_params(opt);
