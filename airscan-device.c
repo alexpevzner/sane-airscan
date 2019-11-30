@@ -864,7 +864,10 @@ device_escl_start_scan (device *dev)
     trace_printf(dev->trace, "  image size:     %dx%d", wid, hei);
     trace_printf(dev->trace, "  image X offset: %d", math_mm2px(dev->opt.tl_x));
     trace_printf(dev->trace, "  image Y offset: %d", math_mm2px(dev->opt.tl_y));
-    trace_printf(dev->trace, "  resolution:     %d", dev->opt.resolution);
+    trace_printf(dev->trace, "  x_resolution:   %d", x_resolution);
+    trace_printf(dev->trace, "  y_resolution:   %d", y_resolution);
+    trace_printf(dev->trace, "  image format:   %s", mime);
+    trace_printf(dev->trace, "  duplex:         %s", duplex ? "true" : "false");
     trace_printf(dev->trace, "");
 
     /* Build scan request */
