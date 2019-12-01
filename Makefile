@@ -56,7 +56,7 @@ install: all
 	install -s -D -t $(PREFIX)/$(LIBDIR)/sane $(BACKEND) 
 
 clean:
-	rm -f test $(BACKEND)
+	rm -f test $(BACKEND) tags
 
 test:	$(BACKEND) test.c
 	gcc -o test test.c $(BACKEND) -Wl,-rpath . ${CFLAGS}
