@@ -38,6 +38,13 @@
  */
 #define CONFIG_DEFAULT_RESOLUTION       300
 
+/******************** Utility macros ********************/
+/* Obtain pointer to outer structure from pointer to
+ * its known member
+ */
+#define OUTER_STRUCT(member_p,struct_t,field)                            \
+    ((struct_t*)((char*)(member_p) - ((ptrdiff_t) &(((struct_t*) 0)->field))))
+
 /******************** Configuration file loader  ********************/
 /* Device configuration, for manually added devices
  */

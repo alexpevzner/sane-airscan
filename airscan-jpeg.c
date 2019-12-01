@@ -9,6 +9,7 @@
 #include "airscan.h"
 
 #include <jpeglib.h>
+#include <setjmp.h>
 
 /* JPEG image decoder
  */
@@ -16,6 +17,7 @@ typedef struct {
     image_decoder                 decoder;   /* Base class */
     struct jpeg_decompress_struct cinfo;     /* libjpeg decoder */
     struct jpeg_error_mgr         jerr;      /* libjpeg error manager */
+    jmp_buf                       jmpb;
     JDIMENSION                    num_lines; /* Num of lines left to read */
 } image_decoder_jpeg;
 
@@ -39,21 +41,25 @@ image_decoder_jpeg_begin (image_decoder *decoder, const void *data,
     image_decoder_jpeg *jpeg = (image_decoder_jpeg*) decoder;
     int                rc;
 
-    jpeg_mem_src(&jpeg->cinfo, data, size);
-    rc = jpeg_read_header(&jpeg->cinfo, true);
-    if (rc != JPEG_HEADER_OK) {
-        jpeg_abort((j_common_ptr) &jpeg->cinfo);
-        return false;
+    if (!setjmp(jpeg->jmpb)) {
+        jpeg_mem_src(&jpeg->cinfo, data, size);
+        rc = jpeg_read_header(&jpeg->cinfo, true);
+        if (rc != JPEG_HEADER_OK) {
+            jpeg_abort((j_common_ptr) &jpeg->cinfo);
+            return false;
+        }
+
+        if (jpeg->cinfo.num_components != 1) {
+            jpeg->cinfo.out_color_space = JCS_RGB;
+        }
+
+        jpeg_start_decompress(&jpeg->cinfo);
+        jpeg->num_lines = jpeg->cinfo.image_height;
+
+        return true;
     }
 
-    if (jpeg->cinfo.num_components != 1) {
-        jpeg->cinfo.out_color_space = JCS_RGB;
-    }
-
-    jpeg_start_decompress(&jpeg->cinfo);
-    jpeg->num_lines = jpeg->cinfo.image_height;
-
-    return true;
+    return false;
 }
 
 /* Reset JPEG decoder
@@ -119,13 +125,17 @@ image_decoder_jpeg_read_line (image_decoder *decoder, void *buffer)
         return false;
     }
 
-    if (jpeg_read_scanlines(&jpeg->cinfo, lines, 1) == 0) {
-        return false;
+    if (!setjmp(jpeg->jmpb)) {
+        if (jpeg_read_scanlines(&jpeg->cinfo, lines, 1) == 0) {
+            return false;
+        }
+
+        jpeg->num_lines --;
+
+        return true;
     }
 
-    jpeg->num_lines --;
-
-    return true;
+    return false;
 }
 
 /* Dummy "output error message" callback for JPEG decoder
@@ -134,6 +144,17 @@ static void
 image_decoder_jpeg_output_message (j_common_ptr cinfo)
 {
     (void) cinfo;
+}
+
+/* error_exit callback for JPEG decoder. The default callback
+ * terminates a program, which is not good for us
+ */
+static void
+image_decoder_jpeg_error_exit (j_common_ptr cinfo)
+{
+    image_decoder_jpeg *jpeg = OUTER_STRUCT(cinfo, image_decoder_jpeg, cinfo);
+    jpeg_abort(cinfo);
+    longjmp(jpeg->jmpb, 1);
 }
 
 /* Create JPEG image decoder
@@ -152,6 +173,7 @@ image_decoder_jpeg_new (void)
 
     jpeg->cinfo.err = jpeg_std_error(&jpeg->jerr);
     jpeg->jerr.output_message = image_decoder_jpeg_output_message;
+    jpeg->jerr.error_exit = image_decoder_jpeg_error_exit;
     jpeg_create_decompress(&jpeg->cinfo);
 
     return &jpeg->decoder;
