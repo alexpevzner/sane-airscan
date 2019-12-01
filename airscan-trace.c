@@ -125,8 +125,7 @@ trace_message_headers_foreach_callback (const char *name, const char *value,
  * Returns name of file, where data was saved
  */
 static void
-trace_dump_data (trace *t, SoupBuffer *buf, const char *suffix,
-        const char *content_type)
+trace_dump_data (trace *t, SoupBuffer *buf, const char *content_type)
 {
     tar_header hdr;
     guint32 chsum;
@@ -151,7 +150,7 @@ trace_dump_data (trace *t, SoupBuffer *buf, const char *suffix,
     }
 
     /* Make file name */
-    sprintf(hdr.name, "%8.8d%s.%s", t->index, suffix, ext);
+    sprintf(hdr.name, "%8.8d.%s", t->index, ext);
 
     /* Make tar header */
     strcpy(hdr.mode, "644");
@@ -211,8 +210,7 @@ trace_dump_text (trace *t, SoupBuffer *buf, const char *content_type)
 /* Dump message body
  */
 static void
-trace_dump_body (trace *t, SoupMessageHeaders *hdrs, SoupMessageBody *body,
-        const char *data_suffix)
+trace_dump_body (trace *t, SoupMessageHeaders *hdrs, SoupMessageBody *body)
 {
     SoupBuffer *buf = soup_message_body_flatten(body);
     const char *content_type = soup_message_headers_get_one(hdrs, "Content-Type");
@@ -228,7 +226,7 @@ trace_dump_body (trace *t, SoupMessageHeaders *hdrs, SoupMessageBody *body,
     if (!strncmp(content_type, "text/", 5)) {
         trace_dump_text(t, buf, content_type);
     } else {
-        trace_dump_data(t, buf, data_suffix, content_type);
+        trace_dump_data(t, buf, content_type);
     }
 
     putc('\n', t->log);
@@ -254,7 +252,7 @@ trace_msg_hook (trace *t, SoupMessage *msg)
         soup_message_headers_foreach(msg->request_headers,
                 trace_message_headers_foreach_callback, t);
         fprintf(t->log, "\n");
-        trace_dump_body(t, msg->request_headers, msg->request_body, "-rq");
+        trace_dump_body(t, msg->request_headers, msg->request_body);
 
         /* Dump response */
         fprintf(t->log, "Status: %d %s\n", msg->status_code,
@@ -262,7 +260,7 @@ trace_msg_hook (trace *t, SoupMessage *msg)
         soup_message_headers_foreach(msg->response_headers,
             trace_message_headers_foreach_callback, t);
         fprintf(t->log, "\n");
-        trace_dump_body(t, msg->response_headers, msg->response_body, "-rsp");
+        trace_dump_body(t, msg->response_headers, msg->response_body);
 
         g_free(uri_str);
         t->index ++;
