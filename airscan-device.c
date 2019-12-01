@@ -24,6 +24,8 @@ enum {
                                            scan and not ready yet */
     DEVICE_OPENED           = (1 << 5), /* Device currently opened */
     DEVICE_SCANNING         = (1 << 6), /* Scan in progress */
+    DEVICE_CLOSING          = (1 << 7), /* Close in progress */
+
     DEVICE_ALL_FLAGS        = 0xffffffff
 };
 
@@ -1002,7 +1004,7 @@ device_job_cancel_event_callback (void *data)
     device *dev = data;
 
     DBG_DEVICE(dev->name, "Cancel");
-    if ((dev->flags & DEVICE_SCANNING) != 0) {
+    if ((dev->flags & (DEVICE_SCANNING | DEVICE_CLOSING)) != 0) {
         device_job_abort(dev, SANE_STATUS_CANCELLED);
     }
 }
@@ -1120,9 +1122,20 @@ void
 device_close (device *dev)
 {
     if ((dev->flags & DEVICE_OPENED) != 0) {
+        /* Cancel job in progress, if any */
+        if (dev->job_state != DEVICE_JOB_DONE) {
+            dev->flags |= DEVICE_CLOSING;
+            device_cancel(dev);
+
+            while (dev->job_state != DEVICE_JOB_DONE) {
+                eloop_cond_wait(&dev->job_state_cond);
+            }
+        }
+
+        /* Close the device */
         eloop_event_free(dev->job_cancel_event);
         dev->job_cancel_event = NULL;
-        dev->flags &= ~DEVICE_OPENED;
+        dev->flags &= ~(DEVICE_OPENED | DEVICE_CLOSING);
         device_unref(dev);
     }
 }
