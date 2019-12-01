@@ -817,6 +817,72 @@ device_escl_start_scan_callback (device *dev, SoupMessage *msg)
     device_escl_load_page(dev);
 }
 
+/* Geometrical scan parameters
+ */
+typedef struct {
+    SANE_Word off;   /* Requested X/Y offset, in pixels assuming 300 DPI */
+    SANE_Word len;   /* Requested width/height, in pixels, assuming 300 DPI */
+    SANE_Word skip;  /* Pixels to skip in returned image, in pixels assuming
+                        actual resolution */
+}
+device_geom;
+
+/*
+ * Computing geometrical scan parameters
+ *
+ * Input:
+ *   tl, br         - top-left, bottom-rights X/Y, in mm
+ *   minlen, maxlen - device-defined min and max width or height,
+ *                    in pixels, assuming 300 dpi
+ *   res            - scan resolution
+ *
+ * Output:
+ *   Filled device_geom structure
+ *
+ * Problem description.
+ *
+ *   First of all, we use 3 different units to deal with geometrical
+ *   parameters:
+ *     1) we communicate with frontend in millimeters
+ *     2) we communicate with scanner in pixels, assuming 300 DPI
+ *     3) when we deal with image, sizes are in pixels in real
+ *        resolution
+ *
+ *   Second, scanner returns minimal and maximal window size, but
+ *   to simplify frontend's life, we pretend there is no such thing,
+ *   as a minimal width or height, otherwise TL and BR ranges become
+ *   dependent from each other. Instead, we always request image from
+ *   scanner not smaller that scanner's minimum, and clip excessive
+ *   image parts, if required.
+ *
+ *   This all makes things non-trivial. This function handles
+ *   this complexity
+ */
+static device_geom
+device_geom_compute (SANE_Word tl, SANE_Word br,
+        SANE_Word minlen, SANE_Word maxlen, SANE_Word res)
+{
+    device_geom geom;
+    SANE_Word   len;
+    SANE_Word   minlen_mm = math_px2mm(minlen);
+
+    br = math_max(br, minlen_mm);
+    len = br - tl;
+    if (len < minlen_mm) {
+        geom.off = math_mm2px(br - minlen_mm);
+        geom.len = minlen_mm;
+        geom.skip = math_mm2px_res(minlen_mm - len, res);
+    } else {
+        geom.off = math_mm2px(tl);
+        geom.len = math_mm2px(len);
+        geom.skip = 0;
+    }
+
+    geom.len = math_bound(geom.len, minlen, maxlen);
+
+    return geom;
+}
+
 /* ESCL: start scanning
  *
  * HTTP POST ${dev->uri_escl}/ScanJobs
@@ -824,21 +890,24 @@ device_escl_start_scan_callback (device *dev, SoupMessage *msg)
 static void
 device_escl_start_scan (device *dev)
 {
-    unsigned int x_off = 0;
-    unsigned int y_off = 0;
-    unsigned int wid, hei;
-    const char   *source = NULL;
-    const char   *colormode = NULL;
-    bool         duplex = false;
-    const char   *mime = "image/jpeg";
-    //const char   *mime = "application/pdf";
-    SANE_Word    x_resolution = dev->opt.resolution;
-    SANE_Word    y_resolution = dev->opt.resolution;
+    const char     *source = NULL;
+    const char     *colormode = NULL;
+    bool           duplex = false;
+    const char     *mime = "image/jpeg";
+    //const char     *mime = "application/pdf";
+    SANE_Word      x_resolution = dev->opt.resolution;
+    SANE_Word      y_resolution = dev->opt.resolution;
+    devcaps_source *src = dev->opt.caps.src[dev->opt.src];
+    device_geom    geom_x, geom_y;
 
-    /* Prepare parameters */
-    wid = math_mm2px(dev->opt.br_x);
-    hei = math_mm2px(dev->opt.br_y);
+    /* Prepare window parameters */
+    geom_x = device_geom_compute(dev->opt.tl_x, dev->opt.br_x,
+        src->min_wid_px, src->max_wid_px, x_resolution);
 
+    geom_y = device_geom_compute(dev->opt.tl_y, dev->opt.br_y,
+        src->min_hei_px, src->max_hei_px, y_resolution);
+
+    /* Prepare other parameters */
     switch (dev->opt.src) {
     case OPT_SOURCE_PLATEN:      source = "Platen"; duplex = false; break;
     case OPT_SOURCE_ADF_SIMPLEX: source = "Feeder"; duplex = false; break;
@@ -847,7 +916,6 @@ device_escl_start_scan (device *dev)
     default:
         g_assert_not_reached();
     }
-
 
     switch (dev->opt.colormode) {
     case OPT_COLORMODE_COLOR:     colormode = "RGB24"; break;
@@ -863,9 +931,9 @@ device_escl_start_scan (device *dev)
     trace_printf(dev->trace, "Starting scan, using the following parameters:");
     trace_printf(dev->trace, "  source:         %s", source);
     trace_printf(dev->trace, "  colormode:      %s", colormode);
-    trace_printf(dev->trace, "  image size:     %dx%d", wid, hei);
-    trace_printf(dev->trace, "  image X offset: %d", math_mm2px(dev->opt.tl_x));
-    trace_printf(dev->trace, "  image Y offset: %d", math_mm2px(dev->opt.tl_y));
+    trace_printf(dev->trace, "  image size:     %dx%d", geom_x.len, geom_y.len);
+    trace_printf(dev->trace, "  image X offset: %d", geom_x.off);
+    trace_printf(dev->trace, "  image Y offset: %d", geom_y.off);
     trace_printf(dev->trace, "  x_resolution:   %d", x_resolution);
     trace_printf(dev->trace, "  y_resolution:   %d", y_resolution);
     trace_printf(dev->trace, "  image format:   %s", mime);
@@ -879,10 +947,10 @@ device_escl_start_scan (device *dev)
 
     xml_wr_enter(xml, "pwg:ScanRegions");
     xml_wr_enter(xml, "pwg:ScanRegion");
-    xml_wr_add_uint(xml, "pwg:XOffset", x_off);
-    xml_wr_add_uint(xml, "pwg:YOffset", y_off);
-    xml_wr_add_uint(xml, "pwg:Width", wid);
-    xml_wr_add_uint(xml, "pwg:Height", hei);
+    xml_wr_add_uint(xml, "pwg:XOffset", geom_x.off);
+    xml_wr_add_uint(xml, "pwg:YOffset", geom_y.off);
+    xml_wr_add_uint(xml, "pwg:Width", geom_x.len);
+    xml_wr_add_uint(xml, "pwg:Height", geom_y.len);
     xml_wr_add_text(xml, "pwg:ContentRegionUnits",
             "escl:ThreeHundredthsOfInches");
     xml_wr_leave(xml); /* pwg:ScanRegion */

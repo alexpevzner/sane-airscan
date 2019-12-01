@@ -867,6 +867,20 @@ math_max (SANE_Word a, SANE_Word b)
     return a > b ? a : b;
 }
 
+/* Bound integer within range
+ */
+static inline SANE_Word
+math_bound (SANE_Word x, SANE_Word min, SANE_Word max)
+{
+    if (x < min) {
+        return min;
+    } else if (x > max) {
+        return max;
+    } else {
+        return x;
+    }
+}
+
 /* Merge two ranges, if possible
  */
 bool
