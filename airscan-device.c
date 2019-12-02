@@ -897,6 +897,7 @@ device_escl_start_scan (device *dev)
     SANE_Word      y_resolution = dev->opt.resolution;
     devcaps_source *src = dev->opt.caps.src[dev->opt.src];
     device_geom    geom_x, geom_y;
+    char           buf[64];
 
     /* Prepare window parameters */
     geom_x = device_geom_compute(dev->opt.tl_x, dev->opt.br_x,
@@ -929,6 +930,14 @@ device_escl_start_scan (device *dev)
     trace_printf(dev->trace, "Starting scan, using the following parameters:");
     trace_printf(dev->trace, "  source:         %s", source);
     trace_printf(dev->trace, "  colormode:      %s", colormode);
+    trace_printf(dev->trace, "  tl_x:           %s mm",
+            math_fmt_mm(dev->opt.tl_x, buf));
+    trace_printf(dev->trace, "  tl_y:           %s mm",
+            math_fmt_mm(dev->opt.tl_y, buf));
+    trace_printf(dev->trace, "  br_x:           %s mm",
+            math_fmt_mm(dev->opt.br_x, buf));
+    trace_printf(dev->trace, "  br_y:           %s mm",
+            math_fmt_mm(dev->opt.br_y, buf));
     trace_printf(dev->trace, "  image size:     %dx%d", geom_x.len, geom_y.len);
     trace_printf(dev->trace, "  image X offset: %d", geom_x.off);
     trace_printf(dev->trace, "  image Y offset: %d", geom_y.off);
