@@ -881,6 +881,21 @@ math_bound (SANE_Word x, SANE_Word min, SANE_Word max)
     }
 }
 
+/* Compute x * mul / div, taking in account rounding
+ * and integer overflow
+ */
+static inline SANE_Word
+math_muldiv (SANE_Word x, SANE_Word mul, SANE_Word div)
+{
+    int64_t tmp;
+
+    tmp = (int64_t) x * (int64_t) mul;
+    tmp += div / 2;
+    tmp /= div;
+
+    return (SANE_Word) tmp;
+}
+
 /* Merge two ranges, if possible
  */
 bool

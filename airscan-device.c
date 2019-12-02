@@ -863,22 +863,19 @@ device_geom_compute (SANE_Word tl, SANE_Word br,
         SANE_Word minlen, SANE_Word maxlen, SANE_Word res)
 {
     device_geom geom;
-    SANE_Word   len;
-    SANE_Word   minlen_mm = math_px2mm(minlen);
 
-    br = math_max(br, minlen_mm);
-    len = br - tl;
-    if (len < minlen_mm) {
-        geom.off = math_mm2px(br - minlen_mm);
-        geom.len = minlen_mm;
-        geom.skip = math_mm2px_res(minlen_mm - len, res);
-    } else {
-        geom.off = math_mm2px(tl);
-        geom.len = math_mm2px(len);
-        geom.skip = 0;
-    }
+    geom.off = math_mm2px(tl);
+    geom.len = math_mm2px(br - tl);
+    geom.skip = 0;
 
     geom.len = math_bound(geom.len, minlen, maxlen);
+
+    if (geom.off + geom.len > maxlen) {
+        geom.skip = geom.off + geom.len - maxlen;
+        geom.off -= geom.skip;
+
+        geom.skip = math_muldiv(geom.skip, res, 300);
+    }
 
     return geom;
 }
