@@ -868,6 +868,7 @@ device_geom_compute (SANE_Word tl, SANE_Word br,
     geom.len = math_mm2px(br - tl);
     geom.skip = 0;
 
+    minlen = math_max(minlen, 1);
     geom.len = math_bound(geom.len, minlen, maxlen);
 
     if (geom.off + geom.len > maxlen) {
