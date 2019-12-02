@@ -938,6 +938,11 @@ math_mm2px (SANE_Word mm)
     return math_mm2px_res(mm, 300);
 }
 
+/* Format millimeters, for printing
+ */
+char*
+math_fmt_mm (SANE_Word mm, char buf[]);
+
 /******************** Protocol trace ********************/
 /* Type trace represents an opaque handle of trace
  * file

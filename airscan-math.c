@@ -142,5 +142,25 @@ math_range_fit(const SANE_Range *r, SANE_Word i)
     return math_min(i, r->max);
 }
 
+/* Format millimeters, for printing
+ */
+char*
+math_fmt_mm (SANE_Word mm, char buf[])
+{
+    double mmd = SANE_UNFIX(mm);
+    double integer, fraction;
+
+    integer = floor(mmd);
+    fraction = mmd - integer;
+
+    if (fraction != 0) {
+        sprintf(buf, "%d.%2.2d", (int) integer, (int) round(fraction * 100));
+    } else {
+        sprintf(buf, "%d", (int) integer);
+    }
+
+    return buf;
+}
+
 /* vim:ts=8:sw=4:et
  */
