@@ -69,19 +69,21 @@ struct device {
     GPtrArray            *job_images;         /* Array of SoupBuffer* */
     unsigned int         job_images_received; /* How many images received */
     GCond                job_state_cond;      /* Signaled when state changed */
+    SANE_Word            job_skip_x;          /* How much pixels to skip, */
+    SANE_Word            job_skip_y;          /*    from left and top */
 
     /* Read machinery */
     image_decoder        *read_decoder_jpeg; /* JPEG decoder */
     pollable             *read_pollable;     /* Signalled when read won't
                                                 block */
     SoupBuffer           *read_image;        /* Current image */
-    SANE_Parameters      read_params;        /* Actual image parameters */
     SANE_Byte            *read_line_buf;     /* Single-line buffer */
     SANE_Int             read_line_num;      /* Current image line 0-based */
-    size_t               read_line_size;     /* Logical size of single line */
-    size_t               read_line_off;      /* Current offset in the line */
+    SANE_Int             read_line_end;      /* If read_line_num>read_line_end
+                                                no more lines left in image */
+    SANE_Int             read_line_off;      /* Current offset in the line */
     SANE_Int             read_skip_lines;    /* How many lines to skip */
-    size_t               read_skip_bytes;    /* How many bytes to skip at line
+    SANE_Int             read_skip_bytes;    /* How many bytes to skip at line
                                                 beginning */
 };
 
@@ -906,6 +908,9 @@ device_escl_start_scan (device *dev)
     geom_y = device_geom_compute(dev->opt.tl_y, dev->opt.br_y,
         src->min_hei_px, src->max_hei_px, y_resolution);
 
+    dev->job_skip_x = geom_x.skip;
+    dev->job_skip_y = geom_y.skip;
+
     /* Prepare other parameters */
     switch (dev->opt.src) {
     case OPT_SOURCE_PLATEN:      source = "Platen"; duplex = false; break;
@@ -1356,36 +1361,72 @@ device_cancel (device *dev)
 static bool
 device_read_push (device *dev)
 {
-    bool   ok;
-    size_t line_capacity;
+    bool            ok;
+    size_t          line_capacity;
+    SANE_Parameters params;
+    image_decoder   *decoder = dev->read_decoder_jpeg;
+    int             wid, hei;
 
     dev->read_image = g_ptr_array_remove_index(dev->job_images, 0);
 
     /* Start new image decoding */
-    ok = image_decoder_begin(dev->read_decoder_jpeg,
+    ok = image_decoder_begin(decoder,
             dev->read_image->data, dev->read_image->length);
 
-    /* Initialize image decoding
-     *
-     * Here we set line width to match computed parameters rather
-     * that actual image width. Comments to device_read_decode_line()
-     * explain why
-     */
-    if (ok) {
-        image_decoder_get_params(dev->read_decoder_jpeg, &dev->read_params);
-        line_capacity = math_max(dev->opt.params.bytes_per_line,
-                dev->read_params.bytes_per_line);
-
-        dev->read_line_buf = g_malloc(line_capacity);
-        memset(dev->read_line_buf, 0xff, line_capacity);
-
-        dev->read_line_num = 0;
-        dev->read_line_size = dev->opt.params.bytes_per_line;
-        dev->read_line_off = dev->read_line_size;
-
-        pollable_signal(dev->read_pollable);
+    if (!ok) {
+        goto DONE;
     }
 
+    /* Obtain and validate image parameters */
+    image_decoder_get_params(decoder, &params);
+    if (params.format != dev->opt.params.format) {
+        /* This is what we cannot handle */
+        ok = false;
+        goto DONE;
+    }
+
+    wid = params.pixels_per_line;
+    hei = params.lines;
+
+    /* Setup image clipping */
+    if (dev->job_skip_x >= wid || dev->job_skip_y >= hei) {
+        /* Trivial case - just skip everything */
+        dev->read_skip_lines = hei;
+        dev->read_skip_bytes = 0;
+        line_capacity = dev->opt.params.bytes_per_line;
+    } else {
+        image_window win;
+        int          bpp = image_decoder_get_bytes_per_pixel(decoder);
+
+        win.x_off = dev->job_skip_x;
+        win.y_off = dev->job_skip_y;
+        win.wid = wid - dev->job_skip_x;
+        win.hei = hei - dev->job_skip_y;
+
+        image_decoder_set_window(decoder, &win);
+
+        dev->read_skip_bytes = 0;
+        if (win.x_off != dev->job_skip_x) {
+            dev->read_skip_bytes = bpp * (dev->job_skip_x - win.x_off);
+        }
+
+        dev->read_skip_lines = 0;
+        if (win.y_off != dev->job_skip_y) {
+            dev->read_skip_lines = dev->job_skip_y - win.y_off;
+        }
+
+        line_capacity = math_max(dev->opt.params.bytes_per_line, wid * bpp);
+    }
+
+    /* Initialize image decoding */
+    dev->read_line_buf = g_malloc(line_capacity);
+    memset(dev->read_line_buf, 0xff, line_capacity);
+
+    dev->read_line_num = 0;
+    dev->read_line_off = dev->opt.params.bytes_per_line;
+    dev->read_line_end = hei - dev->read_skip_lines;
+
+DONE:
     return ok;
 }
 
@@ -1412,8 +1453,8 @@ device_read_decode_line (device *dev)
         return SANE_STATUS_EOF;
     }
 
-    if (n < dev->read_skip_lines || n == dev->read_params.lines) {
-        memset(dev->read_line_buf, 0xff, dev->read_line_size);
+    if (n < dev->read_skip_lines || n >= dev->read_line_end) {
+        memset(dev->read_line_buf, 0xff, dev->opt.params.bytes_per_line);
     } else {
         bool ok = image_decoder_read_line(dev->read_decoder_jpeg,
                 dev->read_line_buf);
@@ -1469,11 +1510,11 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
 
     /* Read line by line */
     for (len = 0; status == SANE_STATUS_GOOD && len < max_len; ) {
-        if (dev->read_line_off == dev->read_line_size) {
+        if (dev->read_line_off == dev->opt.params.bytes_per_line) {
             status = device_read_decode_line (dev);
         } else {
             SANE_Int sz = math_min(max_len - len,
-                dev->read_line_size - dev->read_line_off);
+                dev->opt.params.bytes_per_line - dev->read_line_off);
 
             memcpy(data, dev->read_line_buf + dev->read_line_off, sz);
             data += sz;
