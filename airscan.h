@@ -767,7 +767,7 @@ struct image_decoder {
     bool (*begin) (image_decoder *decoder, const void *data, size_t size);
     void (*reset) (image_decoder *decoder);
     void (*get_params) (image_decoder *decoder, SANE_Parameters *params);
-    void (*set_window) (image_decoder *decoder, image_window *win);
+    bool (*set_window) (image_decoder *decoder, image_window *win);
     bool (*read_line) (image_decoder *decoder, void *buffer);
 };
 
@@ -825,10 +825,10 @@ image_decoder_get_params (image_decoder *decoder, SANE_Parameters *params)
  * at all, it is safe that decoder will simply set window boundaries
  * to contain an entire image
  */
-static inline void
+static inline bool
 image_decoder_set_window (image_decoder *decoder, image_window *win)
 {
-    decoder->set_window(decoder, win);
+    return decoder->set_window(decoder, win);
 }
 
 /* Read next line of image. Decoder may safely assume the provided

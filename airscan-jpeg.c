@@ -43,6 +43,7 @@ image_decoder_jpeg_begin (image_decoder *decoder, const void *data,
 
     if (!setjmp(jpeg->jmpb)) {
         jpeg_mem_src(&jpeg->cinfo, data, size);
+
         rc = jpeg_read_header(&jpeg->cinfo, true);
         if (rc != JPEG_HEADER_OK) {
             jpeg_abort((j_common_ptr) &jpeg->cinfo);
@@ -95,22 +96,28 @@ image_decoder_jpeg_get_params (image_decoder *decoder, SANE_Parameters *params)
 
 /* Set clipping window
  */
-static void
+static bool
 image_decoder_jpeg_set_window (image_decoder *decoder, image_window *win)
 {
     image_decoder_jpeg *jpeg = (image_decoder_jpeg*) decoder;
     JDIMENSION         x_off = win->x_off;
     JDIMENSION         wid = win->wid;
 
-    jpeg_crop_scanline(&jpeg->cinfo, &x_off, &wid);
-    if (win->y_off > 0) {
-        jpeg_skip_scanlines(&jpeg->cinfo, win->y_off);
+    if (!setjmp(jpeg->jmpb)) {
+        jpeg_crop_scanline(&jpeg->cinfo, &x_off, &wid);
+        if (win->y_off > 0) {
+            jpeg_skip_scanlines(&jpeg->cinfo, win->y_off);
+        }
+
+        jpeg->num_lines = win->hei;
+
+        win->x_off = x_off;
+        win->wid = wid;
+
+        return true;
     }
 
-    jpeg->num_lines = win->hei;
-
-    win->x_off = x_off;
-    win->wid = wid;
+    return false;
 }
 
 /* Read next line of image
