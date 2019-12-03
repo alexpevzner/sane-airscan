@@ -465,51 +465,74 @@ DONE:
 /* Dump device capabilities, for debugging
  */
 void
-devcaps_dump (const char *name, devcaps *caps)
+devcaps_dump (trace *t, devcaps *caps)
 {
-    int i, j;
+    int     i;
     GString *buf = g_string_new(NULL);
 
-    DBG_PROTO(name, "===== device capabilities =====");
-    DBG_PROTO(name, "  Model: %s", caps->model);
-    DBG_PROTO(name, "  Vendor: %s", caps->vendor);
+    trace_printf(t, "===== device capabilities =====");
+    trace_printf(t, "  Model:   \"%s\"", caps->model);
+    trace_printf(t, "  Vendor:  \"%s\"", caps->vendor);
 
     g_string_truncate(buf, 0);
     for (i = 0; caps->sane_sources[i] != NULL; i ++) {
-        g_string_append_printf(buf, " \"%s\"", caps->sane_sources[i]);
+        if (i != 0) {
+            g_string_append(buf, ", ");
+        }
+        g_string_append_printf(buf, "%s", caps->sane_sources[i]);
     }
-    DBG_PROTO(name, "  Sources:%s", buf->str);
+
+    trace_printf(t, "  Sources: %s", buf->str);
 
     OPT_SOURCE opt_src;
     for (opt_src = (OPT_SOURCE) 0; opt_src < NUM_OPT_SOURCE; opt_src ++) {
         devcaps_source *src = caps->src[opt_src];
+        char           xbuf[64], ybuf[64];
+
         if (src == NULL) {
             continue;
         }
 
-        DBG_PROTO(name, "  %s:", opt_source_to_sane(opt_src));
-        DBG_PROTO(name, "    Min window: %dx%d",
-                src->min_wid_px, src->min_hei_px);
-        DBG_PROTO(name, "    Max window: %dx%d",
-                src->max_wid_px, src->max_hei_px);
+        trace_printf(t, "");
+        trace_printf(t, "  %s:", opt_source_to_sane(opt_src));
+
+        math_fmt_mm(math_px2mm(src->min_wid_px), xbuf);
+        math_fmt_mm(math_px2mm(src->min_hei_px), ybuf);
+
+        trace_printf(t, "    Min window:  %dx%d px, %sx%s mm",
+                src->min_wid_px, src->min_hei_px, xbuf, ybuf);
+
+        math_fmt_mm(math_px2mm(src->max_wid_px), xbuf);
+        math_fmt_mm(math_px2mm(src->max_hei_px), ybuf);
+
+        trace_printf(t, "    Max window:  %dx%d px, %sx%s mm",
+                src->max_wid_px, src->max_hei_px, xbuf, ybuf);
 
         if (src->flags & DEVCAPS_SOURCE_RES_DISCRETE) {
             g_string_truncate(buf, 0);
-            for (j = 0; j < (int) array_of_word_len(&src->resolutions); j ++) {
-                g_string_append_printf(buf, " %d", src->resolutions[j+1]);
+            for (i = 0; i < (int) array_of_word_len(&src->resolutions); i ++) {
+                if (i != 0) {
+                    g_string_append_c(buf, ' ');
+                }
+                g_string_append_printf(buf, "%d", src->resolutions[i+1]);
             }
-            DBG_PROTO(name, "    Resolutions: %s", buf->str);
+
+            trace_printf(t, "    Resolutions: %s", buf->str);
         }
 
         g_string_truncate(buf, 0);
         for (i = 0; src->sane_colormodes[i] != NULL; i ++) {
-            g_string_append_printf(buf, " \"%s\"", src->sane_colormodes[i]);
+            if (i != 0) {
+                g_string_append(buf, ", ");
+            }
+            g_string_append_printf(buf, "%s", src->sane_colormodes[i]);
         }
-        DBG_PROTO(name, "    Modes:%s", buf->str);
 
+        trace_printf(t, "    Color modes: %s", buf->str);
     }
 
     g_string_free(buf, TRUE);
+    trace_printf(t, "");
 }
 
 /* vim:ts=8:sw=4:et

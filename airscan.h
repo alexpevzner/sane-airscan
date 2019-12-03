@@ -262,6 +262,44 @@ enum {
 #define DBG_CONF(fmt, args...)                  \
         DBG_PRINT(DBG_FLG_CONF, "conf", fmt, ##args)
 
+/******************** Protocol trace ********************/
+/* Type trace represents an opaque handle of trace
+ * file
+ */
+typedef struct trace trace;
+
+/* Initialize protocol trace. Called at backend initialization
+ */
+SANE_Status
+trace_init (void);
+
+/* Cleanup protocol trace. Called at backend unload
+ */
+void
+trace_cleanup (void);
+
+/* Open protocol trace
+ */
+trace*
+trace_open (const char *device_name);
+
+/* Close protocol trace
+ */
+void
+trace_close (trace *t);
+
+/* This hook needs to be called from message
+ * completion callback
+ */
+void
+trace_msg_hook (trace *t, SoupMessage *msg);
+
+/* Printf to the trace log
+ */
+void
+trace_printf (trace *t, const char *fmt, ...);
+
+
 /******************** Typed Arrays ********************/
 /* Initialize array of SANE_Word
  */
@@ -581,7 +619,7 @@ devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len);
 /* Dump device capabilities, for debugging
  */
 void
-devcaps_dump (const char *name, devcaps *caps);
+devcaps_dump (trace *t, devcaps *caps);
 
 /******************** Device options ********************/
 /* Scan options
@@ -951,43 +989,6 @@ math_mm2px (SANE_Word mm)
  */
 char*
 math_fmt_mm (SANE_Word mm, char buf[]);
-
-/******************** Protocol trace ********************/
-/* Type trace represents an opaque handle of trace
- * file
- */
-typedef struct trace trace;
-
-/* Initialize protocol trace. Called at backend initialization
- */
-SANE_Status
-trace_init (void);
-
-/* Cleanup protocol trace. Called at backend unload
- */
-void
-trace_cleanup (void);
-
-/* Open protocol trace
- */
-trace*
-trace_open (const char *device_name);
-
-/* Close protocol trace
- */
-void
-trace_close (trace *t);
-
-/* This hook needs to be called from message
- * completion callback
- */
-void
-trace_msg_hook (trace *t, SoupMessage *msg);
-
-/* Printf to the trace log
- */
-void
-trace_printf (trace *t, const char *fmt, ...);
 
 #endif
 

@@ -430,7 +430,7 @@ device_scanner_capabilities_callback (device *dev, SoupMessage *msg)
         goto DONE;
     }
 
-    devcaps_dump(dev->name, &dev->opt.caps);
+    devcaps_dump(dev->trace, &dev->opt.caps);
 
     /* Cleanup and exit */
 DONE:
