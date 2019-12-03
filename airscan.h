@@ -766,6 +766,7 @@ struct image_decoder {
     void (*free) (image_decoder *decoder);
     bool (*begin) (image_decoder *decoder, const void *data, size_t size);
     void (*reset) (image_decoder *decoder);
+    int  (*get_bytes_per_pixel) (image_decoder *decoder);
     void (*get_params) (image_decoder *decoder, SANE_Parameters *params);
     bool (*set_window) (image_decoder *decoder, image_window *win);
     bool (*read_line) (image_decoder *decoder, void *buffer);
@@ -800,6 +801,14 @@ static inline void
 image_decoder_reset (image_decoder *decoder)
 {
     decoder->reset(decoder);
+}
+
+/* Get bytes count per pixel
+ */
+static inline int
+image_decoder_get_bytes_per_pixel (image_decoder *decoder)
+{
+    return decoder->get_bytes_per_pixel(decoder);
 }
 
 /* Get image parameters. Can be called at any time between

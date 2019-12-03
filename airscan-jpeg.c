@@ -73,6 +73,15 @@ image_decoder_jpeg_reset (image_decoder *decoder)
     jpeg_abort((j_common_ptr) &jpeg->cinfo);
 }
 
+/* Get bytes count per pixel
+ */
+static int
+image_decoder_jpeg_get_bytes_per_pixel (image_decoder *decoder)
+{
+    image_decoder_jpeg *jpeg = (image_decoder_jpeg*) decoder;
+    return jpeg->cinfo.num_components;
+}
+
 /* Get image parameters
  */
 static void
@@ -174,6 +183,7 @@ image_decoder_jpeg_new (void)
     jpeg->decoder.free = image_decoder_jpeg_free;
     jpeg->decoder.begin = image_decoder_jpeg_begin;
     jpeg->decoder.reset = image_decoder_jpeg_reset;
+    jpeg->decoder.get_bytes_per_pixel = image_decoder_jpeg_get_bytes_per_pixel;
     jpeg->decoder.get_params = image_decoder_jpeg_get_params;
     jpeg->decoder.set_window = image_decoder_jpeg_set_window;
     jpeg->decoder.read_line = image_decoder_jpeg_read_line;
