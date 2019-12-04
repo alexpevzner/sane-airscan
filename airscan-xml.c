@@ -52,7 +52,7 @@ __xml_rd_invalidate_cache (xml_rd *xml)
  *
  * Returns NULL on success, or error text on a error
  */
-const char*
+error
 xml_rd_begin (xml_rd **xml, const char *xml_text, size_t xml_len)
 {
     *xml = g_new0(xml_rd, 1);
@@ -60,7 +60,7 @@ xml_rd_begin (xml_rd **xml, const char *xml_text, size_t xml_len)
     (*xml)->doc = xmlParseMemory(xml_text, xml_len);
     if ((*xml)->doc == NULL) {
         xml_rd_finish(xml);
-        return "Failed to parse XML";
+        return ERROR("Failed to parse XML");
     }
 
     (*xml)->node = xmlDocGetRootElement((*xml)->doc);
@@ -186,7 +186,7 @@ xml_rd_node_value (xml_rd *xml)
 /* Get value of the current node as unsigned integer
  * Returns error string, NULL if OK
  */
-const char*
+error
 xml_rd_node_value_uint (xml_rd *xml, SANE_Word *val)
 {
     const char *s = xml_rd_node_value(xml);

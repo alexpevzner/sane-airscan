@@ -261,7 +261,7 @@ eloop_event_trigger (eloop_event *event)
  * on a next eloop roll, so don't save this string
  * anywhere, if you need to do so, create a copy!
  */
-const char*
+error
 eloop_eprintf(const char *fmt, ...)
 {
     gchar *estring;
@@ -274,7 +274,7 @@ eloop_eprintf(const char *fmt, ...)
     g_free(eloop_estring);
     eloop_estring = estring;
 
-    return estring;
+    return ERROR(estring);
 }
 
 /* vim:ts=8:sw=4:et

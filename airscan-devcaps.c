@@ -66,7 +66,7 @@ devcaps_reset (devcaps *caps)
 
 /* Parse color modes. Returns NULL on success, error string otherwise
  */
-static const char*
+static error
 devcaps_source_parse_color_modes (xml_rd *xml, devcaps_source *src)
 {
     src->colormodes = 0;
@@ -101,7 +101,7 @@ devcaps_source_parse_color_modes (xml_rd *xml, devcaps_source *src)
 
 /* Parse document formats. Returns NULL on success, error string otherwise
  */
-static const char*
+static error
 devcaps_source_parse_document_formats (xml_rd *xml, devcaps_source *src)
 {
     xml_rd_enter(xml);
@@ -126,10 +126,10 @@ devcaps_source_parse_document_formats (xml_rd *xml, devcaps_source *src)
 /* Parse discrete resolutions.
  * Returns NULL on success, error string otherwise
  */
-static const char*
+static error
 devcaps_source_parse_discrete_resolutions (xml_rd *xml, devcaps_source *src)
 {
-    const char *err = NULL;
+    error err = NULL;
 
     array_of_word_reset(&src->resolutions);
 
@@ -166,10 +166,10 @@ devcaps_source_parse_discrete_resolutions (xml_rd *xml, devcaps_source *src)
 /* Parse resolutions range
  * Returns NULL on success, error string otherwise
  */
-static const char*
+static error
 devcaps_source_parse_resolutions_range (xml_rd *xml, devcaps_source *src)
 {
-    const char *err = NULL;
+    error      err = NULL;
     SANE_Range range_x = {0, 0, 0}, range_y = {0, 0, 0};
 
     xml_rd_enter(xml);
@@ -198,12 +198,12 @@ devcaps_source_parse_resolutions_range (xml_rd *xml, devcaps_source *src)
     xml_rd_leave(xml);
 
     if (range_x.min > range_x.max) {
-        err = "Invalid scan:XResolution range";
+        err = ERROR("Invalid scan:XResolution range");
         goto DONE;
     }
 
     if (range_y.min > range_y.max) {
-        err = "Invalid scan:YResolution range";
+        err = ERROR("Invalid scan:YResolution range");
         goto DONE;
     }
 
@@ -219,7 +219,8 @@ devcaps_source_parse_resolutions_range (xml_rd *xml, devcaps_source *src)
 
     /* Try to merge x/y ranges */
     if (!math_range_merge(&src->res_range, &range_x, &range_y)) {
-        err = "Incompatible scan:XResolution and scan:YResolution ranges";
+        err = ERROR("Incompatible scan:XResolution and "
+                    "scan:YResolution ranges");
         goto DONE;
     }
 
@@ -232,10 +233,10 @@ DONE:
 /* Parse supported resolutions.
  * Returns NULL on success, error string otherwise
  */
-static const char*
+static error
 devcaps_source_parse_resolutions (xml_rd *xml, devcaps_source *src)
 {
-    const char *err = NULL;
+    error err = NULL;
 
     xml_rd_enter(xml);
     for (; err == NULL && !xml_rd_end(xml); xml_rd_next(xml)) {
@@ -253,7 +254,7 @@ devcaps_source_parse_resolutions (xml_rd *xml, devcaps_source *src)
     }
 
     if (!(src->flags & (DEVCAPS_SOURCE_RES_DISCRETE|DEVCAPS_SOURCE_RES_RANGE))){
-        err = "Source resolutions are not defined";
+        err = ERROR("Source resolutions are not defined");
     }
 
     return err;
@@ -262,10 +263,10 @@ devcaps_source_parse_resolutions (xml_rd *xml, devcaps_source *src)
 /* Parse setting profiles (color modes, document formats etc).
  * Returns NULL on success, error string otherwise
  */
-static const char*
+static error
 devcaps_source_parse_setting_profiles (xml_rd *xml, devcaps_source *src)
 {
-    const char *err = NULL;
+    error err = NULL;
 
     xml_rd_enter(xml);
     for (; err == NULL && !xml_rd_end(xml); xml_rd_next(xml)) {
@@ -293,11 +294,11 @@ devcaps_source_parse_setting_profiles (xml_rd *xml, devcaps_source *src)
 
 /* Parse source capabilities. Returns NULL on success, error string otherwise
  */
-static const char*
+static error
 devcaps_source_parse (xml_rd *xml, devcaps_source **out)
 {
     devcaps_source *src = devcaps_source_new();
-    const char *err = NULL;
+    error          err = NULL;
 
     xml_rd_enter(xml);
     for (; err == NULL && !xml_rd_end(xml); xml_rd_next(xml)) {
@@ -324,13 +325,13 @@ devcaps_source_parse (xml_rd *xml, devcaps_source **out)
         /* Validate window size */
         if (src->min_wid_px >= src->max_wid_px )
         {
-            err = "Invalid scan:MinWidth or scan:MaxWidth";
+            err = ERROR("Invalid scan:MinWidth or scan:MaxWidth");
             goto DONE;
         }
 
         if (src->min_hei_px >= src->max_hei_px)
         {
-            err = "Invalid scan:MinHeight or scan:MaxHeight";
+            err = ERROR("Invalid scan:MinHeight or scan:MaxHeight");
             goto DONE;
         }
 
@@ -362,12 +363,12 @@ DONE:
  *
  * Returns NULL if OK, error string otherwise
  */
-const char*
+error
 devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
 {
-    const char *err = NULL;
-    char       *model = NULL, *make_and_model = NULL;
-    xml_rd   *xml;
+    error  err = NULL;
+    char   *model = NULL, *make_and_model = NULL;
+    xml_rd *xml;
 
     /* Parse capabilities XML */
     err = xml_rd_begin(&xml, xml_text, xml_len);
@@ -376,7 +377,7 @@ devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
     }
 
     if (!xml_rd_node_name_match(xml, "scan:ScannerCapabilities")) {
-        err = "XML: missed scan:ScannerCapabilities";
+        err = ERROR("XML: missed scan:ScannerCapabilities");
         goto DONE;
     }
 

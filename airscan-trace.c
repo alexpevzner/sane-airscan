@@ -285,5 +285,15 @@ trace_printf (trace *t, const char *fmt, ...)
     }
 }
 
+/* Note an error in trace log
+ */
+void
+trace_error (trace *t, error err)
+{
+    trace_printf(t, "---");
+    trace_printf(t, "%s", ESTRING(err));
+    trace_printf(t, "");
+}
+
 /* vim:ts=8:sw=4:et
  */

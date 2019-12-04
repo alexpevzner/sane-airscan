@@ -45,7 +45,36 @@
 #define OUTER_STRUCT(member_p,struct_t,field)                            \
     ((struct_t*)((char*)(member_p) - ((ptrdiff_t) &(((struct_t*) 0)->field))))
 
-/******************** Configuration file loader  ********************/
+/******************** Error handling ********************/
+/* Type error represents an error. Its value either NULL,
+ * which indicates "no error" condition, or some opaque
+ * non-null pointer, which can be converted to string
+ * with textual description of the error, using the ESTRING()
+ * function
+ *
+ * Caller should not attempt to free the memory, referred
+ * by error or string, obtained from an error using the
+ * ESTRING() function
+ */
+typedef struct {} *error;
+
+/* Construct error from a string
+ */
+static inline error
+ERROR (const char *s)
+{
+    return (error) s;
+}
+
+/* Obtain textual representation of the error
+ */
+static inline const char*
+ESTRING (error err)
+{
+    return (const char*) err;
+}
+
+/******************** Configuration file loader ********************/
 /* Device configuration, for manually added devices
  */
 typedef struct conf_device conf_device;
@@ -209,7 +238,7 @@ eloop_event_trigger (eloop_event *event);
  * on a next eloop roll, so don't save this string
  * anywhere, if you need to do so, create a copy!
  */
-const char*
+error
 eloop_eprintf(const char *fmt, ...);
 
 /******************** Debugging ********************/
@@ -299,6 +328,10 @@ trace_msg_hook (trace *t, SoupMessage *msg);
 void
 trace_printf (trace *t, const char *fmt, ...);
 
+/* Note an error in trace log
+ */
+void
+trace_error (trace *t, error err);
 
 /******************** Typed Arrays ********************/
 /* Initialize array of SANE_Word
@@ -379,7 +412,7 @@ typedef struct xml_rd xml_rd;
  *
  * On a error, returns a error text
  */
-const char*
+error
 xml_rd_begin (xml_rd **xml, const char *xml_text, size_t xml_len);
 
 /* Finish reading, free allocated resources
@@ -433,7 +466,7 @@ xml_rd_node_value (xml_rd *xml);
 /* Get value of the current node as unsigned integer
  * Returns error string, NULL if OK
  */
-const char*
+error
 xml_rd_node_value_uint (xml_rd *xml, SANE_Word *val);
 
 /* XML writer
@@ -613,7 +646,7 @@ devcaps_cleanup (devcaps *caps);
  *
  * Returns NULL if OK, error string otherwise
  */
-const char*
+error
 devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len);
 
 /* Dump device capabilities, for debugging
@@ -649,7 +682,7 @@ devopt_cleanup (devopt *opt);
  *
  * Returns NULL if OK, error string otherwise
  */
-const char*
+error
 devopt_import_caps (devopt *opt, const char *xml_text, size_t xml_len);
 
 /* Set device option

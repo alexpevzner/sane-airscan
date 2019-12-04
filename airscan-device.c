@@ -410,13 +410,13 @@ device_table_ready (void)
 static void
 device_scanner_capabilities_callback (device *dev, SoupMessage *msg)
 {
-    DBG_DEVICE(dev->name, "ScannerCapabilities: status=%d", msg->status_code);
+    error err = NULL;
 
-    const char *err = NULL;
+    DBG_DEVICE(dev->name, "ScannerCapabilities: status=%d", msg->status_code);
 
     /* Check request status */
     if (!SOUP_STATUS_IS_SUCCESSFUL(msg->status_code)) {
-        err = "failed to load ScannerCapabilities";
+        err = ERROR("failed to load ScannerCapabilities");
         goto DONE;
     }
 
@@ -435,6 +435,8 @@ device_scanner_capabilities_callback (device *dev, SoupMessage *msg)
     /* Cleanup and exit */
 DONE:
     if (err != NULL) {
+        trace_error(dev->trace, err);
+
         if (dev->addr_current != NULL && dev->addr_current->next != NULL) {
             device_probe_address(dev, dev->addr_current->next);
         } else {
@@ -601,12 +603,12 @@ device_escl_cleanup (device *dev)
  * On success, returns NULL and `idle' is set to true
  * if scanner is idle
  */
-static const char*
+static error
 device_escl_scannerstatus_parse (const char *xml_text, size_t xml_len,
         SANE_Status *device_status, SANE_Status *adf_status)
 {
-    const char *err = NULL;
-    xml_rd     *xml;
+    error  err = NULL;
+    xml_rd *xml;
 
     *device_status = SANE_STATUS_GOOD;
     *adf_status = SANE_STATUS_GOOD;
@@ -617,7 +619,7 @@ device_escl_scannerstatus_parse (const char *xml_text, size_t xml_len,
     }
 
     if (!xml_rd_node_name_match(xml, "scan:ScannerStatus")) {
-        err = "XML: missed scan:ScannerStatus";
+        err = ERROR("XML: missed scan:ScannerStatus");
         goto DONE;
     }
 
@@ -648,12 +650,12 @@ DONE:
 static void
 device_escl_check_status_callback (device *dev, SoupMessage *msg)
 {
-    const char  *err = NULL;
+    error       err = NULL;
     SANE_Status status = SANE_STATUS_IO_ERROR, device_status, adf_status;
 
     /* Check request status */
     if (!SOUP_STATUS_IS_SUCCESSFUL(msg->status_code)) {
-        err = "failed to load ScannerStatus";
+        err = ERROR("failed to load ScannerStatus");
         goto DONE;
     }
 

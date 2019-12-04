@@ -388,10 +388,10 @@ devopt_set_geom (devopt *opt, SANE_Int option, SANE_Word val, SANE_Word *info)
  *
  * Returns NULL if OK, error string otherwise
  */
-const char*
+error
 devopt_import_caps (devopt *opt, const char *xml_text, size_t xml_len)
 {
-    const char     *err;
+    error          err;
     devcaps_source *src;
 
     err = devcaps_parse (&opt->caps, xml_text, xml_len);
