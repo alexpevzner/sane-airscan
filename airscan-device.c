@@ -1363,7 +1363,7 @@ device_cancel (device *dev)
 static bool
 device_read_push (device *dev)
 {
-    bool            ok;
+    error           err;
     size_t          line_capacity;
     SANE_Parameters params;
     image_decoder   *decoder = dev->read_decoder_jpeg;
@@ -1372,10 +1372,10 @@ device_read_push (device *dev)
     dev->read_image = g_ptr_array_remove_index(dev->job_images, 0);
 
     /* Start new image decoding */
-    ok = image_decoder_begin(decoder,
+    err = image_decoder_begin(decoder,
             dev->read_image->data, dev->read_image->length);
 
-    if (!ok) {
+    if (err != NULL) {
         goto DONE;
     }
 
@@ -1383,7 +1383,7 @@ device_read_push (device *dev)
     image_decoder_get_params(decoder, &params);
     if (params.format != dev->opt.params.format) {
         /* This is what we cannot handle */
-        ok = false;
+        err = ERROR("Unexpected image format");
         goto DONE;
     }
 
@@ -1405,7 +1405,10 @@ device_read_push (device *dev)
         win.wid = wid - dev->job_skip_x;
         win.hei = hei - dev->job_skip_y;
 
-        image_decoder_set_window(decoder, &win);
+        err = image_decoder_set_window(decoder, &win);
+        if (err != NULL) {
+            goto DONE;
+        }
 
         dev->read_skip_bytes = 0;
         if (win.x_off != dev->job_skip_x) {
@@ -1429,7 +1432,13 @@ device_read_push (device *dev)
     dev->read_line_end = hei - dev->read_skip_lines;
 
 DONE:
-    return ok;
+    if (err != NULL) {
+        trace_error(dev->trace, err);
+        soup_buffer_free(dev->read_image);
+        dev->read_image = NULL;
+    }
+
+    return err == NULL;
 }
 
 /* Decode next image line
@@ -1458,10 +1467,11 @@ device_read_decode_line (device *dev)
     if (n < dev->read_skip_lines || n >= dev->read_line_end) {
         memset(dev->read_line_buf, 0xff, dev->opt.params.bytes_per_line);
     } else {
-        bool ok = image_decoder_read_line(dev->read_decoder_jpeg,
+        error err = image_decoder_read_line(dev->read_decoder_jpeg,
                 dev->read_line_buf);
 
-        if (!ok) {
+        if (err != NULL) {
+            trace_error(dev->trace, err);
             return SANE_STATUS_IO_ERROR;
         }
     }

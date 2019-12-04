@@ -17,7 +17,9 @@ typedef struct {
     image_decoder                 decoder;   /* Base class */
     struct jpeg_decompress_struct cinfo;     /* libjpeg decoder */
     struct jpeg_error_mgr         jerr;      /* libjpeg error manager */
-    jmp_buf                       jmpb;
+    jmp_buf                       jmpb;      /* For longjmp from libjpeg */
+    char                          errbuf[    /* Error buffer */
+                                        JMSG_LENGTH_MAX + 16];
     JDIMENSION                    num_lines; /* Num of lines left to read */
 } image_decoder_jpeg;
 
@@ -34,7 +36,7 @@ image_decoder_jpeg_free (image_decoder *decoder)
 
 /* Begin JPEG decoding
  */
-static bool
+static error
 image_decoder_jpeg_begin (image_decoder *decoder, const void *data,
         size_t size)
 {
@@ -47,7 +49,7 @@ image_decoder_jpeg_begin (image_decoder *decoder, const void *data,
         rc = jpeg_read_header(&jpeg->cinfo, true);
         if (rc != JPEG_HEADER_OK) {
             jpeg_abort((j_common_ptr) &jpeg->cinfo);
-            return false;
+            return ERROR("JPEG: invalid header");
         }
 
         if (jpeg->cinfo.num_components != 1) {
@@ -57,10 +59,10 @@ image_decoder_jpeg_begin (image_decoder *decoder, const void *data,
         jpeg_start_decompress(&jpeg->cinfo);
         jpeg->num_lines = jpeg->cinfo.image_height;
 
-        return true;
+        return NULL;
     }
 
-    return false;
+    return ERROR(jpeg->errbuf);
 }
 
 /* Reset JPEG decoder
@@ -105,7 +107,7 @@ image_decoder_jpeg_get_params (image_decoder *decoder, SANE_Parameters *params)
 
 /* Set clipping window
  */
-static bool
+static error
 image_decoder_jpeg_set_window (image_decoder *decoder, image_window *win)
 {
     image_decoder_jpeg *jpeg = (image_decoder_jpeg*) decoder;
@@ -123,43 +125,46 @@ image_decoder_jpeg_set_window (image_decoder *decoder, image_window *win)
         win->x_off = x_off;
         win->wid = wid;
 
-        return true;
+        return NULL;
     }
 
-    return false;
+    return ERROR(jpeg->errbuf);
 }
 
 /* Read next line of image
  */
-static bool
+static error
 image_decoder_jpeg_read_line (image_decoder *decoder, void *buffer)
 {
     image_decoder_jpeg *jpeg = (image_decoder_jpeg*) decoder;
     JSAMPROW           lines[1] = {buffer};
 
     if (!jpeg->num_lines) {
-        return false;
+        return ERROR("JPEG: end of file");
     }
 
     if (!setjmp(jpeg->jmpb)) {
         if (jpeg_read_scanlines(&jpeg->cinfo, lines, 1) == 0) {
-            return false;
+            return ERROR(jpeg->errbuf);
         }
 
         jpeg->num_lines --;
 
-        return true;
+        return NULL;
     }
 
-    return false;
+    return ERROR(jpeg->errbuf);
 }
 
-/* Dummy "output error message" callback for JPEG decoder
+/* "Output error message" callback for JPEG decoder
  */
 static void
 image_decoder_jpeg_output_message (j_common_ptr cinfo)
 {
-    (void) cinfo;
+    image_decoder_jpeg *jpeg = OUTER_STRUCT(cinfo, image_decoder_jpeg, cinfo);
+
+    memcpy(jpeg->errbuf, "JPEG: ", 6);
+    (*cinfo->err->format_message)(cinfo, jpeg->errbuf + 6);
 }
 
 /* error_exit callback for JPEG decoder. The default callback
@@ -169,6 +174,9 @@ static void
 image_decoder_jpeg_error_exit (j_common_ptr cinfo)
 {
     image_decoder_jpeg *jpeg = OUTER_STRUCT(cinfo, image_decoder_jpeg, cinfo);
+
+    image_decoder_jpeg_output_message(cinfo);
+
     jpeg_abort(cinfo);
     longjmp(jpeg->jmpb, 1);
 }

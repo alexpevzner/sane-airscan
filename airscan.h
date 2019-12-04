@@ -834,13 +834,13 @@ typedef struct {
  */
 typedef struct image_decoder image_decoder;
 struct image_decoder {
-    void (*free) (image_decoder *decoder);
-    bool (*begin) (image_decoder *decoder, const void *data, size_t size);
-    void (*reset) (image_decoder *decoder);
-    int  (*get_bytes_per_pixel) (image_decoder *decoder);
-    void (*get_params) (image_decoder *decoder, SANE_Parameters *params);
-    bool (*set_window) (image_decoder *decoder, image_window *win);
-    bool (*read_line) (image_decoder *decoder, void *buffer);
+    void  (*free) (image_decoder *decoder);
+    error (*begin) (image_decoder *decoder, const void *data, size_t size);
+    void  (*reset) (image_decoder *decoder);
+    int   (*get_bytes_per_pixel) (image_decoder *decoder);
+    void  (*get_params) (image_decoder *decoder, SANE_Parameters *params);
+    error (*set_window) (image_decoder *decoder, image_window *win);
+    error (*read_line) (image_decoder *decoder, void *buffer);
 };
 
 /* Create JPEG image decoder
@@ -859,7 +859,7 @@ image_decoder_free (image_decoder *decoder)
 /* Begin image decoding. Decoder may assume that provided data
  * buffer remains valid during a whole decoding cycle
  */
-static inline bool
+static inline error
 image_decoder_begin (image_decoder *decoder, const void *data, size_t size)
 {
     return decoder->begin(decoder, data, size);
@@ -905,7 +905,7 @@ image_decoder_get_params (image_decoder *decoder, SANE_Parameters *params)
  * at all, it is safe that decoder will simply set window boundaries
  * to contain an entire image
  */
-static inline bool
+static inline error
 image_decoder_set_window (image_decoder *decoder, image_window *win)
 {
     return decoder->set_window(decoder, win);
@@ -914,7 +914,7 @@ image_decoder_set_window (image_decoder *decoder, image_window *win)
 /* Read next line of image. Decoder may safely assume the provided
  * buffer is big enough to keep the entire line
  */
-static inline bool
+static inline error
 image_decoder_read_line (image_decoder *decoder, void *buffer)
 {
     return decoder->read_line(decoder, buffer);
