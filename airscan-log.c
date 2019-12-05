@@ -22,10 +22,10 @@ log_message (device *dev, const char *fmt, va_list ap)
     struct iovec iov[3];
 
     if (dev != NULL) {
-        off += snprintf(buf, 64, "%.64s: ", device_name(dev));
+        off += snprintf(buf, 64, "\"%.64s\": ", device_name(dev));
     }
 
-    off += vsnprintf(buf, sizeof(buf) - off, fmt, ap);
+    off += vsnprintf(buf + off, sizeof(buf) - off, fmt, ap);
 
     iov[0].iov_base = "airscan: ";
     iov[0].iov_len = strlen(iov[0].iov_base);

@@ -19,7 +19,7 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
 {
     SANE_Status status;
 
-    DBG_API_ENTER();
+    log_debug(NULL, "sane_init() called");
 
     conf_load();
 
@@ -49,7 +49,7 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
     /* Start airscan thread */
     eloop_thread_start(device_management_start_stop);
 
-    DBG_API_LEAVE(status);
+    log_debug(NULL, "sane_init(): %s", sane_strstatus(status));
 
     return status;
 }
@@ -59,7 +59,7 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
 void
 sane_exit (void)
 {
-    DBG_API_ENTER();
+    log_debug(NULL, "sane_init() called");
 
     eloop_thread_stop();
 
@@ -69,7 +69,7 @@ sane_exit (void)
     eloop_cleanup();
     device_list_free(sane_device_list);
 
-    DBG_API_LEAVE(SANE_STATUS_GOOD);
+    log_debug(NULL, "sane_init(): OK");
 }
 
 /* Get list of devices
@@ -78,8 +78,6 @@ SANE_Status
 sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
 {
     SANE_Status status = SANE_STATUS_GOOD;
-
-    DBG_API_ENTER();
 
     if (local_only) {
         /* All our devices are non-local */
@@ -95,7 +93,9 @@ sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
         eloop_mutex_unlock();
     }
 
-    DBG_API_LEAVE(status);
+    if (status != SANE_STATUS_GOOD) {
+        log_debug(NULL, "sane_get_devices(): %s", sane_strstatus(status));
+    }
 
     return status;
 }
@@ -108,8 +108,6 @@ sane_open (SANE_String_Const name, SANE_Handle *handle)
     SANE_Status status;
     device *dev;
 
-    DBG_API_ENTER();
-
     eloop_mutex_lock();
     status = device_open(name, &dev);
     eloop_mutex_unlock();
@@ -118,7 +116,8 @@ sane_open (SANE_String_Const name, SANE_Handle *handle)
         *handle = (SANE_Handle) dev;
     }
 
-    DBG_API_LEAVE(status);
+    log_debug(dev, "sane_open(%s): %s", name ? name : "<nil>",
+            sane_strstatus(status));
 
     return status;
 }
@@ -128,13 +127,13 @@ sane_open (SANE_String_Const name, SANE_Handle *handle)
 void
 sane_close (SANE_Handle handle)
 {
-    DBG_API_ENTER();
+    device *dev = (device*) handle;
+
+    log_debug(dev, "sane_close()");
 
     eloop_mutex_lock();
     device_close((device*) handle);
     eloop_mutex_unlock();
-
-    DBG_API_LEAVE(SANE_STATUS_GOOD);
 }
 
 /* Get option descriptor
@@ -145,13 +144,9 @@ sane_get_option_descriptor (SANE_Handle handle, SANE_Int option)
     device *dev = (device*) handle;
     const SANE_Option_Descriptor *desc;
 
-    DBG_API_ENTER();
-
     eloop_mutex_lock();
     desc = device_get_option_descriptor(dev, option);
     eloop_mutex_unlock();
-
-    DBG_API_LEAVE(desc ? SANE_STATUS_GOOD : SANE_STATUS_INVAL);
 
     return desc;
 }
@@ -165,8 +160,6 @@ sane_control_option (SANE_Handle handle, SANE_Int option, SANE_Action action,
     SANE_Status status = SANE_STATUS_INVAL;
     device *dev = (device*) handle;
     const SANE_Option_Descriptor *desc;
-
-    DBG_API_ENTER();
 
     eloop_mutex_lock();
 
@@ -194,8 +187,6 @@ sane_control_option (SANE_Handle handle, SANE_Int option, SANE_Action action,
 DONE:
     eloop_mutex_unlock();
 
-    DBG_API_LEAVE(status);
-
     return status;
 }
 
@@ -207,15 +198,11 @@ sane_get_parameters (SANE_Handle handle, SANE_Parameters *params)
     SANE_Status status = SANE_STATUS_GOOD;
     device *dev = (device*) handle;
 
-    DBG_API_ENTER();
-
     if (params != NULL) {
         eloop_mutex_lock();
         status = device_get_parameters(dev, params);
         eloop_mutex_unlock();
     }
-
-    DBG_API_LEAVE(status);
 
     return status;
 }
@@ -228,13 +215,13 @@ sane_start (SANE_Handle handle)
     SANE_Status status;
     device *dev = (device*) handle;
 
-    DBG_API_ENTER();
+    log_debug(dev, "sane_start()");
 
     eloop_mutex_lock();
     status = device_start(dev);
     eloop_mutex_unlock();
 
-    DBG_API_LEAVE(status);
+    log_debug(dev, "sane_start(): %s", sane_strstatus(status));
 
     return status;
 }
@@ -247,13 +234,13 @@ sane_read (SANE_Handle handle, SANE_Byte *data, SANE_Int max_len, SANE_Int *len)
     SANE_Status status = SANE_STATUS_UNSUPPORTED;
     device *dev = (device*) handle;
 
-    DBG_API_ENTER();
-
     eloop_mutex_lock();
     status = device_read(dev, data, max_len, len);
     eloop_mutex_unlock();
 
-    DBG_API_LEAVE(status);
+    if (status != SANE_STATUS_GOOD) {
+        log_debug(dev, "sane_read(): %s", sane_strstatus(status));
+    }
 
     return status;
 }
@@ -276,14 +263,11 @@ sane_cancel (SANE_Handle handle)
 SANE_Status
 sane_set_io_mode (SANE_Handle handle, SANE_Bool non_blocking)
 {
+    device      *dev = handle;
     SANE_Status status = SANE_STATUS_UNSUPPORTED;
 
-    DBG_API_ENTER();
-
-    (void) handle;
-    (void) non_blocking;
-
-    DBG_API_LEAVE(status);
+    log_debug(dev, "sane_set_io_mode(%s): %s",
+        non_blocking ? "true" : "false", sane_strstatus(status));
 
     return status;
 }
@@ -295,13 +279,9 @@ sane_get_select_fd (SANE_Handle handle, SANE_Int * fd)
 {
     SANE_Status status = SANE_STATUS_UNSUPPORTED;
 
-    DBG_API_ENTER();
-
     (void) handle;
 
     *fd = -1;
-
-    DBG_API_LEAVE(status);
 
     return status;
 }

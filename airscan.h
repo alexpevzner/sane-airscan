@@ -269,13 +269,6 @@ enum {
 
 /* Shortcuts for various subsystems
  */
-#define DBG_API(fmt, args...)                   \
-        DBG_PRINT(DBG_FLG_API, "api", fmt, ##args)
-
-#define DBG_API_ENTER()         DBG_API("%s", __FUNCTION__)
-#define DBG_API_LEAVE(status)                   \
-        DBG_API("%s -- %s", __FUNCTION__, sane_strstatus(status))
-
 #define DBG_DISCOVERY(name, fmt, args...)       \
         DBG_PRINT(DBG_FLG_DISCOVERY, "discovery", "\"%s\": " fmt, name, ##args)
 
