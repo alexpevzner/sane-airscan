@@ -272,9 +272,6 @@ enum {
 #define DBG_DISCOVERY(name, fmt, args...)       \
         DBG_PRINT(DBG_FLG_DISCOVERY, "discovery", "\"%s\": " fmt, name, ##args)
 
-#define DBG_PROTO(name, fmt, args...)           \
-        DBG_PRINT(DBG_FLG_PROTO, "proto", "\"%s\": " fmt, name, ##args)
-
 #define DBG_DEVICE(name, fmt, args...)          \
         DBG_PRINT(DBG_FLG_DEVICE, "dev", "\"%s\": " fmt, name, ##args)
 
