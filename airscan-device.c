@@ -176,10 +176,10 @@ device_unref (device *dev)
 {
     if (g_atomic_int_dec_and_test(&dev->refcnt)) {
         DBG_DEVICE(dev->name, "destroyed");
-        g_assert((dev->flags & DEVICE_LISTED) == 0);
-        g_assert((dev->flags & DEVICE_HALTED) != 0);
-        g_assert((dev->flags & DEVICE_OPENED) == 0);
-        g_assert(dev->http_pending == NULL);
+        log_assert(dev, (dev->flags & DEVICE_LISTED) == 0);
+        log_assert(dev, (dev->flags & DEVICE_HALTED) != 0);
+        log_assert(dev, (dev->flags & DEVICE_OPENED) == 0);
+        log_assert(dev, dev->http_pending == NULL);
 
         /* Release all memory */
         g_free((void*) dev->name);
@@ -215,7 +215,7 @@ device_del (device *dev)
 {
     /* Remove device from table */
     DBG_DEVICE(dev->name, "removed from device table");
-    g_assert((dev->flags & DEVICE_LISTED) != 0);
+    log_assert(dev, (dev->flags & DEVICE_LISTED) != 0);
 
     dev->flags &= ~DEVICE_LISTED;
     g_tree_remove(device_table, dev->name);
@@ -316,7 +316,7 @@ device_probe_address (device *dev, zeroconf_addrinfo *addrinfo)
     }
 
     dev->uri_escl = soup_uri_new(url);
-    g_assert(dev->uri_escl != NULL);
+    log_assert(dev, dev->uri_escl != NULL);
     DBG_DEVICE(dev->name, "url=\"%s\"", url);
 
     /* Fetch device capabilities */
@@ -378,7 +378,7 @@ device_table_collect (unsigned int flags, device *out[])
 static unsigned
 device_table_size (void)
 {
-    g_assert(device_table);
+    log_assert(NULL, device_table);
     return g_tree_nnodes(device_table);
 }
 
@@ -480,13 +480,15 @@ device_http_callback(SoupSession *session, SoupMessage *msg, gpointer userdata)
     }
 
     if (msg->status_code != SOUP_STATUS_CANCELLED) {
-        g_assert(data->dev->http_pending == msg);
-        data->dev->http_pending = NULL;
+        device *dev = data->dev;
+
+        log_assert(dev, dev->http_pending == msg);
+        dev->http_pending = NULL;
 
         trace_msg_hook(data->trace, msg);
 
         if (data->func != NULL) {
-            data->func(data->dev, msg);
+            data->func(dev, msg);
         }
     }
 
@@ -507,7 +509,7 @@ device_http_perform (device *dev, const char *path,
         void (*callback)(device*, SoupMessage*))
 {
     SoupURI *url = soup_uri_new_with_base(dev->uri_escl, path);
-    g_assert(url);
+    log_assert(dev, url);
     SoupMessage *msg = soup_message_new_from_uri(method, url);
 
     if (DBG_ENABLED(DBG_FLG_HTTP)) {
@@ -541,7 +543,7 @@ device_http_perform (device *dev, const char *path,
     soup_session_queue_message(device_http_session, msg,
             device_http_callback, data);
 
-    g_assert(dev->http_pending == NULL);
+    log_assert(dev, dev->http_pending == NULL);
     dev->http_pending = msg;
 }
 
@@ -920,7 +922,7 @@ device_escl_start_scan (device *dev)
     case OPT_SOURCE_ADF_DUPLEX:  source = "Feeder"; duplex = true; break;
 
     default:
-        g_assert_not_reached();
+        log_internal_error(dev);
     }
 
     switch (dev->opt.colormode) {
@@ -929,7 +931,7 @@ device_escl_start_scan (device *dev)
     case OPT_COLORMODE_LINEART:   colormode = "BlackAndWhite1"; break;
 
     default:
-        g_assert_not_reached();
+        log_internal_error(dev);
     }
 
     /* Dump parameters */
@@ -1151,6 +1153,14 @@ device_list_free (const SANE_Device **dev_list)
 
         g_free(dev_list);
     }
+}
+
+/* Get device name (mostly for debugging
+ */
+const char*
+device_name (device *dev)
+{
+    return dev->name;
 }
 
 /* Open a device
@@ -1516,7 +1526,7 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
 
     if (dev->read_image == NULL) {
         status = dev->job_status;
-        g_assert(status != SANE_STATUS_GOOD);
+        log_assert(dev, status != SANE_STATUS_GOOD);
         goto DONE;
     }
 
@@ -1624,7 +1634,7 @@ void
 device_management_cleanup (void)
 {
     if (device_table != NULL) {
-        g_assert(g_tree_nnodes(device_table) == 0);
+        log_assert(NULL, g_tree_nnodes(device_table) == 0);
         g_cond_clear(&device_table_cond);
         g_tree_unref(device_table);
         device_table = NULL;

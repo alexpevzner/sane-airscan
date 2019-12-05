@@ -267,7 +267,7 @@ eloop_eprintf(const char *fmt, ...)
     gchar *estring;
     va_list ap;
 
-    g_assert(g_thread_self() == eloop_thread);
+    log_assert(NULL, g_thread_self() == eloop_thread);
 
     va_start(ap, fmt);
     estring = g_strdup_vprintf(fmt, ap);

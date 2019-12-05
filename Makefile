@@ -11,6 +11,7 @@ SRC	= \
 	airscan-devops.c \
 	airscan-eloop.c \
 	airscan-jpeg.c \
+	airscan-log.c \
 	airscan-math.c \
 	airscan-opt.c \
 	airscan-pollable.c \

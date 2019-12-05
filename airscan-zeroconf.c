@@ -451,7 +451,7 @@ zeroconf_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
 static void
 zeroconf_avahi_browser_start (AvahiClient *client)
 {
-    g_assert(zeroconf_avahi_browser == NULL);
+    log_assert(NULL, zeroconf_avahi_browser == NULL);
 
     zeroconf_avahi_browser = avahi_service_browser_new(client,
             AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC,
@@ -530,7 +530,7 @@ zeroconf_avahi_client_start (void)
 {
     int error;
 
-    g_assert(zeroconf_avahi_client == NULL);
+    log_assert(NULL, zeroconf_avahi_client == NULL);
 
     zeroconf_avahi_client = avahi_client_new (zeroconf_avahi_poll,
         AVAHI_CLIENT_NO_FAIL, zeroconf_avahi_client_callback, NULL, &error);

@@ -43,7 +43,7 @@ opt_name_encode (const opt_name_map map[], size_t map_size, SANE_Word value)
         }
     }
 
-    g_assert(!"internal error");
+    log_assert(NULL, !"internal error");
 
     return NULL;
 }

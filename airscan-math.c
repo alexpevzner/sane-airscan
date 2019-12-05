@@ -13,7 +13,7 @@
 SANE_Word
 math_gcd (SANE_Word x, SANE_Word y)
 {
-    g_assert(x > 0 && y > 0);
+    log_assert(NULL, x > 0 && y > 0);
 
     while (x != y) {
         if (x > y) {

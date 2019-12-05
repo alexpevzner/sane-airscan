@@ -193,7 +193,7 @@ xml_rd_node_value_uint (xml_rd *xml, SANE_Word *val)
     char *end;
     unsigned long v;
 
-    g_assert(s != NULL);
+    log_assert(NULL, s != NULL);
 
     v = strtoul(s, &end, 10);
     if (end == s || *end || v != (unsigned long) (SANE_Word) v) {
@@ -405,7 +405,7 @@ xml_wr_enter (xml_wr *xml, const char *name)
 void
 xml_wr_leave (xml_wr *xml)
 {
-    g_assert(xml->current->parent != NULL);
+    log_assert(NULL, xml->current->parent != NULL);
     xml->current = xml->current->parent;
 }
 

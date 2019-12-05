@@ -132,7 +132,7 @@ trace_dump_data (trace *t, SoupBuffer *buf, const char *content_type)
     size_t i;
     const char *ext;
 
-    g_assert(sizeof(hdr) == 512);
+    log_assert(NULL, sizeof(hdr) == 512);
     memset(&hdr, 0, sizeof(hdr));
 
     /* Guess file extension */

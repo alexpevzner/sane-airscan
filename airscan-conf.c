@@ -463,7 +463,7 @@ inifile_read_finish (inifile *file, int last_char, INIFILE_RECORD rec_type)
             file->record.variable = file->variable->str;
             file->record.value = file->value->str;
         } else {
-            g_assert(file->record.tokc);
+            log_assert(NULL, file->record.tokc);
             file->record.variable = file->record.tokv[0];
             file->record.tokc --;
             if (file->record.tokc) {

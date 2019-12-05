@@ -746,6 +746,11 @@ device_list_get (void);
 void
 device_list_free (const SANE_Device **dev_list);
 
+/* Get device name (mostly for debugging
+ */
+const char*
+device_name (device *dev);
+
 /* Open a device
  */
 SANE_Status
@@ -1022,6 +1027,37 @@ math_mm2px (SANE_Word mm)
  */
 char*
 math_fmt_mm (SANE_Word mm, char buf[]);
+
+/******************** Logging ********************/
+/* Write a debug message. If dev != NULL, message will
+ * be written in a context of device.
+ */
+void
+log_debug (device *dev, const char *fmt, ...);
+
+/* Write an error message and terminate a program.
+ * If dev != NULL, message will be written in a context of device.
+ */
+void
+log_panic (device *dev, const char *fmt, ...);
+
+/* Panic if assertion fails
+ */
+#define log_assert(dev,expr)                                            \
+     do {                                                               \
+         if (!(expr)) {                                                 \
+             log_panic(dev,"file %s: line %d (%s): assertion failed: (%s)",\
+                     __FILE__, __LINE__, __PRETTY_FUNCTION__, #expr);   \
+         }                                                              \
+     } while (0)
+
+/* Panic if this code is reached
+ */
+#define log_internal_error(dev)                                         \
+     do {                                                               \
+         log_panic(dev,"file %s: line %d (%s): internal error",         \
+                 __FILE__, __LINE__, __PRETTY_FUNCTION__);              \
+     } while (0)
 
 #endif
 

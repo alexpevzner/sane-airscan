@@ -39,7 +39,7 @@ devopt_choose_default_source (devopt *opt)
         opt_src ++;
     }
 
-    g_assert(opt_src != NUM_OPT_SOURCE);
+    log_assert(NULL, opt_src != NUM_OPT_SOURCE);
     return opt_src;
 }
 
@@ -65,7 +65,7 @@ devopt_choose_colormode(devopt *opt, OPT_COLORMODE wanted)
      * supported by the scanner */
     wanted = (OPT_COLORMODE) 0;
     while ((src->colormodes & (1 << wanted)) == 0) {
-        g_assert(wanted < NUM_OPT_COLORMODE);
+        log_assert(NULL, wanted < NUM_OPT_COLORMODE);
         wanted ++;
     }
 
@@ -257,7 +257,7 @@ devopt_update_params (devopt *opt)
         break;
 
     default:
-        g_assert(!"internal error");
+        log_assert(NULL, !"internal error");
     }
 }
 
@@ -368,7 +368,7 @@ devopt_set_geom (devopt *opt, SANE_Int option, SANE_Word val, SANE_Word *info)
         break;
 
     default:
-        g_assert_not_reached();
+        log_internal_error(NULL);
     }
 
     /* Update option */
