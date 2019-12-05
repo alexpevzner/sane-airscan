@@ -152,7 +152,7 @@ device_add (const char *name)
     dev->read_decoder_jpeg = image_decoder_jpeg_new();
     dev->read_pollable = pollable_new();
 
-    DBG_DEVICE(dev->name, "created");
+    log_debug(dev, "device created");
 
     /* Add to the table */
     g_tree_insert(device_table, (gpointer) dev->name, dev);
@@ -175,7 +175,8 @@ static inline void
 device_unref (device *dev)
 {
     if (g_atomic_int_dec_and_test(&dev->refcnt)) {
-        DBG_DEVICE(dev->name, "destroyed");
+        log_debug(dev, "device destroyed");
+
         log_assert(dev, (dev->flags & DEVICE_LISTED) == 0);
         log_assert(dev, (dev->flags & DEVICE_HALTED) != 0);
         log_assert(dev, (dev->flags & DEVICE_OPENED) == 0);
@@ -411,8 +412,6 @@ static void
 device_scanner_capabilities_callback (device *dev, SoupMessage *msg)
 {
     error err = NULL;
-
-    DBG_DEVICE(dev->name, "ScannerCapabilities: status=%d", msg->status_code);
 
     /* Check request status */
     if (!SOUP_STATUS_IS_SUCCESSFUL(msg->status_code)) {
@@ -1017,7 +1016,7 @@ static void
 device_job_set_state (device *dev, DEVICE_JOB_STATE state)
 {
     if (dev->job_state != state) {
-        DBG_DEVICE(dev->name, "job_state=%s", device_job_state_name(state));
+        log_debug(dev, "JOB state=%s", device_job_state_name(state));
 
         dev->job_state = state;
         g_cond_broadcast(&dev->job_state_cond);
@@ -1038,7 +1037,7 @@ device_job_set_status (device *dev, SANE_Status status)
 {
     if (dev->job_status == SANE_STATUS_GOOD ||
         status == SANE_STATUS_CANCELLED) {
-        DBG_DEVICE(dev->name, "job_status=%s", sane_strstatus(status));
+        log_debug(dev, "JOB status=%s", sane_strstatus(status));
         dev->job_status = status;
     }
 }
@@ -1048,7 +1047,7 @@ device_job_set_status (device *dev, SANE_Status status)
 static void
 device_job_abort (device *dev, SANE_Status status)
 {
-    DBG_DEVICE(dev->name, "job aborted: %s", sane_strstatus(status));
+    log_debug(dev, "JOB aborted: %s", sane_strstatus(status));
 
     if (dev->job_cancel_rq) {
         return; /* We are working on it */
@@ -1091,7 +1090,7 @@ device_job_cancel_event_callback (void *data)
 {
     device *dev = data;
 
-    DBG_DEVICE(dev->name, "Cancel");
+    log_debug(dev, "cancel requested");
     if ((dev->flags & (DEVICE_SCANNING | DEVICE_CLOSING)) != 0) {
         device_job_abort(dev, SANE_STATUS_CANCELLED);
     }
