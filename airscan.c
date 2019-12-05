@@ -116,7 +116,7 @@ sane_open (SANE_String_Const name, SANE_Handle *handle)
         *handle = (SANE_Handle) dev;
     }
 
-    log_debug(dev, "sane_open(%s): %s", name ? name : "<nil>",
+    log_debug(dev, "sane_open(\"%s\"): %s", name ? name : "",
             sane_strstatus(status));
 
     return status;
