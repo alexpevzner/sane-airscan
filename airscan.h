@@ -278,9 +278,6 @@ enum {
 #define DBG_DEVICE(name, fmt, args...)          \
         DBG_PRINT(DBG_FLG_DEVICE, "dev", "\"%s\": " fmt, name, ##args)
 
-#define DBG_HTTP(fmt, args...)                  \
-        DBG_PRINT(DBG_FLG_HTTP, "http", fmt, ##args)
-
 #define DBG_CONF(fmt, args...)                  \
         DBG_PRINT(DBG_FLG_CONF, "conf", fmt, ##args)
 

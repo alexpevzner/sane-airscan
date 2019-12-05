@@ -469,18 +469,19 @@ device_http_callback(SoupSession *session, SoupMessage *msg, gpointer userdata)
     device_http_callback_data *data = userdata;
 
     (void) session;
-    if (DBG_ENABLED(DBG_FLG_HTTP)) {
-        SoupURI *uri = soup_message_get_uri(msg);
-        char *uri_str = soup_uri_to_string(uri, FALSE);
-
-        DBG_HTTP("%s %s: %s", msg->method, uri_str,
-                soup_status_get_phrase(msg->status_code));
-
-        g_free(uri_str);
-    }
 
     if (msg->status_code != SOUP_STATUS_CANCELLED) {
         device *dev = data->dev;
+
+        if (DBG_ENABLED(DBG_FLG_HTTP)) {
+            SoupURI *uri = soup_message_get_uri(msg);
+            char *uri_str = soup_uri_to_string(uri, FALSE);
+
+            log_debug(dev, "HTTP %s %s: %s", msg->method, uri_str,
+                    soup_status_get_phrase(msg->status_code));
+
+            g_free(uri_str);
+        }
 
         log_assert(dev, dev->http_pending == msg);
         dev->http_pending = NULL;
@@ -514,7 +515,7 @@ device_http_perform (device *dev, const char *path,
 
     if (DBG_ENABLED(DBG_FLG_HTTP)) {
         char *uri_str = soup_uri_to_string(url, FALSE);
-        DBG_HTTP("%s %s", msg->method, uri_str);
+        log_debug(dev, "HTTP %s %s", msg->method, uri_str);
         g_free(uri_str);
     }
 

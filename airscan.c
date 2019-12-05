@@ -59,7 +59,7 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
 void
 sane_exit (void)
 {
-    log_debug(NULL, "sane_init() called");
+    log_debug(NULL, "sane_exit() called");
 
     eloop_thread_stop();
 
@@ -69,7 +69,7 @@ sane_exit (void)
     eloop_cleanup();
     device_list_free(sane_device_list);
 
-    log_debug(NULL, "sane_init(): OK");
+    log_debug(NULL, "sane_exit(): OK");
 }
 
 /* Get list of devices
@@ -221,7 +221,9 @@ sane_start (SANE_Handle handle)
     status = device_start(dev);
     eloop_mutex_unlock();
 
-    log_debug(dev, "sane_start(): %s", sane_strstatus(status));
+    if (status != SANE_STATUS_GOOD) {
+        log_debug(dev, "sane_start(): %s", sane_strstatus(status));
+    }
 
     return status;
 }
