@@ -434,6 +434,7 @@ device_scanner_capabilities_callback (device *dev, SoupMessage *msg)
     /* Cleanup and exit */
 DONE:
     if (err != NULL) {
+        log_debug(dev, ESTRING(err));
         trace_error(dev->trace, err);
 
         if (dev->addr_current != NULL && dev->addr_current->next != NULL) {
@@ -1446,6 +1447,7 @@ device_read_push (device *dev)
 
 DONE:
     if (err != NULL) {
+        log_debug(dev, ESTRING(err));
         trace_error(dev->trace, err);
         soup_buffer_free(dev->read_image);
         dev->read_image = NULL;
@@ -1484,6 +1486,7 @@ device_read_decode_line (device *dev)
                 dev->read_line_buf);
 
         if (err != NULL) {
+            log_debug(dev, ESTRING(err));
             trace_error(dev->trace, err);
             return SANE_STATUS_IO_ERROR;
         }
