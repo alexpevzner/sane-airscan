@@ -799,6 +799,10 @@ device_escl_start_scan_callback (device *dev, SoupMessage *msg)
         }
     }
 
+    if (location != NULL) {
+        g_string_assign(dev->job_location, location);
+    }
+
     /* Check for pending cancellation */
     if (dev->job_cancel_rq) {
         device_job_set_status(dev, SANE_STATUS_CANCELLED);
@@ -819,7 +823,6 @@ device_escl_start_scan_callback (device *dev, SoupMessage *msg)
     }
 
     /* Start loading peges */
-    g_string_assign(dev->job_location, location);
     device_escl_load_page(dev);
 }
 
