@@ -474,7 +474,7 @@ device_http_callback(SoupSession *session, SoupMessage *msg, gpointer userdata)
     if (msg->status_code != SOUP_STATUS_CANCELLED) {
         device *dev = data->dev;
 
-        if (DBG_ENABLED(DBG_FLG_HTTP)) {
+        if (conf.dbg_enabled) {
             SoupURI *uri = soup_message_get_uri(msg);
             char *uri_str = soup_uri_to_string(uri, FALSE);
 
@@ -514,7 +514,7 @@ device_http_perform (device *dev, const char *path,
     log_assert(dev, url);
     SoupMessage *msg = soup_message_new_from_uri(method, url);
 
-    if (DBG_ENABLED(DBG_FLG_HTTP)) {
+    if (conf.dbg_enabled) {
         char *uri_str = soup_uri_to_string(url, FALSE);
         log_debug(dev, "HTTP %s %s", msg->method, uri_str);
         g_free(uri_str);

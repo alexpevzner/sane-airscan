@@ -589,7 +589,7 @@ inifile_match_name (const char *n1, const char *n2)
 /******************** Configuration file loader  ********************/
 /* Configuration data
  */
-conf_data conf = {DBG_FLG_ALL, NULL, NULL};
+conf_data conf = {true, NULL, NULL};
 
 /* Revert conf.devices list
  */
@@ -824,7 +824,7 @@ conf_free (void)
     conf_device_list_free();
     g_free((char*) conf.dbg_trace);
     memset(&conf, 0, sizeof(conf));
-    conf.dbg_flags = DBG_FLG_ALL;
+    conf.dbg_enabled = true; // FIXME
 }
 
 /* vim:ts=8:sw=4:et

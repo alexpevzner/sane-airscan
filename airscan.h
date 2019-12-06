@@ -87,9 +87,9 @@ struct conf_device {
 /* Backend configuration
  */
 typedef struct {
-    int         dbg_flags;  /* Combination of debug flags */
-    const char  *dbg_trace; /* Trace directory */
-    conf_device *devices;   /* Manually configured devices */
+    bool        dbg_enabled; /* Debugging enabled */
+    const char  *dbg_trace;  /* Trace directory */
+    conf_device *devices;    /* Manually configured devices */
 } conf_data;
 
 extern conf_data conf;
@@ -240,37 +240,6 @@ eloop_event_trigger (eloop_event *event);
  */
 error
 eloop_eprintf(const char *fmt, ...);
-
-/******************** Debugging ********************/
-/* Debug flags
- */
-enum {
-    DBG_FLG_API       = (1 << 0), /* API tracing */
-    DBG_FLG_DISCOVERY = (1 << 1), /* Device discovery debugging */
-    DBG_FLG_PROTO     = (1 << 2), /* Protocol */
-    DBG_FLG_DEVICE    = (1 << 3), /* Device management */
-    DBG_FLG_HTTP      = (1 << 4), /* HTTP tracing */
-    DBG_FLG_CONF      = (1 << 5), /* Configuration file loader */
-    DBG_FLG_ALL       = 0xff
-};
-
-/* Check dbg_flags
- */
-#define DBG_ENABLED(flg)        ((flg) & conf.dbg_flags)
-
-/* Print debug message
- */
-#define DBG_PRINT(flg, prefix, fmt, args...)                    \
-    do{                                                         \
-        if (DBG_ENABLED(flg)) {                                 \
-            printf("airscan: " prefix ": " fmt "\n", ##args);   \
-        }                                                       \
-    } while(0)
-
-/* Shortcuts for various subsystems
- */
-#define DBG_DEVICE(name, fmt, args...)          \
-        DBG_PRINT(DBG_FLG_DEVICE, "dev", "\"%s\": " fmt, name, ##args)
 
 /******************** Protocol trace ********************/
 /* Type trace represents an opaque handle of trace

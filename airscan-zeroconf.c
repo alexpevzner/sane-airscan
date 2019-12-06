@@ -377,7 +377,7 @@ zeroconf_avahi_resolver_callback (AvahiServiceResolver *r,
         devstate->addresses = zeroconf_addrinfo_list_revert(
                 devstate->addresses);
 
-        if (DBG_ENABLED(DBG_FLG_DISCOVERY)) {
+        if (conf.dbg_enabled) {
             zeroconf_addrinfo *addrinfo;
             int               i = 1;
 
