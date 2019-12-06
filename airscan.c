@@ -49,7 +49,9 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
     /* Start airscan thread */
     eloop_thread_start(device_management_start_stop);
 
-    log_debug(NULL, "sane_init(): %s", sane_strstatus(status));
+    if (status != SANE_STATUS_GOOD) {
+        log_debug(NULL, "sane_init(): %s", sane_strstatus(status));
+    }
 
     return status;
 }
@@ -202,6 +204,10 @@ sane_get_parameters (SANE_Handle handle, SANE_Parameters *params)
         eloop_mutex_lock();
         status = device_get_parameters(dev, params);
         eloop_mutex_unlock();
+    }
+
+    if (status != SANE_STATUS_GOOD) {
+        log_debug(NULL, "sane_get_params(): %s", sane_strstatus(status));
     }
 
     return status;
