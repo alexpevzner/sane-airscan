@@ -381,7 +381,7 @@ zeroconf_avahi_resolver_callback (AvahiServiceResolver *r,
             zeroconf_addrinfo *addrinfo;
             int               i = 1;
 
-            log_debug(NULL, "MDNS: \"%s\" addresses resolved:");
+            log_debug(NULL, "MDNS: \"%s\" addresses resolved:", name);
 
             for (addrinfo = devstate->addresses; addrinfo != NULL;
                     addrinfo = addrinfo->next, i ++) {
