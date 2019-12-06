@@ -305,6 +305,34 @@ zeroconf_addrinfo_list_free (zeroconf_addrinfo *list)
     }
 }
 
+/* Compare two zeroconf_addrinfo addresses, for sorting
+ */
+static int
+zeroconf_addrinfo_cmp (zeroconf_addrinfo *a1, zeroconf_addrinfo *a2)
+{
+    int tmp;
+
+    /* Prefer normal addresses, rather that link-local */
+    if (a1->linklocal != a2->linklocal) {
+        return (int) a1->linklocal - (int) a2->linklocal;
+    }
+
+    /* Be in trend: prefer IPv6 addresses */
+    if (a1->addr.proto != a2->addr.proto) {
+        return a1->addr.proto == AVAHI_PROTO_INET6 ? -1 : 1;
+    }
+
+    /* Sort addresses lexicographically */
+    tmp = a1->addr.proto == AVAHI_PROTO_INET6 ? 16 : 4;
+    tmp = memcmp(a1->addr.data.data, a2->addr.data.data, tmp);
+    if (tmp != 0) {
+        return tmp;
+    }
+
+    /* Sort by port */
+    return (int) a1->port - (int) a2->port;
+}
+
 /* Revert zeroconf_addrinfo list
  */
 static zeroconf_addrinfo*
@@ -320,6 +348,59 @@ zeroconf_addrinfo_list_revert (zeroconf_addrinfo *list)
     }
 
     return prev;
+}
+
+/* Sort list of addresses
+ */
+static zeroconf_addrinfo*
+zeroconf_addrinfo_list_sort (zeroconf_addrinfo *list)
+{
+    zeroconf_addrinfo *halves[2] = {NULL, NULL};
+    int               half = 0;
+
+    if (list->next == NULL) {
+        return list;
+    }
+
+    /* Split list into halves */
+    while (list != NULL) {
+        zeroconf_addrinfo *next = list->next;
+
+        list->next = halves[half];
+        halves[half] = list;
+
+        half ^= 1;
+        list = next;
+    }
+
+    /* Sort each half, recursively */
+    for (half = 0; half < 2; half ++) {
+        halves[half] = zeroconf_addrinfo_list_sort(halves[half]);
+    }
+
+    /* Now merge the sorted halves */
+    list = NULL;
+    while (halves[0] != NULL || halves[1] != NULL) {
+        zeroconf_addrinfo *next;
+
+        if (halves[0] == NULL) {
+            half = 1;
+        } else if (halves[1] == NULL) {
+            half = 0;
+        } else if (zeroconf_addrinfo_cmp(halves[0], halves[1]) < 0) {
+            half = 0;
+        } else {
+            half = 1;
+        }
+
+        next = halves[half]->next;
+        halves[half]->next = list;
+        list = halves[half];
+        halves[half] = next;
+    }
+
+    /* And revert the list, as after merging it is reverted */
+    return zeroconf_addrinfo_list_revert(list);
 }
 
 /* Prepend zeroconf_addrinfo to the list
@@ -374,7 +455,7 @@ zeroconf_avahi_resolver_callback (AvahiServiceResolver *r,
     g_ptr_array_remove(devstate->resolvers, r);
 
     if (devstate->resolvers->len == 0 && devstate->addresses != NULL) {
-        devstate->addresses = zeroconf_addrinfo_list_revert(
+        devstate->addresses = zeroconf_addrinfo_list_sort(
                 devstate->addresses);
 
         if (conf.dbg_enabled) {
