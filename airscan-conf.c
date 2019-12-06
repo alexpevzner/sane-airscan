@@ -671,6 +671,14 @@ conf_expand_path (const char *path)
     return path;
 }
 
+/* Report configuration file error
+ */
+static void
+conf_perror (const inifile_record *rec, const char *err)
+{
+    log_debug(NULL, "%s:%d: %s", rec->file, rec->line, err);
+}
+
 /* Load configuration from opened inifile
  */
 static void
@@ -680,7 +688,7 @@ conf_load_from_ini(inifile *ini)
     while ((rec = inifile_read(ini)) != NULL) {
         switch (rec->type) {
         case INIFILE_SYNTAX:
-            DBG_CONF("%s:%d: syntax error", rec->file, rec->line);
+            conf_perror(rec, "syntax error");
             break;
 
         case INIFILE_VARIABLE:
@@ -688,10 +696,9 @@ conf_load_from_ini(inifile *ini)
                 SoupURI     *uri;
 
                 if (conf_device_list_lookup(rec->variable) != NULL) {
-                    DBG_CONF("%s:%d: device already defined",
-                            rec->file, rec->line);
+                    conf_perror(rec, "device already defined");
                 } else if ((uri = soup_uri_new(rec->value)) == NULL) {
-                    DBG_CONF("%s:%d: invalid URL", rec->file, rec->line);
+                    conf_perror(rec, "invalid URL");
                 } else {
                     conf_device_list_prepend(rec->variable, uri);
                 }
@@ -700,8 +707,7 @@ conf_load_from_ini(inifile *ini)
                     g_free((char*) conf.dbg_trace);
                     conf.dbg_trace = conf_expand_path(rec->value);
                     if (conf.dbg_trace == NULL) {
-                        DBG_CONF("%s:%d: failed to expand path",
-                                rec->file, rec->line);
+                        conf_perror(rec, "failed to expand path");
                     }
                 }
             }
@@ -718,7 +724,8 @@ conf_load_from_ini(inifile *ini)
 static void
 conf_load_from_file(const char *name)
 {
-DBG_CONF("trying %s", name);
+    log_debug(NULL, "loading configuration file %s", name);
+
     inifile *ini = inifile_open(name);
     if (ini != NULL) {
         conf_load_from_ini(ini);
