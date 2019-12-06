@@ -1048,10 +1048,12 @@ device_job_set_status (device *dev, SANE_Status status)
 static void
 device_job_abort (device *dev, SANE_Status status)
 {
-    log_debug(dev, "JOB aborted: %s", sane_strstatus(status));
-
     if (dev->job_cancel_rq) {
-        return; /* We are working on it */
+        return; /* We are already working on it */
+    }
+
+    if (dev->job_state != DEVICE_JOB_IDLE) {
+        log_debug(dev, "JOB aborted: %s", sane_strstatus(status));
     }
 
     switch (dev->job_state) {
@@ -1219,7 +1221,9 @@ device_close (device *dev)
 {
     if ((dev->flags & DEVICE_OPENED) != 0) {
         /* Cancel job in progress, if any */
-        if (dev->job_state != DEVICE_JOB_DONE) {
+        if (dev->job_state != DEVICE_JOB_IDLE &&
+            dev->job_state != DEVICE_JOB_DONE) {
+
             dev->flags |= DEVICE_CLOSING;
             device_cancel(dev);
 
