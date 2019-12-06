@@ -69,9 +69,11 @@ main (void)
 
         count += len;
     }
-    printf("Got %d bytes of data\n", count);
+    if (count != 0) {
+        printf("%d bytes of data received\n", count);
+    }
 
-    getchar();
+    //getchar();
 
     sane_close(handle);
     sane_exit();
