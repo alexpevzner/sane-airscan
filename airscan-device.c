@@ -215,7 +215,7 @@ static void
 device_del (device *dev)
 {
     /* Remove device from table */
-    DBG_DEVICE(dev->name, "removed from device table");
+    log_debug(dev, "removed from device table");
     log_assert(dev, (dev->flags & DEVICE_LISTED) != 0);
 
     dev->flags &= ~DEVICE_LISTED;
@@ -246,10 +246,12 @@ device_find (const char *name)
 static void
 device_add_static (const char *name, SoupURI *uri)
 {
+    log_debug(NULL, "statically adding: \"%s\"", name);
+
     /* Don't allow duplicate devices */
     device *dev = device_find(name);
     if (dev != NULL) {
-        DBG_DEVICE(name, "device already exist");
+        log_debug(dev, "device already exist");
         return;
     }
 
@@ -318,7 +320,6 @@ device_probe_address (device *dev, zeroconf_addrinfo *addrinfo)
 
     dev->uri_escl = soup_uri_new(url);
     log_assert(dev, dev->uri_escl != NULL);
-    DBG_DEVICE(dev->name, "url=\"%s\"", url);
 
     /* Fetch device capabilities */
     device_http_get(dev, "ScannerCapabilities",
@@ -1591,10 +1592,12 @@ void
 device_event_found (const char *name, bool init_scan,
         zeroconf_addrinfo *addresses)
 {
+    log_debug(NULL, "dynamically adding: \"%s\"", name);
+
     /* Don't allow duplicate devices */
     device *dev = device_find(name);
     if (dev != NULL) {
-        DBG_DEVICE(name, "device already exist");
+        log_debug(dev, "device already exist");
         return;
     }
 
