@@ -55,12 +55,23 @@ zeroconf_avahi_client_start (void);
 static void
 zeroconf_avahi_client_restart_defer (void);
 
-/* Get current AVAHI error string
+/* Print error message
  */
-static const char*
-zeroconf_avahi_strerror (void)
+static void
+zeroconf_perror (const char *name, AvahiProtocol protocol, const char *action)
 {
-    return avahi_strerror(avahi_client_errno(zeroconf_avahi_client));
+    log_debug(NULL, "MDNS: %s \"%s\" (%s): %s",
+            action, name, protocol == AVAHI_PROTO_INET ? "ipv4" : "ipv6",
+            avahi_strerror(avahi_client_errno(zeroconf_avahi_client)));
+}
+
+/* Print event message
+ */
+static void
+zeroconf_pevent (const char *name, AvahiProtocol protocol, const char *action)
+{
+    log_debug(NULL, "MDNS: %s \"%s\" (%s)",
+            action, name, protocol == AVAHI_PROTO_INET ? "ipv4" : "ipv6");
 }
 
 /* avahi_service_resolver_free adapter for GDestroyNotify
@@ -355,7 +366,7 @@ zeroconf_avahi_resolver_callback (AvahiServiceResolver *r,
         break;
 
     case AVAHI_RESOLVER_FAILURE:
-        DBG_DISCOVERY(name, "resolver: %s", zeroconf_avahi_strerror());
+        zeroconf_perror(name, protocol, "resolve");
         break;
     }
 
@@ -366,22 +377,18 @@ zeroconf_avahi_resolver_callback (AvahiServiceResolver *r,
         devstate->addresses = zeroconf_addrinfo_list_revert(
                 devstate->addresses);
 
-
         if (DBG_ENABLED(DBG_FLG_DISCOVERY)) {
             zeroconf_addrinfo *addrinfo;
             int               i = 1;
 
-            DBG_DISCOVERY(name, "device addresses:");
+            log_debug(NULL, "MDNS: \"%s\" addresses resolved:");
 
             for (addrinfo = devstate->addresses; addrinfo != NULL;
                     addrinfo = addrinfo->next, i ++) {
                 char buf[128];
 
                 avahi_address_snprint(buf, sizeof(buf), &addrinfo->addr);
-                DBG_DISCOVERY(name, "  %d: addr=%s", i, buf);
-                if (rs_text != NULL) {
-                    DBG_DISCOVERY(name, "  %d: rs=%s", i, rs_text);
-                }
+                log_debug(NULL, "  %d: addr=%s rs=%s", i, buf,rs_text);
             }
         }
 
@@ -407,7 +414,7 @@ zeroconf_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
 
     switch (event) {
     case AVAHI_BROWSER_NEW:
-        DBG_DISCOVERY(name, "found");
+        zeroconf_pevent(name, protocol, "found");
 
         /* Add a device (or lookup for already added) */
         devstate = zeroconf_devstate_add(name);
@@ -419,7 +426,7 @@ zeroconf_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
                 zeroconf_avahi_resolver_callback, devstate);
 
         if (r == NULL) {
-            DBG_DISCOVERY(name, "%s", zeroconf_avahi_strerror());
+            zeroconf_perror(name, protocol, "resolve");
             zeroconf_avahi_client_restart_defer();
             break;
         }
@@ -429,7 +436,7 @@ zeroconf_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
         break;
 
     case AVAHI_BROWSER_REMOVE:
-        DBG_DISCOVERY(name, "removed");
+        zeroconf_pevent(name, protocol, "removed");
         zeroconf_devstate_del(name);
         break;
 

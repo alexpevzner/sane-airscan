@@ -269,9 +269,6 @@ enum {
 
 /* Shortcuts for various subsystems
  */
-#define DBG_DISCOVERY(name, fmt, args...)       \
-        DBG_PRINT(DBG_FLG_DISCOVERY, "discovery", "\"%s\": " fmt, name, ##args)
-
 #define DBG_DEVICE(name, fmt, args...)          \
         DBG_PRINT(DBG_FLG_DEVICE, "dev", "\"%s\": " fmt, name, ##args)
 
