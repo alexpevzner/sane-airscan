@@ -57,7 +57,7 @@ struct device {
                                            device was statically added */
     zeroconf_addrinfo    *addr_current; /* Current address to probe */
     SoupURI              *uri_escl;     /* eSCL base URI */
-    SoupMessage          *http_pending; /* Pending HTTP requests, NULL if none */
+    SoupMessage          *http_pending; /* Pending HTTP request, NULL if none */
     trace                *trace;        /* Protocol trace */
 
     /* Scanning state machinery */
