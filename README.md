@@ -37,6 +37,31 @@ cd sane-airscan
 make
 make install
 ```
+### Reporting bugs
+To report a bug, please [create a new GitHub issue] (https://github.com/alexpevzner/sane-airscan/issues/new)
+
+To create a helpful bug report, please perform the following steps:
+
+1. Enable protocol trace in the sane-airscan, by adding the following
+entries into the configuration file:
+```
+[debug]
+trace = ~/airscan/trace
+```
+You may use an arbitrary directory path, assuming you have enough rights
+to create and write such a directory. The directory will be created automatically.
+
+2. Reproduce the problem. Please, don't use any confidential documents
+when problem is being reproduces, as their content will be visible to
+others.
+
+3. Explain the problem carefully
+
+4. In the directory you've specified as the trace parameter, you will find
+two files. Assuming you are using program xsane and your device name is
+"Kyocera MFP Scanner", file names will be **xsane:Kyocera-MFP-Scanner.log**
+and **xsane:Kyocera-MFP-Scanner.tar**. Please, attach these files to the
+new issue.
 
 ## References
 
