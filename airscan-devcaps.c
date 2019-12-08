@@ -87,12 +87,11 @@ devcaps_source_parse_color_modes (xml_rd *xml, devcaps_source *src)
     }
     xml_rd_leave(xml);
 
-    OPT_COLORMODE opt_colormode;
-    for (opt_colormode = (OPT_COLORMODE) 0; opt_colormode < NUM_OPT_COLORMODE;
-            opt_colormode ++) {
-        if ((src->colormodes & (1 << opt_colormode)) != 0) {
-            array_of_string_append(&src->sane_colormodes,
-                    (SANE_String) opt_colormode_to_sane(opt_colormode));
+    OPT_COLORMODE cm;
+    for (cm = (OPT_COLORMODE) 0; cm < NUM_OPT_COLORMODE; cm ++) {
+        if ((src->colormodes & (1 << cm)) != 0) {
+            SANE_String s = (SANE_String) opt_colormode_to_sane(cm);
+            array_of_string_append(&src->sane_colormodes, s);
         }
     }
 
