@@ -8,7 +8,10 @@
 
 #include "airscan.h"
 
+#include <limits.h>
 #include <stdarg.h>
+
+#pragma GCC diagnostic ignored "-Wformat-truncation"
 
 /* Trace file handle
  */
@@ -40,6 +43,10 @@ typedef struct {
     char pad[12];
 } tar_header;
 
+/* Name of the process' executable
+ */
+static char program[PATH_MAX];
+
 /* Full block of zero bytes
  */
 static const char zero_block[512];
@@ -49,6 +56,16 @@ static const char zero_block[512];
 SANE_Status
 trace_init (void)
 {
+    ssize_t rc = readlink("/proc/self/exe", program, sizeof(program));
+    if (rc < 0) {
+        strcpy(program, "unknown");
+    } else {
+        char *s = strrchr(program, '/');
+        if (s != NULL) {
+            memmove(program, s+1, strlen(s+1) + 1);
+        }
+    }
+
     return SANE_STATUS_GOOD;
 }
 
@@ -65,7 +82,8 @@ trace*
 trace_open (const char *device_name)
 {
     trace *t;
-    char  *path;
+    char  path[PATH_MAX];
+    size_t len;
 
     if (conf.dbg_trace == NULL) {
         return NULL;
@@ -74,13 +92,26 @@ trace_open (const char *device_name)
     g_mkdir_with_parents (conf.dbg_trace, 0755);
     t = g_new0(trace, 1);
 
-    path = g_strdup_printf("%s%s.log", conf.dbg_trace, device_name);
-    t->log = fopen(path, "w");
-    g_free(path);
+    strcpy(path, conf.dbg_trace);
+    len = strlen(path);
+    strcat(path, program);
+    strcat(path, ":");
+    strcat(path, device_name);
 
-    path = g_strdup_printf("%s%s.tar", conf.dbg_trace, device_name);
+    for (; path[len] != '\0'; len ++) {
+        switch (path[len]) {
+        case ' ':
+        case '/':
+            path[len] = '-';
+            break;
+        }
+    }
+
+    strcpy(path + len, ".log");
+    t->log = fopen(path, "w");
+
+    strcpy(path + len, ".tar");
     t->data = fopen(path, "wb");
-    g_free(path);
 
     if (t->log != NULL && t->data != NULL) {
         return t;
