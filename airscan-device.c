@@ -89,7 +89,7 @@ struct device {
 
 /* Static variables
  */
-static GTree *device_table;
+static GPtrArray *device_table;
 static GCond device_table_cond;
 
 static SoupSession *device_http_session;
@@ -121,15 +121,6 @@ device_escl_load_page (device *dev);
 static bool
 device_read_push (device *dev);
 
-/* Compare device names, for device_table
- */
-static int
-device_name_compare (gconstpointer a, gconstpointer b, gpointer userdata)
-{
-    (void) userdata;
-    return strcmp((const char *) a, (const char*) b);
-}
-
 /* Add device to the table
  */
 static device*
@@ -155,7 +146,7 @@ device_add (const char *name)
     log_debug(dev, "device created");
 
     /* Add to the table */
-    g_tree_insert(device_table, (gpointer) dev->name, dev);
+    g_ptr_array_add(device_table, dev);
 
     return dev;
 }
@@ -219,7 +210,7 @@ device_del (device *dev)
     log_assert(dev, (dev->flags & DEVICE_LISTED) != 0);
 
     dev->flags &= ~DEVICE_LISTED;
-    g_tree_remove(device_table, dev->name);
+    g_ptr_array_remove(device_table, dev);
 
     /* Stop all pending I/O activity */
     device_http_cancel(dev);
@@ -238,7 +229,16 @@ device_del (device *dev)
 static device*
 device_find (const char *name)
 {
-    return g_tree_lookup(device_table, name);
+    unsigned int i;
+
+    for (i = 0; i < device_table->len; i ++) {
+        device *dev = g_ptr_array_index(device_table, i);
+        if (!strcmp(dev->name, name)) {
+            return dev;
+        }
+    }
+
+    return NULL;
 }
 
 /* Add statically configured device
@@ -327,37 +327,6 @@ device_probe_address (device *dev, zeroconf_addrinfo *addrinfo)
 }
 
 /******************** Device table operations ********************/
-/* Userdata passed to device_table_foreach_callback
- */
-typedef struct {
-    unsigned int flags;     /* Device flags */
-    unsigned int count;     /* Count of devices used so far */
-    device       **devlist; /* List of devices collected so far. May be NULL */
-} device_table_foreach_userdata;
-
-/* g_tree_foreach callback for traversing device table
- */
-static gboolean
-device_table_foreach_callback (gpointer key, gpointer value, gpointer userdata)
-{
-    device *dev = value;
-    device_table_foreach_userdata *data = userdata;
-
-    (void) key;
-
-    if (!(data->flags & dev->flags)) {
-        return FALSE;
-    }
-
-    if (data->devlist != NULL) {
-        data->devlist[data->count] = dev;
-    }
-
-    data->count ++;
-
-    return FALSE;
-}
-
 /* Collect devices matching the flags. Return count of
  * collected devices. If caller is only interested in
  * the count, it is safe to call with out == NULL
@@ -370,18 +339,28 @@ device_table_foreach_callback (gpointer key, gpointer value, gpointer userdata)
 static unsigned int
 device_table_collect (unsigned int flags, device *out[])
 {
-    device_table_foreach_userdata       data = {flags, 0, out};
-    g_tree_foreach(device_table, device_table_foreach_callback, &data);
-    return data.count;
+    unsigned int x, y = 0;
+
+    for (x = 0; x < device_table->len; x ++) {
+        device *dev = g_ptr_array_index(device_table, x);
+        if ((dev->flags & flags) != 0) {
+            if (out != NULL) {
+                out[y] = dev;
+            }
+            y ++;
+        }
+    }
+
+    return y;
 }
 
 /* Get current device_table size
  */
-static unsigned
+static unsigned int
 device_table_size (void)
 {
     log_assert(NULL, device_table);
-    return g_tree_nnodes(device_table);
+    return device_table->len;
 }
 
 /* Purge device_table
@@ -1115,6 +1094,14 @@ device_list_sync (void)
     }
 }
 
+/* Compare SANE_Device*, for qsort
+ */
+static int
+device_list_qsort_cmp (const void *p1, const void *p2)
+{
+    return strcmp(((SANE_Device*) p1)->name, ((SANE_Device*) p2)->name);
+}
+
 /* Get list of devices, in SANE format
  */
 const SANE_Device**
@@ -1138,6 +1125,8 @@ device_list_get (void)
         info->model = g_strdup(devices[i]->opt.caps.model);
         info->type = "eSCL network scanner";
     }
+
+    qsort(dev_list, count, sizeof(*dev_list), device_list_qsort_cmp);
 
     return dev_list;
 }
@@ -1636,7 +1625,7 @@ SANE_Status
 device_management_init (void)
 {
     g_cond_init(&device_table_cond);
-    device_table = g_tree_new_full(device_name_compare, NULL, NULL, NULL);
+    device_table = g_ptr_array_new();
 
     return SANE_STATUS_GOOD;
 }
@@ -1647,9 +1636,9 @@ void
 device_management_cleanup (void)
 {
     if (device_table != NULL) {
-        log_assert(NULL, g_tree_nnodes(device_table) == 0);
+        log_assert(NULL, device_table->len == 0);
         g_cond_clear(&device_table_cond);
-        g_tree_unref(device_table);
+        g_ptr_array_unref(device_table);
         device_table = NULL;
     }
 }
