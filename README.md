@@ -73,7 +73,8 @@ make
 make install
 ```
 ### Reporting bugs
-To report a bug, please [create a new GitHub issue] (https://github.com/alexpevzner/sane-airscan/issues/new)
+To report a bug, please
+[create a new GitHub issue] (https://github.com/alexpevzner/sane-airscan/issues/new)
 
 To create a helpful bug report, please perform the following steps:
 
