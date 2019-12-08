@@ -289,7 +289,7 @@ zeroconf_addrinfo_new (const AvahiAddress *addr, uint16_t port, const char *rs,
 /* Clone a single zeroconf_addrinfo
  */
 static zeroconf_addrinfo*
-zeroconf_addrinfo_clone (const zeroconf_addrinfo *addrinfo)
+zeroconf_addrinfo_copy_single (const zeroconf_addrinfo *addrinfo)
 {
     zeroconf_addrinfo *addrinfo2 = g_new0(zeroconf_addrinfo, 1);
 
@@ -318,7 +318,7 @@ zeroconf_addrinfo_list_copy (zeroconf_addrinfo *list)
     zeroconf_addrinfo *newlist = NULL, *last = NULL, *addrinfo;
 
     while (list != NULL) {
-        addrinfo = zeroconf_addrinfo_clone(list);
+        addrinfo = zeroconf_addrinfo_copy_single(list);
         if (last != NULL) {
             last->next = addrinfo;
         } else {
