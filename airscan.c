@@ -79,11 +79,9 @@ sane_exit (void)
 SANE_Status
 sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
 {
-    SANE_Status status = SANE_STATUS_GOOD;
-
     if (local_only) {
-        /* All our devices are non-local */
-        static const SANE_Device *empty_devlist[1] = { 0 };
+        /* Note, all our devices are non-local */
+        static const SANE_Device *empty_devlist[1] = {0};
         *device_list = empty_devlist;
     } else {
         eloop_mutex_lock();
@@ -95,11 +93,7 @@ sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
         eloop_mutex_unlock();
     }
 
-    if (status != SANE_STATUS_GOOD) {
-        log_debug(NULL, "sane_get_devices(): %s", sane_strstatus(status));
-    }
-
-    return status;
+    return SANE_STATUS_GOOD;
 }
 
 /* Open the device
