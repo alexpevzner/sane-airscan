@@ -242,32 +242,73 @@ static zeroconf_addrinfo*
 zeroconf_addrinfo_new (const AvahiAddress *addr, uint16_t port, const char *rs,
         AvahiIfIndex interface)
 {
-    zeroconf_addrinfo   *addrinfo = g_new0(zeroconf_addrinfo, 1);
+    zeroconf_addrinfo *addrinfo = g_new0(zeroconf_addrinfo, 1);
+    char              str_addr[128];
 
-    addrinfo->addr = *addr;
     if (addr->proto == AVAHI_PROTO_INET) {
         /* 169.254.0.0/16 */
         if ((ntohl(addr->data.ipv4.address) & 0xffff0000) == 0xa9fe0000) {
             addrinfo->linklocal = true;
         }
+
+        avahi_address_snprint(str_addr, sizeof(str_addr), addr);
     } else {
         static char link_local[8] = {0xfe, 0x80};
-        addrinfo->linklocal = ! memcmp(addr->data.ipv6.address,
+        size_t      len;
+
+        addrinfo->ipv6 = true;
+        addrinfo->linklocal = !memcmp(addr->data.ipv6.address,
             link_local, sizeof(link_local));
+
+        str_addr[0] = '[';
+        avahi_address_snprint(str_addr + 1, sizeof(str_addr) - 2, addr);
+        len = strlen(str_addr);
+
+        /* Connect to link-local address requires explicit scope */
+        if (addrinfo->linklocal) {
+            /* Percent character in the IPv6 address literal
+             * needs to be properly escaped, so it becomes %25
+             * See RFC6874 for details
+             */
+            len += sprintf(str_addr + len, "%%25%d", interface);
+        }
+
+        str_addr[len++] = ']';
+        str_addr[len] = '\0';
     }
-    addrinfo->port = port;
-    addrinfo->rs = g_strdup(rs);
-    addrinfo->interface = interface;
+
+    if (rs != NULL) {
+        addrinfo->uri = g_strdup_printf("http://%s:%d/%s/",
+                str_addr, port, rs);
+    } else {
+        addrinfo->uri = g_strdup_printf("http://%s:%d/",
+                str_addr, port);
+    }
 
     return addrinfo;
 }
+
+/* Clone a single zeroconf_addrinfo
+ */
+static zeroconf_addrinfo*
+zeroconf_addrinfo_clone (const zeroconf_addrinfo *addrinfo)
+{
+    zeroconf_addrinfo *addrinfo2 = g_new0(zeroconf_addrinfo, 1);
+
+    *addrinfo2 = *addrinfo2;
+    addrinfo2->uri = g_strdup(addrinfo->uri);
+    addrinfo2->next = NULL;
+
+    return addrinfo2;
+}
+
 
 /* Free single zeroconf_addrinfo
  */
 static void
 zeroconf_addrinfo_free_single (zeroconf_addrinfo *addrinfo)
 {
-    g_free((char*) addrinfo->rs);
+    g_free((char*) addrinfo->uri);
     g_free(addrinfo);
 }
 
@@ -279,8 +320,7 @@ zeroconf_addrinfo_list_copy (zeroconf_addrinfo *list)
     zeroconf_addrinfo *newlist = NULL, *last = NULL, *addrinfo;
 
     while (list != NULL) {
-        addrinfo = zeroconf_addrinfo_new(&list->addr, list->port, list->rs,
-                list->interface);
+        addrinfo = zeroconf_addrinfo_clone(list);
         if (last != NULL) {
             last->next = addrinfo;
         } else {
@@ -310,27 +350,18 @@ zeroconf_addrinfo_list_free (zeroconf_addrinfo *list)
 static int
 zeroconf_addrinfo_cmp (zeroconf_addrinfo *a1, zeroconf_addrinfo *a2)
 {
-    int tmp;
-
     /* Prefer normal addresses, rather that link-local */
     if (a1->linklocal != a2->linklocal) {
         return (int) a1->linklocal - (int) a2->linklocal;
     }
 
     /* Be in trend: prefer IPv6 addresses */
-    if (a1->addr.proto != a2->addr.proto) {
-        return a1->addr.proto == AVAHI_PROTO_INET6 ? -1 : 1;
+    if (a1->ipv6 != a2->ipv6) {
+        return (int) a2->ipv6 - (int) a1->ipv6;
     }
 
-    /* Sort addresses lexicographically */
-    tmp = a1->addr.proto == AVAHI_PROTO_INET6 ? 16 : 4;
-    tmp = memcmp(a1->addr.data.data, a2->addr.data.data, tmp);
-    if (tmp != 0) {
-        return tmp;
-    }
-
-    /* Sort by port */
-    return (int) a1->port - (int) a2->port;
+    /* Otherwise, sort lexicographically */
+    return strcmp(a1->uri, a2->uri);
 }
 
 /* Revert zeroconf_addrinfo list
@@ -466,10 +497,7 @@ zeroconf_avahi_resolver_callback (AvahiServiceResolver *r,
 
             for (addrinfo = devstate->addresses; addrinfo != NULL;
                     addrinfo = addrinfo->next, i ++) {
-                char buf[128];
-
-                avahi_address_snprint(buf, sizeof(buf), &addrinfo->addr);
-                log_debug(NULL, "  %d: addr=%s rs=%s", i, buf,rs_text);
+                log_debug(NULL, "  %d: %s", i, addrinfo->uri);
             }
         }
 

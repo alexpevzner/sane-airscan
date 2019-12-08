@@ -287,38 +287,8 @@ device_probe_address (device *dev, zeroconf_addrinfo *addrinfo)
         soup_uri_free(dev->uri_escl);
     }
 
-    /* Build device API URL */
-    char str_addr[128], *url;
-
-    if (addrinfo->addr.proto == AVAHI_PROTO_INET) {
-        avahi_address_snprint(str_addr, sizeof(str_addr), &addrinfo->addr);
-    } else {
-        str_addr[0] = '[';
-        avahi_address_snprint(str_addr + 1, sizeof(str_addr) - 2,
-            &addrinfo->addr);
-        size_t l = strlen(str_addr);
-
-        /* Connect to link-local address requires explicit scope */
-        if (addrinfo->linklocal) {
-            /* Percent character in the IPv6 address literal
-             * needs to be properly escaped, so it becomes %25
-             * See RFC6874 for details
-             */
-            l += sprintf(str_addr + l, "%%25%d", addrinfo->interface);
-        }
-
-        str_addr[l++] = ']';
-        str_addr[l] = '\0';
-    }
-
-    if (addrinfo->rs != NULL) {
-        url = g_strdup_printf("http://%s:%d/%s/", str_addr, addrinfo->port,
-                addrinfo->rs);
-    } else {
-        url = g_strdup_printf("http://%s:%d/", str_addr, addrinfo->port);
-    }
-
-    dev->uri_escl = soup_uri_new(url);
+    /* Parse device URI */
+    dev->uri_escl = soup_uri_new(addrinfo->uri);
     log_assert(dev, dev->uri_escl != NULL);
 
     /* Fetch device capabilities */

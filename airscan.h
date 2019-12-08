@@ -650,11 +650,9 @@ devopt_get_option (devopt *opt, SANE_Int option, void *value);
  */
 typedef struct zeroconf_addrinfo zeroconf_addrinfo;
 struct zeroconf_addrinfo {
-    AvahiAddress      addr;      /* Device address */
-    bool              linklocal; /* It's a link-local address */
-    uint16_t          port;      /* Device port */
-    const char        *rs;       /* "rs" portion of the TXT record */
-    AvahiIfIndex      interface; /* Interface index */
+    const char        *uri;      /* I.e, "http://192.168.1.1:8080/eSCL/" */
+    bool              ipv6;      /* This is an IPv6 address */
+    bool              linklocal; /* This is a link-local address */
     zeroconf_addrinfo *next;     /* Next address in the list */
 };
 
