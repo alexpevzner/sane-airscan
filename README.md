@@ -46,10 +46,10 @@ To create a helpful bug report, please perform the following steps:
 entries into the configuration file:
 ```
 [debug]
-trace = ~/airscan/trace
+trace = ~/airscan/trace ; Path to directory where trace files will be saved
 ```
 You may use an arbitrary directory path, assuming you have enough rights
-to create and write such a directory. The directory will be created automatically.
+to create and write this directory. The directory will be created automatically.
 
 2. Reproduce the problem. Please, don't use any confidential documents
 when problem is being reproduces, as their content will be visible to
