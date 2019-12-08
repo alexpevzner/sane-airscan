@@ -13,7 +13,37 @@ network configuration etc.
 Unfortunately, Linux doesn't support AirScan, and the goal of this
 project is to fix this situation.
 
-### Installation
+### Features
+
+1. Supported input sources (actual list depends of your hardware
+capabilities):
+* Platen
+* Automatic document feeder in simplex and duplex modes
+* Support for multi-page scan from ADF
+2. Supported color modes:
+* RGB24
+* 8-bit gray scale
+3. Reasonably low memory footprint, achieved by decompressing image received
+from scanner line-by-line.
+4. The cancel operation is as fast as possible, depending on your hardware.
+
+### Compatibility
+
+In theory, sane-airscan must be compatible with any scanner, marked as
+AirPrint compatible or Mopria certified, or with announces eSCL protocol
+support.
+
+It was tested with the following scanners:
+1. Kyocera ECOSYS M2040dn
+
+If you have success with a scanner not included into this list,
+please let me know.
+
+### Installation from pre-build binaries
+
+TODO
+
+### Installation from sources
 #### Install required libraries - Fedora and similar
 As root, execute the following commands:
 ```
