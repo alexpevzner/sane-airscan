@@ -552,7 +552,11 @@ zeroconf_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
         break;
 
     case AVAHI_BROWSER_CACHE_EXHAUSTED:
+        break;
+
     case AVAHI_BROWSER_ALL_FOR_NOW:
+        log_debug(NULL, "MDNS: initial scan finished");
+
         zeroconf_avahi_browser_init_scan = false;
         zeroconf_devstate_list_walk(zeroconf_devstate_unconfirmed_del);
         device_event_init_scan_finished();
