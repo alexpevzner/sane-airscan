@@ -280,7 +280,7 @@ zeroconf_addrinfo_new (const AvahiAddress *addr, uint16_t port, const char *rs,
     if (rs != NULL) {
         addrinfo->uri = g_strdup_printf("http://%s:%d/%s/", str_addr, port, rs);
     } else {
-        addrinfo->uri = g_strdup_printf("http://%s:%d/eSCL", str_addr, port);
+        addrinfo->uri = g_strdup_printf("http://%s:%d/eSCL/", str_addr, port);
     }
 
     return addrinfo;
