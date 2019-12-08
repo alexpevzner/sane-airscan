@@ -628,7 +628,7 @@ DONE:
     return err;
 }
 
-/* HTTP POST ${dev->uri_escl}/ScannerStatus callback
+/* HTTP GET ${dev->uri_escl}/ScannerStatus callback
  */
 static void
 device_escl_check_status_callback (device *dev, SoupMessage *msg)
@@ -689,9 +689,10 @@ DONE:
     }
 }
 
-/* ESCL: chech scanner status (used after failed scan reques to clarify reasons)
+/* ESCL: check scanner status (used after failed scan request to
+ * clarify reasons)
  *
- * HTTP POST ${dev->uri_escl}/ScannerStatus
+ * HTTP GET ${dev->uri_escl}/ScannerStatus
  */
 static void
 device_escl_check_status (device *dev)
