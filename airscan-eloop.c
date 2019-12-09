@@ -10,12 +10,17 @@
 
 #include <glib-unix.h>
 
+/* Limits */
+#define ELOOP_START_STOP_CALLBACKS_MAX  8
+
 /* Static variables
  */
 static GThread *eloop_thread;
 static GMainContext *eloop_glib_main_context;
 static GMainLoop *eloop_glib_main_loop;
 static char *eloop_estring = NULL;
+static void (*eloop_start_stop_callbacks[ELOOP_START_STOP_CALLBACKS_MAX]) (bool);
+static int eloop_start_stop_callbacks_count;
 G_LOCK_DEFINE_STATIC(eloop_mutex);
 
 /* Forward declarations
@@ -31,6 +36,7 @@ eloop_init (void)
     eloop_glib_main_context = g_main_context_new();
     eloop_glib_main_loop = g_main_loop_new(eloop_glib_main_context, FALSE);
     g_main_context_set_poll_func(eloop_glib_main_context, glib_poll_hook);
+    eloop_start_stop_callbacks_count = 0;
 
     return SANE_STATUS_GOOD;
 }
@@ -50,6 +56,24 @@ eloop_cleanup (void)
     }
 }
 
+/* Add start/stop callback. This callback is called
+ * on a event loop thread context, once when event
+ * loop is started, and second time when it is stopped
+ *
+ * Start callbacks are called in the same order as
+ * they were added. Stop callbacks are called in a
+ * reverse order
+ */
+void
+eloop_add_start_stop_callback (void (*callback) (bool start))
+{
+    log_assert(NULL,
+            eloop_start_stop_callbacks_count < ELOOP_START_STOP_CALLBACKS_MAX);
+
+    eloop_start_stop_callbacks[eloop_start_stop_callbacks_count] = callback;
+    eloop_start_stop_callbacks_count ++;
+}
+
 /* Poll function hook
  */
 static gint
@@ -67,14 +91,23 @@ glib_poll_hook (GPollFD *ufds, guint nfds, gint timeout)
 static gpointer
 eloop_thread_func (gpointer data)
 {
-    void (*callback)(bool) = data;
+    int i;
+
+    (void) data;
 
     G_LOCK(eloop_mutex);
 
     g_main_context_push_thread_default(eloop_glib_main_context);
-    callback(true);
+
+    for (i = 0; i < eloop_start_stop_callbacks_count; i ++) {
+        eloop_start_stop_callbacks[i](true);
+    }
+
     g_main_loop_run(eloop_glib_main_loop);
-    callback(false);
+
+    for (i = eloop_start_stop_callbacks_count - 1; i >= 0; i --) {
+        eloop_start_stop_callbacks[i](false);
+    }
 
     G_UNLOCK(eloop_mutex);
 
@@ -88,9 +121,9 @@ eloop_thread_func (gpointer data)
  *     callback(false) - when thread is about to exit
  */
 void
-eloop_thread_start (void (*callback)(bool))
+eloop_thread_start (void)
 {
-    eloop_thread = g_thread_new("airscan", eloop_thread_func, callback);
+    eloop_thread = g_thread_new("airscan", eloop_thread_func, NULL);
 
     /* Wait until thread is started. Otherwise, g_main_loop_quit()
      * might not terminate the thread

@@ -114,6 +114,9 @@ device_escl_load_page (device *dev);
 static bool
 device_read_push (device *dev);
 
+static void
+device_management_start_stop (bool start);
+
 /******************** Device table management ********************/
 /* Add device to the table
  */
@@ -1592,6 +1595,8 @@ device_management_init (void)
     g_cond_init(&device_table_cond);
     device_table = g_ptr_array_new();
 
+    eloop_add_start_stop_callback(device_management_start_stop);
+
     return SANE_STATUS_GOOD;
 }
 
@@ -1645,7 +1650,7 @@ device_management_stop (void)
 
 /* Start/stop device management
  */
-void
+static void
 device_management_start_stop (bool start)
 {
     if (start) {

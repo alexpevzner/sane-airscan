@@ -162,6 +162,17 @@ eloop_init (void);
 void
 eloop_cleanup (void);
 
+/* Add start/stop callback. This callback is called
+ * on a event loop thread context, once when event
+ * loop is started, and second time when it is stopped
+ *
+ * Start callbacks are called in the same order as
+ * they were added. Stop callbacks are called in a
+ * reverse order
+ */
+void
+eloop_add_start_stop_callback (void (*callback) (bool start));
+
 /* Start event loop thread.
  *
  * Callback is called from the thread context twice:
@@ -169,7 +180,7 @@ eloop_cleanup (void);
  *     callback(false) - when thread is about to exit
  */
 void
-eloop_thread_start (void (*callback)(bool));
+eloop_thread_start (void);
 
 /* Stop event loop thread and wait until its termination
  */
@@ -771,11 +782,6 @@ device_management_init (void);
  */
 void
 device_management_cleanup (void);
-
-/* Start/stop device management
- */
-void
-device_management_start_stop (bool start);
 
 /******************** Image decoding ********************/
 /* The window withing the image
