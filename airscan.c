@@ -74,6 +74,8 @@ sane_exit (void)
     device_list_free(sane_device_list);
 
     log_debug(NULL, "sane_exit(): OK");
+    conf_unload();
+
     log_cleanup(); /* Must be the last thing to do */
 }
 
