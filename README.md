@@ -98,8 +98,11 @@ to the new issue.
 
 ## References
 
-[kno10/python-scan-eSCL](https://github.com/kno10/python-scan-eSCL)
+The eSCL protocol is not documented, but this is simple protocol,
+based on HTTP and XML, easy for reverse engineering. There are many
+Internet resources around, related to this protocol, and among others
+I want to note the following links:
 
-[SimulPiscator/AirSane](https://github.com/SimulPiscator/AirSane)
-
-[markosjal/AirScan-eSCL.txt](https://gist.github.com/markosjal/79d03cc4f1fd287016906e7ff6f07136)
+* [kno10/python-scan-eSCL](https://github.com/kno10/python-scan-eSCL)
+* [SimulPiscator/AirSane](https://github.com/SimulPiscator/AirSane)
+* [markosjal/AirScan-eSCL.txt](https://gist.github.com/markosjal/79d03cc4f1fd287016906e7ff6f07136)
