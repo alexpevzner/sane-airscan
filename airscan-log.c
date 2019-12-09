@@ -12,29 +12,79 @@
 #include <stdlib.h>
 #include <sys/uio.h>
 
+/* Static variables */
+static GString *log_buffer;
+static bool log_configured;
+
+/* Initialize logging
+ *
+ * No log messages should be generated before this call
+ */
+void
+log_init (void)
+{
+    log_buffer = g_string_new(NULL);
+    log_configured = false;
+}
+
+/* Cleanup logging
+ *
+ * No log messages should be generated after this call
+ */
+void
+log_cleanup (void)
+{
+    g_string_free(log_buffer, TRUE);
+    log_buffer = NULL;
+}
+
+/* Flush buffered log to file
+ */
+static void
+log_flush (void)
+{
+    write(1, log_buffer->str, log_buffer->len);
+    g_string_truncate(log_buffer, 0);
+}
+
+/* Notify logger that configuration is loaded and
+ * logger can configure itself
+ *
+ * This is safe to generate log messages before log_configure()
+ * is called. These messages will be buffered, and after
+ * logger is configured, either written or abandoned, depending
+ * on configuration
+ */
+void
+log_configure (void)
+{
+    log_configured = true;
+    if (conf.dbg_enabled) {
+        log_flush();
+    } else {
+        g_string_truncate(log_buffer, 0);
+    }
+}
+
 /* Write a log message
  */
 static void
-log_message (device *dev, const char *fmt, va_list ap)
+log_message (device *dev, bool force, const char *fmt, va_list ap)
 {
-    char         buf[1024];
-    int          off = 0;
-    struct iovec iov[3];
-
-    if (dev != NULL) {
-        off += snprintf(buf, 64, "\"%.64s\": ", device_name(dev));
+    if (log_configured && !conf.dbg_enabled) {
+        return;
     }
 
-    off += vsnprintf(buf + off, sizeof(buf) - off, fmt, ap);
+    if (dev != NULL) {
+        g_string_append_printf(log_buffer, "\"%.64s\": ", device_name(dev));
+    }
 
-    iov[0].iov_base = "airscan: ";
-    iov[0].iov_len = strlen(iov[0].iov_base);
-    iov[1].iov_base = buf;
-    iov[1].iov_len = off;
-    iov[2].iov_base = "\n";
-    iov[2].iov_len = 1;
+    g_string_append_vprintf(log_buffer, fmt, ap);
+    g_string_append_c(log_buffer, '\n');
 
-    writev(1, iov, 3);
+    if ((log_configured && conf.dbg_enabled) || force) {
+        log_flush();
+    }
 }
 
 /* Write a debug message. If dev != NULL, message will
@@ -45,7 +95,7 @@ log_debug (device *dev, const char *fmt, ...)
 {
     va_list      ap;
     va_start(ap, fmt);
-    log_message(dev, fmt, ap);
+    log_message(dev, false, fmt, ap);
     va_end(ap);
 }
 
@@ -56,8 +106,16 @@ void
 log_panic (device *dev, const char *fmt, ...)
 {
     va_list      ap;
+
+    /* Note, log_buffer is not empty only if logger is not
+     * configured yet, but there are pending debug messages.
+     * At this case we discard these messages, but panic
+     * message is written anyway
+     */
+    g_string_truncate(log_buffer, 0);
+
     va_start(ap, fmt);
-    log_message(dev, fmt, ap);
+    log_message(dev, true, fmt, ap);
     va_end(ap);
     abort();
 }

@@ -19,9 +19,11 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
 {
     SANE_Status status;
 
+    log_init(); /* Must be the first thing to do */
     log_debug(NULL, "sane_init() called");
 
     conf_load();
+    log_configure(); /* As soon, as configuration is available */
 
     if (version_code != NULL) {
         *version_code = SANE_VERSION_CODE (SANE_CURRENT_MAJOR,
@@ -72,6 +74,7 @@ sane_exit (void)
     device_list_free(sane_device_list);
 
     log_debug(NULL, "sane_exit(): OK");
+    log_cleanup(); /* Must be the last thing to do */
 }
 
 /* Get list of devices

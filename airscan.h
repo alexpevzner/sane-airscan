@@ -977,6 +977,31 @@ char*
 math_fmt_mm (SANE_Word mm, char buf[]);
 
 /******************** Logging ********************/
+/* Initialize logging
+ *
+ * No log messages should be generated before this call
+ */
+void
+log_init (void);
+
+/* Cleanup logging
+ *
+ * No log messages should be generated after this call
+ */
+void
+log_cleanup (void);
+
+/* Notify logger that configuration is loaded and
+ * logger can configure itself
+ *
+ * This is safe to generate log messages before log_configure()
+ * is called. These messages will be buffered, and after
+ * logger is configured, either written or abandoned, depending
+ * on configuration
+ */
+void
+log_configure (void);
+
 /* Write a debug message. If dev != NULL, message will
  * be written in a context of device.
  */
