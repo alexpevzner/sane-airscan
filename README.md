@@ -15,22 +15,15 @@ project is to fix this situation.
 
 ### Features
 
-1. Supported input sources (actual list depends of your hardware
-capabilities):
-* Platen
-* Automatic document feeder in simplex and duplex modes
-* Support for multi-page scan from ADF
-2. Supported color modes:
-* RGB24
-* 8-bit gray scale
+1. Scan from platen and ADF, in duplex and simplex modes, multi-page
+scan from ADF supported as well.
+2. Color and gray scale modes
 3. Reasonably low memory footprint, achieved by decompressing image received
 from scanner line-by-line.
 4. The cancel operation is as fast as possible, depending on your hardware.
-5. Scanners are found and configured automatically
+5. Automatic discovery and configuration of the hardware
 6. Manual configuration is also possible, in case zeroconf doesn't work
 (i.e., computer and scanner are connected to the different subnets)
-7. Network monitoring continues in background, so if client supports it,
-scanner can be hot plugged.
 
 ### Compatibility
 
