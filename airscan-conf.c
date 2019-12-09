@@ -589,7 +589,7 @@ inifile_match_name (const char *n1, const char *n2)
 /******************** Configuration file loader  ********************/
 /* Configuration data
  */
-conf_data conf = {true, NULL, NULL};
+conf_data conf = {false, NULL, NULL};
 
 /* Revert conf.devices list
  */
@@ -682,7 +682,7 @@ conf_perror (const inifile_record *rec, const char *err)
 /* Load configuration from opened inifile
  */
 static void
-conf_load_from_ini(inifile *ini)
+conf_load_from_ini (inifile *ini)
 {
     const inifile_record *rec;
     while ((rec = inifile_read(ini)) != NULL) {
@@ -709,6 +709,14 @@ conf_load_from_ini(inifile *ini)
                     if (conf.dbg_trace == NULL) {
                         conf_perror(rec, "failed to expand path");
                     }
+                } else if (inifile_match_name(rec->variable, "enable")) {
+                    if (inifile_match_name(rec->value, "true")) {
+                        conf.dbg_enabled = true;
+                    } else if (inifile_match_name(rec->value, "false")) {
+                        conf.dbg_enabled = false;
+                    } else {
+                        conf_perror(rec, "usage: enable = true | false");
+                    }
                 }
             }
             break;
@@ -722,7 +730,7 @@ conf_load_from_ini(inifile *ini)
 /* Load configuration from the particular file
  */
 static void
-conf_load_from_file(const char *name)
+conf_load_from_file (const char *name)
 {
     log_debug(NULL, "loading configuration file %s", name);
 
@@ -739,7 +747,7 @@ conf_load_from_file(const char *name)
  * buffer and doesn't guarantee to preserve its content
  */
 static void
-conf_load_from_dir(GString *path)
+conf_load_from_dir (GString *path)
 {
     if (path->len != 0 && path->str[path->len - 1] != '/') {
         g_string_append_c(path, '/');
@@ -768,6 +776,34 @@ conf_load_from_dir(GString *path)
         }
 
         g_dir_close(dir);
+    }
+}
+
+/* Load configuration from environment
+ */
+static void
+conf_load_from_env (void)
+{
+    const char *env;
+
+    env = getenv(CONFIG_ENV_AIRSCAN_DEBUG);
+    if (env != NULL) {
+        if (inifile_match_name(env, "true")) {
+            conf.dbg_enabled = true;
+        } else if (inifile_match_name(env, "false")) {
+            conf.dbg_enabled = false;
+        } else {
+            unsigned long v;
+            char *end;
+
+            v = strtoul(env, &end, 0);
+            if (env != end && *end == '\0') {
+                conf.dbg_enabled = v != 0;
+            } else {
+                log_debug(NULL, "usage: %s=true|false",
+                        CONFIG_ENV_AIRSCAN_DEBUG);
+            }
+        }
     }
 }
 
@@ -807,6 +843,9 @@ conf_load (void)
             break;
         }
     }
+
+    /* Load configuration from environment */
+    conf_load_from_env();
 
     /* Cleanup and exit */
     conf_device_list_revert();

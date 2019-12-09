@@ -34,6 +34,10 @@
 #define CONFIG_AIRSCAN_CONF             "airscan.conf"
 #define CONFIG_AIRSCAN_D                "airscan.d"
 
+/* Environment variables
+ */
+#define CONFIG_ENV_AIRSCAN_DEBUG        "SANE_DEBUG_AIRSCAN"
+
 /* Default resolution, DPI
  */
 #define CONFIG_DEFAULT_RESOLUTION       300
