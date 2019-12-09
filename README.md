@@ -16,11 +16,11 @@ project is to fix this situation.
 ### Features
 
 1. Scan from platen and ADF, in duplex and simplex modes, multi-page
-scan from ADF supported as well.
-2. Color and gray scale modes
-3. Reasonably low memory footprint, achieved by decompressing image received
-from scanner line-by-line.
-4. The cancel operation is as fast as possible, depending on your hardware.
+scan from ADF supported as well
+2. Scan in color and gray scale modes
+3. Reasonably low memory footprint, achieved by on demand decompression of
+image received from scanner
+4. The cancel operation is as fast as possible, depending on your hardware
 5. Automatic discovery and configuration of the hardware
 6. Manual configuration is also possible, in case zeroconf doesn't work
 (i.e., computer and scanner are connected to the different subnets)
