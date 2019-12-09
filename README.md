@@ -103,7 +103,7 @@ based on HTTP and XML, easy for reverse engineering. There are many
 Internet resources around, related to this protocol, and among others
 I want to note the following links:
 
-* [kno10/python-scan-eSCL](https://github.com/kno10/python-scan-eSCL) - the tiny
+* [kno10/python-scan-eSCL](https://github.com/kno10/python-scan-eSCL) - a tiny
 Python script, able to scan from eSCL-compatible scanners
 * [SimulPiscator/AirSane](https://github.com/SimulPiscator/AirSane) - this
 project solves the reverse problem, converting any SANE-compatible scanner
