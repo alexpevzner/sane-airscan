@@ -103,7 +103,7 @@ conf_load (void);
  * data into initial state
  */
 void
-conf_free (void);
+conf_unload (void);
 
 /******************** Pollable events ********************/
 /* The pollable event

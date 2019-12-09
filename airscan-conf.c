@@ -819,7 +819,7 @@ conf_load (void)
  * data into initial state
  */
 void
-conf_free (void)
+conf_unload (void)
 {
     conf_device_list_free();
     g_free((char*) conf.dbg_trace);
