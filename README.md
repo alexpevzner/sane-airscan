@@ -31,8 +31,13 @@ In theory, sane-airscan must be compatible with any scanner, marked as
 AirPrint compatible or Mopria certified, or with announces eSCL protocol
 support.
 
-It was tested with the following scanners:
+Apple maintains [a comprehensive list](https://support.apple.com/en-us/HT201311)
+of compatible devices, but please note, this list contains not only scanners
+and MFP, but pure printers as well.
+
+Sane-airscan was tested with the following scanners:
 1. Kyocera ECOSYS M2040dn
+2. TODO
 
 If you have success with a scanner not included into this list,
 please let me know.
