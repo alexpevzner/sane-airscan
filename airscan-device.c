@@ -1620,8 +1620,19 @@ static void
 device_management_start (void)
 {
     conf_device *dev_conf;
+    GValue      val = G_VALUE_INIT;
 
     device_http_session = soup_session_new();
+
+    g_value_init (&val, G_TYPE_BOOLEAN);
+    g_value_set_boolean(&val, false);
+
+    g_object_set_property(G_OBJECT(device_http_session),
+        SOUP_SESSION_SSL_USE_SYSTEM_CA_FILE, &val);
+
+    g_object_set_property(G_OBJECT(device_http_session),
+        SOUP_SESSION_SSL_STRICT, &val);
+
     for (dev_conf = conf.devices; dev_conf != NULL; dev_conf = dev_conf->next) {
         device_add_static(dev_conf->name, dev_conf->uri);
     }
