@@ -29,19 +29,19 @@ enum {
     DEVICE_ALL_FLAGS        = 0xffffffff
 };
 
-/* Scan states
+/* Device states
  */
 typedef enum {
-    DEVICE_JOB_IDLE,
-    DEVICE_JOB_STARTED,
-    DEVICE_JOB_REQUESTING,
-    DEVICE_JOB_LOADING,
-    DEVICE_JOB_CHECK_STATUS,
-    DEVICE_JOB_CLEANING_UP,
+    DEVICE_SCAN_IDLE,
+    DEVICE_SCAN_STARTED,
+    DEVICE_SCAN_REQUESTING,
+    DEVICE_SCAN_LOADING,
+    DEVICE_SCAN_CHECK_STATUS,
+    DEVICE_SCAN_CLEANING_UP,
 
-    DEVICE_JOB_DONE
+    DEVICE_SCAN_DONE
 
-} DEVICE_JOB_STATE;
+} DEVICE_STATE;
 
 /* Device descriptor
  */
@@ -51,6 +51,8 @@ struct device {
     const char           *name;         /* Device name */
     unsigned int         flags;         /* Device flags */
     devopt               opt;           /* Device options */
+    DEVICE_STATE         state;         /* Device state */
+    GCond                state_cond;    /* Signaled when state changes */
 
     /* I/O handling (AVAHI and HTTP) */
     zeroconf_addrinfo    *addresses;    /* Device addresses, NULL if
@@ -61,14 +63,12 @@ struct device {
     trace                *trace;        /* Protocol trace */
 
     /* Scanning state machinery */
-    DEVICE_JOB_STATE     job_state;           /* Scan job state */
     SANE_Status          job_status;          /* Job completion status */
     GString              *job_location;       /* Scanned page location */
     eloop_event          *job_cancel_event;   /* Cancel event */
     bool                 job_cancel_rq;       /* Cancel requested */
     GPtrArray            *job_images;         /* Array of SoupBuffer* */
     unsigned int         job_images_received; /* How many images received */
-    GCond                job_state_cond;      /* Signaled when state changed */
     SANE_Word            job_skip_x;          /* How much pixels to skip, */
     SANE_Word            job_skip_y;          /*    from left and top */
 
@@ -100,14 +100,7 @@ static void
 device_scanner_capabilities_callback (device *dev, SoupMessage *msg);
 
 static void
-device_http_get (device *dev, const char *path,
-        void (*callback)(device*, SoupMessage*));
-
-static void
 device_http_cancel (device *dev);
-
-static void
-device_job_set_state (device *dev, DEVICE_JOB_STATE state);
 
 static void
 device_job_set_status (device *dev, SANE_Status status);
@@ -121,6 +114,7 @@ device_escl_load_page (device *dev);
 static bool
 device_read_push (device *dev);
 
+/******************** Device table management ********************/
 /* Add device to the table
  */
 static device*
@@ -137,7 +131,7 @@ device_add (const char *name)
     dev->trace = trace_open(name);
 
     dev->job_location = g_string_new(NULL);
-    g_cond_init(&dev->job_state_cond);
+    g_cond_init(&dev->state_cond);
     dev->job_images = g_ptr_array_new();
 
     dev->read_decoder_jpeg = image_decoder_jpeg_new();
@@ -185,7 +179,7 @@ device_unref (device *dev)
         }
 
         g_string_free(dev->job_location, TRUE);
-        g_cond_clear(&dev->job_state_cond);
+        g_cond_clear(&dev->state_cond);
         g_ptr_array_free(dev->job_images, TRUE);
 
         image_decoder_free(dev->read_decoder_jpeg);
@@ -241,62 +235,6 @@ device_find (const char *name)
     return NULL;
 }
 
-/* Add statically configured device
- */
-static void
-device_add_static (const char *name, SoupURI *uri)
-{
-    log_debug(NULL, "statically adding: \"%s\"", name);
-
-    /* Don't allow duplicate devices */
-    device *dev = device_find(name);
-    if (dev != NULL) {
-        log_debug(dev, "device already exist");
-        return;
-    }
-
-    /* Add a device */
-    dev = device_add(name);
-    dev->flags |= DEVICE_INIT_WAIT;
-    dev->uri_escl = soup_uri_copy(uri);
-
-    /* Make sure eSCL URI's path ends with '/' character */
-    const char *path = soup_uri_get_path(dev->uri_escl);
-    if (!g_str_has_suffix(path, "/")) {
-        size_t len = strlen(path);
-        char *path2 = g_alloca(len + 2);
-        memcpy(path2, path, len);
-        path2[len] = '/';
-        path2[len+1] = '\0';
-        soup_uri_set_path(dev->uri_escl, path2);
-    }
-
-    /* Fetch device capabilities */
-    device_http_get(dev, "ScannerCapabilities",
-            device_scanner_capabilities_callback);
-}
-
-/* Probe next device address
- */
-static void
-device_probe_address (device *dev, zeroconf_addrinfo *addrinfo)
-{
-    /* Cleanup after previous probe */
-    dev->addr_current = addrinfo;
-    if (dev->uri_escl != NULL) {
-        soup_uri_free(dev->uri_escl);
-    }
-
-    /* Parse device URI */
-    dev->uri_escl = soup_uri_new(addrinfo->uri);
-    log_assert(dev, dev->uri_escl != NULL);
-
-    /* Fetch device capabilities */
-    device_http_get(dev, "ScannerCapabilities",
-            device_scanner_capabilities_callback);
-}
-
-/******************** Device table operations ********************/
 /* Collect devices matching the flags. Return count of
  * collected devices. If caller is only interested in
  * the count, it is safe to call with out == NULL
@@ -356,48 +294,42 @@ device_table_ready (void)
     return device_table_collect(DEVICE_INIT_WAIT, NULL) == 0;
 }
 
-/* ScannerCapabilities fetch callback
+/******************** Device state management ********************/
+/* Get device state name, for debugging
+ */
+static inline const char*
+device_state_name (DEVICE_STATE state)
+{
+    switch (state) {
+    case DEVICE_SCAN_IDLE:         return "SCAN_IDLE";
+    case DEVICE_SCAN_STARTED:      return "SCAN_STARTED";
+    case DEVICE_SCAN_REQUESTING:   return "SCAN_REQUESTING";
+    case DEVICE_SCAN_LOADING:      return "SCAN_LOADING";
+    case DEVICE_SCAN_CHECK_STATUS: return "SCAN_CHECK_STATUS";
+    case DEVICE_SCAN_CLEANING_UP:  return "SCAN_CLEANING_UP";
+    case DEVICE_SCAN_DONE:         return "SCAN_DONE";
+    }
+
+    return "UNKNOWN";
+}
+
+/* Set device state
  */
 static void
-device_scanner_capabilities_callback (device *dev, SoupMessage *msg)
+device_state_set (device *dev, DEVICE_STATE state)
 {
-    error err = NULL;
+    if (dev->state != state) {
+        log_debug(dev, "state=%s", device_state_name(state));
 
-    /* Check request status */
-    if (!SOUP_STATUS_IS_SUCCESSFUL(msg->status_code)) {
-        err = ERROR("failed to load ScannerCapabilities");
-        goto DONE;
-    }
+        dev->state = state;
+        g_cond_broadcast(&dev->state_cond);
 
-    /* Parse XML response */
-    SoupBuffer *buf = soup_message_body_flatten(msg->response_body);
-    err = devopt_import_caps(&dev->opt, buf->data, buf->length);
-    soup_buffer_free(buf);
-
-    if (err != NULL) {
-        err = eloop_eprintf("ScannerCapabilities: %s", err);
-        goto DONE;
-    }
-
-    devcaps_dump(dev->trace, &dev->opt.caps);
-
-    /* Cleanup and exit */
-DONE:
-    if (err != NULL) {
-        log_debug(dev, ESTRING(err));
-        trace_error(dev->trace, err);
-
-        if (dev->addr_current != NULL && dev->addr_current->next != NULL) {
-            device_probe_address(dev, dev->addr_current->next);
-        } else {
-            device_del(dev);
+        if (dev->state == DEVICE_SCAN_DONE) {
+            if ((dev->flags & DEVICE_SCANNING) != 0) {
+                pollable_signal(dev->read_pollable);
+            }
         }
-    } else {
-        dev->flags |= DEVICE_READY;
-        dev->flags &= ~DEVICE_INIT_WAIT;
     }
-
-    g_cond_broadcast(&device_table_cond);
 }
 
 /******************** HTTP operations ********************/
@@ -527,7 +459,107 @@ device_http_cancel (device *dev)
     }
 }
 
-/******************** ESCL protocol ********************/
+/******************** ESCL initialization ********************/
+/* Add statically configured device
+ */
+static void
+device_add_static (const char *name, SoupURI *uri)
+{
+    log_debug(NULL, "statically adding: \"%s\"", name);
+
+    /* Don't allow duplicate devices */
+    device *dev = device_find(name);
+    if (dev != NULL) {
+        log_debug(dev, "device already exist");
+        return;
+    }
+
+    /* Add a device */
+    dev = device_add(name);
+    dev->flags |= DEVICE_INIT_WAIT;
+    dev->uri_escl = soup_uri_copy(uri);
+
+    /* Make sure eSCL URI's path ends with '/' character */
+    const char *path = soup_uri_get_path(dev->uri_escl);
+    if (!g_str_has_suffix(path, "/")) {
+        size_t len = strlen(path);
+        char *path2 = g_alloca(len + 2);
+        memcpy(path2, path, len);
+        path2[len] = '/';
+        path2[len+1] = '\0';
+        soup_uri_set_path(dev->uri_escl, path2);
+    }
+
+    /* Fetch device capabilities */
+    device_http_get(dev, "ScannerCapabilities",
+            device_scanner_capabilities_callback);
+}
+
+/* Probe next device address
+ */
+static void
+device_probe_address (device *dev, zeroconf_addrinfo *addrinfo)
+{
+    /* Cleanup after previous probe */
+    dev->addr_current = addrinfo;
+    if (dev->uri_escl != NULL) {
+        soup_uri_free(dev->uri_escl);
+    }
+
+    /* Parse device URI */
+    dev->uri_escl = soup_uri_new(addrinfo->uri);
+    log_assert(dev, dev->uri_escl != NULL);
+
+    /* Fetch device capabilities */
+    device_http_get(dev, "ScannerCapabilities",
+            device_scanner_capabilities_callback);
+}
+
+/* ScannerCapabilities fetch callback
+ */
+static void
+device_scanner_capabilities_callback (device *dev, SoupMessage *msg)
+{
+    error err = NULL;
+
+    /* Check request status */
+    if (!SOUP_STATUS_IS_SUCCESSFUL(msg->status_code)) {
+        err = ERROR("failed to load ScannerCapabilities");
+        goto DONE;
+    }
+
+    /* Parse XML response */
+    SoupBuffer *buf = soup_message_body_flatten(msg->response_body);
+    err = devopt_import_caps(&dev->opt, buf->data, buf->length);
+    soup_buffer_free(buf);
+
+    if (err != NULL) {
+        err = eloop_eprintf("ScannerCapabilities: %s", err);
+        goto DONE;
+    }
+
+    devcaps_dump(dev->trace, &dev->opt.caps);
+
+    /* Cleanup and exit */
+DONE:
+    if (err != NULL) {
+        log_debug(dev, ESTRING(err));
+        trace_error(dev->trace, err);
+
+        if (dev->addr_current != NULL && dev->addr_current->next != NULL) {
+            device_probe_address(dev, dev->addr_current->next);
+        } else {
+            device_del(dev);
+        }
+    } else {
+        dev->flags |= DEVICE_READY;
+        dev->flags &= ~DEVICE_INIT_WAIT;
+    }
+
+    g_cond_broadcast(&device_table_cond);
+}
+
+/******************** ESCL scanning ********************/
 /* HTTP DELETE ${dev->job_location} callback
  */
 static void
@@ -535,7 +567,7 @@ device_escl_cleanup_callback (device *dev, SoupMessage *msg)
 {
     (void) msg;
 
-    device_job_set_state(dev, DEVICE_JOB_DONE);
+    device_state_set(dev, DEVICE_SCAN_DONE);
 }
 
 /* ESCL: cleanup after scan (delete current job)
@@ -545,7 +577,7 @@ device_escl_cleanup_callback (device *dev, SoupMessage *msg)
 static void
 device_escl_cleanup (device *dev)
 {
-    device_job_set_state(dev, DEVICE_JOB_CLEANING_UP);
+    device_state_set(dev, DEVICE_SCAN_CLEANING_UP);
 
     device_http_perform(dev, dev->job_location->str, "DELETE", NULL,
             device_escl_cleanup_callback);
@@ -650,10 +682,9 @@ DONE:
     trace_printf(dev->trace, "Job status: %s", sane_strstatus(status));
     trace_printf(dev->trace, "");
 
-
     device_job_set_status(dev, status);
     if (dev->job_location->len == 0) {
-        device_job_set_state(dev, DEVICE_JOB_DONE);
+        device_state_set(dev, DEVICE_SCAN_DONE);
     } else {
         device_escl_cleanup(dev);
     }
@@ -667,7 +698,7 @@ DONE:
 static void
 device_escl_check_status (device *dev)
 {
-    device_job_set_state(dev, DEVICE_JOB_CHECK_STATUS);
+    device_state_set(dev, DEVICE_SCAN_CHECK_STATUS);
 
     device_http_get(dev, "ScannerStatus",
             device_escl_check_status_callback);
@@ -680,7 +711,7 @@ device_escl_load_page_callback (device *dev, SoupMessage *msg)
 {
     /* Transport error is fatal */
     if (SOUP_STATUS_IS_TRANSPORT_ERROR(msg->status_code)) {
-        device_job_set_state(dev, DEVICE_JOB_DONE);
+        device_state_set(dev, DEVICE_SCAN_DONE);
         device_job_set_status(dev, SANE_STATUS_IO_ERROR);
         return;
     }
@@ -722,7 +753,7 @@ device_escl_load_page (device *dev)
     }
     g_string_append(dev->job_location, "NextDocument");
 
-    device_job_set_state(dev, DEVICE_JOB_LOADING);
+    device_state_set(dev, DEVICE_SCAN_LOADING);
 
     device_http_get(dev, dev->job_location->str, device_escl_load_page_callback);
     g_string_truncate(dev->job_location, sz);
@@ -738,14 +769,16 @@ device_escl_start_scan_callback (device *dev, SoupMessage *msg)
     /* Transport error fails immediately */
     if (SOUP_STATUS_IS_TRANSPORT_ERROR(msg->status_code)) {
         device_job_set_status(dev, SANE_STATUS_IO_ERROR);
-        device_job_set_state(dev, DEVICE_JOB_DONE);
+        device_state_set(dev, DEVICE_SCAN_DONE);
         return;
     }
 
     /* Check HTTP status and obtain location */
     location = NULL;
     if (msg->status_code == SOUP_STATUS_CREATED) {
-        location = soup_message_headers_get_one(msg->response_headers, "Location");
+        location = soup_message_headers_get_one(msg->response_headers,
+            "Location");
+
         if (*location == '\0') {
             location = NULL; /* Paranoia */
         }
@@ -762,7 +795,7 @@ device_escl_start_scan_callback (device *dev, SoupMessage *msg)
         if (location != NULL) {
             device_escl_cleanup(dev);
         } else {
-            device_job_set_state(dev, DEVICE_JOB_DONE);
+            device_state_set(dev, DEVICE_SCAN_DONE);
         }
 
         return;
@@ -938,49 +971,12 @@ device_escl_start_scan (device *dev)
     /* Send request to device */
     const char *rq = xml_wr_finish (xml);
 
-    device_job_set_state(dev, DEVICE_JOB_REQUESTING);
+    device_state_set(dev, DEVICE_SCAN_REQUESTING);
     device_http_perform(dev, "ScanJobs", "POST", rq,
             device_escl_start_scan_callback);
 }
 
 /******************** Scan Job management ********************/
-/* Get job state name, for debugging
- */
-static inline const char*
-device_job_state_name (DEVICE_JOB_STATE state)
-{
-    switch (state) {
-    case DEVICE_JOB_IDLE:         return "JOB_IDLE";
-    case DEVICE_JOB_STARTED:      return "JOB_STARTED";
-    case DEVICE_JOB_REQUESTING:   return "JOB_REQUESTING";
-    case DEVICE_JOB_LOADING:      return "JOB_LOADING";
-    case DEVICE_JOB_CHECK_STATUS: return "JOB_CHECK_STATUS";
-    case DEVICE_JOB_CLEANING_UP:  return "JOB_CLEANING_UP";
-    case DEVICE_JOB_DONE:         return "JOB_DONE";
-    }
-
-    return "UNKNOWN";
-}
-
-/* Set job_state
- */
-static void
-device_job_set_state (device *dev, DEVICE_JOB_STATE state)
-{
-    if (dev->job_state != state) {
-        log_debug(dev, "JOB state=%s", device_job_state_name(state));
-
-        dev->job_state = state;
-        g_cond_broadcast(&dev->job_state_cond);
-
-        if (dev->job_state == DEVICE_JOB_DONE) {
-            if ((dev->flags & DEVICE_SCANNING) != 0) {
-                pollable_signal(dev->read_pollable);
-            }
-        }
-    }
-}
-
 /* Set job status. If status already set, it will not be
  * changed
  */
@@ -1003,35 +999,35 @@ device_job_abort (device *dev, SANE_Status status)
         return; /* We are already working on it */
     }
 
-    if (dev->job_state != DEVICE_JOB_IDLE) {
+    if (dev->state != DEVICE_SCAN_IDLE) {
         log_debug(dev, "JOB aborted: %s", sane_strstatus(status));
     }
 
-    switch (dev->job_state) {
-    case DEVICE_JOB_IDLE:
-    case DEVICE_JOB_DONE:
+    switch (dev->state) {
+    case DEVICE_SCAN_IDLE:
+    case DEVICE_SCAN_DONE:
         /* Nothing to do */
         break;
 
-    case DEVICE_JOB_STARTED:
-    case DEVICE_JOB_REQUESTING:
+    case DEVICE_SCAN_STARTED:
+    case DEVICE_SCAN_REQUESTING:
         dev->job_cancel_rq = true;
         break;
 
-    case DEVICE_JOB_LOADING:
-    case DEVICE_JOB_CHECK_STATUS:
+    case DEVICE_SCAN_LOADING:
+    case DEVICE_SCAN_CHECK_STATUS:
         device_http_cancel(dev);
         /* Fall through...*/
 
-    case DEVICE_JOB_CLEANING_UP:
+    case DEVICE_SCAN_CLEANING_UP:
         device_job_set_status(dev, status);
 
-        if (dev->job_state == DEVICE_JOB_LOADING) {
+        if (dev->state == DEVICE_SCAN_LOADING) {
             device_escl_cleanup(dev);
         }
 
-        if (dev->job_state != DEVICE_JOB_CLEANING_UP) {
-            device_job_set_state(dev, DEVICE_JOB_DONE);
+        if (dev->state != DEVICE_SCAN_CLEANING_UP) {
+            device_state_set(dev, DEVICE_SCAN_DONE);
         }
         break;
     }
@@ -1182,14 +1178,12 @@ device_close (device *dev)
 {
     if ((dev->flags & DEVICE_OPENED) != 0) {
         /* Cancel job in progress, if any */
-        if (dev->job_state != DEVICE_JOB_IDLE &&
-            dev->job_state != DEVICE_JOB_DONE) {
-
+        if (dev->state != DEVICE_SCAN_IDLE && dev->state != DEVICE_SCAN_DONE) {
             dev->flags |= DEVICE_CLOSING;
             device_cancel(dev);
 
-            while (dev->job_state != DEVICE_JOB_DONE) {
-                eloop_cond_wait(&dev->job_state_cond);
+            while (dev->state != DEVICE_SCAN_DONE) {
+                eloop_cond_wait(&dev->state_cond);
             }
         }
 
@@ -1246,7 +1240,7 @@ device_start_do (gpointer data)
     device      *dev = data;
 
     if (dev->job_cancel_rq) {
-        device_job_set_state(dev, DEVICE_JOB_DONE);
+        device_state_set(dev, DEVICE_SCAN_DONE);
         device_job_set_status(dev, SOUP_STATUS_CANCELLED);
     } else {
         device_escl_start_scan(dev);
@@ -1276,7 +1270,7 @@ device_start (device *dev)
 
     /* Previous multi-page scan job may still be running. Check
      * its state */
-    if (dev->job_state != DEVICE_JOB_IDLE) {
+    if (dev->state != DEVICE_SCAN_IDLE) {
         if (dev->job_images->len != 0) {
             /* We have more buffered images */
             if (device_read_push(dev)) {
@@ -1288,8 +1282,8 @@ device_start (device *dev)
         }
 
         /* Just wait until previous job completion */
-        while (dev->job_state != DEVICE_JOB_DONE) {
-            eloop_cond_wait(&dev->job_state_cond);
+        while (dev->state != DEVICE_SCAN_DONE) {
+            eloop_cond_wait(&dev->state_cond);
         }
 
         if (dev->job_status != SANE_STATUS_GOOD) {
@@ -1298,7 +1292,7 @@ device_start (device *dev)
     }
 
     /* Start new scan job */
-    device_job_set_state(dev, DEVICE_JOB_STARTED);
+    device_state_set(dev, DEVICE_SCAN_STARTED);
     dev->job_status = SANE_STATUS_GOOD;
     g_string_truncate(dev->job_location, 0);
     dev->job_cancel_rq = false;
@@ -1307,19 +1301,19 @@ device_start (device *dev)
     eloop_call(device_start_do, dev);
 
     /* And wait until it reaches "LOADING" state */
-    while (dev->job_state != DEVICE_JOB_LOADING) {
-        if (dev->job_state == DEVICE_JOB_DONE) {
+    while (dev->state != DEVICE_SCAN_LOADING) {
+        if (dev->state == DEVICE_SCAN_DONE) {
             goto FAIL;
         }
 
-        eloop_cond_wait(&dev->job_state_cond);
+        eloop_cond_wait(&dev->state_cond);
     }
 
     return SANE_STATUS_GOOD;
 
     /* Cleanup after error */
 FAIL:
-    device_job_set_state(dev, DEVICE_JOB_IDLE);
+    device_state_set(dev, DEVICE_SCAN_IDLE);
     dev->flags &= ~DEVICE_SCANNING;
 
     return dev->job_status;
@@ -1484,7 +1478,7 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
     }
 
     /* Wait until device is ready */
-    while (dev->read_image == NULL && dev->job_state != DEVICE_JOB_DONE) {
+    while (dev->read_image == NULL && dev->state != DEVICE_SCAN_DONE) {
         eloop_mutex_unlock();
         pollable_wait(dev->read_pollable);
         eloop_mutex_lock();
