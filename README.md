@@ -103,6 +103,12 @@ based on HTTP and XML, easy for reverse engineering. There are many
 Internet resources around, related to this protocol, and among others
 I want to note the following links:
 
-* [kno10/python-scan-eSCL](https://github.com/kno10/python-scan-eSCL)
-* [SimulPiscator/AirSane](https://github.com/SimulPiscator/AirSane)
-* [markosjal/AirScan-eSCL.txt](https://gist.github.com/markosjal/79d03cc4f1fd287016906e7ff6f07136)
+* [kno10/python-scan-eSCL](https://github.com/kno10/python-scan-eSCL) - the tiny
+Python script, able to scan from eSCL-compatible scanners
+* [SimulPiscator/AirSane](https://github.com/SimulPiscator/AirSane) - this
+project solves the reverse problem, converting any SANE-compatible scanner
+into eSCL server. Author claims that it is compatible with Mopria and
+Apple clients
+* [markosjal/AirScan-eSCL.txt](https://gist.github.com/markosjal/79d03cc4f1fd287016906e7ff6f07136) - document,
+describing eSCL protocol, based on reverse engineering. Not complete and
+not always accurate, but gives the good introduction
