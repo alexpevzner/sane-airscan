@@ -156,7 +156,9 @@ zeroconf_devstate_del (const char *name)
     }
 
     /* Delete a device state */
-    device_event_removed(name);
+    if (devstate->reported) {
+        device_event_removed(name);
+    }
 
     if (prev != NULL) {
         prev->next = devstate->next;
@@ -529,6 +531,7 @@ zeroconf_avahi_browser_stop (void)
 {
     if (zeroconf_avahi_browser != NULL) {
         zeroconf_devstate_del_all(true);
+        avahi_service_browser_free(zeroconf_avahi_browser);
         zeroconf_avahi_browser = NULL;
     }
 }
@@ -579,7 +582,6 @@ static void
 zeroconf_avahi_client_stop (void)
 {
     if (zeroconf_avahi_client != NULL) {
-        avahi_service_browser_free(zeroconf_avahi_browser);
         avahi_client_free(zeroconf_avahi_client);
         zeroconf_avahi_client = NULL;
     }
