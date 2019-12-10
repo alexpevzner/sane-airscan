@@ -1623,7 +1623,7 @@ device_management_start (void)
 
     device_http_session = soup_session_new();
 
-    g_value_init (&val, G_TYPE_BOOLEAN);
+    g_value_init(&val, G_TYPE_BOOLEAN);
     g_value_set_boolean(&val, false);
 
     g_object_set_property(G_OBJECT(device_http_session),
