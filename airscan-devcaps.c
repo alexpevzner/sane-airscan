@@ -87,6 +87,14 @@ devcaps_source_parse_color_modes (xml_rd *xml, devcaps_source *src)
     }
     xml_rd_leave(xml);
 
+    /* FIXME
+     *
+     * The only image format that we currently support is JPEG,
+     * and LINEART images are not representable in JPEG, so lets
+     * disable it for now (until PDF decoder will be implemented)
+     */
+    src->colormodes &= ~(1 << OPT_COLORMODE_LINEART);
+
     OPT_COLORMODE cm;
     for (cm = (OPT_COLORMODE) 0; cm < NUM_OPT_COLORMODE; cm ++) {
         if ((src->colormodes & (1 << cm)) != 0) {
