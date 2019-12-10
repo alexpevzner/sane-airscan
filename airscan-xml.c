@@ -78,7 +78,7 @@ xml_rd_finish (xml_rd **xml)
 {
     if (*xml) {
         if ((*xml)->doc) {
-            xmlFree((*xml)->doc);
+            xmlFreeDoc((*xml)->doc);
         }
         __xml_rd_invalidate_cache(*xml);
 
