@@ -616,7 +616,7 @@ conf_device_list_free (void)
     while (list != NULL) {
         next = list->next;
         g_free((char*) list->name);
-        soup_uri_free(list->uri);
+        g_free((char*) list->uri);
         g_free(list);
         list = next;
     }
@@ -625,7 +625,7 @@ conf_device_list_free (void)
 /* Prepend device conf.devices list
  */
 static void
-conf_device_list_prepend (const char *name, SoupURI *uri)
+conf_device_list_prepend (const char *name, const char *uri)
 {
     conf_device *dev = g_new0(conf_device, 1);
     dev->name = g_strdup(name);
@@ -700,7 +700,9 @@ conf_load_from_ini (inifile *ini)
                 } else if ((uri = soup_uri_new(rec->value)) == NULL) {
                     conf_perror(rec, "invalid URL");
                 } else {
-                    conf_device_list_prepend(rec->variable, uri);
+                    conf_device_list_prepend(rec->variable,
+                            soup_uri_to_string(uri, FALSE));
+                    soup_uri_free(uri);
                 }
             } else if (inifile_match_name(rec->section, "debug")) {
                 if (inifile_match_name(rec->variable, "trace")) {

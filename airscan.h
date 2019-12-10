@@ -84,7 +84,7 @@ ESTRING (error err)
 typedef struct conf_device conf_device;
 struct conf_device {
     const char  *name; /* Device name */
-    SoupURI     *uri;  /* Device URI, parsed */
+    const char  *uri;  /* Device URI, parsed */
     conf_device *next; /* Next device in the list */
 };
 

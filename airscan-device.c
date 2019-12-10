@@ -96,11 +96,17 @@ static SoupSession *device_http_session;
 
 /* Forward declarations
  */
+static device*
+device_find (const char *name);
+
 static void
 device_scanner_capabilities_callback (device *dev, SoupMessage *msg);
 
 static void
 device_http_cancel (device *dev);
+
+static void
+device_probe_address (device *dev, zeroconf_addrinfo *addrinfo);
 
 static void
 device_job_set_status (device *dev, SANE_Status status);
@@ -120,15 +126,32 @@ device_management_start_stop (bool start);
 /******************** Device table management ********************/
 /* Add device to the table
  */
-static device*
-device_add (const char *name)
+static void
+device_add (const char *name, zeroconf_addrinfo *addresses,
+        bool init_scan, bool statically)
 {
+    device      *dev;
+
+    /* Issue log message */
+    log_debug(NULL, "statically adding: \"%s\"", name,
+            statically ? "statically" : "dynamically");
+
+    /* Don't allow duplicate devices */
+    dev = device_find(name);
+    if (dev != NULL) {
+        log_debug(dev, "device already exist");
+        return;
+    }
+
     /* Create device */
-    device      *dev = g_new0(device, 1);
+    dev = g_new0(device, 1);
 
     dev->refcnt = 1;
     dev->name = g_strdup(name);
-    dev->flags = DEVICE_LISTED;
+    dev->flags = DEVICE_LISTED | DEVICE_INIT_WAIT;
+    if (init_scan) {
+        dev->flags |= DEVICE_INIT_WAIT;
+    }
     devopt_init(&dev->opt);
 
     dev->trace = trace_open(name);
@@ -145,7 +168,11 @@ device_add (const char *name)
     /* Add to the table */
     g_ptr_array_add(device_table, dev);
 
-    return dev;
+    /* Initialize device I/O */
+    dev->addresses = zeroconf_addrinfo_list_copy(addresses);
+    device_probe_address(dev, dev->addresses);
+
+    return;
 }
 
 /* Ref the device
@@ -463,41 +490,6 @@ device_http_cancel (device *dev)
 }
 
 /******************** ESCL initialization ********************/
-/* Add statically configured device
- */
-static void
-device_add_static (const char *name, SoupURI *uri)
-{
-    log_debug(NULL, "statically adding: \"%s\"", name);
-
-    /* Don't allow duplicate devices */
-    device *dev = device_find(name);
-    if (dev != NULL) {
-        log_debug(dev, "device already exist");
-        return;
-    }
-
-    /* Add a device */
-    dev = device_add(name);
-    dev->flags |= DEVICE_INIT_WAIT;
-    dev->uri_escl = soup_uri_copy(uri);
-
-    /* Make sure eSCL URI's path ends with '/' character */
-    const char *path = soup_uri_get_path(dev->uri_escl);
-    if (!g_str_has_suffix(path, "/")) {
-        size_t len = strlen(path);
-        char *path2 = g_alloca(len + 2);
-        memcpy(path2, path, len);
-        path2[len] = '/';
-        path2[len+1] = '\0';
-        soup_uri_set_path(dev->uri_escl, path2);
-    }
-
-    /* Fetch device capabilities */
-    device_http_get(dev, "ScannerCapabilities",
-            device_scanner_capabilities_callback);
-}
-
 /* Probe next device address
  */
 static void
@@ -512,6 +504,17 @@ device_probe_address (device *dev, zeroconf_addrinfo *addrinfo)
     /* Parse device URI */
     dev->uri_escl = soup_uri_new(addrinfo->uri);
     log_assert(dev, dev->uri_escl != NULL);
+
+    /* Make sure eSCL URI's path ends with '/' character */
+    const char *path = soup_uri_get_path(dev->uri_escl);
+    if (!g_str_has_suffix(path, "/")) {
+        size_t len = strlen(path);
+        char *path2 = g_alloca(len + 2);
+        memcpy(path2, path, len);
+        path2[len] = '/';
+        path2[len+1] = '\0';
+        soup_uri_set_path(dev->uri_escl, path2);
+    }
 
     /* Fetch device capabilities */
     device_http_get(dev, "ScannerCapabilities",
@@ -1543,28 +1546,25 @@ DONE:
 }
 
 /******************** Device discovery events ********************/
+/* Add statically configured device
+ */
+static void
+device_statically_configured (const char *name, const char *uri)
+{
+    zeroconf_addrinfo addrinfo;
+
+    memset(&addrinfo, 0, sizeof(addrinfo));
+    addrinfo.uri = uri;
+    device_add(name, &addrinfo, true, true);
+}
+
 /* Device found notification -- called by ZeroConf
  */
 void
 device_event_found (const char *name, bool init_scan,
         zeroconf_addrinfo *addresses)
 {
-    log_debug(NULL, "dynamically adding: \"%s\"", name);
-
-    /* Don't allow duplicate devices */
-    device *dev = device_find(name);
-    if (dev != NULL) {
-        log_debug(dev, "device already exist");
-        return;
-    }
-
-    /* Add a device */
-    dev = device_add(name);
-    if (init_scan) {
-        dev->flags |= DEVICE_INIT_WAIT;
-    }
-    dev->addresses = zeroconf_addrinfo_list_copy(addresses);
-    device_probe_address(dev, dev->addresses);
+    device_add(name, addresses, init_scan, true);
 }
 
 /* Device removed notification -- called by ZeroConf
@@ -1633,7 +1633,7 @@ device_management_start (void)
         SOUP_SESSION_SSL_STRICT, &val);
 
     for (dev_conf = conf.devices; dev_conf != NULL; dev_conf = dev_conf->next) {
-        device_add_static(dev_conf->name, dev_conf->uri);
+        device_statically_configured(dev_conf->name, dev_conf->uri);
     }
 }
 
