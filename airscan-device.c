@@ -1564,7 +1564,7 @@ void
 device_event_found (const char *name, bool init_scan,
         zeroconf_addrinfo *addresses)
 {
-    device_add(name, addresses, init_scan, true);
+    device_add(name, addresses, init_scan, false);
 }
 
 /* Device removed notification -- called by ZeroConf
