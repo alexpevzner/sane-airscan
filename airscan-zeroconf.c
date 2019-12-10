@@ -34,9 +34,8 @@ struct zeroconf_devstate {
     GPtrArray         *resolvers;  /* Pending resolvers */
     zeroconf_addrinfo *addresses;  /* Discovered addresses */
     zeroconf_devstate *next;       /* Next devstate in the list */
-    bool              init_scan;   /* Device found during initial scan */
     bool              reported;    /* Device reported to device manager */
-    bool              unconfirmed; /* Device not confirmed */
+    bool              init_scan;   /* Device found during initial scan */
 };
 
 /* Static variables
@@ -157,9 +156,7 @@ zeroconf_devstate_del (const char *name)
     }
 
     /* Delete a device state */
-    if (devstate->reported) {
-        device_event_removed(name);
-    }
+    device_event_removed(name);
 
     if (prev != NULL) {
         prev->next = devstate->next;
@@ -170,67 +167,16 @@ zeroconf_devstate_del (const char *name)
     zeroconf_devstate_free(devstate);
 }
 
-/* Walk the device state list, applying callback to each device state
- * If callback returns true, device state will remain in the list.
- * Otherwise, it will be deleted
+/* Delete all zeroconf_devstate and optionally notify a device manager
  */
 static void
-zeroconf_devstate_list_walk (bool (*callback) (zeroconf_devstate *devstate))
-{
-    zeroconf_devstate *devstate = zeroconf_devstate_list, *prev = NULL;
-
-    zeroconf_devstate_list = NULL;
-    while (devstate != NULL) {
-        zeroconf_devstate *next = devstate->next;
-
-        if (callback(devstate)) {
-            if (prev != NULL) {
-                prev->next = devstate;
-            } else {
-                zeroconf_devstate_list = devstate;
-            }
-        } else {
-            if (devstate->reported) {
-                device_event_removed(devstate->name);
-            }
-            zeroconf_devstate_free(devstate);
-        }
-
-        devstate = next;
-    }
-}
-
-/* Callback for zeroconf_devstate_list_walk:
- *   - mark reported device state as unconfirmed
- *   - delete unreported device state
- */
-static bool
-zeroconf_devstate_unconfirmed_mark (zeroconf_devstate *devstate)
-{
-    if (devstate->reported) {
-        devstate->unconfirmed = true;
-        return true;
-    } else {
-        return false;
-    }
-}
-
-/* Callback for zeroconf_devstate_list_walk:
- *   - delete unconfirmed device
- */
-static bool
-zeroconf_devstate_unconfirmed_del (zeroconf_devstate *devstate)
-{
-    return !devstate->unconfirmed;
-}
-
-/* Delete all zeroconf_devstate
- */
-static void
-zeroconf_devstate_del_all (void)
+zeroconf_devstate_del_all (bool notify)
 {
     while (zeroconf_devstate_list != NULL) {
         zeroconf_devstate       *next = zeroconf_devstate_list->next;
+        if (notify && zeroconf_devstate_list->reported) {
+            device_event_removed(zeroconf_devstate_list->name);
+        }
         zeroconf_devstate_free(zeroconf_devstate_list);
         zeroconf_devstate_list = next;
     }
@@ -558,7 +504,6 @@ zeroconf_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
         log_debug(NULL, "MDNS: initial scan finished");
 
         zeroconf_avahi_browser_init_scan = false;
-        zeroconf_devstate_list_walk(zeroconf_devstate_unconfirmed_del);
         device_event_init_scan_finished();
         break;
     }
@@ -583,7 +528,7 @@ static void
 zeroconf_avahi_browser_stop (void)
 {
     if (zeroconf_avahi_browser != NULL) {
-        avahi_service_browser_free(zeroconf_avahi_browser);
+        zeroconf_devstate_del_all(true);
         zeroconf_avahi_browser = NULL;
     }
 }
@@ -631,11 +576,10 @@ zeroconf_avahi_restart_timer_callback(AvahiTimeout *t, void *userdata)
 /* Stop AVAHI client
  */
 static void
-zeroconf_avahi_client_stop ()
+zeroconf_avahi_client_stop (void)
 {
     if (zeroconf_avahi_client != NULL) {
-        zeroconf_devstate_list_walk(zeroconf_devstate_unconfirmed_mark);
-
+        avahi_service_browser_free(zeroconf_avahi_browser);
         avahi_client_free(zeroconf_avahi_client);
         zeroconf_avahi_client = NULL;
     }
@@ -662,7 +606,7 @@ zeroconf_avahi_client_restart_defer (void)
     struct timeval tv;
 
     zeroconf_avahi_browser_stop();
-    zeroconf_avahi_client_stop(false);
+    zeroconf_avahi_client_stop();
 
     gettimeofday(&tv, NULL);
     tv.tv_sec += AIRSCAN_AVAHI_CLIENT_RESTART_TIMEOUT;
@@ -712,7 +656,7 @@ zeroconf_cleanup (void)
     if (zeroconf_avahi_glib_poll != NULL) {
         zeroconf_avahi_browser_stop();
         zeroconf_avahi_client_stop();
-        zeroconf_devstate_del_all();
+        zeroconf_devstate_del_all(false);
 
         if (zeroconf_avahi_restart_timer != NULL) {
             zeroconf_avahi_poll->timeout_free(zeroconf_avahi_restart_timer);
