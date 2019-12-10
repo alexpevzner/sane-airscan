@@ -98,6 +98,7 @@ inifile_close (inifile *file)
     g_string_free(file->variable, TRUE);
     g_string_free(file->value, TRUE);
     g_free(file->record.tokv);
+    g_free(file);
 }
 
 /* Get next character from the file
