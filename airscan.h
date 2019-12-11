@@ -347,12 +347,6 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
         char *body, const char *content_type,
         void (*callback) (device *dev, http_query *q));
 
-/* Cancel unfinished http_query. Callback will not be called and
- * memory owned by the http_query will be released
- */
-void
-http_query_cancel (http_query *q);
-
 /* Get query error, if any
  *
  * Both transport errors and erroneous HTTP response codes considered errors here

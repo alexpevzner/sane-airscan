@@ -13,6 +13,10 @@
 /******************** Static variables ********************/
 static SoupSession *http_session;
 
+/******************** Forward declarations ********************/
+static void
+http_query_cancel (http_query *q);
+
 /******************** HTTP URI ********************/
 /* Type http_uri represents HTTP URI
  */
