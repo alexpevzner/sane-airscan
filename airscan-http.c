@@ -151,8 +151,10 @@ http_data_unref (http_data *data)
 /* Type http_client represents HTTP client instance
  */
 struct http_client {
-    void       *dev;   /* Device that owns the client */
-    http_query *query; /* Current http_query, if any */
+    void       *dev;       /* Device that owns the client */
+    http_query *query;     /* Current http_query, if any */
+    void       (*onerror)( /* Callback to be called on transport error */
+            device *dev, error err);
 };
 
 /* Create new http_client
@@ -172,6 +174,17 @@ http_client_free (http_client *client)
 {
     log_assert(client->dev, client->query == NULL);
     g_free(client);
+}
+
+/* Set on-error callback. If this callback is not NULL,
+ * in a case of transport error it will be called instead
+ * of the http_query callback
+ */
+void
+http_client_onerror (http_client *client,
+        void (*callback)(device *dev, error err))
+{
+    client->onerror = callback;
 }
 
 /* Cancel pending http_query, if any
@@ -223,6 +236,7 @@ http_query_callback (SoupSession *session, SoupMessage *msg, gpointer userdata)
 
     if (msg->status_code != SOUP_STATUS_CANCELLED) {
         device *dev = q->client->dev;
+        error  err = http_query_transport_error(q);
 
         log_debug(dev, "HTTP %s %s: %s", q->msg->method,
                 http_uri_str(q->uri),
@@ -230,7 +244,9 @@ http_query_callback (SoupSession *session, SoupMessage *msg, gpointer userdata)
 
         trace_http_query_hook(device_trace(dev), q);
 
-        if (q->callback != NULL) {
+        if (err != NULL && q->client->onerror != NULL) {
+            q->client->onerror(dev, err);
+        } else if (q->callback != NULL) {
             q->callback(dev, q);
         }
     }

@@ -330,6 +330,14 @@ http_client_free (http_client *client);
 void
 http_client_cancel (http_client *client);
 
+/* Set on-error callback. If this callback is not NULL,
+ * in a case of transport error it will be called instead
+ * of the http_query callback
+ */
+void
+http_client_onerror (http_client *client,
+        void (*callback)(device *dev, error err));
+
 /* Type http_query represents HTTP query (both request and response)
  */
 typedef struct http_query http_query;

@@ -98,6 +98,9 @@ static device*
 device_find (const char *name);
 
 static void
+device_http_onerror (device *dev, error err);
+
+static void
 device_scanner_capabilities_callback (device *dev, http_query *q);
 
 static void
@@ -383,6 +386,15 @@ device_http_get (device *dev, const char *path,
     device_http_perform(dev, path, "GET", NULL, callback);
 }
 
+/* http_client onerror callback
+ */
+static void
+device_http_onerror (device *dev, error err) {
+    log_debug(dev, ESTRING(err));
+    device_state_set(dev, DEVICE_SCAN_DONE);
+    device_job_set_status(dev, SANE_STATUS_IO_ERROR);
+}
+
 /******************** ESCL initialization ********************/
 /* Probe next device address
  */
@@ -454,6 +466,8 @@ DONE:
     } else {
         dev->flags |= DEVICE_READY;
         dev->flags &= ~DEVICE_INIT_WAIT;
+
+        http_client_onerror(dev->http_client, device_http_onerror);
     }
 
     g_cond_broadcast(&device_table_cond);
@@ -611,14 +625,6 @@ device_escl_load_page_callback (device *dev, http_query *q)
 {
     error err;
 
-    /* Transport error is fatal */
-    err = http_query_transport_error(q);
-    if (err != NULL) {
-        device_state_set(dev, DEVICE_SCAN_DONE);
-        device_job_set_status(dev, SANE_STATUS_IO_ERROR);
-        return;
-    }
-
     /* Try to fetch next page until previous page fetched successfully */
     err = http_query_error(q);
     if (err == NULL) {
@@ -669,15 +675,6 @@ static void
 device_escl_start_scan_callback (device *dev, http_query *q)
 {
     const char *location;
-    error      err;
-
-    /* Transport error fails immediately */
-    err = http_query_transport_error(q);
-    if (err != NULL) {
-        device_job_set_status(dev, SANE_STATUS_IO_ERROR);
-        device_state_set(dev, DEVICE_SCAN_DONE);
-        return;
-    }
 
     /* Check HTTP status and obtain location */
     location = NULL;
@@ -712,7 +709,7 @@ device_escl_start_scan_callback (device *dev, http_query *q)
         return;
     }
 
-    /* Start loading peges */
+    /* Start loading pages */
     device_escl_load_page(dev);
 }
 
