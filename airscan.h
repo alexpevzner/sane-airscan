@@ -14,8 +14,6 @@
 #include <sane/sane.h>
 #include <sane/saneopts.h>
 
-#include <libsoup/soup.h>
-
 #include <math.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -41,6 +39,11 @@
 /* Default resolution, DPI
  */
 #define CONFIG_DEFAULT_RESOLUTION       300
+
+/******************** Forward declarations ********************/
+/* Type device represents a scanner devise
+ */
+typedef struct device device;
 
 /******************** Utility macros ********************/
 /* Obtain pointer to outer structure from pointer to
@@ -256,6 +259,186 @@ eloop_event_trigger (eloop_event *event);
 error
 eloop_eprintf(const char *fmt, ...);
 
+/******************** HTTP Client ********************/
+/* Type http_uri represents HTTP URI
+ */
+typedef struct http_uri http_uri;
+
+/* Create new URI, by parsing URI string
+ */
+http_uri*
+http_uri_new (const char *str);
+
+/* Create URI, relative to base URI
+ */
+http_uri*
+http_uri_new_relative (const http_uri *base, const char *path);
+
+/* Free the URI
+ */
+void
+http_uri_free (http_uri *uri);
+
+/* Get URI string
+ */
+const char*
+http_uri_str (http_uri *uri);
+
+/* Get URI path
+ */
+const char*
+http_uri_get_path (const http_uri *uri);
+
+/* Set URI path
+ */
+void
+http_uri_set_path (http_uri *uri, const char *path);
+
+/* HTTP data
+ */
+typedef struct {
+    const void *bytes; /* Data bytes */
+    size_t     size;  /* Data size */
+} http_data;
+
+/* Ref http_data
+ */
+http_data*
+http_data_ref (http_data *data);
+
+/* Unref http_data
+ */
+void
+http_data_unref (http_data *data);
+
+/* Type http_client represents HTTP client instance
+ */
+typedef struct http_client http_client;
+
+/* Create new http_client
+ */
+http_client*
+http_client_new (device *dev);
+
+/* Destroy http_client
+ */
+void
+http_client_free (http_client *client);
+
+/* Cancel pending http_query, if any
+ */
+void
+http_client_cancel (http_client *client);
+
+/* Type http_query represents HTTP query (both request and response)
+ */
+typedef struct http_query http_query;
+
+/* Create new http_query
+ *
+ * Newly created http_query takes ownership on uri and body (if not NULL).
+ * The method and content_type assumed to be constant strings.
+ *
+ * When query is finished, callback will be called. After return from
+ * callback, memory, owned by http_query will be invalidated
+ */
+http_query*
+http_query_new (http_client *client, http_uri *uri, const char *method,
+        char *body, const char *content_type,
+        void (*callback) (device *dev, http_query *q));
+
+/* Cancel unfinished http_query. Callback will not be called and
+ * memory owned by the http_query will be released
+ */
+void
+http_query_cancel (http_query *q);
+
+/* Get query error, if any
+ *
+ * Both transport errors and erroneous HTTP response codes considered errors here
+ */
+error
+http_query_error (http_query *q);
+
+/* Get query transport error, if any
+ *
+ * Only transport errors considered errors here
+ */
+error
+http_query_transport_error (http_query *q);
+
+/* Get HTTP status code. Code not available, if query finished
+ * with error
+ */
+int
+http_query_status (http_query *q);
+
+/* Get HTTP status string
+ */
+const char*
+http_query_status_string (http_query *q);
+
+/* Get query URI
+ */
+http_uri*
+http_query_uri (http_query *q);
+
+/* Get query method
+ */
+const char*
+http_query_method (http_query *q);
+
+/* Get request header
+ */
+const char*
+http_query_get_request_header (http_query *q, const char *name);
+
+/* Get response header
+ */
+const char*
+http_query_get_response_header (http_query *q, const char *name);
+
+/* Get request data
+ */
+http_data*
+http_query_get_request_data (http_query *q);
+
+/* Get request data
+ */
+http_data*
+http_query_get_response_data (http_query *q);
+
+/* Call callback for each request header
+ */
+void
+http_query_foreach_request_header (http_query *q,
+        void (*callback)(const char *name, const char *value, void *ptr),
+        void *ptr);
+
+/* Call callback for each response header
+ */
+void
+http_query_foreach_response_header (http_query *q,
+        void (*callback)(const char *name, const char *value, void *ptr),
+        void *ptr);
+
+/* Some HTTP status codes
+ */
+enum {
+    HTTP_STATUS_OK      = 200,
+    HTTP_STATUS_CREATED = 201
+};
+
+/* Initialize HTTP client
+ */
+SANE_Status
+http_init (void);
+
+/* Initialize HTTP client
+ */
+void
+http_cleanup (void);
+
 /******************** Protocol trace ********************/
 /* Type trace represents an opaque handle of trace
  * file
@@ -282,11 +465,10 @@ trace_open (const char *device_name);
 void
 trace_close (trace *t);
 
-/* This hook needs to be called from message
- * completion callback
+/* This hook is called on every http_query completion
  */
 void
-trace_msg_hook (trace *t, SoupMessage *msg);
+trace_http_query_hook (trace *t, http_query *q);
 
 /* Printf to the trace log
  */
@@ -446,7 +628,7 @@ xml_wr_begin (const char *root);
 /* Finish writing, generate document string.
  * Caller must g_free() this string after use
  */
-const char*
+char*
 xml_wr_finish (xml_wr *xml);
 
 /* Add node with textual value
@@ -697,8 +879,6 @@ void
 zeroconf_addrinfo_list_free (zeroconf_addrinfo *list);
 
 /******************** Device Management ********************/
-typedef struct device device;
-
 /* Get list of devices, in SANE format
  */
 const SANE_Device**
@@ -713,6 +893,11 @@ device_list_free (const SANE_Device **dev_list);
  */
 const char*
 device_name (device *dev);
+
+/* Get device's trace handle
+ */
+trace*
+device_trace (device *dev);
 
 /* Open a device
  */

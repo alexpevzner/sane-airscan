@@ -35,6 +35,9 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
     /* Initialize all parts */
     status = eloop_init();
     if (status == SANE_STATUS_GOOD) {
+        http_init();
+    }
+    if (status == SANE_STATUS_GOOD) {
         device_management_init();
     }
     if (status == SANE_STATUS_GOOD) {
@@ -70,6 +73,7 @@ sane_exit (void)
     trace_cleanup();
     zeroconf_cleanup();
     device_management_cleanup();
+    http_cleanup();
     eloop_cleanup();
     device_list_free(sane_device_list);
 

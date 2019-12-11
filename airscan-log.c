@@ -10,7 +10,7 @@
 
 #include <stdarg.h>
 #include <stdlib.h>
-#include <sys/uio.h>
+#include <unistd.h>
 
 /* Static variables */
 static GString *log_buffer;

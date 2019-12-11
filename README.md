@@ -92,8 +92,8 @@ others.
 
 4. In the directory you've specified as the trace parameter, you will find
 two files. Assuming you are using program xsane and your device name is
-"Kyocera MFP Scanner", file names will be **"xsane:Kyocera-MFP-Scanner.log"**
-and **"xsane:Kyocera-MFP-Scanner.tar"**. Please, attach both of these files
+"Kyocera MFP Scanner", file names will be **"xsane-Kyocera-MFP-Scanner.log"**
+and **"xsane-Kyocera-MFP-Scanner.tar"**. Please, attach both of these files
 to the new issue.
 
 ## References

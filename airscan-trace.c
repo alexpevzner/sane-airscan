@@ -10,6 +10,7 @@
 
 #include <limits.h>
 #include <stdarg.h>
+#include <unistd.h>
 
 #pragma GCC diagnostic ignored "-Wformat-truncation"
 
@@ -95,7 +96,7 @@ trace_open (const char *device_name)
     strcpy(path, conf.dbg_trace);
     len = strlen(path);
     strcat(path, program);
-    strcat(path, ":");
+    strcat(path, "-");
     strcat(path, device_name);
 
     for (; path[len] != '\0'; len ++) {
@@ -142,7 +143,8 @@ trace_close (trace *t)
     }
 }
 
-/* soup_message_headers_foreach callback
+/* http_query_foreach_request_header()/http_query_foreach_response_header()
+ * callback
  */
 static void
 trace_message_headers_foreach_callback (const char *name, const char *value,
@@ -156,7 +158,7 @@ trace_message_headers_foreach_callback (const char *name, const char *value,
  * Returns name of file, where data was saved
  */
 static void
-trace_dump_data (trace *t, SoupBuffer *buf, const char *content_type)
+trace_dump_data (trace *t, http_data *data, const char *content_type)
 {
     tar_header hdr;
     guint32 chsum;
@@ -187,7 +189,7 @@ trace_dump_data (trace *t, SoupBuffer *buf, const char *content_type)
     strcpy(hdr.mode, "644");
     strcpy(hdr.uid, "0");
     strcpy(hdr.gid, "0");
-    sprintf(hdr.size, "%lo", buf->length);
+    sprintf(hdr.size, "%lo", data->size);
     sprintf(hdr.mtime, "%lo", time(NULL));
     hdr.typeflag[0] = '0';
     strcpy(hdr.magic, "ustar");
@@ -204,29 +206,29 @@ trace_dump_data (trace *t, SoupBuffer *buf, const char *content_type)
 
     /* Write header and file data */
     fwrite(&hdr, sizeof(hdr), 1, t->data);
-    fwrite(buf->data, buf->length, 1, t->data);
+    fwrite(data->bytes, data->size, 1, t->data);
 
     /* Write padding */
-    i = 512 - (buf->length & (512-1));
+    i = 512 - (data->size & (512-1));
     if (i != 0) {
         fwrite(zero_block, i, 1, t->data);
     }
 
     /* Put a note into the log file */
-    fprintf(t->log, "%ld bytes of data saved as %s\n", buf->length, hdr.name);
+    fprintf(t->log, "%ld bytes of data saved as %s\n", data->size, hdr.name);
 }
 
 /* Dump text data. The data will be saved directly to the log file
  */
 static void
-trace_dump_text (trace *t, SoupBuffer *buf, const char *content_type)
+trace_dump_text (trace *t, http_data *data, const char *content_type)
 {
-    const char *d, *end = buf->data + buf->length;
+    const char *d, *end = (char*) data->bytes + data->size;
     int last = -1;
 
     (void) content_type;
 
-    for (d = buf->data; d < end; d ++) {
+    for (d = data->bytes; d < end; d ++) {
         if (*d != '\r') {
             last = *d;
             putc(last, t->log);
@@ -241,12 +243,9 @@ trace_dump_text (trace *t, SoupBuffer *buf, const char *content_type)
 /* Dump message body
  */
 static void
-trace_dump_body (trace *t, SoupMessageHeaders *hdrs, SoupMessageBody *body)
+trace_dump_body (trace *t, http_data *data, const char *content_type)
 {
-    SoupBuffer *buf = soup_message_body_flatten(body);
-    const char *content_type = soup_message_headers_get_one(hdrs, "Content-Type");
-
-    if (buf->length == 0) {
+    if (data->size == 0) {
         goto DONE;
     }
 
@@ -255,45 +254,51 @@ trace_dump_body (trace *t, SoupMessageHeaders *hdrs, SoupMessageBody *body)
     }
 
     if (!strncmp(content_type, "text/", 5)) {
-        trace_dump_text(t, buf, content_type);
+        trace_dump_text(t, data, content_type);
     } else {
-        trace_dump_data(t, buf, content_type);
+        trace_dump_data(t, data, content_type);
     }
 
     putc('\n', t->log);
 
 DONE:
-    soup_buffer_free(buf);
+    ;
 }
 
-/* This hook needs to be called from message
- * completion callback
+/* This hook is called on every http_query completion
  */
 void
-trace_msg_hook (trace *t, SoupMessage *msg)
+trace_http_query_hook (trace *t, http_query *q)
 {
-    if (t != NULL) {
-        SoupURI *uri = soup_message_get_uri(msg);
-        char *uri_str = soup_uri_to_string(uri, FALSE);
+    error err;
 
+    if (t != NULL) {
         fprintf(t->log, "==============================\n");
 
         /* Dump request */
-        fprintf(t->log, "%s %s\n",  msg->method, uri_str);
-        soup_message_headers_foreach(msg->request_headers,
+        fprintf(t->log, "%s %s\n", http_query_method(q),
+                http_uri_str(http_query_uri(q)));
+        http_query_foreach_request_header(q,
                 trace_message_headers_foreach_callback, t);
         fprintf(t->log, "\n");
-        trace_dump_body(t, msg->request_headers, msg->request_body);
+        trace_dump_body(t, http_query_get_request_data(q),
+                http_query_get_request_header(q, "Content-Type"));
 
         /* Dump response */
-        fprintf(t->log, "Status: %d %s\n", msg->status_code,
-                soup_status_get_phrase(msg->status_code));
-        soup_message_headers_foreach(msg->response_headers,
-            trace_message_headers_foreach_callback, t);
-        fprintf(t->log, "\n");
-        trace_dump_body(t, msg->response_headers, msg->response_body);
+        err = http_query_transport_error(q);
+        if (err != NULL) {
+            fprintf(t->log, "Error: %s\n", ESTRING(err));
+        } else {
+            fprintf(t->log, "Status: %d %s\n", http_query_status(q),
+                    http_query_status_string(q));
 
-        g_free(uri_str);
+            http_query_foreach_response_header(q,
+                trace_message_headers_foreach_callback, t);
+            fprintf(t->log, "\n");
+            trace_dump_body(t, http_query_get_response_data(q),
+                    http_query_get_response_header(q, "Content-Type"));
+        }
+
         t->index ++;
 
         fflush(t->log);

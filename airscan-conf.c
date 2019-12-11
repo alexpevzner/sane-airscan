@@ -630,7 +630,7 @@ conf_device_list_prepend (const char *name, const char *uri)
 {
     conf_device *dev = g_new0(conf_device, 1);
     dev->name = g_strdup(name);
-    dev->uri = uri;
+    dev->uri = g_strdup(uri);
     dev->next = conf.devices;
     conf.devices = dev;
 }
@@ -693,16 +693,15 @@ conf_load_from_ini (inifile *ini)
 
         case INIFILE_VARIABLE:
             if (inifile_match_name(rec->section, "devices")) {
-                SoupURI     *uri;
+                http_uri *uri;
 
                 if (conf_device_list_lookup(rec->variable) != NULL) {
                     conf_perror(rec, "device already defined");
-                } else if ((uri = soup_uri_new(rec->value)) == NULL) {
+                } else if ((uri = http_uri_new(rec->value)) == NULL) {
                     conf_perror(rec, "invalid URL");
                 } else {
-                    conf_device_list_prepend(rec->variable,
-                            soup_uri_to_string(uri, FALSE));
-                    soup_uri_free(uri);
+                    conf_device_list_prepend(rec->variable, http_uri_str(uri));
+                    http_uri_free(uri);
                 }
             } else if (inifile_match_name(rec->section, "debug")) {
                 if (inifile_match_name(rec->variable, "trace")) {

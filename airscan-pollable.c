@@ -10,6 +10,7 @@
 
 #include <sys/eventfd.h>
 #include <poll.h>
+#include <unistd.h>
 
 #pragma GCC diagnostic ignored "-Wunused-result"
 

@@ -336,11 +336,10 @@ xml_wr_revert_children (xml_wr_node *node)
 /* Finish writing, generate document string.
  * Caller must g_free() this string after use
  */
-const char*
+char*
 xml_wr_finish (xml_wr *xml)
 {
     GString    *buf = g_string_new(NULL);
-    const char *text;
 
     xml_wr_revert_children(xml->root);
     xml_wr_format_node(buf, xml->root, 0);
@@ -348,10 +347,7 @@ xml_wr_finish (xml_wr *xml)
     xml_wr_node_free_recursive(xml->root);
     g_free(xml);
 
-    text = buf->str;
-    g_string_free(buf, false);
-
-    return text;
+    return g_string_free(buf, false);
 }
 
 /* Add XML writer node to the current node's children
