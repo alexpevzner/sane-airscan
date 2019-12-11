@@ -231,12 +231,12 @@ http_query_callback (SoupSession *session, SoupMessage *msg, gpointer userdata)
 
     (void) session;
 
-    log_assert(q->client->dev, q->client->query == q);
-    q->client->query = NULL;
-
     if (msg->status_code != SOUP_STATUS_CANCELLED) {
         device *dev = q->client->dev;
         error  err = http_query_transport_error(q);
+
+        log_assert(q->client->dev, q->client->query == q);
+        q->client->query = NULL;
 
         log_debug(dev, "HTTP %s %s: %s", q->msg->method,
                 http_uri_str(q->uri),
