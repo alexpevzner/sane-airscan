@@ -12,6 +12,7 @@
 
 /******************** Static variables ********************/
 static SoupSession *http_session;
+static http_query  *http_query_list;
 
 /******************** Forward declarations ********************/
 static void
@@ -209,13 +210,45 @@ struct http_query {
             http_query *q);
     http_data   *request_data;     /* Response data, cached */
     http_data   *response_data;    /* Response data, cached */
+    http_query  *prev, *next;      /* Prev/next query in http_query_list */
 };
+
+/* Insert http_query into http_query_list
+ */
+static inline void
+http_query_list_ins (http_query *q)
+{
+    if (http_query_list == NULL) {
+        http_query_list = q;
+    } else {
+        q->next = http_query_list;
+        http_query_list->prev = q;
+        http_query_list = q;
+    }
+}
+
+/* Delete http_query from http_query_list
+ */
+static inline void
+http_query_list_del (http_query *q)
+{
+    if (q->next != NULL) {
+        q->next->prev = q->prev;
+    }
+
+    if (q->prev != NULL) {
+        q->prev->next = q->next;
+    } else {
+        http_query_list = q->next;
+    }
+}
 
 /* Free http_query
  */
 static void
 http_query_free (http_query *q)
 {
+    http_query_list_del(q);
     http_uri_free(q->uri);
     http_data_unref(q->request_data);
     http_data_unref(q->response_data);
@@ -280,6 +313,8 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
         soup_message_set_request(q->msg, content_type, SOUP_MEMORY_TAKE,
                 body, strlen(body));
     }
+
+    http_query_list_ins(q);
 
     /* Note, on Kyocera ECOSYS M2040dn connection keep-alive causes
      * scanned job to remain in "Processing" state about 10 seconds
@@ -466,6 +501,13 @@ http_start_stop (bool start)
         soup_session_abort(http_session);
         g_object_unref(http_session);
         http_session = NULL;
+
+        /* Note, soup_session_abort() may leave some requests
+         * pending, so we must free them here explicitly
+         */
+        while (http_query_list != NULL) {
+            http_query_free(http_query_list);
+        }
     }
 }
 
