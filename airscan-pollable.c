@@ -85,7 +85,7 @@ pollable_wait (pollable *p)
             .events = POLLIN,
             .revents = 0
         };
-        rc = poll(&pfd, 1, 10000);
+        rc = poll(&pfd, 1, -1);
     } while (rc < 1);
 }
 
