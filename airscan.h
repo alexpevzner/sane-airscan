@@ -973,7 +973,7 @@ device_management_cleanup (void);
 /******************** Image decoding ********************/
 /* The window withing the image
  *
- * Note, all sized and coordinates are in pixels
+ * Note, all sizes and coordinates are in pixels
  */
 typedef struct {
     int x_off, y_off;  /* Top-left corner offset */
