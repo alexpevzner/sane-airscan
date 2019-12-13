@@ -242,7 +242,7 @@ sane_start (SANE_Handle handle)
 SANE_Status
 sane_read (SANE_Handle handle, SANE_Byte *data, SANE_Int max_len, SANE_Int *len)
 {
-    SANE_Status status = SANE_STATUS_UNSUPPORTED;
+    SANE_Status status;
     device *dev = (device*) handle;
 
     eloop_mutex_lock();
@@ -275,10 +275,16 @@ SANE_Status
 sane_set_io_mode (SANE_Handle handle, SANE_Bool non_blocking)
 {
     device      *dev = handle;
-    SANE_Status status = SANE_STATUS_UNSUPPORTED;
+    SANE_Status status;
 
-    log_debug(dev, "sane_set_io_mode(%s): %s",
-        non_blocking ? "true" : "false", sane_strstatus(status));
+    eloop_mutex_lock();
+    status = device_set_io_mode(dev, non_blocking);
+    eloop_mutex_unlock();
+
+    if (status != SANE_STATUS_GOOD) {
+        log_debug(dev, "sane_set_io_mode(%s): %s",
+            non_blocking ? "true" : "false", sane_strstatus(status));
+    }
 
     return status;
 }
@@ -286,13 +292,18 @@ sane_set_io_mode (SANE_Handle handle, SANE_Bool non_blocking)
 /* Get select file descriptor
  */
 SANE_Status
-sane_get_select_fd (SANE_Handle handle, SANE_Int * fd)
+sane_get_select_fd (SANE_Handle handle, SANE_Int *fd)
 {
-    SANE_Status status = SANE_STATUS_UNSUPPORTED;
+    device      *dev = handle;
+    SANE_Status status;
 
-    (void) handle;
+    eloop_mutex_lock();
+    status = device_get_select_fd(dev, fd);
+    eloop_mutex_unlock();
 
-    *fd = -1;
+    if (status != SANE_STATUS_GOOD) {
+        log_debug(dev, "sane_get_select_fd(): %s", sane_strstatus(status));
+    }
 
     return status;
 }

@@ -74,6 +74,7 @@ struct device {
     SANE_Word            job_skip_y;          /*    from left and top */
 
     /* Read machinery */
+    SANE_Bool            read_non_blocking;  /* Non-blocking I/O mode */
     image_decoder        *read_decoder_jpeg; /* JPEG decoder */
     pollable             *read_pollable;     /* Signalled when read won't
                                                 block */
@@ -1178,6 +1179,7 @@ device_start (device *dev)
     /* Update state */
     dev->flags |= DEVICE_SCANNING;
     pollable_reset(dev->read_pollable);
+    dev->read_non_blocking = SANE_FALSE;
 
     /* Previous multi-page scan job may still be running. Check
      * its state */
@@ -1239,6 +1241,33 @@ device_cancel (device *dev)
         eloop_event_trigger(dev->job_cancel_event);
     }
 }
+
+/* Set I/O mode
+ */
+SANE_Status
+device_set_io_mode (device *dev, SANE_Bool non_blocking)
+{
+    if ((dev->flags & DEVICE_SCANNING) == 0) {
+        return SANE_STATUS_INVAL;
+    }
+
+    dev->read_non_blocking = non_blocking;
+    return SANE_STATUS_GOOD;
+}
+
+/* Get select file descriptor
+ */
+SANE_Status
+device_get_select_fd (device *dev, SANE_Int *fd)
+{
+    if ((dev->flags & DEVICE_SCANNING) == 0) {
+        return SANE_STATUS_INVAL;
+    }
+
+    *fd = pollable_get_fd(dev->read_pollable);
+    return SANE_STATUS_GOOD;
+}
+
 
 /******************** Read machinery ********************/
 /* Push next image to reader. Returns false, if image
@@ -1401,6 +1430,11 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
 
     /* Wait until device is ready */
     while (dev->read_image == NULL && dev->state != DEVICE_SCAN_DONE) {
+        if (dev->read_non_blocking) {
+            *len_out = 0;
+            return SANE_STATUS_GOOD;
+        }
+
         eloop_mutex_unlock();
         pollable_wait(dev->read_pollable);
         eloop_mutex_lock();

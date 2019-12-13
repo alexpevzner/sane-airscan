@@ -939,6 +939,16 @@ device_start (device *dev);
 void
 device_cancel (device *dev);
 
+/* Set I/O mode
+ */
+SANE_Status
+device_set_io_mode (device *dev, SANE_Bool non_blocking);
+
+/* Get select file descriptor
+ */
+SANE_Status
+device_get_select_fd (device *dev, SANE_Int *fd);
+
 /* Read scanned image
  */
 SANE_Status
