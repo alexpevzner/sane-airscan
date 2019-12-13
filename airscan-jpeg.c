@@ -188,6 +188,7 @@ image_decoder_jpeg_new (void)
 {
     image_decoder_jpeg *jpeg = g_new0(image_decoder_jpeg, 1);
 
+    jpeg->decoder.content_type = "image/jpeg";
     jpeg->decoder.free = image_decoder_jpeg_free;
     jpeg->decoder.begin = image_decoder_jpeg_begin;
     jpeg->decoder.reset = image_decoder_jpeg_reset;

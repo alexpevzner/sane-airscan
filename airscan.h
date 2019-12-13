@@ -984,6 +984,7 @@ typedef struct {
  */
 typedef struct image_decoder image_decoder;
 struct image_decoder {
+    const char *content_type;
     void  (*free) (image_decoder *decoder);
     error (*begin) (image_decoder *decoder, const void *data, size_t size);
     void  (*reset) (image_decoder *decoder);
@@ -1004,6 +1005,14 @@ static inline void
 image_decoder_free (image_decoder *decoder)
 {
     decoder->free(decoder);
+}
+
+/* Get content type
+ */
+static inline const char*
+image_content_type (image_decoder *decoder)
+{
+    return decoder->content_type;
 }
 
 /* Begin image decoding. Decoder may assume that provided data

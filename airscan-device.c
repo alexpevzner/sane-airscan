@@ -1271,6 +1271,17 @@ device_read_push (device *dev)
     wid = params.pixels_per_line;
     hei = params.lines;
 
+    /* Dump parameters */
+    trace_printf(dev->trace, "==============================");
+    trace_printf(dev->trace, "Starting image decoding, image parameters are:");
+    trace_printf(dev->trace, "  content type:   %s", image_content_type(decoder));
+    trace_printf(dev->trace, "  frame format:   %s",
+            params.format == SANE_FRAME_GRAY ? "Gray" : "RGB" );
+    trace_printf(dev->trace, "  image size:     %dx%d", params.pixels_per_line,
+            params.lines);
+    trace_printf(dev->trace, "  color depth:    %d", params.depth);
+    trace_printf(dev->trace, "");
+
     /* Setup image clipping */
     if (dev->job_skip_x >= wid || dev->job_skip_y >= hei) {
         /* Trivial case - just skip everything */
