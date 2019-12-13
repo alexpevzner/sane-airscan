@@ -23,7 +23,8 @@ enum {
     DEVICE_INIT_WAIT        = (1 << 4), /* Device was found during initial
                                            scan and not ready yet */
     DEVICE_OPENED           = (1 << 5), /* Device currently opened */
-    DEVICE_SCANNING         = (1 << 6), /* Scan in progress */
+    DEVICE_SCANNING         = (1 << 6), /* We are between sane_start() and
+                                           final sane_read() */
     DEVICE_CLOSING          = (1 << 7), /* Close in progress */
 
     DEVICE_ALL_FLAGS        = 0xffffffff
@@ -1066,9 +1067,7 @@ device_open (const char *name, device **out)
     }
 
     /* Proceed with open */
-    dev->job_cancel_event = eloop_event_new(device_job_cancel_event_callback,
-            dev);
-
+    dev->job_cancel_event = eloop_event_new(device_job_cancel_event_callback, dev);
     if (dev->job_cancel_event == NULL) {
         return SANE_STATUS_NO_MEM;
     }
@@ -1128,6 +1127,10 @@ device_get_option (device *dev, SANE_Int option, void *value)
 SANE_Status
 device_set_option (device *dev, SANE_Int option, void *value, SANE_Word *info)
 {
+    if ((dev->flags & DEVICE_SCANNING) != 0) {
+        return SANE_STATUS_INVAL;
+    }
+
     return devopt_set_option(&dev->opt, option, value, info);
 }
 
@@ -1164,7 +1167,7 @@ device_start (device *dev)
 {
     /* Already scanning? */
     if ((dev->flags & DEVICE_SCANNING) != 0) {
-        return SANE_STATUS_DEVICE_BUSY;
+        return SANE_STATUS_INVAL;
     }
 
     /* Don's start if window is not valid */
