@@ -63,7 +63,7 @@ sane_word_array_append(SANE_Word **a, SANE_Word w)
 
 /* Compare function for sane_word_array_sort
  */
-int
+static int
 sane_word_array_sort_cmp(const void *p1, const void *p2)
 {
     return *(SANE_Word*) p1 - *(SANE_Word*) p2;
