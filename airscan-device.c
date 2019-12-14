@@ -757,7 +757,7 @@ device_geom;
  *   this complexity
  */
 static device_geom
-device_geom_compute (SANE_Word tl, SANE_Word br,
+device_geom_compute (SANE_Fixed tl, SANE_Fixed br,
         SANE_Word minlen, SANE_Word maxlen, SANE_Word res)
 {
     device_geom geom;

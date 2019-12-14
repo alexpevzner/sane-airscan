@@ -180,7 +180,7 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->title = SANE_TITLE_SCAN_TL_X;
     desc->desc = SANE_DESC_SCAN_TL_X;
     desc->type = SANE_TYPE_FIXED;
-    desc->size = sizeof(SANE_Word);
+    desc->size = sizeof(SANE_Fixed);
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_MM;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
@@ -192,7 +192,7 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->title = SANE_TITLE_SCAN_TL_Y;
     desc->desc = SANE_DESC_SCAN_TL_Y;
     desc->type = SANE_TYPE_FIXED;
-    desc->size = sizeof(SANE_Word);
+    desc->size = sizeof(SANE_Fixed);
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_MM;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
@@ -204,7 +204,7 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->title = SANE_TITLE_SCAN_BR_X;
     desc->desc = SANE_DESC_SCAN_BR_X;
     desc->type = SANE_TYPE_FIXED;
-    desc->size = sizeof(SANE_Word);
+    desc->size = sizeof(SANE_Fixed);
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_MM;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
@@ -216,7 +216,7 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->title = SANE_TITLE_SCAN_BR_Y;
     desc->desc = SANE_DESC_SCAN_BR_Y;
     desc->type = SANE_TYPE_FIXED;
-    desc->size = sizeof(SANE_Word);
+    desc->size = sizeof(SANE_Fixed);
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_MM;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
@@ -229,8 +229,8 @@ devopt_rebuild_opt_desc (devopt *opt)
 static void
 devopt_update_params (devopt *opt)
 {
-    SANE_Word wid = math_max(0, opt->br_x - opt->tl_x);
-    SANE_Word hei = math_max(0, opt->br_y - opt->tl_y);
+    SANE_Fixed wid = math_max(0, opt->br_x - opt->tl_x);
+    SANE_Fixed hei = math_max(0, opt->br_y - opt->tl_y);
 
     opt->params.last_frame = SANE_TRUE;
     opt->params.pixels_per_line = math_mm2px_res(wid, opt->resolution);
@@ -339,9 +339,9 @@ devopt_set_source (devopt *opt, OPT_SOURCE opt_src, SANE_Word *info)
 /* Set geometry option
  */
 static SANE_Status
-devopt_set_geom (devopt *opt, SANE_Int option, SANE_Word val, SANE_Word *info)
+devopt_set_geom (devopt *opt, SANE_Int option, SANE_Fixed val, SANE_Word *info)
 {
-    SANE_Word      *out = NULL;
+    SANE_Fixed     *out = NULL;
     SANE_Range     *range = NULL;
     devcaps_source *src = opt->caps.src[opt->src];
 
@@ -460,7 +460,7 @@ devopt_set_option (devopt *opt, SANE_Int option, void *value, SANE_Word *info)
     case OPT_SCAN_TL_Y:
     case OPT_SCAN_BR_X:
     case OPT_SCAN_BR_Y:
-        status = devopt_set_geom(opt, option, *(SANE_Word*)value, info);
+        status = devopt_set_geom(opt, option, *(SANE_Fixed*)value, info);
         break;
 
     default:
@@ -504,19 +504,19 @@ devopt_get_option (devopt *opt, SANE_Int option, void *value)
         break;
 
     case OPT_SCAN_TL_X:
-        *(SANE_Word*) value = opt->tl_x;
+        *(SANE_Fixed*) value = opt->tl_x;
         break;
 
     case OPT_SCAN_TL_Y:
-        *(SANE_Word*) value = opt->tl_y;
+        *(SANE_Fixed*) value = opt->tl_y;
         break;
 
     case OPT_SCAN_BR_X:
-        *(SANE_Word*) value = opt->br_x;
+        *(SANE_Fixed*) value = opt->br_x;
         break;
 
     case OPT_SCAN_BR_Y:
-        *(SANE_Word*) value = opt->br_y;
+        *(SANE_Fixed*) value = opt->br_y;
         break;
 
     default:

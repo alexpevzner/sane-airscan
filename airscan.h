@@ -807,8 +807,8 @@ typedef struct {
     OPT_SOURCE             src;               /* Current source */
     OPT_COLORMODE          colormode;         /* Color mode */
     SANE_Word              resolution;        /* Current resolution */
-    SANE_Word              tl_x, tl_y;        /* Top-left x/y */
-    SANE_Word              br_x, br_y;        /* Bottom-right x/y */
+    SANE_Fixed             tl_x, tl_y;        /* Top-left x/y */
+    SANE_Fixed             br_x, br_y;        /* Bottom-right x/y */
     SANE_Parameters        params;            /* Scan parameters */
 } devopt;
 
@@ -1161,7 +1161,7 @@ math_px2mm_res (SANE_Word px, SANE_Word res)
 /* Convert millimeters to pixels, using given resolution
  */
 static inline SANE_Word
-math_mm2px_res (SANE_Word mm, SANE_Word res)
+math_mm2px_res (SANE_Fixed mm, SANE_Word res)
 {
     return (SANE_Word) roundl(SANE_UNFIX(mm) * res / 25.4);
 }
