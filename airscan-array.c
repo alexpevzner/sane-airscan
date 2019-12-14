@@ -3,7 +3,7 @@
  * Copyright (C) 2019 and up by Alexander Pevzner (pzz@apevzner.com)
  * See LICENSE for license terms and conditions
  *
- * Typed Arrays
+ * SANE_Word/SANE_String arrays
  */
 
 #include "airscan.h"

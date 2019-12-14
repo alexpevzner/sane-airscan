@@ -482,7 +482,7 @@ trace_printf (trace *t, const char *fmt, ...);
 void
 trace_error (trace *t, error err);
 
-/******************** SANE Arrays (of Word and String) ********************/
+/******************** SANE_Word/SANE_String arrays ********************/
 /* Initialize array of SANE_Word
  */
 void
