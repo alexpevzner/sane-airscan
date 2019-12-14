@@ -82,7 +82,7 @@ devopt_choose_resolution (devopt *opt, SANE_Word wanted)
     if (src->flags & DEVCAPS_SOURCE_RES_DISCRETE) {
         SANE_Word res = src->resolutions[1];
         SANE_Word delta = (SANE_Word) labs(wanted - res);
-        size_t i, end = array_of_word_len(&src->resolutions) + 1;
+        size_t i, end = sane_word_array_len(&src->resolutions) + 1;
 
         for (i = 2; i < end; i ++) {
             SANE_Word res2 = src->resolutions[i];
@@ -150,7 +150,7 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->title = SANE_TITLE_SCAN_MODE;
     desc->desc = SANE_DESC_SCAN_MODE;
     desc->type = SANE_TYPE_STRING;
-    desc->size = array_of_string_max_strlen(&src->sane_colormodes) + 1;
+    desc->size = sane_string_array_max_strlen(&src->sane_colormodes) + 1;
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->constraint_type = SANE_CONSTRAINT_STRING_LIST;
     desc->constraint.string_list = (SANE_String_Const*) src->sane_colormodes;
@@ -161,7 +161,7 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->title = SANE_TITLE_SCAN_SOURCE;
     desc->desc = SANE_DESC_SCAN_SOURCE;
     desc->type = SANE_TYPE_STRING;
-    desc->size = array_of_string_max_strlen(&opt->caps.sane_sources) + 1;
+    desc->size = sane_string_array_max_strlen(&opt->caps.sane_sources) + 1;
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->constraint_type = SANE_CONSTRAINT_STRING_LIST;
     desc->constraint.string_list = (SANE_String_Const*) opt->caps.sane_sources;

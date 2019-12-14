@@ -482,71 +482,71 @@ trace_printf (trace *t, const char *fmt, ...);
 void
 trace_error (trace *t, error err);
 
-/******************** Typed Arrays ********************/
+/******************** SANE Arrays (of Word and String) ********************/
 /* Initialize array of SANE_Word
  */
 void
-array_of_word_init (SANE_Word **a);
+sane_word_array_init (SANE_Word **a);
 
 /* Cleanup array of SANE_Word
  */
 void
-array_of_word_cleanup (SANE_Word **a);
+sane_word_array_cleanup (SANE_Word **a);
 
 /* Reset array of SANE_Word
  */
 void
-array_of_word_reset (SANE_Word **a);
+sane_word_array_reset (SANE_Word **a);
 
 /* Get length of the SANE_Word array
  */
 size_t
-array_of_word_len (SANE_Word **a);
+sane_word_array_len (SANE_Word **a);
 
 /* Append word to array
  */
 void
-array_of_word_append(SANE_Word **a, SANE_Word w);
+sane_word_array_append(SANE_Word **a, SANE_Word w);
 
-/* Compare function for array_of_word_sort
+/* Compare function for sane_word_array_sort
  */
 int
-array_of_word_sort_cmp(const void *p1, const void *p2);
+sane_word_array_sort_cmp(const void *p1, const void *p2);
 
 /* Sort array of SANE_Word in increasing order
  */
 void
-array_of_word_sort(SANE_Word **a);
+sane_word_array_sort(SANE_Word **a);
 
 /* Initialize array of SANE_String
  */
 void
-array_of_string_init (SANE_String **a);
+sane_string_array_init (SANE_String **a);
 
 /* Reset array of SANE_String
  */
 void
-array_of_string_reset (SANE_String **a);
+sane_string_array_reset (SANE_String **a);
 
 /* Cleanup array of SANE_String
  */
 void
-array_of_string_cleanup (SANE_String **a);
+sane_string_array_cleanup (SANE_String **a);
 
 /* Get length of the SANE_Word array
  */
 size_t
-array_of_string_len (SANE_String **a);
+sane_string_array_len (SANE_String **a);
 
 /* Append string to array
  */
 void
-array_of_string_append(SANE_String **a, SANE_String s);
+sane_string_array_append(SANE_String **a, SANE_String s);
 
 /* Compute max string length in array of strings
  */
 size_t
-array_of_string_max_strlen(SANE_String **a);
+sane_string_array_max_strlen(SANE_String **a);
 
 /******************** XML utilities ********************/
 /* XML reader

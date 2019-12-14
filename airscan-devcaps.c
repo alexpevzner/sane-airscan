@@ -14,8 +14,8 @@ static devcaps_source*
 devcaps_source_new (void)
 {
     devcaps_source *src = g_new0(devcaps_source, 1);
-    array_of_string_init(&src->sane_colormodes);
-    array_of_word_init(&src->resolutions);
+    sane_string_array_init(&src->sane_colormodes);
+    sane_word_array_init(&src->resolutions);
     return src;
 }
 
@@ -25,8 +25,8 @@ static void
 devcaps_source_free (devcaps_source *src)
 {
     if (src != NULL) {
-        array_of_string_cleanup(&src->sane_colormodes);
-        array_of_word_cleanup(&src->resolutions);
+        sane_string_array_cleanup(&src->sane_colormodes);
+        sane_word_array_cleanup(&src->resolutions);
         g_free(src);
     }
 }
@@ -36,7 +36,7 @@ devcaps_source_free (devcaps_source *src)
 void
 devcaps_init (devcaps *caps)
 {
-    array_of_string_init(&caps->sane_sources);
+    sane_string_array_init(&caps->sane_sources);
 }
 
 /* Cleanup Device Capabilities
@@ -44,7 +44,7 @@ devcaps_init (devcaps *caps)
 void
 devcaps_cleanup (devcaps *caps)
 {
-    array_of_string_cleanup(&caps->sane_sources);
+    sane_string_array_cleanup(&caps->sane_sources);
     g_free((void*) caps->vendor);
     g_free((void*) caps->model);
 
@@ -70,7 +70,7 @@ static error
 devcaps_source_parse_color_modes (xml_rd *xml, devcaps_source *src)
 {
     src->colormodes = 0;
-    array_of_string_reset(&src->sane_colormodes);
+    sane_string_array_reset(&src->sane_colormodes);
 
     xml_rd_enter(xml);
     for (; !xml_rd_end(xml); xml_rd_next(xml)) {
@@ -99,7 +99,7 @@ devcaps_source_parse_color_modes (xml_rd *xml, devcaps_source *src)
     for (cm = (OPT_COLORMODE) 0; cm < NUM_OPT_COLORMODE; cm ++) {
         if ((src->colormodes & (1 << cm)) != 0) {
             SANE_String s = (SANE_String) opt_colormode_to_sane(cm);
-            array_of_string_append(&src->sane_colormodes, s);
+            sane_string_array_append(&src->sane_colormodes, s);
         }
     }
 
@@ -138,7 +138,7 @@ devcaps_source_parse_discrete_resolutions (xml_rd *xml, devcaps_source *src)
 {
     error err = NULL;
 
-    array_of_word_reset(&src->resolutions);
+    sane_word_array_reset(&src->resolutions);
 
     xml_rd_enter(xml);
     for (; err == NULL && !xml_rd_end(xml); xml_rd_next(xml)) {
@@ -156,15 +156,15 @@ devcaps_source_parse_discrete_resolutions (xml_rd *xml, devcaps_source *src)
             xml_rd_leave(xml);
 
             if (x && y && x == y) {
-                array_of_word_append(&src->resolutions, x);
+                sane_word_array_append(&src->resolutions, x);
             }
         }
     }
     xml_rd_leave(xml);
 
-    if (array_of_word_len((&src->resolutions)) > 0) {
+    if (sane_word_array_len((&src->resolutions)) > 0) {
         src->flags |= DEVCAPS_SOURCE_RES_DISCRETE;
-        array_of_word_sort(&src->resolutions);
+        sane_word_array_sort(&src->resolutions);
     }
 
     return err;
@@ -450,10 +450,10 @@ devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
     /* Update list of sources */
     OPT_SOURCE opt_src;
 
-    array_of_string_reset(&caps->sane_sources);
+    sane_string_array_reset(&caps->sane_sources);
     for (opt_src = (OPT_SOURCE) 0; opt_src < NUM_OPT_SOURCE; opt_src ++) {
         if (caps->src[opt_src] != NULL) {
-            array_of_string_append(&caps->sane_sources,
+            sane_string_array_append(&caps->sane_sources,
                 (SANE_String) opt_source_to_sane(opt_src));
         }
     }
@@ -518,7 +518,7 @@ devcaps_dump (trace *t, devcaps *caps)
 
         if (src->flags & DEVCAPS_SOURCE_RES_DISCRETE) {
             g_string_truncate(buf, 0);
-            for (i = 0; i < (int) array_of_word_len(&src->resolutions); i ++) {
+            for (i = 0; i < (int) sane_word_array_len(&src->resolutions); i ++) {
                 if (i != 0) {
                     g_string_append_c(buf, ' ');
                 }
