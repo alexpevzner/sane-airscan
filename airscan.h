@@ -1152,7 +1152,7 @@ math_range_fit (const SANE_Range *r, SANE_Word i);
 
 /* Convert pixels to millimeters, using given resolution
  */
-static inline SANE_Word
+static inline SANE_Fixed
 math_px2mm_res (SANE_Word px, SANE_Word res)
 {
     return SANE_FIX((double) px * 25.4 / res);
@@ -1168,7 +1168,7 @@ math_mm2px_res (SANE_Fixed mm, SANE_Word res)
 
 /* Convert pixels to millimeters, assuming 300 DPI
  */
-static inline SANE_Word
+static inline SANE_Fixed
 math_px2mm (SANE_Word px)
 {
     return math_px2mm_res(px, 300);
@@ -1177,7 +1177,7 @@ math_px2mm (SANE_Word px)
 /* Convert millimeters to pixels, assuming 300 DPI
  */
 static inline SANE_Word
-math_mm2px (SANE_Word mm)
+math_mm2px (SANE_Fixed mm)
 {
     return math_mm2px_res(mm, 300);
 }
