@@ -189,7 +189,7 @@ trace_dump_data (trace *t, http_data *data, const char *content_type)
     strcpy(hdr.mode, "644");
     strcpy(hdr.uid, "0");
     strcpy(hdr.gid, "0");
-    sprintf(hdr.size, "%lo", data->size);
+    sprintf(hdr.size, "%lo", (unsigned long) data->size);
     sprintf(hdr.mtime, "%lo", time(NULL));
     hdr.typeflag[0] = '0';
     strcpy(hdr.magic, "ustar");
@@ -215,7 +215,8 @@ trace_dump_data (trace *t, http_data *data, const char *content_type)
     }
 
     /* Put a note into the log file */
-    fprintf(t->log, "%ld bytes of data saved as %s\n", data->size, hdr.name);
+    fprintf(t->log, "%lu bytes of data saved as %s\n",
+            (unsigned long) data->size, hdr.name);
 }
 
 /* Dump text data. The data will be saved directly to the log file
