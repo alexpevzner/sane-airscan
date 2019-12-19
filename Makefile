@@ -21,7 +21,7 @@ SRC	= \
 	airscan-zeroconf.c \
 	sane_strstatus.c
 
-CFLAGS	= -O2 -g -W -Wall -fPIC
+CFLAGS	= -O2 -g -W -Wall -Werror -fPIC
 CFLAGS += `pkg-config --cflags --libs avahi-client`
 CFLAGS += `pkg-config --cflags --libs avahi-glib`
 CFLAGS += `pkg-config --cflags --libs libjpeg`
