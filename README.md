@@ -44,7 +44,22 @@ please let me know.
 
 ### Installation from pre-build binaries
 
-TODO
+#### Fedora, OpenSUSE
+
+| Version    | Arch        | Repo                                                                                   |
+| ---------- | ----------- | -------------------------------------------------------------------------------------- |
+| **Fedora**                                                                                                        |
+| Fedora 29  | i586,x86_64 | https://download.opensuse.org/repositories/home:/pzz/Fedora_29/home:pzz.repo           |
+| Fedora 30  | i586,x86_64 | https://download.opensuse.org/repositories/home:/pzz/Fedora_30/home:pzz.repo           |
+| Fedora 31  | x86_64      | https://download.opensuse.org/repositories/home:/pzz/Fedora_31/home:pzz.repo           |
+| **OpenSuse**                                                                                                      |
+| Leap 15.1  | x86_64      | https://download.opensuse.org/repositories/home:/pzz/openSUSE_Leap_15.1/home:pzz.repo  |
+| Tumbleweed | i586,x86_64 | https://download.opensuse.org/repositories/home:/pzz/openSUSE_Tumbleweed/home:pzz.repo |
+
+1. Add package repository
+* For Fedora, use the command **dnf config-manager --add-repo https://...**
+* For OpenSUSE, [see the link](https://en.opensuse.org/SDB:Add_package_repositories)
+2. Install package **sane-airscan**
 
 ### Installation from sources
 #### Install required libraries - Fedora and similar
