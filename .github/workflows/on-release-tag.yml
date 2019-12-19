@@ -1,0 +1,20 @@
+name: UpdateReleases
+
+on: [create]
+
+jobs:
+  update_releases:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update refs/heads/releases
+        run: |
+          curl --request PATCH \
+          --url https://api.github.com/repos/${{ github.repository }}/git/refs/heads/releases \
+          --header 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
+          --header 'content-type: application/json' \
+          --data '{
+            "sha": "${GITHUB_SHA}",
+            "force": true
+          }'
+          
+      
