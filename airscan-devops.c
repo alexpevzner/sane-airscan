@@ -8,6 +8,9 @@
 
 #include "airscan.h"
 
+#include <stdlib.h>
+#include <string.h>
+
 /* Initialize device options
  */
 void

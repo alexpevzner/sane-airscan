@@ -10,6 +10,7 @@
 
 #include <limits.h>
 #include <stdarg.h>
+#include <string.h>
 #include <unistd.h>
 
 #pragma GCC diagnostic ignored "-Wformat-truncation"

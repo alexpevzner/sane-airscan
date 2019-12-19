@@ -9,6 +9,7 @@
 #include "airscan.h"
 
 #include <libsoup/soup.h>
+#include <string.h>
 
 /******************** Static variables ********************/
 static SoupSession *http_session;

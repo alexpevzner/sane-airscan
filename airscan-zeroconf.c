@@ -14,6 +14,8 @@
 #include <avahi-client/lookup.h>
 #include <avahi-common/error.h>
 
+#include <string.h>
+
 /******************** Constants *********************/
 /* Service type to look for
  */

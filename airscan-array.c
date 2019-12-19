@@ -8,6 +8,9 @@
 
 #include "airscan.h"
 
+#include <stdlib.h>
+#include <string.h>
+
 /* Initial capacity of arrays
  */
 #define ARRAY_INITIAL_CAPACITY  4
