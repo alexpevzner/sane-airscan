@@ -1,6 +1,8 @@
 CONFDIR = /etc/sane.d
 LIBDIR = `pkg-config --variable=libdir sane-backends`
 BACKEND = libsane-airscan.so.1
+MANDIR = /usr/share/man/
+MANPAGE = sane-airscan.5
 
 SRC	= \
 	airscan.c \
@@ -55,7 +57,9 @@ install: all
 	mkdir -p $(PREFIX)$(CONFDIR)/dll.d
 	cp -n airscan.conf $(PREFIX)$(CONFDIR)
 	cp -n dll.conf $(PREFIX)$(CONFDIR)/dll.d/airscan
-	install -s -D -t $(PREFIX)/$(LIBDIR)/sane $(BACKEND) 
+	install -s -D -t $(PREFIX)/$(LIBDIR)/sane $(BACKEND)
+	mkdir -p $(PREFIX)/$(MANDIR)/man5
+	gzip <$(MANPAGE) > $(PREFIX)/$(MANDIR)/man5/$(MANPAGE).gz
 
 clean:
 	rm -f test $(BACKEND) tags
