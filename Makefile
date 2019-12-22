@@ -50,7 +50,7 @@ all:	$(BACKEND) test
 
 $(BACKEND): Makefile $(SRC) airscan.h airscan.sym
 	-ctags -R .
-	gcc -o $(BACKEND) -shared ${CFLAGS} $(SRC)
+	gcc -o $(BACKEND) -shared $(SRC) ${CFLAGS}
 
 install: all
 	mkdir -p $(PREFIX)$(CONFDIR)
