@@ -13,8 +13,6 @@
 #include <string.h>
 #include <unistd.h>
 
-#pragma GCC diagnostic ignored "-Wformat-truncation"
-
 /* Trace file handle
  */
 struct  trace {
