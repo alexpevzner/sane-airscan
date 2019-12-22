@@ -43,7 +43,8 @@ log_cleanup (void)
 static void
 log_flush (void)
 {
-    write(1, log_buffer->str, log_buffer->len);
+    int rc = write(1, log_buffer->str, log_buffer->len);
+    (void) rc;
     g_string_truncate(log_buffer, 0);
 }
 
