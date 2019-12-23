@@ -58,8 +58,9 @@ see [Installation from sources] section below.
 3. Download file `home:pzz.repo`
 4. Install it, using your distribution's package manager:
 
-        dnf config-manager --add-repo ./home:pzz.repo
-        
+    * Fedore: `dnf config-manager --add-repo ./home:pzz.repo`
+    * openSUSE: [see the link](https://en.opensuse.org/SDB:Add_package_repositories)
+
 5. Install package `sane-airscan`
 
 #### DEB-based distros (Debian, Ubuntu)
@@ -70,13 +71,13 @@ see [Installation from sources] section below.
 4. Add it to the list of trusted keys:
 
         apt-key add Release.key
-    
+
 5. Add the repository:
 
         add-apt-repository -m "deb https://download.opensuse.org/repositories/... ./"
 
     note, the URL above is the path to repository that you have choosen in step 2
-    
+
 6. Install package `sane-airscan`
 
 ### Installation from sources
