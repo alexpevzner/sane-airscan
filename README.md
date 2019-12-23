@@ -1,17 +1,17 @@
 # sane-airscan -- Linux support of Apple AirScan (eSCL) compatible document scanners
 
-Currently many new document scanners and MFPs come with Apple AirScan
-support, also known as AirPrint scanning or eSCL protocol. And number of
-AirScan-compatible devices tends to grow.
+If you are a lucky owner of scanner or MFP which works via network with
+Apple devices, I have a good news for you: now your scanner works with
+Linux as well!
 
-Looks that AirScan becomes de-facto standard protocol for document
-scanners, connected to the network. This is very convenient for (Apple)
-users, because installation of the new scanner becomes trivial task,
-everything "just works" without need to worry about device drivers,
-network configuration etc.
+In theory, this backend should work with any scanner which support
+**eSCL** protocol (unofficially known as **AirScan** or **AirPrint scanning**).
+In practice, I have tested it with my **Kyocera ECOSYS M2040dn**
+and waiting to feedback regarding other devices.
 
-Unfortunately, Linux doesn't support AirScan, and the goal of this
-project is to fix this situation.
+Apple maintains [a comprehensive list](https://support.apple.com/en-us/HT201311)
+of compatible devices, but please note, this list contains not only scanners
+and MFP, but pure printers as well.
 
 ### Features
 
@@ -27,13 +27,8 @@ image received from scanner
 
 ### Compatibility
 
-In theory, sane-airscan must be compatible with any scanner, marked as
-AirPrint compatible or Mopria certified, or with announces eSCL protocol
-support.
-
-Apple maintains [a comprehensive list](https://support.apple.com/en-us/HT201311)
-of compatible devices, but please note, this list contains not only scanners
-and MFP, but pure printers as well.
+Any **eSCL** capable scanner expected to work, but only few of them
+were actually tested.
 
 Sane-airscan was tested with the following scanners:
 1. Kyocera ECOSYS M2040dn
@@ -44,22 +39,32 @@ please let me know.
 
 ### Installation from pre-build binaries
 
-#### Fedora, OpenSUSE
+Thanks to [openSUSE Build Service](https://build.opensuse.org/), I can
+provide a pre-built packages for many popular Linux distros.
 
-| Version    | Arch        | Repo                                                                                   |
-| ---------- | ----------- | -------------------------------------------------------------------------------------- |
-| **Fedora**                                                                                                        |
-| Fedora 29  | i586,x86_64 | https://download.opensuse.org/repositories/home:/pzz/Fedora_29/home:pzz.repo           |
-| Fedora 30  | i586,x86_64 | https://download.opensuse.org/repositories/home:/pzz/Fedora_30/home:pzz.repo           |
-| Fedora 31  | x86_64      | https://download.opensuse.org/repositories/home:/pzz/Fedora_31/home:pzz.repo           |
-| **OpenSuse**                                                                                                      |
-| Leap 15.1  | x86_64      | https://download.opensuse.org/repositories/home:/pzz/openSUSE_Leap_15.1/home:pzz.repo  |
-| Tumbleweed | i586,x86_64 | https://download.opensuse.org/repositories/home:/pzz/openSUSE_Tumbleweed/home:pzz.repo |
+Currently, the following distros are supported: **Debian** (9.0 and 10),
+**Fedora** (29, 30 and 31), **openSUSE** (Leap and Tumbleweed),
+**Ubuntu** (18.04, 19.04 and 19.10). If your distro is not listed,
+see [Installation from sources] section below.
 
-1. Add package repository
-* For Fedora, use the command **dnf config-manager --add-repo https://...**
-* For OpenSUSE, [see the link](https://en.opensuse.org/SDB:Add_package_repositories)
-2. Install package **sane-airscan**
+#### RPM-based distros (Fedora, openSUSE)
+
+1. Navigate to https://download.opensuse.org/repositories/home:/pzz/
+2. Find your distro in the list
+3. Download file `home:pzz.repo`
+4. Install it, using your distribution's package manager
+5. Install package `sane-airscan`
+
+#### DEB-based distros (Debian, Ubuntu)
+
+1. Navigate to https://download.opensuse.org/repositories/home:/pzz/
+2. Find your distro in the list
+3. Download file `Release.gpg`
+4. Add it to the list of trusted keys:
+    * apt-key add Release.key
+5. Add the repository:
+    * add-apt-repository -m "deb https://download.opensuse.org/repositories/home:/pzz/xUbuntu_18.04 ./"
+6. Install package `sane-airscan`
 
 ### Installation from sources
 #### Install required libraries - Fedora and similar
