@@ -40,21 +40,18 @@ please let me know.
 ### Installation from pre-build binaries
 
 Thanks to [openSUSE Build Service](https://build.opensuse.org/), I can
-provide a pre-built packages for many popular Linux distros.
-
-Though it is possible to install packages manually, this is suggested
-to add my repo to your system package manager. At this case you will
-receive upgdades automatically.
+provide pre-built packages for many popular Linux distros.
 
 Currently, the following distros are supported: **Debian** (9.0 and 10),
 **Fedora** (29, 30 and 31), **openSUSE** (Leap and Tumbleweed),
 **Ubuntu** (18.04, 19.04 and 19.10). If your distro is not listed,
-see [Installation from sources] section below.
+see [Installation from sources](https://github.com/alexpevzner/sane-airscan#installation-from-sources)
+section below.
 
 #### RPM-based distros (Fedora, openSUSE)
 
 1. Navigate to https://download.opensuse.org/repositories/home:/pzz/
-2. Find your distro in the list, and enter its directory
+2. Find your distro in the list and enter its directory
 3. Download file `home:pzz.repo`
 4. Install it, using your distribution's package manager:
 
@@ -66,7 +63,7 @@ see [Installation from sources] section below.
 #### DEB-based distros (Debian, Ubuntu)
 
 1. Navigate to https://download.opensuse.org/repositories/home:/pzz/
-2. Find your distro in the list, and enter its directory
+2. Find your distro in the list and enter its directory
 3. Download file `Release.gpg`
 4. Add it to the list of trusted keys:
 
