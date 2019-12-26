@@ -76,6 +76,7 @@ sane_exit (void)
     http_cleanup();
     eloop_cleanup();
     device_list_free(sane_device_list);
+    sane_device_list = NULL;
 
     log_debug(NULL, "sane_exit(): OK");
     conf_unload();
