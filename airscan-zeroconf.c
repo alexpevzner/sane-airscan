@@ -194,6 +194,7 @@ zeroconf_addrinfo_new (const AvahiAddress *addr, uint16_t port, const char *rs,
 {
     zeroconf_addrinfo *addrinfo = g_new0(zeroconf_addrinfo, 1);
     char              str_addr[128];
+    int               rs_len;
 
     if (addr->proto == AVAHI_PROTO_INET) {
         /* 169.254.0.0/16 */
@@ -227,10 +228,26 @@ zeroconf_addrinfo_new (const AvahiAddress *addr, uint16_t port, const char *rs,
         str_addr[len] = '\0';
     }
 
-    if (rs != NULL) {
-        addrinfo->uri = g_strdup_printf("http://%s:%d/%s/", str_addr, port, rs);
-    } else {
+    /* Normalize rs */
+    while (*rs == '/') {
+        rs ++;
+    }
+
+    rs_len = (int) strlen(rs);
+    while (rs_len != 0 && rs[rs_len - 1] == '/') {
+        rs_len --;
+    }
+
+    /* Make eSCL URL */
+    if (rs == NULL) {
+        /* Assume /eSCL by default */
         addrinfo->uri = g_strdup_printf("http://%s:%d/eSCL/", str_addr, port);
+    } else if (rs_len == 0) {
+        /* Empty rs, avoid double '/' */
+        addrinfo->uri = g_strdup_printf("http://%s:%d/", str_addr, port);
+    } else {
+        addrinfo->uri = g_strdup_printf("http://%s:%d/%.*s/", str_addr, port,
+                rs_len, rs);
     }
 
     return addrinfo;
