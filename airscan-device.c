@@ -873,7 +873,9 @@ device_escl_start_scan (device *dev)
     xml_wr_add_text(xml, "scan:DocumentFormatExt", mime);
     xml_wr_add_uint(xml, "scan:XResolution", x_resolution);
     xml_wr_add_uint(xml, "scan:YResolution", y_resolution);
-    xml_wr_add_bool(xml, "scan:Duplex", duplex);
+    if (dev->opt.src != OPT_SOURCE_PLATEN) {
+        xml_wr_add_bool(xml, "scan:Duplex", duplex);
+    }
 
     /* Send request to device */
     device_state_set(dev, DEVICE_SCAN_REQUESTING);
