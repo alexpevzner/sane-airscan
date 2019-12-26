@@ -50,7 +50,8 @@ __xml_rd_invalidate_cache (xml_rd *xml)
 /* Parse XML text and initialize reader to iterate
  * starting from the root node
  *
- * Returns NULL on success, or error text on a error
+ * On success, saves newly constructed reader into
+ * the xml parameter.
  */
 error
 xml_rd_begin (xml_rd **xml, const char *xml_text, size_t xml_len)
@@ -184,7 +185,6 @@ xml_rd_node_value (xml_rd *xml)
 }
 
 /* Get value of the current node as unsigned integer
- * Returns error string, NULL if OK
  */
 error
 xml_rd_node_value_uint (xml_rd *xml, SANE_Word *val)

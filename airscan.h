@@ -551,10 +551,8 @@ typedef struct xml_rd xml_rd;
 /* Parse XML text and initialize reader to iterate
  * starting from the root node
  *
- * On success, saves newly constructed readrr into
- * the xml parameter and returns NULL
- *
- * On a error, returns a error text
+ * On success, saves newly constructed reader into
+ * the xml parameter.
  */
 error
 xml_rd_begin (xml_rd **xml, const char *xml_text, size_t xml_len);
@@ -608,7 +606,6 @@ const char*
 xml_rd_node_value (xml_rd *xml);
 
 /* Get value of the current node as unsigned integer
- * Returns error string, NULL if OK
  */
 error
 xml_rd_node_value_uint (xml_rd *xml, SANE_Word *val);
