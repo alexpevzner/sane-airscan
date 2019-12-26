@@ -21,14 +21,14 @@
  */
 enum {
     DEVICE_LISTED           = (1 << 0), /* Device listed in device_table */
-    DEVICE_READY            = (1 << 2), /* Device is ready */
-    DEVICE_HALTED           = (1 << 3), /* Device is halted */
-    DEVICE_INIT_WAIT        = (1 << 4), /* Device was found during initial
+    DEVICE_READY            = (1 << 1), /* Device is ready */
+    DEVICE_HALTED           = (1 << 2), /* Device is halted */
+    DEVICE_INIT_WAIT        = (1 << 3), /* Device was found during initial
                                            scan and not ready yet */
-    DEVICE_OPENED           = (1 << 5), /* Device currently opened */
-    DEVICE_SCANNING         = (1 << 6), /* We are between sane_start() and
+    DEVICE_OPENED           = (1 << 4), /* Device currently opened */
+    DEVICE_SCANNING         = (1 << 5), /* We are between sane_start() and
                                            final sane_read() */
-    DEVICE_CLOSING          = (1 << 7), /* Close in progress */
+    DEVICE_CLOSING          = (1 << 6), /* Close in progress */
 
     DEVICE_ALL_FLAGS        = 0xffffffff
 };

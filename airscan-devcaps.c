@@ -66,7 +66,7 @@ devcaps_reset (devcaps *caps)
     devcaps_init(caps);
 }
 
-/* Parse color modes. Returns NULL on success, error string otherwise
+/* Parse color modes
  */
 static error
 devcaps_source_parse_color_modes (xml_rd *xml, devcaps_source *src)
@@ -108,7 +108,7 @@ devcaps_source_parse_color_modes (xml_rd *xml, devcaps_source *src)
     return NULL;
 }
 
-/* Parse document formats. Returns NULL on success, error string otherwise
+/* Parse document formats
  */
 static error
 devcaps_source_parse_document_formats (xml_rd *xml, devcaps_source *src)
@@ -133,7 +133,6 @@ devcaps_source_parse_document_formats (xml_rd *xml, devcaps_source *src)
 }
 
 /* Parse discrete resolutions.
- * Returns NULL on success, error string otherwise
  */
 static error
 devcaps_source_parse_discrete_resolutions (xml_rd *xml, devcaps_source *src)
@@ -173,7 +172,6 @@ devcaps_source_parse_discrete_resolutions (xml_rd *xml, devcaps_source *src)
 }
 
 /* Parse resolutions range
- * Returns NULL on success, error string otherwise
  */
 static error
 devcaps_source_parse_resolutions_range (xml_rd *xml, devcaps_source *src)
@@ -240,7 +238,6 @@ DONE:
 }
 
 /* Parse supported resolutions.
- * Returns NULL on success, error string otherwise
  */
 static error
 devcaps_source_parse_resolutions (xml_rd *xml, devcaps_source *src)
@@ -270,7 +267,6 @@ devcaps_source_parse_resolutions (xml_rd *xml, devcaps_source *src)
 }
 
 /* Parse setting profiles (color modes, document formats etc).
- * Returns NULL on success, error string otherwise
  */
 static error
 devcaps_source_parse_setting_profiles (xml_rd *xml, devcaps_source *src)
@@ -369,8 +365,6 @@ DONE:
 
 /* Parse device capabilities. devcaps structure must be initialized
  * before calling this function.
- *
- * Returns NULL if OK, error string otherwise
  */
 error
 devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)

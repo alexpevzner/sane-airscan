@@ -357,7 +357,8 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
 
 /* Get query error, if any
  *
- * Both transport errors and erroneous HTTP response codes considered errors here
+ * Both transport errors and erroneous HTTP response codes
+ * considered as errors here
  */
 error
 http_query_error (http_query *q);
@@ -784,8 +785,6 @@ devcaps_cleanup (devcaps *caps);
 
 /* Parse device capabilities. devcaps structure must be initialized
  * before calling this function.
- *
- * Returns NULL if OK, error string otherwise
  */
 error
 devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len);
@@ -820,8 +819,6 @@ void
 devopt_cleanup (devopt *opt);
 
 /* Parse device capabilities, and set default options values
- *
- * Returns NULL if OK, error string otherwise
  */
 error
 devopt_import_caps (devopt *opt, const char *xml_text, size_t xml_len);

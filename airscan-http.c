@@ -356,7 +356,8 @@ http_query_cancel (http_query *q)
 
 /* Get query error, if any
  *
- * Both transport errors and erroneous HTTP response codes considered errors here
+ * Both transport errors and erroneous HTTP response codes
+ * considered as errors here
  */
 error
 http_query_error (http_query *q)
