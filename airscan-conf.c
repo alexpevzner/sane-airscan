@@ -12,8 +12,7 @@
 #include <string.h>
 
 /******************** .INI-file parser ********************/
-/*
- * Types of .INI file records
+/* Types of .INI file records
  */
 typedef enum {
     INIFILE_SECTION,                    /* The [section name] string */
@@ -22,8 +21,7 @@ typedef enum {
     INIFILE_SYNTAX                      /* The syntax error */
 } INIFILE_RECORD;
 
-/*
- * .INI file record
+/* .INI file record
  */
 typedef struct {
     INIFILE_RECORD      type;           /* Record type */
@@ -36,8 +34,7 @@ typedef struct {
     unsigned int        line;           /* File line */
 } inifile_record;
 
-/*
- * .INI file (opaque)
+/* .INI file (opaque)
  */
 typedef struct {
     const char          *file;                  /* File name */
@@ -177,9 +174,7 @@ inifile_istkbreaker (int c)
     return c == ',';
 }
 
-/*
- * Translate hexadecimal digit character to its integer value
- * Note, this function requires valie hexadecimal number as its argument
+/* Translate hexadecimal digit character to its integer value
  */
 static inline unsigned int
 inifile_hex2int (int c)
@@ -191,7 +186,7 @@ inifile_hex2int (int c)
     }
 }
 
-/* Reset tokenizer
+/* Reset tokeniser
  */
 static inline void
 inifile_tk_reset (inifile *file)
@@ -453,7 +448,7 @@ inifile_gets (inifile *file, char delimiter, bool linecont, bool *syntax)
 /* Finish reading the record. Performs common cleanup operations,
  * feels record structure etc
  */
-const inifile_record*
+static const inifile_record*
 inifile_read_finish (inifile *file, int last_char, INIFILE_RECORD rec_type)
 {
     file->record.type = rec_type;
@@ -493,7 +488,7 @@ inifile_read_finish (inifile *file, int last_char, INIFILE_RECORD rec_type)
 
 /* Read next record
  */
-const inifile_record*
+static const inifile_record*
 inifile_read (inifile *file)
 {
     int  c;
@@ -537,13 +532,12 @@ inifile_read (inifile *file)
     return inifile_read_finish(file, c, INIFILE_SYNTAX);
 }
 
-/*
- * Match section or variable names:
+/* Match name of section of variable
  *   - match is case-insensitive
  *   - difference in amount of free space is ignored
  *   - leading and trailing space is ignored
  */
-bool
+static bool
 inifile_match_name (const char *n1, const char *n2)
 {
     /* Skip leading space */
