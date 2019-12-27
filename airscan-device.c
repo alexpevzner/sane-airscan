@@ -136,8 +136,8 @@ device_add (const char *name, zeroconf_addrinfo *addresses,
     device      *dev;
 
     /* Issue log message */
-    log_debug(NULL, "statically adding: \"%s\"", name,
-            statically ? "statically" : "dynamically");
+    log_debug(NULL, "%s adding: \"%s\"",
+            statically ? "statically" : "dynamically", name);
 
     /* Don't allow duplicate devices */
     dev = device_find(name);
