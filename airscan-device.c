@@ -870,7 +870,8 @@ device_escl_start_scan (device *dev)
     //xml_wr_add_text(xml, "scan:InputSource", source);
     xml_wr_add_text(xml, "pwg:InputSource", source);
     xml_wr_add_text(xml, "scan:ColorMode", colormode);
-    xml_wr_add_text(xml, "scan:DocumentFormatExt", mime);
+    //xml_wr_add_text(xml, "scan:DocumentFormatExt", mime);
+    xml_wr_add_text(xml, "pwd:DocumentFormat", mime);
     xml_wr_add_uint(xml, "scan:XResolution", x_resolution);
     xml_wr_add_uint(xml, "scan:YResolution", y_resolution);
     if (dev->opt.src != OPT_SOURCE_PLATEN) {
