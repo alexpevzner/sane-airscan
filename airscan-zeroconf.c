@@ -498,6 +498,22 @@ zeroconf_avahi_resolver_callback (AvahiServiceResolver *r,
     }
 }
 
+/* Look for device's static configuration
+ */
+static conf_device*
+zeroconf_find_static_configuration (const char *name)
+{
+    conf_device *dev_conf;
+
+    for (dev_conf = conf.devices; dev_conf != NULL; dev_conf = dev_conf->next) {
+        if (!strcasecmp(dev_conf->name, name)) {
+            return dev_conf;
+        }
+    }
+
+    return NULL;
+}
+
 /* AVAHI browser callback
  */
 static void
@@ -515,6 +531,21 @@ zeroconf_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
     switch (event) {
     case AVAHI_BROWSER_NEW:
         zeroconf_pevent(name, protocol, "found");
+
+        /* Ignore manually configured devices */
+        conf_device *dev_conf = zeroconf_find_static_configuration(name);
+        if (dev_conf != NULL) {
+            const char *msg;
+
+            if (dev_conf->uri != NULL) {
+                msg = "ignored statically configured";
+            } else {
+                msg = "ignored disabled";
+            }
+
+            zeroconf_pevent(name, protocol, msg);
+            return;
+        }
 
         /* Add a device (or lookup for already added) */
         devstate = zeroconf_devstate_add(name);

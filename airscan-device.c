@@ -1577,7 +1577,9 @@ device_management_start (void)
     conf_device *dev_conf;
 
     for (dev_conf = conf.devices; dev_conf != NULL; dev_conf = dev_conf->next) {
-        device_statically_configured(dev_conf->name, dev_conf->uri);
+        if (dev_conf->uri != NULL) {
+            device_statically_configured(dev_conf->name, dev_conf->uri);
+        }
     }
 }
 

@@ -602,6 +602,8 @@ conf_device_list_revert (void)
         prev = list;
         list = next;
     }
+
+    conf.devices = prev;
 }
 
 /* Free conf.devices list
@@ -627,7 +629,7 @@ conf_device_list_prepend (const char *name, const char *uri)
 {
     conf_device *dev = g_new0(conf_device, 1);
     dev->name = g_strdup(name);
-    dev->uri = g_strdup(uri);
+    dev->uri = uri ? g_strdup(uri) : NULL;
     dev->next = conf.devices;
     conf.devices = dev;
 }
@@ -694,11 +696,13 @@ conf_load_from_ini (inifile *ini)
 
                 if (conf_device_list_lookup(rec->variable) != NULL) {
                     conf_perror(rec, "device already defined");
-                } else if ((uri = http_uri_new(rec->value)) == NULL) {
-                    conf_perror(rec, "invalid URL");
-                } else {
+                } else if (!strcmp(rec->value, CONF_DEVICE_DISABLE)) {
+                    conf_device_list_prepend(rec->variable, NULL);
+                } else if ((uri = http_uri_new(rec->value)) != NULL) {
                     conf_device_list_prepend(rec->variable, http_uri_str(uri));
                     http_uri_free(uri);
+                } else {
+                    conf_perror(rec, "invalid URL");
                 }
             } else if (inifile_match_name(rec->section, "debug")) {
                 if (inifile_match_name(rec->variable, "trace")) {

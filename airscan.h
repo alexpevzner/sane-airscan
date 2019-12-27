@@ -82,12 +82,16 @@ ESTRING (error err)
 }
 
 /******************** Configuration file loader ********************/
+/* Device URI for manually disabled device
+ */
+#define CONF_DEVICE_DISABLE     "disable"
+
 /* Device configuration, for manually added devices
  */
 typedef struct conf_device conf_device;
 struct conf_device {
     const char  *name; /* Device name */
-    const char  *uri;  /* Device URI, parsed */
+    const char  *uri;  /* Device URI, parsed; NULL if device disabled */
     conf_device *next; /* Next device in the list */
 };
 
