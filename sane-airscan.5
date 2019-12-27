@@ -41,13 +41,14 @@ To manually configure a device, add the following section to the configuration f
 
 [devices]
 "Kyocera MFP Scanner" = http://192\.168\.1\.102:9095/eSCL
+"Device I don\'t want to see" = disable
 .
 .fi
 .
 .IP "" 0
 .
 .P
-The \fB[devices]\fR section contains all manually configured devices, one line per device, and each line contains a device name on a left side of equation and device URL on a rights side\.
+The \fB[devices]\fR section contains all manually configured devices, one line per device, and each line contains a device name on a left side of equation and device URL on a rights side\. You may also disable particular device by using the \fBdisable\fR keyword instead of URL\.
 .
 .P
 To figure out the device URL, you need to know its components:
