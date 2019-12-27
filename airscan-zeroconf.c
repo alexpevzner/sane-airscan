@@ -399,6 +399,32 @@ zeroconf_addrinfo_list_sort (zeroconf_addrinfo *list)
     return zeroconf_addrinfo_list_revert(list);
 }
 
+/* Sort list of addresses and remove duplicates
+ */
+static zeroconf_addrinfo*
+zeroconf_addrinfo_list_sort_dedup (zeroconf_addrinfo *list)
+{
+    zeroconf_addrinfo   *addr, *next;
+
+    if (list == NULL) {
+        return NULL;
+    }
+
+    list = zeroconf_addrinfo_list_sort(list);
+
+    addr = list;
+    while ((next = addr->next) != NULL) {
+        if (zeroconf_addrinfo_cmp(addr, next) == 0) {
+            addr->next = next->next;
+            zeroconf_addrinfo_free_single(next);
+        } else {
+            addr = next;
+        }
+    }
+
+    return list;
+}
+
 /* Prepend zeroconf_addrinfo to the list
  */
 static void
@@ -451,7 +477,7 @@ zeroconf_avahi_resolver_callback (AvahiServiceResolver *r,
     g_ptr_array_remove(devstate->resolvers, r);
 
     if (devstate->resolvers->len == 0 && devstate->addresses != NULL) {
-        devstate->addresses = zeroconf_addrinfo_list_sort(
+        devstate->addresses = zeroconf_addrinfo_list_sort_dedup(
                 devstate->addresses);
 
         if (conf.dbg_enabled) {
