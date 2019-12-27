@@ -867,7 +867,7 @@ device_escl_start_scan (device *dev)
     xml_wr_leave(xml); /* pwg:ScanRegion */
     xml_wr_leave(xml); /* pwg:ScanRegions */
 
-    xml_wr_add_text(xml, "scan:InputSource", source);
+    //xml_wr_add_text(xml, "scan:InputSource", source);
     xml_wr_add_text(xml, "pwg:InputSource", source);
     xml_wr_add_text(xml, "scan:ColorMode", colormode);
     xml_wr_add_text(xml, "scan:DocumentFormatExt", mime);
