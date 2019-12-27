@@ -858,12 +858,12 @@ device_escl_start_scan (device *dev)
 
     xml_wr_enter(xml, "pwg:ScanRegions");
     xml_wr_enter(xml, "pwg:ScanRegion");
+    xml_wr_add_text(xml, "pwg:ContentRegionUnits",
+            "escl:ThreeHundredthsOfInches");
     xml_wr_add_uint(xml, "pwg:XOffset", geom_x.off);
     xml_wr_add_uint(xml, "pwg:YOffset", geom_y.off);
     xml_wr_add_uint(xml, "pwg:Width", geom_x.len);
     xml_wr_add_uint(xml, "pwg:Height", geom_y.len);
-    xml_wr_add_text(xml, "pwg:ContentRegionUnits",
-            "escl:ThreeHundredthsOfInches");
     xml_wr_leave(xml); /* pwg:ScanRegion */
     xml_wr_leave(xml); /* pwg:ScanRegions */
 
