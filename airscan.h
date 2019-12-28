@@ -101,7 +101,10 @@ typedef struct {
     bool        dbg_enabled; /* Debugging enabled */
     const char  *dbg_trace;  /* Trace directory */
     conf_device *devices;    /* Manually configured devices */
+    bool        discovery;   /* Scanners discovery enabled */
 } conf_data;
+
+#define CONF_INIT { false, NULL, NULL, true }
 
 extern conf_data conf;
 

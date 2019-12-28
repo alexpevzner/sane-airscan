@@ -587,7 +587,7 @@ inifile_match_name (const char *n1, const char *n2)
 /******************** Configuration file loader  ********************/
 /* Configuration data
  */
-conf_data conf = {false, NULL, NULL};
+conf_data conf = CONF_INIT;
 
 /* Revert conf.devices list
  */
@@ -704,6 +704,16 @@ conf_load_from_ini (inifile *ini)
                 } else {
                     conf_perror(rec, "invalid URL");
                 }
+            } else if (inifile_match_name(rec->section, "options")) {
+                if (inifile_match_name(rec->variable, "discovery")) {
+                    if (inifile_match_name(rec->value, "enable")) {
+                        conf.discovery = true;
+                    } else if (inifile_match_name(rec->value, "disable")) {
+                        conf.discovery = false;
+                    } else {
+                        conf_perror(rec, "usage: discovery = enable | disable");
+                    }
+                }
             } else if (inifile_match_name(rec->section, "debug")) {
                 if (inifile_match_name(rec->variable, "trace")) {
                     g_free((char*) conf.dbg_trace);
@@ -815,9 +825,13 @@ conf_load_from_env (void)
 void
 conf_load (void)
 {
-    GString *dir_list = g_string_new(NULL);
-    GString *path = g_string_new(NULL);
-    char    *s;
+    GString   *dir_list = g_string_new(NULL);
+    GString   *path = g_string_new(NULL);
+    char      *s;
+    conf_data init = CONF_INIT;
+
+    /* Reset the configuration */
+    conf = init;
 
     /* Look to configuration path in environment */
     s = getenv(CONFIG_PATH_ENV);

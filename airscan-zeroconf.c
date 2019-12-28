@@ -701,6 +701,11 @@ zeroconf_avahi_client_restart_defer (void)
 SANE_Status
 zeroconf_init (void)
 {
+    if (!conf.discovery) {
+        log_debug(NULL, "MDNS: devices discovery disabled");
+        return SANE_STATUS_GOOD;
+    }
+
     zeroconf_avahi_glib_poll = eloop_new_avahi_poll();
     if (zeroconf_avahi_glib_poll == NULL) {
         return SANE_STATUS_NO_MEM;
