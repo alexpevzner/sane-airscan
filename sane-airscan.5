@@ -10,12 +10,6 @@
 The \fBsane\-airscan\fR implements a SANE backend that provides access network scanners and MFP using eSCL protocol, also known as AirScan or AirPrint scan\.
 .
 .SH "CONFIGURATION"
-If scanner and computer are connected to the same LAN segment, everything expected to "just work" out of box, without any need of manual configuration\.
-.
-.P
-Unfortunately, automatic configuration doesn\'t work if there is an IP router between computer and scanner\. At this case scanner can be added manually\.
-.
-.P
 The sane\-airscan loads its configuration files from the following places:
 .
 .IP "" 4
@@ -30,7 +24,29 @@ The sane\-airscan loads its configuration files from the following places:
 .IP "" 0
 .
 .P
-The configuration file syntax is very similar to the \.INI file syntax\.
+The configuration file syntax is very similar to the \.INI file syntax\. It consist of sections, each section contains some variables\. Comments are started from # or ; characters and continies until end of line
+.
+.IP "" 4
+.
+.nf
+
+# This is a comment
+[section 1]
+variable 1 = value 1  ; and another comment
+variable 2 = value 2
+.
+.fi
+.
+.IP "" 0
+.
+.P
+Leading and trailing spaces of variable name and value are striped\. If you want to preserve them, put name or value into quotes ("like this")\.
+.
+.SH "CONFIGURATION OF DEVICES"
+If scanner and computer are connected to the same LAN segment, everything expected to "just work" out of box, without any need of manual configuration\.
+.
+.P
+Unfortunately, automatic configuration doesn\'t work if there is an IP router between computer and scanner\. At this case scanner can be added manually\.
 .
 .P
 To manually configure a device, add the following section to the configuration file:
@@ -96,6 +112,20 @@ Address and port are on obvious places\. Please notice the "rs=eSCL" record in t
 .
 .P
 If running avahi\-browse on same LAN segment as a scanner is not possible, you will have to follow a hard way\. Your administrator must know device IP address, consult your device manual for the eSCL port, and the URL path component most likely is the "/eSCL", though on some devices it may differ\.
+.
+.SH "CONFIGURATION OPTIONS"
+Miscellaneous options all goes to the \fB[options]\fR section\. Currently the following options are supported:
+.
+.IP "" 4
+.
+.nf
+
+[options]
+discovery = enable | disabele ; Enable or disable devices discovery
+.
+.fi
+.
+.IP "" 0
 .
 .SH "FILES"
 .
