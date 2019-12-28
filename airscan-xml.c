@@ -310,7 +310,10 @@ xml_wr_format_node (GString *buf, xml_wr_node *node, unsigned int indent)
             }
 
             xml_wr_format_indent(buf, indent);
-            g_string_append_printf(buf, "</%s>\n", node->name);
+            g_string_append_printf(buf, "</%s>", node->name);
+            if (indent != 0) {
+                g_string_append_c(buf, '\n');
+            }
         } else {
             g_string_append_printf(buf, "%s</%s>\n", node->value, node->name);
         }
