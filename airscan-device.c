@@ -854,7 +854,7 @@ device_escl_start_scan (device *dev)
     /* Build scan request */
     xml_wr *xml = xml_wr_begin("scan:ScanSettings");
 
-    xml_wr_add_text(xml, "pwg:Version", "2.6");
+    xml_wr_add_text(xml, "pwg:Version", "2.0");
 
     xml_wr_enter(xml, "pwg:ScanRegions");
     xml_wr_enter(xml, "pwg:ScanRegion");
