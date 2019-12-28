@@ -339,7 +339,9 @@ xml_wr_revert_children (xml_wr_node *node)
 char*
 xml_wr_finish (xml_wr *xml)
 {
-    GString    *buf = g_string_new(NULL);
+    GString    *buf;
+
+    buf = g_string_new("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
 
     xml_wr_revert_children(xml->root);
     xml_wr_format_node(buf, xml->root, 0);
