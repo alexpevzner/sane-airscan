@@ -295,9 +295,9 @@ xml_wr_format_node (GString *buf, xml_wr_node *node, unsigned int indent)
         g_string_append_printf(buf, "<%s", node->name);
         if (indent == 0) {
             /* Root node defines namespaces */
-            g_string_append_c(buf, '\n');
-            g_string_append(buf, "xmlns:scan=\"http://schemas.hp.com/imaging/escl/2011/05/03\"\n");
-            g_string_append(buf, "xmlns:pwg=\"http://www.pwg.org/schemas/2010/12/sm\"");
+            g_string_append_c(buf, ' ');
+            g_string_append(buf, "xmlns:pwg=\"http://www.pwg.org/schemas/2010/12/sm\" ");
+            g_string_append(buf, "xmlns:scan=\"http://schemas.hp.com/imaging/escl/2011/05/03\"");
         }
         g_string_append_c(buf, '>');
 
