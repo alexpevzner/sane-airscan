@@ -283,9 +283,9 @@ http_query_callback (SoupSession *session, SoupMessage *msg, gpointer userdata)
         } else if (q->callback != NULL) {
             q->callback(dev, q);
         }
-    }
 
-    http_query_free(q);
+        http_query_free(q);
+    }
 }
 
 /* Create new http_query
@@ -341,15 +341,16 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
 void
 http_query_cancel (http_query *q)
 {
-    soup_session_cancel_message(http_session, q->msg, SOUP_STATUS_CANCELLED);
-
     /* Note, if message processing already finished,
      * soup_session_cancel_message() will do literally nothing,
      * and in particular will not update message status,
      * but we rely on a fact that status of cancelled
      * messages is set properly
      */
+    g_object_ref(q->msg);
+    soup_session_cancel_message(http_session, q->msg, SOUP_STATUS_CANCELLED);
     soup_message_set_status(q->msg, SOUP_STATUS_CANCELLED);
+    g_object_unref(q->msg);
 
     http_query_free(q);
 }
