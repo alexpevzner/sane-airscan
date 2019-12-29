@@ -38,6 +38,7 @@ enum {
 typedef enum {
     DEVICE_SCAN_IDLE,
     DEVICE_SCAN_STARTED,
+    DEVICE_SCAN_PRECHECK_STATUS,
     DEVICE_SCAN_REQUESTING,
     DEVICE_SCAN_LOADING,
     DEVICE_SCAN_CHECK_STATUS,
@@ -333,13 +334,14 @@ static inline const char*
 device_state_name (DEVICE_STATE state)
 {
     switch (state) {
-    case DEVICE_SCAN_IDLE:         return "SCAN_IDLE";
-    case DEVICE_SCAN_STARTED:      return "SCAN_STARTED";
-    case DEVICE_SCAN_REQUESTING:   return "SCAN_REQUESTING";
-    case DEVICE_SCAN_LOADING:      return "SCAN_LOADING";
-    case DEVICE_SCAN_CHECK_STATUS: return "SCAN_CHECK_STATUS";
-    case DEVICE_SCAN_CLEANING_UP:  return "SCAN_CLEANING_UP";
-    case DEVICE_SCAN_DONE:         return "SCAN_DONE";
+    case DEVICE_SCAN_IDLE:            return "SCAN_IDLE";
+    case DEVICE_SCAN_STARTED:         return "SCAN_STARTED";
+    case DEVICE_SCAN_PRECHECK_STATUS: return "DEVICE_SCAN_PRECHECK_STATUS";
+    case DEVICE_SCAN_REQUESTING:      return "SCAN_REQUESTING";
+    case DEVICE_SCAN_LOADING:         return "SCAN_LOADING";
+    case DEVICE_SCAN_CHECK_STATUS:    return "SCAN_CHECK_STATUS";
+    case DEVICE_SCAN_CLEANING_UP:     return "SCAN_CLEANING_UP";
+    case DEVICE_SCAN_DONE:            return "SCAN_DONE";
     }
 
     return "UNKNOWN";
@@ -884,6 +886,37 @@ device_escl_start_scan (device *dev)
             device_escl_start_scan_callback);
 }
 
+/* HTTP GET ${dev->uri_escl}/ScannerStatus callback
+ */
+static void
+device_escl_precheck_status_callback (device *dev, http_query *q)
+{
+    error err = http_query_error(q);
+    if (err != NULL) {
+        err = eloop_eprintf("ScannerStatus query: %s", ESTRING(err));
+        trace_printf(dev->trace, "-----");
+        trace_printf(dev->trace, "Error: %s", err);
+
+        device_job_abort(dev, SANE_STATUS_IO_ERROR);
+    } else {
+        device_escl_start_scan(dev);
+    }
+}
+
+
+/* ESCL: check scanner status before scan
+ *
+ * HTTP GET ${dev->uri_escl}/ScannerStatus
+ */
+static void
+device_escl_precheck_status (device *dev)
+{
+    device_state_set(dev, DEVICE_SCAN_PRECHECK_STATUS);
+
+    device_http_get(dev, "ScannerStatus",
+            device_escl_precheck_status_callback);
+}
+
 /******************** Scan Job management ********************/
 /* Set job status. If status already set, it will not be
  * changed
@@ -923,6 +956,7 @@ device_job_abort (device *dev, SANE_Status status)
         break;
 
     case DEVICE_SCAN_LOADING:
+    case DEVICE_SCAN_PRECHECK_STATUS:
     case DEVICE_SCAN_CHECK_STATUS:
         http_client_cancel(dev->http_client);
         /* Fall through...*/
@@ -1161,7 +1195,7 @@ device_start_do (gpointer data)
         device_state_set(dev, DEVICE_SCAN_DONE);
         device_job_set_status(dev, SANE_STATUS_CANCELLED);
     } else {
-        device_escl_start_scan(dev);
+        device_escl_precheck_status(dev);
     }
 
     return FALSE;
