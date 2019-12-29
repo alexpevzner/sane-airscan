@@ -432,7 +432,7 @@ devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
     }
 
     if (caps->vendor == NULL) {
-        caps->vendor = g_strdup("Unknown");
+        caps->vendor = g_strdup("AirScan");
     }
 
     if (model != NULL) {
