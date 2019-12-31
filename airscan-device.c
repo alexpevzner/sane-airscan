@@ -693,7 +693,7 @@ device_escl_start_scan_callback (device *dev, http_query *q)
     }
 
     if (http_query_status(q) != HTTP_STATUS_CREATED) {
-        err = eloop_eprintf("ScanJobs request: unexpected HTTP status %s",
+        err = eloop_eprintf("ScanJobs request: unexpected HTTP status %d",
                 http_query_status(q));
         goto DONE;
     }
