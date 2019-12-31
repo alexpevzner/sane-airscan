@@ -8,6 +8,7 @@
 
 #include "airscan.h"
 
+#include <time.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -15,6 +16,18 @@
 /* Static variables */
 static GString *log_buffer;
 static bool log_configured;
+static uint64_t log_start_time;
+
+/* Get time for logging purposes
+ */
+static uint64_t
+log_get_time (void)
+{
+    struct timespec tms;
+
+    clock_gettime(CLOCK_MONOTONIC, &tms);
+    return ((uint64_t) tms.tv_nsec) + 1000000000 * (uint64_t) tms.tv_sec;
+}
 
 /* Initialize logging
  *
@@ -25,6 +38,7 @@ log_init (void)
 {
     log_buffer = g_string_new(NULL);
     log_configured = false;
+    log_start_time = log_get_time();
 }
 
 /* Cleanup logging
@@ -67,24 +81,62 @@ log_configure (void)
     }
 }
 
+/* Format time elapsed since logging began
+ */
+static void
+log_fmt_time (char *buf, size_t size)
+{
+    uint64_t t = log_get_time() - log_start_time;
+    int      hour, min, sec, msec;
+
+    sec = (int) (t / 1000000000);
+    msec = ((int) (t % 1000000000)) / 1000000;
+    hour = sec / 3600;
+    sec = sec % 3600;
+    min = sec / 60;
+    sec = sec % 60;
+
+    snprintf(buf, size, "%2.2d:%2.2d:%2.2d.%3.3d", hour, min, sec, msec);
+}
+
 /* Write a log message
  */
 static void
 log_message (device *dev, bool force, const char *fmt, va_list ap)
 {
-    if (log_configured && !conf.dbg_enabled) {
+    trace *t = dev ? device_trace(dev) : NULL;
+    char  msg[4096];
+    int   len = 0;
+    bool  dont_log = log_configured && !conf.dbg_enabled && !force;
+
+    /* If logs suppressed and trace not in use, we have nothing
+     * to do */
+    if ((t == NULL) && dont_log) {
         return;
     }
 
+    /* Format a log message */
     if (dev != NULL) {
-        g_string_append_printf(log_buffer, "\"%.64s\": ", device_name(dev));
+        len += sprintf(msg, "\"%.64s\": ", device_name(dev));
     }
 
-    g_string_append_vprintf(log_buffer, fmt, ap);
-    g_string_append_c(log_buffer, '\n');
+    len += vsnprintf(msg + len, sizeof(msg) - len, fmt, ap);
 
-    if ((log_configured && conf.dbg_enabled) || force) {
-        log_flush();
+    /* Write to log */
+    if (!dont_log) {
+        g_string_append(log_buffer, msg);
+        g_string_append_c(log_buffer, '\n');
+
+        if ((log_configured && conf.dbg_enabled) || force) {
+            log_flush();
+        }
+    }
+
+    /* Write to trace */
+    if (t != NULL) {
+        char prefix[64];
+        log_fmt_time(prefix, sizeof(prefix));
+        trace_printf(t, "%s: %s", prefix, msg);
     }
 }
 
