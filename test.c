@@ -29,6 +29,9 @@ check (SANE_Status status, const char *operation)
 {
     if (status != SANE_STATUS_GOOD) {
         printf("%s: %s\n", operation, sane_strstatus(status));
+        if (handle != NULL) {
+            sane_close(handle);
+        }
         exit(1);
     }
 }
