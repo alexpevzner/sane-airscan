@@ -118,6 +118,9 @@ static void
 device_job_abort (device *dev, SANE_Status status);
 
 static void
+device_escl_cleanup (device *dev);
+
+static void
 device_escl_load_page (device *dev);
 
 static bool
@@ -396,8 +399,13 @@ device_http_get (device *dev, const char *path,
 static void
 device_http_onerror (device *dev, error err) {
     log_debug(dev, ESTRING(err));
-    device_state_set(dev, DEVICE_SCAN_DONE);
     device_job_set_status(dev, SANE_STATUS_IO_ERROR);
+
+    if (dev->state == DEVICE_SCAN_LOADING) {
+        device_escl_cleanup(dev);
+    } else {
+        device_state_set(dev, DEVICE_SCAN_DONE);
+    }
 }
 
 /******************** ESCL initialization ********************/
@@ -679,19 +687,12 @@ device_escl_load_page (device *dev)
 static void
 device_escl_start_scan_callback (device *dev, http_query *q)
 {
-    error       err;
+    error       err = NULL;
     const char  *location;
     SANE_Status status = SANE_STATUS_GOOD;
     http_uri    *uri;
 
     /* Check HTTP status */
-    err = http_query_transport_error(q);
-    if (err != NULL) {
-        err = eloop_eprintf("ScanJobs request: %s", ESTRING(err));
-        status = SANE_STATUS_IO_ERROR;
-        goto DONE;
-    }
-
     if (http_query_status(q) != HTTP_STATUS_CREATED) {
         err = eloop_eprintf("ScanJobs request: unexpected HTTP status %d",
                 http_query_status(q));
