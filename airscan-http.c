@@ -30,30 +30,54 @@ struct http_uri {
 /* Create new URI, by parsing URI string
  */
 http_uri*
-http_uri_new (const char *str)
+http_uri_new (const char *str, bool strip_fragment)
 {
     http_uri *uri = NULL;
     SoupURI  *parsed = soup_uri_new(str);
 
+    /* Allow only http and https schemes */
+    if (parsed != NULL) {
+        if (strcmp(parsed->scheme, "http") && strcmp(parsed->scheme, "https")) {
+            soup_uri_free(parsed);
+            parsed = NULL;
+        }
+    }
+
     if (parsed != NULL) {
         uri = g_new0(http_uri, 1);
+        if (strip_fragment) {
+            soup_uri_set_fragment(parsed, NULL);
+        }
         uri->parsed = parsed;
     }
 
     return uri;
 }
 
-/* Create URI, relative to base URI
+/* Create URI, relative to base URI. If `path_only' is
+ * true, scheme, host and port are taken from the
+ * base URI
  */
 http_uri*
-http_uri_new_relative (const http_uri *base, const char *path)
+http_uri_new_relative (const http_uri *base, const char *path,
+        bool strip_fragment, bool path_only)
 {
     http_uri *uri = NULL;
     SoupURI  *parsed = soup_uri_new_with_base(base->parsed, path);
 
     if (parsed != NULL) {
         uri = g_new0(http_uri, 1);
-        uri->parsed = parsed;
+        if (path_only) {
+            uri->parsed = soup_uri_copy(base->parsed);
+            soup_uri_set_path(uri->parsed, soup_uri_get_path(parsed));
+            soup_uri_free(parsed);
+        } else {
+            uri->parsed = parsed;
+        }
+
+        if (strip_fragment) {
+            soup_uri_set_fragment(uri->parsed, NULL);
+        }
     }
 
     return uri;

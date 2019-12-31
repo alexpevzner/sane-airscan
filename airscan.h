@@ -274,12 +274,15 @@ typedef struct http_uri http_uri;
 /* Create new URI, by parsing URI string
  */
 http_uri*
-http_uri_new (const char *str);
+http_uri_new (const char *str, bool strip_fragment);
 
-/* Create URI, relative to base URI
+/* Create URI, relative to base URI. If `path_only' is
+ * true, scheme, host and port are taken from the
+ * base URI
  */
 http_uri*
-http_uri_new_relative (const http_uri *base, const char *path);
+http_uri_new_relative (const http_uri *base, const char *path,
+        bool strip_fragment, bool path_only);
 
 /* Free the URI
  */

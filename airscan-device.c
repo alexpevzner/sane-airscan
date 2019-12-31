@@ -378,7 +378,7 @@ device_http_perform (device *dev, const char *path,
         const char *method, char *body,
         void (*callback)(device*, http_query *q))
 {
-    http_uri *uri = http_uri_new_relative(dev->uri_escl, path);
+    http_uri *uri = http_uri_new_relative(dev->uri_escl, path, true, false);
     http_query_new(dev->http_client, uri, method, body, "text/xml", callback);
 }
 
@@ -413,7 +413,7 @@ device_probe_address (device *dev, zeroconf_addrinfo *addrinfo)
     }
 
     /* Parse device URI */
-    dev->uri_escl = http_uri_new(addrinfo->uri);
+    dev->uri_escl = http_uri_new(addrinfo->uri, true);
     log_assert(dev, dev->uri_escl != NULL);
 
     /* Make sure eSCL URI's path ends with '/' character */
@@ -679,43 +679,66 @@ device_escl_load_page (device *dev)
 static void
 device_escl_start_scan_callback (device *dev, http_query *q)
 {
-    const char *location;
+    error       err;
+    const char  *location;
+    SANE_Status status = SANE_STATUS_GOOD;
+    http_uri    *uri;
 
-    /* Check HTTP status and obtain location */
-    location = NULL;
-    if (http_query_status(q) == HTTP_STATUS_CREATED) {
-        location = http_query_get_response_header(q, "Location");
-
-        if (*location == '\0') {
-            location = NULL; /* Paranoia */
-        }
+    /* Check HTTP status */
+    err = http_query_transport_error(q);
+    if (err != NULL) {
+        err = eloop_eprintf("ScanJobs request: %s", ESTRING(err));
+        status = SANE_STATUS_IO_ERROR;
+        goto DONE;
     }
 
-    if (location != NULL) {
-        g_string_assign(dev->job_location, location);
+    if (http_query_status(q) != HTTP_STATUS_CREATED) {
+        err = eloop_eprintf("ScanJobs request: unexpected HTTP status %s",
+                http_query_status(q));
+        goto DONE;
     }
+
+    /* Obtain location */
+    location = http_query_get_response_header(q, "Location");
+    if (location == NULL || *location == '\0') {
+        err = eloop_eprintf("ScanJobs request: empty location received");
+        status = SANE_STATUS_IO_ERROR;
+        goto DONE;
+    }
+
+    /* Validate and save location */
+    uri = http_uri_new_relative(dev->uri_escl, location, true, true);
+    if (uri == NULL) {
+        err = eloop_eprintf("ScanJobs request: invalid location received");
+        status = SANE_STATUS_IO_ERROR;
+        goto DONE;
+    }
+
+    g_string_assign(dev->job_location, http_uri_get_path(uri));
+    http_uri_free(uri);
 
     /* Check for pending cancellation */
     if (dev->job_cancel_rq) {
         device_job_set_status(dev, SANE_STATUS_CANCELLED);
-
-        if (location != NULL) {
-            device_escl_cleanup(dev);
-        } else {
-            device_state_set(dev, DEVICE_SCAN_DONE);
-        }
-
-        return;
-    }
-
-    /* Check for an error */
-    if (location == NULL) {
-        device_escl_check_status(dev);
+        device_escl_cleanup(dev);
         return;
     }
 
     /* Start loading pages */
     device_escl_load_page(dev);
+    return;
+
+    /* Cleanup and exit */
+DONE:
+    log_debug(dev, ESTRING(err));
+    trace_error(dev->trace, err);
+
+    if (status == SANE_STATUS_GOOD) {
+        device_escl_check_status(dev);
+    } else {
+        device_job_set_status(dev, status);
+        device_state_set(dev, DEVICE_SCAN_DONE);
+    }
 }
 
 /* Geometrical scan parameters

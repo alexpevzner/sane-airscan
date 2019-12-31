@@ -698,7 +698,7 @@ conf_load_from_ini (inifile *ini)
                     conf_perror(rec, "device already defined");
                 } else if (!strcmp(rec->value, CONF_DEVICE_DISABLE)) {
                     conf_device_list_prepend(rec->variable, NULL);
-                } else if ((uri = http_uri_new(rec->value)) != NULL) {
+                } else if ((uri = http_uri_new(rec->value, true)) != NULL) {
                     conf_device_list_prepend(rec->variable, http_uri_str(uri));
                     http_uri_free(uri);
                 } else {
