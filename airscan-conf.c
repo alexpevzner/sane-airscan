@@ -713,6 +713,14 @@ conf_load_from_ini (inifile *ini)
                     } else {
                         conf_perror(rec, "usage: discovery = enable | disable");
                     }
+                } else if (inifile_match_name(rec->variable, "model")) {
+                    if (inifile_match_name(rec->value, "network")) {
+                        conf.model_is_netname = true;
+                    } else if (inifile_match_name(rec->value, "hardware")) {
+                        conf.model_is_netname = false;
+                    } else {
+                        conf_perror(rec, "usage: model = network | hardware");
+                    }
                 }
             } else if (inifile_match_name(rec->section, "debug")) {
                 if (inifile_match_name(rec->variable, "trace")) {

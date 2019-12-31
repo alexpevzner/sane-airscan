@@ -121,7 +121,14 @@ Miscellaneous options all goes to the \fB[options]\fR section\. Currently the fo
 .nf
 
 [options]
-discovery = enable | disabele ; Enable or disable devices discovery
+; If there are a lot of scanners around and you are only
+; interested if few of them, disable auto discovery and
+; configure scanners manually
+discovery = enable | disable
+
+; Choose what SANE apps will show in a list of devices:
+; scanner network (the default) name or hardware model name
+model = network | hardware
 .
 .fi
 .

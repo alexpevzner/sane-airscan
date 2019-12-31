@@ -1019,8 +1019,13 @@ device_list_get (void)
         dev_list[i] = info;
 
         info->name = g_strdup(devices[i]->name);
-        info->vendor = g_strdup(devices[i]->opt.caps.vendor);
-        info->model = g_strdup(devices[i]->opt.caps.model);
+        if (conf.model_is_netname) {
+            info->vendor = g_strdup("AirScan");
+            info->model = g_strdup(devices[i]->name);
+        } else {
+            info->vendor = g_strdup(devices[i]->opt.caps.vendor);
+            info->model = g_strdup(devices[i]->opt.caps.model);
+        }
         info->type = "eSCL network scanner";
     }
 

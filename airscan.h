@@ -98,13 +98,14 @@ struct conf_device {
 /* Backend configuration
  */
 typedef struct {
-    bool        dbg_enabled; /* Debugging enabled */
-    const char  *dbg_trace;  /* Trace directory */
-    conf_device *devices;    /* Manually configured devices */
-    bool        discovery;   /* Scanners discovery enabled */
+    bool        dbg_enabled;      /* Debugging enabled */
+    const char  *dbg_trace;       /* Trace directory */
+    conf_device *devices;         /* Manually configured devices */
+    bool        discovery;        /* Scanners discovery enabled */
+    bool        model_is_netname; /* Use network name instead of model */
 } conf_data;
 
-#define CONF_INIT { false, NULL, NULL, true }
+#define CONF_INIT { false, NULL, NULL, true, true }
 
 extern conf_data conf;
 
