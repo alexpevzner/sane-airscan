@@ -288,6 +288,25 @@ http_query_callback (SoupSession *session, SoupMessage *msg, gpointer userdata)
     }
 }
 
+/* Set Host header in HTTP request
+ */
+static void
+http_query_set_host (http_query *q)
+{
+    char       *host, *end, *buf;
+    size_t     len;
+
+    host = strstr(http_uri_str(q->uri), "//") + 2;
+    end = strchr(host, '/');
+
+    len = end - host;
+    buf = g_alloca(len + 1);
+    memcpy(buf, host, len);
+
+    buf[len] = '\0';
+    soup_message_headers_append(q->msg->request_headers, "Host", buf);
+}
+
 /* Create new http_query
  *
  * Newly created http_query takes ownership on uri and body (if not NULL).
@@ -316,6 +335,9 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
     }
 
     http_query_list_ins(q);
+
+    /* Build and set Host: header */
+    http_query_set_host(q);
 
     /* Note, on Kyocera ECOSYS M2040dn connection keep-alive causes
      * scanned job to remain in "Processing" state about 10 seconds
