@@ -94,7 +94,7 @@ As root, execute the following commands:
 apt-get install libavahi-client-dev libavahi-glib-dev
 apt-get install gcc git make pkg-config
 apt-get install libglib2.0-dev libsoup2.4-dev libxml2-dev
-apt-get install libjpeg-turbo8-dev libsane-dev
+apt-get install libjpeg-dev libsane-dev
 ```
 #### Download, build and install sane-airscan
 ```
