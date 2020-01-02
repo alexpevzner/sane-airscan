@@ -601,7 +601,7 @@ device_escl_check_status_callback (device *dev, http_query *q)
 DONE:
     trace_printf(dev->trace, "-----");
     if (err != NULL) {
-        trace_printf(dev->trace, "Error: %s", err);
+        trace_printf(dev->trace, "Error: %s", ESTRING(err));
     }
 
     trace_printf(dev->trace, "Device status: %s", sane_strstatus(device_status));
