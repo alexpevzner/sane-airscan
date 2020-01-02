@@ -887,7 +887,6 @@ conf_unload (void)
     conf_device_list_free();
     g_free((char*) conf.dbg_trace);
     memset(&conf, 0, sizeof(conf));
-    conf.dbg_enabled = true; // FIXME
 }
 
 /* vim:ts=8:sw=4:et
