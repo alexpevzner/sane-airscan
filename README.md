@@ -30,9 +30,8 @@ image received from scanner
 Any **eSCL** capable scanner expected to work, but only few of them
 were actually tested.
 
-Sane-airscan was tested and found to work with the following scanners and
-cameras:
-* Canon D570 (camera)
+Sane-airscan was tested and found to work with the following scanners:
+* Canon D570
 * HP DeskJet 2540
 * HP ENVY 4500
 * Kyocera ECOSYS M2040dn
