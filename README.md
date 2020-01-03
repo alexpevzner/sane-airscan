@@ -30,11 +30,13 @@ image received from scanner
 Any **eSCL** capable scanner expected to work, but only few of them
 were actually tested.
 
-Sane-airscan was tested and found to work with the following scanners:
-1. HP DeskJet 2540
-2. HP ENVY 4500
-3. Kyocera ECOSYS M2040dn
-4. TODO
+Sane-airscan was tested and found to work with the following scanners and
+cameras:
+* Canon D570 (camera)
+* HP DeskJet 2540
+* HP ENVY 4500
+* Kyocera ECOSYS M2040dn
+* TODO
 
 If you have success with a scanner not included into this list,
 please let me know.
