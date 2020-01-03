@@ -115,15 +115,24 @@ devcaps_source_parse_document_formats (xml_rd *xml, devcaps_source *src)
 {
     xml_rd_enter(xml);
     for (; !xml_rd_end(xml); xml_rd_next(xml)) {
-        if(xml_rd_node_name_match(xml, "pwg:DocumentFormat") ||
-           xml_rd_node_name_match(xml, "scan:DocumentFormatExt")) {
+        unsigned int flags = 0;
+
+        if(xml_rd_node_name_match(xml, "pwg:DocumentFormat")) {
+            flags |= DEVCAPS_SOURCE_PWG_DOCFMT;
+        }
+
+        if(xml_rd_node_name_match(xml, "scan:DocumentFormatExt")) {
+            flags |= DEVCAPS_SOURCE_SCAN_DOCFMT_EXT;
+        }
+
+        if (flags != 0) {
             const char *v = xml_rd_node_value(xml);
             if (!strcasecmp(v, "image/jpeg")) {
-                src->flags |= DEVCAPS_SOURCE_FMT_JPEG;
+                src->flags |= flags | DEVCAPS_SOURCE_FMT_JPEG;
             } else if (!strcasecmp(v, "image/png")) {
-                src->flags |= DEVCAPS_SOURCE_FMT_PNG;
+                src->flags |= flags | DEVCAPS_SOURCE_FMT_PNG;
             } else if (!strcasecmp(v, "application/pdf")) {
-                src->flags |= DEVCAPS_SOURCE_FMT_PDF;
+                src->flags |= flags | DEVCAPS_SOURCE_FMT_PDF;
             }
         }
     }

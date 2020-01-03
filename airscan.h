@@ -756,6 +756,10 @@ enum {
     /* Miscellaneous flags */
     DEVCAPS_SOURCE_HAS_SIZE = (1 << 12), /* max_width, max_height and
                                             derivatives are valid */
+
+    /* Protocol dialects */
+    DEVCAPS_SOURCE_PWG_DOCFMT      = (1 << 13), /* pwg:DocumentFormat */
+    DEVCAPS_SOURCE_SCAN_DOCFMT_EXT = (1 << 14), /* scan:DocumentFormatExt */
 };
 
 /* Source Capabilities (each device may contain multiple sources)
