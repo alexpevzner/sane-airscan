@@ -457,8 +457,9 @@ http_query_foreach_response_header (http_query *q,
 /* Some HTTP status codes
  */
 enum {
-    HTTP_STATUS_OK      = 200,
-    HTTP_STATUS_CREATED = 201
+    HTTP_STATUS_OK                  = 200,
+    HTTP_STATUS_CREATED             = 201,
+    HTTP_STATUS_SERVICE_UNAVAILABLE = 503
 };
 
 /* Initialize HTTP client

@@ -16,6 +16,15 @@
  */
 #define DEVICE_TABLE_READY_TIMEOUT              5
 
+/* If HTTP 503 reply is received, how many retry attempts
+ * to perform before giving up
+ */
+#define DEVICE_HTTP_RETRY_ATTEMPTS              10
+
+/* And pause between retries, in seconds
+ */
+#define DEVICE_HTTP_RETRY_PAUSE                 1
+
 /******************** Device management ********************/
 /* Device flags
  */
@@ -40,6 +49,7 @@ typedef enum {
     DEVICE_SCAN_STARTED,
     DEVICE_SCAN_REQUESTING,
     DEVICE_SCAN_LOADING,
+    DEVICE_SCAN_LOAD_RETRY,
     DEVICE_SCAN_CHECK_STATUS,
     DEVICE_SCAN_CLEANING_UP,
 
@@ -64,11 +74,14 @@ struct device {
     zeroconf_addrinfo    *addr_current; /* Current address to probe */
     http_uri             *uri_escl;     /* eSCL base URI */
     http_client          *http_client;  /* HTTP client */
+    eloop_timer          *http_timer;   /* HTTP retry timer */
+    int                  http_retry;    /* HTTP retry count */
     trace                *trace;        /* Protocol trace */
 
     /* Scanning state machinery */
     SANE_Status          job_status;          /* Job completion status */
     GString              *job_location;       /* Scanned page location */
+    bool                 job_has_location;    /* Location is valid */
     eloop_event          *job_cancel_event;   /* Cancel event */
     bool                 job_cancel_rq;       /* Cancel requested */
     GPtrArray            *job_images;         /* Array of SoupBuffer* */
@@ -101,6 +114,9 @@ static GCond device_table_cond;
  */
 static device*
 device_find (const char *name);
+
+static void
+device_http_cancel (device *dev);
 
 static void
 device_http_onerror (device *dev, error err);
@@ -242,7 +258,7 @@ device_del (device *dev)
     g_ptr_array_remove(device_table, dev);
 
     /* Stop all pending I/O activity */
-    http_client_cancel(dev->http_client);
+    device_http_cancel(dev);
     trace_close(dev->trace);
     dev->trace = NULL;
 
@@ -340,6 +356,7 @@ device_state_name (DEVICE_STATE state)
     case DEVICE_SCAN_STARTED:      return "SCAN_STARTED";
     case DEVICE_SCAN_REQUESTING:   return "SCAN_REQUESTING";
     case DEVICE_SCAN_LOADING:      return "SCAN_LOADING";
+    case DEVICE_SCAN_LOAD_RETRY:   return "SCAN_LOAD_RETRY";
     case DEVICE_SCAN_CHECK_STATUS: return "SCAN_CHECK_STATUS";
     case DEVICE_SCAN_CLEANING_UP:  return "SCAN_CLEANING_UP";
     case DEVICE_SCAN_DONE:         return "SCAN_DONE";
@@ -354,7 +371,10 @@ static void
 device_state_set (device *dev, DEVICE_STATE state)
 {
     if (dev->state != state) {
-        log_debug(dev, "state=%s", device_state_name(state));
+        log_debug(dev, "state=%s; has_location=%s; retry=%d",
+                device_state_name(state),
+                dev->job_has_location ? "true" : "false",
+                dev->http_retry);
 
         dev->state = state;
         g_cond_broadcast(&dev->state_cond);
@@ -394,6 +414,18 @@ device_http_get (device *dev, const char *path,
     device_http_perform(dev, path, "GET", NULL, callback);
 }
 
+/* Cancel pending HTTP request, if any
+ */
+static void
+device_http_cancel (device *dev)
+{
+    http_client_cancel(dev->http_client);
+    if (dev->http_timer != NULL) {
+        eloop_timer_cancel(dev->http_timer);
+        dev->http_timer = NULL;
+    }
+}
+
 /* http_client onerror callback
  */
 static void
@@ -401,7 +433,7 @@ device_http_onerror (device *dev, error err) {
     log_debug(dev, ESTRING(err));
     device_job_set_status(dev, SANE_STATUS_IO_ERROR);
 
-    if (dev->state == DEVICE_SCAN_LOADING) {
+    if (dev->job_has_location) {
         device_escl_cleanup(dev);
     } else {
         device_state_set(dev, DEVICE_SCAN_DONE);
@@ -610,10 +642,10 @@ DONE:
     trace_printf(dev->trace, "");
 
     device_job_set_status(dev, status);
-    if (dev->job_location->len == 0) {
-        device_state_set(dev, DEVICE_SCAN_DONE);
-    } else {
+    if (dev->job_has_location) {
         device_escl_cleanup(dev);
+    } else {
+        device_state_set(dev, DEVICE_SCAN_DONE);
     }
 }
 
@@ -631,6 +663,27 @@ device_escl_check_status (device *dev)
             device_escl_check_status_callback);
 }
 
+/* LOAD_RETRY timer callback
+ */
+static void
+device_escl_load_retry_callback (void *data) {
+    device *dev = data;
+    dev->http_timer = NULL;
+    device_escl_load_page(dev);
+}
+
+/* Retry HTTP GET ${dev->job_location}/NextDocument
+ * after some delay
+ */
+static void
+device_escl_load_retry (device *dev) {
+    device_state_set(dev, DEVICE_SCAN_LOAD_RETRY);
+
+    dev->http_retry ++;
+    dev->http_timer = eloop_timer_new(DEVICE_HTTP_RETRY_PAUSE * 1000,
+            device_escl_load_retry_callback, dev);
+}
+
 /* HTTP GET ${dev->job_location}/NextDocument callback
  */
 static void
@@ -645,6 +698,7 @@ device_escl_load_page_callback (device *dev, http_query *q)
 
         g_ptr_array_add(dev->job_images, http_data_ref(data));
         dev->job_images_received ++;
+        dev->http_retry = 0;
 
         if (dev->job_images_received == 1) {
             if (!device_read_push(dev)) {
@@ -658,6 +712,9 @@ device_escl_load_page_callback (device *dev, http_query *q)
         } else {
             device_escl_load_page(dev);
         }
+    } else if (http_query_status(q) == HTTP_STATUS_SERVICE_UNAVAILABLE &&
+               dev->http_retry + 1 < DEVICE_HTTP_RETRY_ATTEMPTS) {
+        device_escl_load_retry(dev);
     } else {
         device_escl_check_status(dev);
     }
@@ -716,6 +773,7 @@ device_escl_start_scan_callback (device *dev, http_query *q)
     }
 
     g_string_assign(dev->job_location, http_uri_get_path(uri));
+    dev->job_has_location = true;
     http_uri_free(uri);
 
     /* Check for pending cancellation */
@@ -949,14 +1007,15 @@ device_job_abort (device *dev, SANE_Status status)
         break;
 
     case DEVICE_SCAN_LOADING:
+    case DEVICE_SCAN_LOAD_RETRY:
     case DEVICE_SCAN_CHECK_STATUS:
-        http_client_cancel(dev->http_client);
+        device_http_cancel(dev);
         /* Fall through...*/
 
     case DEVICE_SCAN_CLEANING_UP:
         device_job_set_status(dev, status);
 
-        if (dev->state == DEVICE_SCAN_LOADING) {
+        if (dev->job_has_location) {
             device_escl_cleanup(dev);
         }
 
@@ -1245,13 +1304,15 @@ device_start (device *dev)
     device_state_set(dev, DEVICE_SCAN_STARTED);
     dev->job_status = SANE_STATUS_GOOD;
     g_string_truncate(dev->job_location, 0);
+    dev->job_has_location = false;
     dev->job_cancel_rq = false;
     dev->job_images_received = 0;
+    dev->http_retry = 0;
 
     eloop_call(device_start_do, dev);
 
     /* And wait until it reaches "LOADING" state */
-    while (dev->state != DEVICE_SCAN_LOADING) {
+    while (!dev->job_has_location) {
         if (dev->state == DEVICE_SCAN_DONE) {
             goto FAIL;
         }
