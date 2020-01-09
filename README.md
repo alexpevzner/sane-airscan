@@ -34,6 +34,7 @@ Sane-airscan was tested and found to work with the following scanners:
 * Canon D570
 * HP DeskJet 2540
 * HP ENVY 4500
+* HP LaserJet Pro M28w
 * Kyocera ECOSYS M2040dn
 * TODO
 
