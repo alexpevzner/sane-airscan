@@ -250,6 +250,24 @@ eloop_event_free (eloop_event *event);
 void
 eloop_event_trigger (eloop_event *event);
 
+/* Timer. Calls user-defined function after a specified
+ * interval
+ */
+typedef struct eloop_timer eloop_timer;
+
+/* Create new timer. Timeout is in milliseconds
+ */
+eloop_timer*
+eloop_timer_new (int timeout, void (*callback)(void *), void *data);
+
+/* Cancel a timer
+ *
+ * Caller SHOULD NOT cancel expired timer (timer with called
+ * callback) -- this is done automatically
+ */
+void
+eloop_timer_cancel (eloop_timer *timer);
+
 /* Format error string, as printf() does and save result
  * in the memory, owned by the event loop
  *

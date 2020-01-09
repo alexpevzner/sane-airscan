@@ -280,6 +280,59 @@ eloop_event_trigger (eloop_event *event)
     pollable_signal(event->p);
 }
 
+/* Timer. Calls user-defined function after a specified
+ * interval
+ */
+struct eloop_timer {
+    GSource *source;             /* Underlying GSource */
+    void    (*callback)(void *); /* User callback */
+    void    *data;               /* User data */
+};
+
+/* eloop_timer callback for GSource
+ */
+static gboolean
+eloop_timer_callback (gpointer data)
+{
+    eloop_timer *timer = data;
+
+    timer->callback(timer->data);
+    eloop_timer_cancel(timer);
+
+    return G_SOURCE_REMOVE;
+}
+
+/* Create new timer. Timeout is in milliseconds
+ */
+eloop_timer*
+eloop_timer_new (int timeout, void (*callback)(void *), void *data)
+{
+    eloop_timer *timer = g_new0(eloop_timer, 1);
+
+    timer->source = g_timeout_source_new(timeout);
+    timer->callback = callback;
+    timer->data = data;
+
+    g_source_set_priority(timer->source, G_PRIORITY_DEFAULT);
+    g_source_set_callback(timer->source, eloop_timer_callback, timer, NULL);
+    g_source_attach(timer->source, eloop_glib_main_context);
+
+    return timer;
+}
+
+/* Cancel a timer
+ *
+ * Caller SHOULD NOT cancel expired timer (timer with called
+ * callback) -- this is done automatically
+ */
+void
+eloop_timer_cancel (eloop_timer *timer)
+{
+    g_source_destroy(timer->source);
+    g_source_unref(timer->source);
+    g_free(timer);
+}
+
 /* Format error string, as printf() does and save result
  * in the memory, owned by the event loop
  *
