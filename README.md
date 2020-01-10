@@ -35,6 +35,7 @@ Sane-airscan was tested and found to work with the following scanners:
 * HP DeskJet 2540
 * HP ENVY 4500
 * HP LaserJet Pro M28w
+* HP OfficeJet Pro 8730
 * Kyocera ECOSYS M2040dn
 * TODO
 
