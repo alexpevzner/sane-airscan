@@ -4,10 +4,11 @@ If you are a lucky owner of scanner or MFP which works via network with
 Apple devices, I have a good news for you: now your scanner works with
 Linux as well!
 
-In theory, this backend should work with any scanner which support
+In theory, this backend should work with any scanner that supports the
 **eSCL** protocol (unofficially known as **AirScan** or **AirPrint scanning**).
-In practice, I have tested it with my **Kyocera ECOSYS M2040dn**
-and waiting to feedback regarding other devices.
+In practice, it was tested on several devices from **Canon**, **Kyocera**
+and **HP**, and this list constantly grows, though slowly, so feedback
+regarding other devices is very welcomed.
 
 Apple maintains [a comprehensive list](https://support.apple.com/en-us/HT201311)
 of compatible devices, but please note, this list contains not only scanners
