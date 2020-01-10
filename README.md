@@ -25,6 +25,7 @@ image received from scanner
 5. Automatic discovery and configuration of the hardware
 6. Manual configuration is also possible, in case zeroconf doesn't work
 (i.e., computer and scanner are connected to the different subnets)
+7. Both IPv4 and IPv6 are supported
 
 ### Compatibility
 
