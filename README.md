@@ -46,12 +46,13 @@ please let me know.
 Thanks to [openSUSE Build Service](https://build.opensuse.org/), I can
 provide pre-built packages for many popular Linux distros.
 
-Currently, the following distros are supported "officially" (i.e., by me): **Debian** (9.0 and 10),
-**Fedora** (29, 30 and 31), **openSUSE** (Leap and Tumbleweed),
-**Ubuntu** (18.04, 19.04 and 19.10). There ara also "3rd party" repos, currently for **Arch Linux"".
+Currently, the following distros are supported "officially" (i.e., by me):
+**Debian** (9.0 and 10), **Fedora** (29, 30 and 31),
+**openSUSE** (Leap and Tumbleweed), **Ubuntu** (18.04, 19.04 and 19.10).
+There are also some "3rd party" repos, currently for **Arch Linux**.
 
-If your distro is not listed,
-see [Installation from sources](https://github.com/alexpevzner/sane-airscan#installation-from-sources)
+If your distro is not listed, see
+[Installation from sources](https://github.com/alexpevzner/sane-airscan#installation-from-sources)
 section below.
 
 #### RPM-based distros (Fedora, openSUSE)
