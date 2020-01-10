@@ -46,9 +46,11 @@ please let me know.
 Thanks to [openSUSE Build Service](https://build.opensuse.org/), I can
 provide pre-built packages for many popular Linux distros.
 
-Currently, the following distros are supported: **Debian** (9.0 and 10),
+Currently, the following distros are supported "officially" (i.e., by me): **Debian** (9.0 and 10),
 **Fedora** (29, 30 and 31), **openSUSE** (Leap and Tumbleweed),
-**Ubuntu** (18.04, 19.04 and 19.10). If your distro is not listed,
+**Ubuntu** (18.04, 19.04 and 19.10). There ara also "3rd party" repos, currently for **Arch Linux"".
+
+If your distro is not listed,
 see [Installation from sources](https://github.com/alexpevzner/sane-airscan#installation-from-sources)
 section below.
 
@@ -80,6 +82,14 @@ section below.
     note, the URL above is the path to repository that you have choosen in step 2
 
 6. Install package `sane-airscan`
+
+#### Other distros
+
+##### Arch Linux
+
+Thomas Kiss <thokis@gmail.com> maintains package for Arch Linux:
+
+* https://aur.archlinux.org/packages/sane-airscan-git/
 
 ### Installation from sources
 #### Install required libraries - Fedora and similar
