@@ -624,7 +624,10 @@ device_escl_check_status_callback (device *dev, http_query *q)
         }
     } else {
         status = adf_status;
-        if (status == SANE_STATUS_GOOD) {
+        if (status == SANE_STATUS_NO_DOCS && dev->job_images_received > 0) {
+            status = SANE_STATUS_GOOD;
+        } else if (status == SANE_STATUS_GOOD) {
+            /* It's just a guess... */
             status = SANE_STATUS_JAMMED;
         }
     }
