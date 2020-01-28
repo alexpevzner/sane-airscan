@@ -52,41 +52,15 @@ provide pre-built packages for many popular Linux distros.
 
 Currently, the following distros are supported "officially" (i.e., by me):
 **Debian** (9.0 and 10), **Fedora** (29, 30 and 31),
-**openSUSE** (Leap and Tumbleweed), **Ubuntu** (18.04, 19.04 and 19.10).
+**openSUSE** (Leap and Tumbleweed), **Ubuntu** (16.04, 18.04, 19.04 and 19.10).
 There are also some "3rd party" repos, currently for **Arch Linux**.
+
+To install a pre-build package,
+[follow the link](https://software.opensuse.org//download.html?project=home%3Apzz&package=sane-airscan)
 
 If your distro is not listed, see
 [Installation from sources](https://github.com/alexpevzner/sane-airscan#installation-from-sources)
 section below.
-
-#### RPM-based distros (Fedora, openSUSE)
-
-1. Navigate to https://download.opensuse.org/repositories/home:/pzz/
-2. Find your distro in the list and enter its directory
-3. Download file `home:pzz.repo`
-4. Install it, using your distribution's package manager:
-
-    * Fedore: `dnf config-manager --add-repo ./home:pzz.repo`
-    * openSUSE: [see the link](https://en.opensuse.org/SDB:Add_package_repositories)
-
-5. Install package `sane-airscan`
-
-#### DEB-based distros (Debian, Ubuntu)
-
-1. Navigate to https://download.opensuse.org/repositories/home:/pzz/
-2. Find your distro in the list and enter its directory
-3. Download file `Release.gpg`
-4. Add it to the list of trusted keys:
-
-        apt-key add Release.key
-
-5. Add the repository:
-
-        add-apt-repository -m "deb https://download.opensuse.org/repositories/... ./"
-
-    note, the URL above is the path to repository that you have choosen in step 2
-
-6. Install package `sane-airscan`
 
 #### Other distros
 
