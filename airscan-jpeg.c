@@ -45,7 +45,7 @@ image_decoder_jpeg_begin (image_decoder *decoder, const void *data,
     int                rc;
 
     if (!setjmp(jpeg->jmpb)) {
-        jpeg_mem_src(&jpeg->cinfo, data, size);
+        jpeg_mem_src(&jpeg->cinfo, (unsigned char*) data, size);
 
         rc = jpeg_read_header(&jpeg->cinfo, true);
         if (rc != JPEG_HEADER_OK) {
@@ -112,6 +112,20 @@ static error
 image_decoder_jpeg_set_window (image_decoder *decoder, image_window *win)
 {
     image_decoder_jpeg *jpeg = (image_decoder_jpeg*) decoder;
+
+    /* Note, image clipping cannot be supported on rather
+     * old libjpeg version (i.e., on Ubuntu 16.04, because
+     * jpeg_crop_scanline() and jpeg_skip_scanlines() functions
+     * are missed. The safe default is to update window to
+     * match the entire image dimensions.
+     */
+
+#if     1
+    win->x_off = win->y_off = 0;
+    win->wid = jpeg->cinfo.image_width;
+    win->hei = jpeg->cinfo.image_height;
+    return NULL;
+#else
     JDIMENSION         x_off = win->x_off;
     JDIMENSION         wid = win->wid;
 
@@ -130,6 +144,7 @@ image_decoder_jpeg_set_window (image_decoder *decoder, image_window *win)
     }
 
     return ERROR(jpeg->errbuf);
+#endif
 }
 
 /* Read next line of image
