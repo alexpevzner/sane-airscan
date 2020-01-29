@@ -39,6 +39,7 @@ were actually tested.
 
 Sane-airscan was tested and found to work with the following scanners:
 * Canon D570
+* Canon TS 6151
 * HP Color LaserJet MFP M281fdw
 * HP DeskJet 2540
 * HP ENVY 4500
@@ -85,9 +86,16 @@ Thomas Kiss <thokis@gmail.com> maintains package for Arch Linux:
 Ubuntu packages usually work on Mint, but Ubuntu version needs to
 be chosen carefully.
 
-I would appreciate if somebody from Linux Mint community will
-notify me which Ubuntu version to use with which Mint version,
-so I could publish this information here.
+The following table represents my approximation of Mint vs Ubuntu
+versions compatibility:
+
+| Linux Mint version | Use Ubuntu package: |
+| ------------------ | ------------------- |
+| 18.x               | 16.04               |
+| 19.x               | 18.04               |
+
+The table may be inaccurate and incomplete. I would appreciate
+Mint community feedback to correct it.
 
 ### Installation from sources
 #### Install required libraries - Fedora and similar
