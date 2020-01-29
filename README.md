@@ -14,6 +14,11 @@ Apple maintains [a comprehensive list](https://support.apple.com/en-us/HT201311)
 of compatible devices, but please note, this list contains not only scanners
 and MFP, but pure printers as well.
 
+To use this backend, you don't need to install ScanGear from Canon, HPLIP
+from HP or some other proprietary software from hardware vendor. This backend
+works directly with your device and doesn't depend on a 3rd party closed
+source components.
+
 ### Features
 
 1. Scan from platen and ADF, in duplex and simplex modes, multi-page
@@ -56,7 +61,12 @@ Currently, the following distros are supported "officially" (i.e., by me):
 There are also some "3rd party" repos, currently for **Arch Linux**.
 
 To install a pre-build package,
-[follow the link](https://software.opensuse.org//download.html?project=home%3Apzz&package=sane-airscan)
+[follow the link](https://software.opensuse.org//download.html?project=home%3Apzz&package=sane-airscan),
+where you will find packages and very detailed installation instructions.
+
+I strongly recommend you to choose "Add repository and install manually"
+option rather that "Grab binary packages directly", because it will
+enable automatic updates of the sane-airscan package.
 
 If your distro is not listed, see
 [Installation from sources](https://github.com/alexpevzner/sane-airscan#installation-from-sources)
@@ -69,6 +79,15 @@ section below.
 Thomas Kiss <thokis@gmail.com> maintains package for Arch Linux:
 
 * https://aur.archlinux.org/packages/sane-airscan-git/
+
+##### Linux Mint
+
+Ubuntu packages usually work on Mint, but Ubuntu version needs to
+be chosen carefully.
+
+I would appreciate if somebody from Linux Mint community will
+notify me which Ubuntu version to use with which Mint version,
+so I could publish this information here.
 
 ### Installation from sources
 #### Install required libraries - Fedora and similar
