@@ -1456,6 +1456,9 @@ device_read_push (device *dev)
     dev->read_line_off = dev->opt.params.bytes_per_line;
     dev->read_line_end = hei - dev->read_skip_lines;
 
+    /* Wake up reader */
+    pollable_signal(dev->read_pollable);
+
 DONE:
     if (err != NULL) {
         log_debug(dev, ESTRING(err));
