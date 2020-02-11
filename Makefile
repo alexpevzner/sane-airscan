@@ -1,7 +1,26 @@
+# USER-SETTABLE VARIABLES
+#
+# The following variables can be overridden by user (i.e.,
+# make install DESTDIR=/tmp/xxx):
+#
+#   Name     Default                  Description
+#   ----     -------                  -----------
+#   DESTDIR                           Destination directory for make install
+#   PREFIX       	              Non-standard: appended to DESTDIR
+#   CC       gcc                      C compiler
+#   CFLAGS   -O2 -g -W -Wall -Werror  C compiler flags
+#   COMPRESS gzip                     Program to compress man page, or ""
+#   MANDIR   /usr/share/man/          Where to install man page
+
+CC	= gcc
+COMPRESS = gzip
+CFLAGS	= -O2 -g -W -Wall -Werror
+MANDIR	= /usr/share/man/
+
+# These variables are not intended to be user-settable
 CONFDIR = /etc/sane.d
 LIBDIR := $(shell pkg-config --variable=libdir sane-backends)
 BACKEND = libsane-airscan.so.1
-MANDIR = /usr/share/man/
 MANPAGE = sane-airscan.5
 
 SRC	= \
@@ -23,13 +42,15 @@ SRC	= \
 	airscan-zeroconf.c \
 	sane_strstatus.c
 
-CFLAGS	= -O2 -g -W -Wall -Werror -fPIC
-CFLAGS += `pkg-config --cflags --libs avahi-client`
-CFLAGS += `pkg-config --cflags --libs avahi-glib`
-CFLAGS += `pkg-config --cflags --libs libjpeg`
-CFLAGS += `pkg-config --cflags --libs libsoup-2.4`
-CFLAGS += `pkg-config --cflags --libs libxml-2.0`
-CFLAGS += -Wl,--version-script=airscan.sym
+# Obtain CFLAGS for libraries
+airscan_CFLAGS	= $(CFLAGS)
+airscan_CFLAGS += -fPIC
+airscan_CFLAGS += `pkg-config --cflags --libs avahi-client`
+airscan_CFLAGS += `pkg-config --cflags --libs avahi-glib`
+airscan_CFLAGS += `pkg-config --cflags --libs libjpeg`
+airscan_CFLAGS += `pkg-config --cflags --libs libsoup-2.4`
+airscan_CFLAGS += `pkg-config --cflags --libs libxml-2.0`
+airscan_CFLAGS += -Wl,--version-script=airscan.sym
 
 # Merge DESTDIR and PREFIX
 PREFIX := $(abspath $(DESTDIR)/$(PREFIX))
@@ -50,13 +71,13 @@ endif
 # The workaround is to prevent our backend's shared object from being
 # unloaded when not longer in use, and these magical options do it
 # by adding NODELETE flag to the resulting ELF shared object
-CFLAGS += -Wl,-z,nodelete
+airscan_CFLAGS += -Wl,-z,nodelete
 
 all:	$(BACKEND) test
 
 $(BACKEND): Makefile $(SRC) airscan.h airscan.sym
 	-ctags -R .
-	gcc -o $(BACKEND) -shared $(SRC) ${CFLAGS}
+	$(CC) -o $(BACKEND) -shared $(SRC) $(airscan_CFLAGS)
 
 install: all
 	mkdir -p $(PREFIX)$(CONFDIR)
@@ -65,10 +86,11 @@ install: all
 	cp -n dll.conf $(PREFIX)$(CONFDIR)/dll.d/airscan
 	install -s -D -t $(PREFIX)$(LIBDIR)/sane $(BACKEND)
 	mkdir -p $(PREFIX)/$(MANDIR)/man5
-	gzip <$(MANPAGE) > $(PREFIX)$(MANDIR)/man5/$(MANPAGE).gz
+	install -m 644 -D -t $(PREFIX)$(MANDIR)/man5 $(MANPAGE)
+	[ "$(COMPRESS)" == "" ] || $(COMPRESS) -f $(PREFIX)$(MANDIR)/man5/$(MANPAGE)
 
 clean:
 	rm -f test $(BACKEND) tags
 
 test:	$(BACKEND) test.c
-	gcc -o test test.c $(BACKEND) -Wl,-rpath . ${CFLAGS}
+	$(CC) -o test test.c $(BACKEND) -Wl,-rpath . ${airscan_CFLAGS}
