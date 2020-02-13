@@ -8,7 +8,9 @@
 #   DESTDIR                           Destination directory for make install
 #   PREFIX       	              Non-standard: appended to DESTDIR
 #   CC       gcc                      C compiler
+#   CPPFLAGS                          C preprocessor flags
 #   CFLAGS   -O2 -g -W -Wall -Werror  C compiler flags
+#   LDFLAGS                           Linker flags
 #   COMPRESS gzip                     Program to compress man page, or ""
 #   MANDIR   /usr/share/man/          Where to install man page
 
@@ -77,7 +79,7 @@ all:	$(BACKEND) test
 
 $(BACKEND): Makefile $(SRC) airscan.h airscan.sym
 	-ctags -R .
-	$(CC) -o $(BACKEND) -shared $(SRC) $(airscan_CFLAGS)
+	$(CC) -o $(BACKEND) -shared $(CPPFLAGS) $(SRC) $(airscan_CFLAGS) $(LDFLAGS)
 
 install: all
 	mkdir -p $(PREFIX)$(CONFDIR)
