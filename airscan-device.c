@@ -139,6 +139,9 @@ device_escl_cleanup (device *dev);
 static void
 device_escl_load_page (device *dev);
 
+static void
+device_read_queue_purge (device *dev);
+
 static bool
 device_read_push (device *dev);
 
@@ -231,6 +234,7 @@ device_unref (device *dev)
 
         g_string_free(dev->job_location, TRUE);
         g_cond_clear(&dev->state_cond);
+        device_read_queue_purge(dev);
         g_ptr_array_free(dev->job_images, TRUE);
 
         image_decoder_free(dev->read_decoder_jpeg);
@@ -1283,7 +1287,8 @@ device_start (device *dev)
     /* Previous multi-page scan job may still be running. Check
      * its state */
     if (dev->state != DEVICE_SCAN_IDLE) {
-        if (dev->job_images->len != 0) {
+        if (dev->job_images->len != 0 &&
+            dev->job_status != SANE_STATUS_CANCELLED) {
             /* We have more buffered images */
             if (device_read_push(dev)) {
                 return SANE_STATUS_GOOD;
@@ -1328,6 +1333,7 @@ device_start (device *dev)
     /* Cleanup after error */
 FAIL:
     device_state_set(dev, DEVICE_SCAN_IDLE);
+    device_read_queue_purge(dev);
     dev->flags &= ~DEVICE_SCANNING;
 
     return dev->job_status;
@@ -1371,6 +1377,17 @@ device_get_select_fd (device *dev, SANE_Int *fd)
 
 
 /******************** Read machinery ********************/
+/* Purge all images from the read queue
+ */
+static void
+device_read_queue_purge (device *dev)
+{
+    while (dev->job_images->len > 0) {
+        http_data *p = g_ptr_array_remove_index(dev->job_images, 0);
+        http_data_unref(p);
+    }
+}
+
 /* Push next image to reader. Returns false, if image
  * decoding cannot be started
  */
