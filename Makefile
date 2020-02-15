@@ -40,6 +40,7 @@ SRC	= \
 	airscan-opt.c \
 	airscan-pollable.c \
 	airscan-trace.c \
+	airscan-uuid.c \
 	airscan-xml.c \
 	airscan-zeroconf.c \
 	sane_strstatus.c

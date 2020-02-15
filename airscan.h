@@ -472,6 +472,21 @@ http_init (void);
 void
 http_cleanup (void);
 
+/******************** UUID generator ********************/
+/* Type uuid represents a random UUID string.
+ *
+ * It is wrapped into struct, so it can be returned
+ * by value, without need to mess with memory allocation
+ */
+typedef struct {
+    char text[sizeof("ede05377-460e-4b4a-a5c0-423f9e02e8fa")];
+} uuid;
+
+/* Generate new random UUID
+ */
+uuid
+uuid_new (void);
+
 /******************** Protocol trace ********************/
 /* Type trace represents an opaque handle of trace
  * file
