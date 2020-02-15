@@ -18,6 +18,8 @@
 #include <stdio.h>
 #include <stdbool.h>
 
+#include <netinet/in.h>
+
 /******************** Static configuration ********************/
 /* Configuration path in environment
  */
@@ -119,6 +121,58 @@ conf_load (void);
  */
 void
 conf_unload (void);
+
+/******************** Network interfaces addresses ********************/
+/* Network interface address
+ */
+typedef struct netif_addr netif_addr;
+struct netif_addr {
+    netif_addr *next;         /* Next address in the list */
+    int        ifindex;       /* Interface index */
+    bool       ipv6;          /* This is an IPv6 address */
+    bool       linklocal;     /* This is a link-local address */
+    union {
+        struct in_addr  v4;   /* IPv4 address */
+        struct in6_addr v6;   /* IPv6 address */
+    } ip;
+};
+
+/* Get list of network interfaces addresses
+ */
+netif_addr*
+netif_addr_get (void);
+
+/* Free list of network interfaces addresses
+ */
+void
+netif_addr_free (netif_addr *list);
+
+/* netif_diff represents a difference between two
+ * lists of network interface addresses
+ */
+typedef struct {
+    netif_addr *added, *removed; /* What was added/removed */
+} netif_diff;
+
+/* Compute a difference between two lists of
+ * addresses.
+ */
+netif_diff
+netif_diff_compute (netif_addr *list1, netif_addr *list2);
+
+/* Network interfaces addresses change notifier
+ */
+typedef struct netif_notifier netif_notifier;
+
+/* Create netif_notifier
+ */
+netif_notifier*
+netif_notifier_create (void (*callback) (void*), void *data);
+
+/* Destroy netif_notifier
+ */
+void
+netif_notifier_free (netif_notifier *notifier);
 
 /******************** Pollable events ********************/
 /* The pollable event
