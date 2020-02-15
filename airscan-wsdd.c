@@ -3,7 +3,7 @@
  * Copyright (C) 2019 and up by Alexander Pevzner (pzz@apevzner.com)
  * See LICENSE for license terms and conditions
  *
- * WS-Discovery
+ * Web Services Dynamic Discovery (WS-Discovery)
  */
 
 #include "airscan.h"
@@ -11,7 +11,7 @@
 /* Initialize WS-Discovery
  */
 SANE_Status
-wsdiscovery_init (void)
+wsdd_init (void)
 {
     return SANE_STATUS_GOOD;
 }
@@ -19,7 +19,7 @@ wsdiscovery_init (void)
 /* Cleanup WS-Discovery
  */
 void
-wsdiscovery_cleanup (void)
+wsdd_cleanup (void)
 {
 }
 

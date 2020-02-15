@@ -43,7 +43,7 @@ SRC	= \
 	airscan-uuid.c \
 	airscan-xml.c \
 	airscan-zeroconf.c \
-	airscan-wsdiscovery.c \
+	airscan-wsdd.c \
 	sane_strstatus.c
 
 # Obtain CFLAGS for libraries

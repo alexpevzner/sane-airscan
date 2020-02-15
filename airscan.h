@@ -922,12 +922,12 @@ zeroconf_addrinfo_list_free (zeroconf_addrinfo *list);
 /* Initialize WS-Discovery
  */
 SANE_Status
-wsdiscovery_init (void);
+wsdd_init (void);
 
 /* Cleanup WS-Discovery
  */
 void
-wsdiscovery_cleanup (void);
+wsdd_cleanup (void);
 
 /******************** Device Management ********************/
 /* Get list of devices, in SANE format
