@@ -918,6 +918,17 @@ zeroconf_addrinfo_list_copy (zeroconf_addrinfo *list);
 void
 zeroconf_addrinfo_list_free (zeroconf_addrinfo *list);
 
+/******************** WS-Discovery ********************/
+/* Initialize WS-Discovery
+ */
+SANE_Status
+wsdiscovery_init (void);
+
+/* Cleanup WS-Discovery
+ */
+void
+wsdiscovery_cleanup (void);
+
 /******************** Device Management ********************/
 /* Get list of devices, in SANE format
  */

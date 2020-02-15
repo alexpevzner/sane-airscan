@@ -44,6 +44,9 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
         status = zeroconf_init();
     }
     if (status == SANE_STATUS_GOOD) {
+        status = wsdiscovery_init();
+    }
+    if (status == SANE_STATUS_GOOD) {
         status = trace_init();
     }
 
@@ -71,6 +74,7 @@ sane_exit (void)
     eloop_thread_stop();
 
     trace_cleanup();
+    wsdiscovery_cleanup();
     zeroconf_cleanup();
     device_management_cleanup();
     http_cleanup();
