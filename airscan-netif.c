@@ -240,7 +240,7 @@ netif_diff_compute (netif_addr *list1, netif_addr *list2)
             diff.removed = addr;
         } else if (cmp > 0) {
             addr = netif_addr_clone_single(list2);
-            list1 = list2->next;
+            list2 = list2->next;
             addr->next = diff.added;
             diff.added = addr;
         } else {
@@ -250,7 +250,7 @@ netif_diff_compute (netif_addr *list1, netif_addr *list2)
     }
 
     diff.added = netif_addr_list_revert(diff.added);
-    diff.removed = netif_addr_list_revert(diff.added);
+    diff.removed = netif_addr_list_revert(diff.removed);
 
     return diff;
 }
