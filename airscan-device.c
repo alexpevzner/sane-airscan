@@ -1017,14 +1017,13 @@ device_job_abort (device *dev, SANE_Status status)
     case DEVICE_SCAN_LOAD_RETRY:
     case DEVICE_SCAN_CHECK_STATUS:
         device_http_cancel(dev);
+        if (dev->job_has_location) {
+            device_escl_cleanup(dev);
+        }
         /* Fall through...*/
 
     case DEVICE_SCAN_CLEANING_UP:
         device_job_set_status(dev, status);
-
-        if (dev->job_has_location) {
-            device_escl_cleanup(dev);
-        }
 
         if (dev->state != DEVICE_SCAN_CLEANING_UP) {
             device_state_set(dev, DEVICE_SCAN_DONE);

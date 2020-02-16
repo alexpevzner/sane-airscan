@@ -55,7 +55,9 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
     }
 
     /* Start airscan thread */
-    eloop_thread_start();
+    if (status == SANE_STATUS_GOOD) {
+        eloop_thread_start();
+    }
 
     if (status != SANE_STATUS_GOOD) {
         log_debug(NULL, "sane_init(): %s", sane_strstatus(status));
