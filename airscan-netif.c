@@ -77,6 +77,25 @@ netif_addr_get (void)
     return netif_addr_list_sort(list);
 }
 
+/* Clone a single netif_addr
+ */
+static netif_addr*
+netif_addr_clone_single (const netif_addr *addr)
+{
+    netif_addr *addr2 = g_new0(netif_addr, 1);
+    *addr2 = *addr;
+    addr2->next = NULL;
+    return addr2;
+}
+
+/* Free a single netif_addr
+ */
+static void
+netif_addr_free_single (netif_addr *addr)
+{
+    g_free(addr);
+}
+
 /* Free list of network interfaces addresses
  */
 void
@@ -84,7 +103,7 @@ netif_addr_free (netif_addr *list)
 {
     while (list != NULL) {
         netif_addr *next = list->next;
-        g_free(list);
+        netif_addr_free_single(list);
         list = next;
     }
 }
@@ -94,6 +113,11 @@ netif_addr_free (netif_addr *list)
 static int
 netif_addr_cmp (netif_addr *a1, netif_addr *a2)
 {
+    /* Compare interface indices */
+    if (a1->ifindex != a2->ifindex) {
+        return a1->ifindex - a2->ifindex;
+    }
+
     /* Prefer normal addresses, rather that link-local */
     if (a1->linklocal != a2->linklocal) {
         return (int) a1->linklocal - (int) a2->linklocal;
@@ -186,7 +210,43 @@ netif_addr_list_sort (netif_addr *list)
  * addresses.
  */
 netif_diff
-netif_diff_compute (netif_addr *list1, netif_addr *list2);
+netif_diff_compute (netif_addr *list1, netif_addr *list2)
+{
+    netif_diff diff = {NULL, NULL};
+
+    while (list1 != NULL || list2 != NULL) {
+        netif_addr *addr;
+        int        cmp;
+
+        if (list1 == NULL) {
+            cmp = 1;
+        } else if (list2 == NULL) {
+            cmp = -1;
+        } else {
+            cmp = netif_addr_cmp(list1, list2);
+        }
+
+        if (cmp < 0) {
+            addr = netif_addr_clone_single(list1);
+            list1 = list1->next;
+            addr->next = diff.removed;
+            diff.removed = addr;
+        } else if (cmp > 0) {
+            addr = netif_addr_clone_single(list2);
+            list1 = list2->next;
+            addr->next = diff.added;
+            diff.added = addr;
+        } else {
+            list1 = list1->next;
+            list2 = list2->next;
+        }
+    }
+
+    diff.added = netif_addr_list_revert(diff.added);
+    diff.removed = netif_addr_list_revert(diff.added);
+
+    return diff;
+}
 
 /* Create netif_notifier
  */

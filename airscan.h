@@ -138,6 +138,7 @@ struct netif_addr {
 };
 
 /* Get list of network interfaces addresses
+ * The returned list is sorted
  */
 netif_addr*
 netif_addr_get (void);
@@ -156,6 +157,9 @@ typedef struct {
 
 /* Compute a difference between two lists of
  * addresses.
+ *
+ * It assumes, both lists are sorted, as returned
+ * by netif_addr_get()
  */
 netif_diff
 netif_diff_compute (netif_addr *list1, netif_addr *list2);
