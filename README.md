@@ -41,6 +41,7 @@ Sane-airscan was tested and found to work with the following scanners:
 * Canon D570
 * Canon TS 6151
 * EPSON WF-7710
+* HP Color Laserjet MFP m178-m181
 * HP Color LaserJet MFP M281fdw
 * HP DeskJet 2540
 * HP ENVY 4500
