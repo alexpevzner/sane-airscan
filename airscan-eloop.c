@@ -394,6 +394,7 @@ eloop_fdpoll_new (int fd,
     };
 
     fdpoll = (eloop_fdpoll*) g_source_new(&funcs, sizeof(eloop_fdpoll));
+    fdpoll->fd = fd;
     fdpoll->callback = callback;
     fdpoll->data = data;
 
@@ -420,14 +421,15 @@ eloop_fdpoll_set_mask (eloop_fdpoll *fdpoll, ELOOP_FDPOLL_MASK mask)
     if (fdpoll->mask != mask) {
         guint events = 0;
 
-        if ((mask && ELOOP_FDPOLL_READ) != 0) {
+        if ((mask & ELOOP_FDPOLL_READ) != 0) {
             events |= G_IO_IN;
         }
 
-        if ((mask && ELOOP_FDPOLL_WRITE) != 0) {
+        if ((mask & ELOOP_FDPOLL_WRITE) != 0) {
             events |= G_IO_OUT;
         }
 
+        fdpoll->mask = mask;
         g_source_modify_unix_fd(&fdpoll->source, fdpoll->fd_tag, events);
     }
 }
