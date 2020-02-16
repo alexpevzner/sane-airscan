@@ -333,6 +333,105 @@ eloop_timer_cancel (eloop_timer *timer)
     g_free(timer);
 }
 
+/* eloop_fdpoll notifies user when file becomes
+ * readable, writable or both, depending on its
+ * event mask
+ */
+struct eloop_fdpoll {
+    GSource           source;   /* Underlying GSource */
+    int               fd;       /* Underlying file descriptor */
+    gpointer          fd_tag;   /* Returned by g_source_add_unix_fd() */
+    ELOOP_FDPOLL_MASK mask;     /* Mask of active events */
+    void     (*callback)(       /* User-defined callback */
+        int, void*, ELOOP_FDPOLL_MASK);
+    void              *data;    /* Callback's data */
+};
+
+/* eloop_fdpoll GSource dispatch function
+ */
+static gboolean
+eloop_fdpoll_source_dispatch (GSource *source, GSourceFunc callback,
+    gpointer data)
+{
+    eloop_fdpoll      *fdpoll = (eloop_fdpoll*) source;
+    guint             events = g_source_query_unix_fd(source, fdpoll->fd_tag);
+    ELOOP_FDPOLL_MASK mask = 0;
+
+    (void) callback;
+    (void) data;
+
+    if ((events & G_IO_IN) != 0) {
+        mask |= ELOOP_FDPOLL_READ;
+    }
+
+    if ((events & G_IO_OUT) != 0) {
+        mask |= ELOOP_FDPOLL_WRITE;
+    }
+
+    mask &= fdpoll->mask;
+    if (mask != 0) {
+        fdpoll->callback(fdpoll->fd, fdpoll->data, mask);
+    }
+
+    return G_SOURCE_CONTINUE;
+}
+
+/* Create eloop_fdpoll
+ *
+ * Callback will be called, when file will be ready for read/write/both,
+ * depending on mask
+ *
+ * Initial mask value is 0, and it can be changed, using
+ * eloop_fdpoll_set_mask() function
+ */
+eloop_fdpoll*
+eloop_fdpoll_new (int fd,
+        void (*callback) (int, void*, ELOOP_FDPOLL_MASK), void *data)
+{
+    eloop_fdpoll *fdpoll;
+    static GSourceFuncs funcs = {
+        .dispatch = eloop_fdpoll_source_dispatch
+    };
+
+    fdpoll = (eloop_fdpoll*) g_source_new(&funcs, sizeof(eloop_fdpoll));
+    fdpoll->callback = callback;
+    fdpoll->data = data;
+
+    fdpoll->fd_tag = g_source_add_unix_fd(&fdpoll->source, fd, 0);
+    g_source_attach(&fdpoll->source, eloop_glib_main_context);
+
+    return fdpoll;
+}
+
+/* Destroy eloop_fdpoll
+ */
+void
+eloop_fdpoll_free (eloop_fdpoll *fdpoll)
+{
+    g_source_destroy(&fdpoll->source);
+    g_source_unref(&fdpoll->source);
+}
+
+/* Set eloop_fdpoll event mask
+ */
+void
+eloop_fdpoll_set_mask (eloop_fdpoll *fdpoll, ELOOP_FDPOLL_MASK mask)
+{
+    if (fdpoll->mask != mask) {
+        guint events = 0;
+
+        if ((mask && ELOOP_FDPOLL_READ) != 0) {
+            events |= G_IO_IN;
+        }
+
+        if ((mask && ELOOP_FDPOLL_WRITE) != 0) {
+            events |= G_IO_OUT;
+        }
+
+        g_source_modify_unix_fd(&fdpoll->source, fdpoll->fd_tag, events);
+    }
+}
+
 /* Format error string, as printf() does and save result
  * in the memory, owned by the event loop
  *

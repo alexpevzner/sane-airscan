@@ -326,6 +326,42 @@ eloop_timer_new (int timeout, void (*callback)(void *), void *data);
 void
 eloop_timer_cancel (eloop_timer *timer);
 
+/* eloop_fdpoll notifies user when file becomes
+ * readable, writable or both, depending on its
+ * event mask
+ */
+typedef struct eloop_fdpoll eloop_fdpoll;
+
+/* Mask of file events user interested in
+ */
+typedef enum {
+    ELOOP_FDPOLL_READ  = (1 << 0),
+    ELOOP_FDPOLL_WRITE = (1 << 1),
+    ELOOP_FDPOLL_BOTH  = ELOOP_FDPOLL_READ | ELOOP_FDPOLL_WRITE
+} ELOOP_FDPOLL_MASK;
+
+/* Create eloop_fdpoll
+ *
+ * Callback will be called, when file will be ready for read/write/both,
+ * depending on mask
+ *
+ * Initial mask value is 0, and it can be changed, using
+ * eloop_fdpoll_set_mask() function
+ */
+eloop_fdpoll*
+eloop_fdpoll_new (int fd,
+        void (*callback) (int, void*, ELOOP_FDPOLL_MASK), void *data);
+
+/* Destroy eloop_fdpoll
+ */
+void
+eloop_fdpoll_free (eloop_fdpoll *fdpoll);
+
+/* Set eloop_fdpoll event mask
+ */
+void
+eloop_fdpoll_set_mask (eloop_fdpoll *fdpoll, ELOOP_FDPOLL_MASK mask);
+
 /* Format error string, as printf() does and save result
  * in the memory, owned by the event loop
  *
