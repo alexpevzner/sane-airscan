@@ -8,8 +8,15 @@
 
 #include "airscan.h"
 
+#include <string.h>
+#include <unistd.h>
+
 #include <ifaddrs.h>
 #include <net/if.h>
+#include <linux/netlink.h>
+#include <linux/rtnetlink.h>
+#include <sys/socket.h>
+
 
 /* Forward declarations */
 static netif_addr*
@@ -248,15 +255,104 @@ netif_diff_compute (netif_addr *list1, netif_addr *list2)
     return diff;
 }
 
+/* Network interfaces addresses change notifier
+ */
+struct netif_notifier {
+    int          rtnetlink;          /* rtnetlink socket */
+    eloop_fdpoll *fdpoll;            /* fdpoll for rtnetlink */
+    void         (*callback)(void*); /* Notification callback */
+    void         *data;              /* Callback data */
+    uint8_t      buf[16384];         /* Input buffer */
+};
+
+/* netif_notifier read callback
+ */
+static void
+netif_notifier_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
+{
+    netif_notifier   *notifier = (netif_notifier*) data;
+    int              rc = read(fd, notifier->buf, sizeof(notifier->buf));
+    struct nlmsghdr *p;
+    size_t           sz;
+
+    (void) mask;
+
+    /* Parse rtnetlink message */
+    if (rc < 0) {
+        return;
+    }
+
+    sz = (size_t) rc;
+    for (p = (struct nlmsghdr*) notifier->buf;
+        sz >= sizeof(struct nlmsghdr); p = NLMSG_NEXT(p, sz)) {
+
+        if (!NLMSG_OK(p, sz) || sz < p->nlmsg_len) {
+            return;
+        }
+
+        switch (p->nlmsg_type) {
+        case NLMSG_DONE:
+            return;
+
+        case RTM_NEWADDR:
+        case RTM_DELADDR:
+            notifier->callback(notifier->data);
+            return;
+        }
+    }
+}
+
 /* Create netif_notifier
  */
 netif_notifier*
-netif_notifier_create (void (*callback) (void*), void *data);
+netif_notifier_create (void (*callback) (void*), void *data)
+{
+    int                rtnetlink, rc;
+    struct sockaddr_nl addr;
+    netif_notifier     *notifier;
+
+    /* Open rtnetlink socket */
+    rtnetlink = socket(AF_NETLINK,
+        SOCK_RAW | SOCK_CLOEXEC | SOCK_NONBLOCK, NETLINK_ROUTE);
+
+    if (rtnetlink < 0) {
+        return NULL;
+    }
+
+    /* Subscribe to notifications */
+    memset(&addr, 0, sizeof(addr));
+    addr.nl_family = AF_NETLINK;
+    addr.nl_groups = RTMGRP_IPV4_IFADDR | RTMGRP_IPV6_IFADDR;
+
+    rc = bind(rtnetlink, (struct sockaddr*) &addr, sizeof(addr));
+    if (rc < 0) {
+        close(rtnetlink);
+        return NULL;
+    }
+
+    /* Create netif_notifier structure */
+    notifier = g_new0(netif_notifier, 1);
+    notifier->rtnetlink = rtnetlink;
+    notifier->callback = callback;
+    notifier->data = data;
+
+    /* Register in event loop */
+    notifier->fdpoll = eloop_fdpoll_new(rtnetlink,
+        netif_notifier_read_callback, notifier);
+    eloop_fdpoll_set_mask(notifier->fdpoll, ELOOP_FDPOLL_READ);
+
+    return notifier;
+}
 
 /* Destroy netif_notifier
  */
 void
-netif_notifier_free (netif_notifier *notifier);
+netif_notifier_free (netif_notifier *notifier)
+{
+    eloop_fdpoll_free(notifier->fdpoll);
+    close(notifier->rtnetlink);
+    g_free(notifier);
+}
 
 /* vim:ts=8:sw=4:et
  */
