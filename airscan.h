@@ -147,6 +147,7 @@ struct netif_addr {
     bool       ipv6;          /* This is an IPv6 address */
     bool       linklocal;     /* This is a link-local address */
     void       *data;         /* Placeholder for user data */
+    char       straddr[64];   /* Address string */
     union {
         struct in_addr  v4;   /* IPv4 address */
         struct in6_addr v6;   /* IPv6 address */

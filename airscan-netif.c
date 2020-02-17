@@ -11,12 +11,12 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <arpa/inet.h>
 #include <ifaddrs.h>
-#include <net/if.h>
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
+#include <net/if.h>
 #include <sys/socket.h>
-
 
 /* Forward declarations */
 static netif_addr*
@@ -57,6 +57,8 @@ netif_addr_get (void)
             if ((ntohl(addr->ip.v4.s_addr) & 0xffff0000) == 0xa9fe0000) {
                 addr->linklocal = true;
             }
+            inet_ntop(AF_INET, &addr->ip.v4,
+                addr->straddr, sizeof(addr->straddr));
             break;
 
         case AF_INET6:
@@ -65,6 +67,8 @@ netif_addr_get (void)
             addr->linklocal =
                     addr->ip.v6.s6_addr[0] == 0xfe &&
                     (addr->ip.v6.s6_addr[1] & 0xc0) == 0x80;
+            inet_ntop(AF_INET6, &addr->ip.v6,
+                addr->straddr, sizeof(addr->straddr));
             break;
 
         default:
@@ -136,11 +140,7 @@ netif_addr_cmp (netif_addr *a1, netif_addr *a2)
     }
 
     /* Otherwise, sort lexicographically */
-    if (a1->ipv6) {
-        return memcmp(a1->ip.v6.s6_addr, a2->ip.v6.s6_addr, 16);
-    } else {
-        return memcmp(&a1->ip.v4.s_addr, &a2->ip.v4.s_addr, 4);
-    }
+    return strcmp(a1->straddr, a2->straddr);
 }
 
 /* Revert netif_addr list
