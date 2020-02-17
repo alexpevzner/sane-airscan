@@ -24,12 +24,12 @@
 /* wsdd_resolver represents a per-interface WSDD resolver
  */
 typedef struct {
-    netif_name   ifname;     /* Interface name */
     int          fd;         /* File descriptor */
     bool         ipv6;       /* We are on IPv6 */
     eloop_fdpoll *fdpoll;    /* Socket fdpoll */
     eloop_timer  *timer;     /* Retransmit timer */
     uint32_t     total_time; /* Total elapsed time */
+    ip_straddr   local;      /* Local address */
 } wsdd_resolver;
 
 /* Static variables
@@ -101,7 +101,7 @@ wsdd_resolver_timer_callback (void *data)
         close(resolver->fd);
         resolver->fdpoll = NULL;
         resolver->fd = -1;
-        log_debug(NULL, "WSSD: %s: done discovery", resolver->ifname.text);
+        log_debug(NULL, "WSSD: %s: done discovery", resolver->local.text);
     } else {
         wsdd_resolver_send_probe(resolver);
     };
@@ -138,7 +138,7 @@ wsdd_resolver_send_probe (wsdd_resolver *resolver)
     struct sockaddr *addr;
     socklen_t       addrlen;
 
-    log_debug(NULL, "WSSD: %s: probe sent", resolver->ifname.text);
+    log_debug(NULL, "WSSD: %s: probe sent", resolver->local.text);
 
     if (resolver->ipv6) {
         addr = (struct sockaddr*) &wsdd_mcast_ipv6;
@@ -168,7 +168,6 @@ wsdd_resolver_new (const netif_addr *addr)
     int           rc;
 
     /* Open a socket */
-    resolver->ifname = addr->ifname;
     resolver->ipv6 = addr->ipv6;
     resolver->fd = socket(af, SOCK_DGRAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
     if (resolver->fd < 0) {
@@ -184,6 +183,7 @@ wsdd_resolver_new (const netif_addr *addr)
         if (rc < 0) {
             log_debug(NULL, "WSDD: setsockopt(AF_INET6,IPV6_MULTICAST_IF): %s",
                     strerror(errno));
+            goto FAIL;
         }
     } else {
         rc = setsockopt(resolver->fd, IPPROTO_IP, IP_MULTICAST_IF,
@@ -192,7 +192,30 @@ wsdd_resolver_new (const netif_addr *addr)
         if (rc < 0) {
             log_debug(NULL, "WSDD: setsockopt(AF_INET,IP_MULTICAST_IF): %s",
                     strerror(errno));
+            goto FAIL;
         }
+    }
+
+    /* Bind the socket */
+    if (addr->ipv6) {
+        struct sockaddr_in6 a;
+        a.sin6_family = AF_INET6;
+        a.sin6_addr = addr->ip.v6;
+        a.sin6_scope_id = addr->ifindex;
+        resolver->local = ip_straddr_from_sockaddr((struct sockaddr*) &a);
+        rc = bind(resolver->fd, (struct sockaddr*) &a, sizeof(a));
+    } else {
+        struct sockaddr_in a;
+        a.sin_family = AF_INET;
+        a.sin_addr = addr->ip.v4;
+        resolver->local = ip_straddr_from_sockaddr((struct sockaddr*) &a);
+        rc = bind(resolver->fd, (struct sockaddr*) &a, sizeof(a));
+    }
+
+    if (rc < 0) {
+        log_debug(NULL, "WSDD: bind(%s): %s", resolver->local.text,
+                strerror(errno));
+        goto FAIL;
     }
 
     /* Setup fdpoll */
