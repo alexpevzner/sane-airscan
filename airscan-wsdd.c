@@ -54,30 +54,32 @@ wsdd_mcsock_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
 static int
 wsdd_mcsock_open (bool ipv6)
 {
-    int af = ipv6 ? AF_INET6 : AF_INET;
-    int fd, rc;
+    int        af = ipv6 ? AF_INET6 : AF_INET;
+    int        fd, rc;
+    const char *af_name = ipv6 ? "AF_INET6" : "AF_INET";
     static int yes = 1;
+    ip_straddr straddr;
 
     /* Open a socket */
     fd = socket(af, SOCK_DGRAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
     if (fd < 0) {
-        log_debug(NULL, "WSDD: socket(): %s", strerror(errno));
+        log_debug(NULL, "WSDD: socket(%s): %s", af_name, strerror(errno));
         return fd;
     }
 
     /* Set socket options */
     rc = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
     if (rc < 0) {
-        log_debug(NULL, "WSDD: setsockopt(SO_REUSEADDR): %s",
-                strerror(errno));
+        log_debug(NULL, "WSDD: setsockopt(%s, SO_REUSEADDR): %s",
+                af_name, strerror(errno));
         goto FAIL;
     }
 
     if (ipv6) {
         rc = setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &yes, sizeof(yes));
         if (rc < 0) {
-            log_debug(NULL, "WSDD: setsockopt(IPV6_V6ONLY): %s",
-                    strerror(errno));
+            log_debug(NULL, "WSDD: setsockopt(%s, IPV6_V6ONLY): %s",
+                    af_name, strerror(errno));
             goto FAIL;
         }
     }
@@ -90,16 +92,18 @@ wsdd_mcsock_open (bool ipv6)
         memset(&addr, 0, sizeof(addr));
         addr.sin6_family = AF_INET6;
         addr.sin6_port = wsdd_mcast_ipv6.sin6_port;
+        straddr = ip_straddr_from_sockaddr((struct sockaddr*) &addr);
         rc = bind(fd, (struct sockaddr*) &addr, sizeof(addr));
     } else {
         struct sockaddr_in addr;
         memset(&addr, 0, sizeof(addr));
         addr.sin_family = AF_INET;
         addr.sin_port = wsdd_mcast_ipv4.sin_port;
+        straddr = ip_straddr_from_sockaddr((struct sockaddr*) &addr);
         rc = bind(fd, (struct sockaddr*) &addr, sizeof(addr));
     }
     if (rc < 0) {
-        log_debug(NULL, "WSDD: bind(): %s", strerror(errno));
+        log_debug(NULL, "WSDD: bind(%s): %s", straddr.text, strerror(errno));
         goto FAIL;
     }
 
@@ -107,7 +111,10 @@ wsdd_mcsock_open (bool ipv6)
 
     /* Error: cleanup and exit */
 FAIL:
+    rc = errno;
     close(fd);
+    errno = rc;
+
     return -1;
 }
 
