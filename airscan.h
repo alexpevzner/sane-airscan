@@ -1352,6 +1352,21 @@ math_mm2px (SANE_Fixed mm)
 char*
 math_fmt_mm (SANE_Word mm, char buf[]);
 
+/* Genrate random 32-bit integer
+ */
+uint32_t
+math_rand_u32 (void);
+
+/* Generate random integer in range [0...max], inclusively
+ */
+uint32_t
+math_rand_max (uint32_t max);
+
+/* Generate random integer in range [min...max], inclusively
+ */
+uint32_t
+math_rand_range (uint32_t min, uint32_t max);
+
 /******************** Logging ********************/
 /* Initialize logging
  *

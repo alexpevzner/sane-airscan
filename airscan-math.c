@@ -8,6 +8,8 @@
 
 #include "airscan.h"
 
+#include <sys/random.h>
+
 /* Find greatest common divisor of two positive integers
  */
 SANE_Word
@@ -160,6 +162,54 @@ math_fmt_mm (SANE_Word mm, char buf[])
     }
 
     return buf;
+}
+
+/* Genrate random 32-bit integer
+ */
+uint32_t
+math_rand_u32 (void)
+{
+    uint32_t r;
+    getrandom(&r, sizeof(r), 0);
+    return r;
+}
+
+/* Generate random integer in range [0...max], inclusively
+ */
+uint32_t
+math_rand_max (uint32_t max)
+{
+    uint32_t mask, tmp;
+
+    for (mask = 0, tmp = max; tmp != 0; tmp >>= 1) {
+        mask |= tmp;
+    }
+
+    do {
+        tmp = math_rand_u32() & mask;
+    } while (tmp > max);
+
+    return tmp;
+}
+
+/* Generate random integer in range [min...max], inclusively
+ */
+uint32_t
+math_rand_range (uint32_t min, uint32_t max)
+{
+    /* Normalize range */
+    if (min == max) {
+        return min;
+    }
+
+    if (min > max) {
+        uint32_t tmp = max;
+        max = min;
+        min = tmp;
+    }
+
+    /* Generate random number */
+    return min + math_rand_max(max - min);
 }
 
 /* vim:ts=8:sw=4:et
