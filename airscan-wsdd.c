@@ -10,16 +10,27 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 
 #include <arpa/inet.h>
 
-/* wssd_resolver represents a per-interface WSDD resolver
+/* Protocol times, in milliseconds
+ */
+#define WSDD_RETRANSMIT_MIN     100     /* Min retransmit time */
+#define WSDD_RETRANSMIT_MAX     250     /* Max retransmit time */
+#define WSDD_DISCOVERY_TIME     2500    /* Overall discovery time */
+
+/* wsdd_resolver represents a per-interface WSDD resolver
  */
 typedef struct {
-    int          fd;      /* File descriptor */
-    eloop_fdpoll *fdpoll; /* Socket fdpoll */
-} wssd_resolver;
+    char         ifname[NETIF_NAMESIZE]; /* Interface name */
+    int          fd;                     /* File descriptor */
+    bool         ipv6;                   /* We are on IPv6 */
+    eloop_fdpoll *fdpoll;                /* Socket fdpoll */
+    eloop_timer  *timer;                 /* Retransmit timer */
+    uint32_t     total_time;             /* Total elapsed time */
+} wsdd_resolver;
 
 /* Static variables
  */
@@ -29,37 +40,136 @@ static int                 wsdd_mcsock_ipv4 = -1;
 static int                 wsdd_mcsock_ipv6 = -1;
 static eloop_fdpoll        *wsdd_fdpoll_ipv4;
 static eloop_fdpoll        *wsdd_fdpoll_ipv6;
-static char                wsdd_buf[65546];
+static char                wsdd_buf[65536];
 static struct sockaddr_in  wsdd_mcast_ipv4;
 static struct sockaddr_in6 wsdd_mcast_ipv6;
+
+/* XML templates
+ */
+static const char *wsdd_probe =
+        "<?xml version=\"1.0\" ?>\n"
+        "<s:Envelope xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\" xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\">\n"
+        "	<s:Header>\n"
+        "		<a:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</a:Action>\n"
+        "		<a:MessageID>urn:uuid:%s</a:MessageID>\n"
+        "		<a:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</a:To>\n"
+        "	</s:Header>\n"
+        "	<s:Body>\n"
+        "		<d:Probe/>\n"
+        "	</s:Body>\n"
+        "</s:Envelope>\n";
+
+/* Forward declarations */
+static void
+wsdd_resolver_send_probe (wsdd_resolver *resolver);
 
 /* Resolver read callback
  */
 static void
-wssd_resolver_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
+wsdd_resolver_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
 {
-    int rc;
+    struct sockaddr_storage addr;
+    socklen_t               addrlen = sizeof(addr);
+    ip_straddr              straddr;
+    int                     rc;
 
     (void) data;
     (void) mask;
 
-    rc = read(fd, wsdd_buf, sizeof(wsdd_buf));
+    rc = recvfrom(fd, wsdd_buf, sizeof(wsdd_buf), 0,
+        (struct sockaddr*) &addr, &addrlen);
     if (rc <= 0) {
         return;
     }
+
+    straddr = ip_straddr_from_sockaddr((struct sockaddr*) &addr);
+    log_debug(NULL, "%d bytes received from %s", rc, straddr.text);
+
+    //write(1, wsdd_buf, rc);
 }
 
-/* Create wssd_resolver
+/* Retransmit timer callback
  */
-static wssd_resolver*
-wssd_resolver_new (const netif_addr *addr)
+static void
+wsdd_resolver_timer_callback (void *data)
 {
-    wssd_resolver *resolver = g_new0(wssd_resolver, 1);
+    wsdd_resolver *resolver = data;
+    resolver->timer = NULL;
+
+    if (resolver->total_time >= WSDD_DISCOVERY_TIME) {
+        eloop_fdpoll_free(resolver->fdpoll);
+        close(resolver->fd);
+        resolver->fdpoll = NULL;
+        resolver->fd = -1;
+        log_debug(NULL, "WSSD: %s: done discovery", resolver->ifname);
+    } else {
+        wsdd_resolver_send_probe(resolver);
+    };
+}
+
+/* Set retransmit timer
+ */
+static void
+wsdd_resolver_timer_set (wsdd_resolver *resolver)
+{
+    uint32_t t;
+
+    log_assert(NULL, resolver->timer == NULL);
+
+    if (resolver->total_time + WSDD_RETRANSMIT_MAX >= WSDD_DISCOVERY_TIME) {
+        t = WSDD_DISCOVERY_TIME - resolver->total_time;
+    } else {
+        t = math_rand_range(WSDD_RETRANSMIT_MIN, WSDD_RETRANSMIT_MAX);
+    }
+
+    resolver->total_time += t;
+    resolver->timer = eloop_timer_new(t,
+            wsdd_resolver_timer_callback, resolver);
+}
+
+/* Send probe
+ */
+static void
+wsdd_resolver_send_probe (wsdd_resolver *resolver)
+{
+    uuid            u = uuid_new();
+    int             n = sprintf(wsdd_buf, wsdd_probe, u.text);
+    int             rc;
+    struct sockaddr *addr;
+    socklen_t       addrlen;
+
+    log_debug(NULL, "WSSD: %s: probe sent", resolver->ifname);
+
+    if (resolver->ipv6) {
+        addr = (struct sockaddr*) &wsdd_mcast_ipv6;
+        addrlen = sizeof(wsdd_mcast_ipv6);
+    } else {
+        addr = (struct sockaddr*) &wsdd_mcast_ipv4;
+        addrlen = sizeof(wsdd_mcast_ipv4);
+    }
+
+    rc = sendto(resolver->fd, wsdd_buf, n, 0, addr, addrlen);
+
+    if (rc < 0) {
+        log_debug(NULL, "WSDD: send_probe: %s", strerror(errno));
+    }
+
+    wsdd_resolver_timer_set(resolver);
+}
+
+/* Create wsdd_resolver
+ */
+static wsdd_resolver*
+wsdd_resolver_new (const netif_addr *addr)
+{
+    wsdd_resolver *resolver = g_new0(wsdd_resolver, 1);
     int           af = addr->ipv6 ? AF_INET6 : AF_INET;
     const char    *af_name = addr->ipv6 ? "AF_INET6" : "AF_INET";
     int           rc;
 
     /* Open a socket */
+    memcpy(resolver->ifname, addr->ifname, NETIF_NAMESIZE);
+    resolver->ipv6 = addr->ipv6;
     resolver->fd = socket(af, SOCK_DGRAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
     if (resolver->fd < 0) {
         log_debug(NULL, "WSDD: socket(%s): %s", af_name, strerror(errno));
@@ -87,7 +197,10 @@ wssd_resolver_new (const netif_addr *addr)
 
     /* Setup fdpoll */
     resolver->fdpoll = eloop_fdpoll_new(resolver->fd,
-        wssd_resolver_read_callback, NULL);
+        wsdd_resolver_read_callback, NULL);
+    eloop_fdpoll_set_mask(resolver->fdpoll, ELOOP_FDPOLL_READ);
+
+    wsdd_resolver_send_probe(resolver);
 
     return resolver;
 
@@ -100,14 +213,18 @@ FAIL:
     return resolver;
 }
 
-/* Destroy wssd_resolver
+/* Destroy wsdd_resolver
  */
 static void
-wssd_resolver_free (wssd_resolver *resolver)
+wsdd_resolver_free (wsdd_resolver *resolver)
 {
     if (resolver->fdpoll != NULL) {
         eloop_fdpoll_free(resolver->fdpoll);
         close(resolver->fd);
+    }
+
+    if (resolver->timer != NULL) {
+        eloop_timer_cancel(resolver->timer);
     }
 
     g_free(resolver);
@@ -284,12 +401,12 @@ wsdd_netif_update_addresses (void) {
 
     /* Start/stop per-interface-address resolvers */
     for (addr = diff.removed; addr != NULL; addr = addr->next) {
-        wssd_resolver_free(addr->data);
+        wsdd_resolver_free(addr->data);
     }
 
     for (addr = wsdd_netif_addr_list; addr != NULL; addr = addr->next) {
         if (addr->data == NULL) {
-            addr->data = wssd_resolver_new(addr);
+            addr->data = wsdd_resolver_new(addr);
         }
     }
 }
