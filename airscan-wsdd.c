@@ -24,12 +24,12 @@
 /* wsdd_resolver represents a per-interface WSDD resolver
  */
 typedef struct {
-    char         ifname[NETIF_NAMESIZE]; /* Interface name */
-    int          fd;                     /* File descriptor */
-    bool         ipv6;                   /* We are on IPv6 */
-    eloop_fdpoll *fdpoll;                /* Socket fdpoll */
-    eloop_timer  *timer;                 /* Retransmit timer */
-    uint32_t     total_time;             /* Total elapsed time */
+    netif_name   ifname;     /* Interface name */
+    int          fd;         /* File descriptor */
+    bool         ipv6;       /* We are on IPv6 */
+    eloop_fdpoll *fdpoll;    /* Socket fdpoll */
+    eloop_timer  *timer;     /* Retransmit timer */
+    uint32_t     total_time; /* Total elapsed time */
 } wsdd_resolver;
 
 /* Static variables
@@ -101,7 +101,7 @@ wsdd_resolver_timer_callback (void *data)
         close(resolver->fd);
         resolver->fdpoll = NULL;
         resolver->fd = -1;
-        log_debug(NULL, "WSSD: %s: done discovery", resolver->ifname);
+        log_debug(NULL, "WSSD: %s: done discovery", resolver->ifname.text);
     } else {
         wsdd_resolver_send_probe(resolver);
     };
@@ -138,7 +138,7 @@ wsdd_resolver_send_probe (wsdd_resolver *resolver)
     struct sockaddr *addr;
     socklen_t       addrlen;
 
-    log_debug(NULL, "WSSD: %s: probe sent", resolver->ifname);
+    log_debug(NULL, "WSSD: %s: probe sent", resolver->ifname.text);
 
     if (resolver->ipv6) {
         addr = (struct sockaddr*) &wsdd_mcast_ipv6;
@@ -168,7 +168,7 @@ wsdd_resolver_new (const netif_addr *addr)
     int           rc;
 
     /* Open a socket */
-    memcpy(resolver->ifname, addr->ifname, NETIF_NAMESIZE);
+    resolver->ifname = addr->ifname;
     resolver->ipv6 = addr->ipv6;
     resolver->fd = socket(af, SOCK_DGRAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
     if (resolver->fd < 0) {
