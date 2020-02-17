@@ -138,12 +138,18 @@ ip_straddr
 ip_straddr_from_sockaddr(const struct sockaddr *addr);
 
 /******************** Network interfaces addresses ********************/
+/* Max size of interface name
+ */
+#define NETIF_NAMESIZE 32
+
 /* Network interface address
  */
 typedef struct netif_addr netif_addr;
 struct netif_addr {
     netif_addr *next;         /* Next address in the list */
     int        ifindex;       /* Interface index */
+    char       ifname[        /* Interface name, for logging */
+                   NETIF_NAMESIZE];
     bool       ipv6;          /* This is an IPv6 address */
     bool       linklocal;     /* This is a link-local address */
     void       *data;         /* Placeholder for user data */

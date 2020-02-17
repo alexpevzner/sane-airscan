@@ -50,6 +50,7 @@ netif_addr_get (void)
         addr = g_new0(netif_addr, 1);
         addr->next = list;
         addr->ifindex = idx;
+        strncpy(addr->ifname, ifp->ifa_name, sizeof(addr->ifname) - 1);
 
         switch (ifp->ifa_addr->sa_family) {
         case AF_INET:
