@@ -19,6 +19,7 @@
 #include <stdbool.h>
 
 #include <netinet/in.h>
+#include <sys/socket.h>
 
 /******************** Static configuration ********************/
 /* Configuration path in environment
@@ -121,6 +122,20 @@ conf_load (void);
  */
 void
 conf_unload (void);
+
+/******************** Utility functions for IP addresses ********************/
+/* Address string, wrapped into structure so can
+ * be passed by value
+ */
+typedef struct {
+    char       text[64];
+} ip_straddr;
+
+/* Format ip_straddr from struct sockaddr.
+ * Both AF_INET and AF_INET6 are supported
+ */
+ip_straddr
+ip_straddr_from_sockaddr(const struct sockaddr *addr);
 
 /******************** Network interfaces addresses ********************/
 /* Network interface address
