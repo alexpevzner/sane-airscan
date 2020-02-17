@@ -123,16 +123,56 @@ FAIL:
 static void
 wsdd_netif_dump_addresses (const char *prefix, netif_addr *list)
 {
-    char buf[128];
+    char suffix[32] = "";
 
     while (list != NULL) {
-        inet_ntop(list->ipv6 ? AF_INET6 : AF_INET, &list->ip, buf, sizeof(buf));
         if (list->ipv6 && list->linklocal) {
-            char *s = buf + strlen(buf);
-            sprintf(s, "%%%d", list->ifindex);
+            sprintf(suffix, "%%%d", list->ifindex);
         }
-        log_debug(NULL, "%s%s", prefix, buf);
+        log_debug(NULL, "%s%s%s", prefix, list->straddr, suffix);
         list = list->next;
+    }
+}
+
+/* Add or drop multicast group membership, on
+ * per-interface-address basis
+ */
+static void
+wsdd_mcast_update_membership (int fd, netif_addr *addr, bool add)
+{
+    int rc, opt;
+
+    if (addr->ipv6) {
+        struct ipv6_mreq mreq6;
+
+        memset(&mreq6, 0, sizeof(mreq6));
+	mreq6.ipv6mr_multiaddr = wsdd_mcast_ipv6.sin6_addr;
+	mreq6.ipv6mr_interface = addr->ifindex;
+
+        opt = add ? IPV6_ADD_MEMBERSHIP : IPV6_DROP_MEMBERSHIP;
+        rc = setsockopt(fd, IPPROTO_IPV6, opt, &mreq6, sizeof(mreq6));
+
+        if (rc < 0) {
+            log_debug(NULL, "WSDD: setsockopt(AF_INET6,%s): %s",
+                    add ? "IPV6_ADD_MEMBERSHIP" : "IPV6_DROP_MEMBERSHIP",
+                    strerror(errno));
+        }
+    } else {
+        struct ip_mreqn  mreq4;
+
+        memset(&mreq4, 0, sizeof(mreq4));
+        mreq4.imr_multiaddr = wsdd_mcast_ipv4.sin_addr;
+        mreq4.imr_address = addr->ip.v4;
+        mreq4.imr_ifindex = addr->ifindex;
+
+        opt = add ? IP_ADD_MEMBERSHIP : IP_DROP_MEMBERSHIP;
+        rc = setsockopt(fd, IPPROTO_IP, opt, &mreq4, sizeof(mreq4));
+
+        if (rc < 0) {
+            log_debug(NULL, "WSDD: setsockopt(AF_INET,%s): %s",
+                    add ? "IP_ADD_MEMBERSHIP" : "IP_DROP_MEMBERSHIP",
+                    strerror(errno));
+        }
     }
 }
 
@@ -141,6 +181,7 @@ wsdd_netif_dump_addresses (const char *prefix, netif_addr *list)
 static void
 wsdd_netif_update_addresses (void) {
     netif_addr *addr_list = netif_addr_get();
+    netif_addr *addr;
     netif_diff diff = netif_diff_compute(wsdd_netif_addr_list, addr_list);
 
     log_debug(NULL, "WSDD: netif addresses update:");
@@ -149,6 +190,17 @@ wsdd_netif_update_addresses (void) {
 
     netif_addr_free(wsdd_netif_addr_list);
     wsdd_netif_addr_list = addr_list;
+
+    /* Update multicast group membership */
+    for (addr = diff.removed; addr != NULL; addr = addr->next) {
+        int fd = addr->ipv6 ? wsdd_mcsock_ipv6 : wsdd_mcsock_ipv4;
+        wsdd_mcast_update_membership(fd, addr, false);
+    }
+
+    for (addr = diff.added; addr != NULL; addr = addr->next) {
+        int fd = addr->ipv6 ? wsdd_mcsock_ipv6 : wsdd_mcsock_ipv4;
+        wsdd_mcast_update_membership(fd, addr, true);
+    }
 }
 
 /* Network interfaces address change notification
