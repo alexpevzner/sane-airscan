@@ -768,6 +768,10 @@ xml_rd_finish (xml_rd **xml);
 void
 xml_rd_ns_subst (xml_rd *xml, const xml_ns_subst *subst);
 
+/* Get current node depth in the tree. Root depth is 0
+ */
+unsigned int
+xml_rd_depth (xml_rd *xml);
 
 /* Check for end-of-document condition
  */
@@ -797,6 +801,11 @@ xml_rd_leave (xml_rd *xml);
  */
 const char*
 xml_rd_node_name (xml_rd *xml);
+
+/* Get full path to the current node, '/'-separated
+ */
+const char*
+xml_rd_node_path (xml_rd *xml);
 
 /* Match name of the current node against the pattern
  */

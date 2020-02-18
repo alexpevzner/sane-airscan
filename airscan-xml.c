@@ -19,7 +19,11 @@ struct xml_rd {
     xmlNode            *node;          /* Current node */
     xmlNode            *parent;        /* Parent node */
     const char         *name;          /* Name of current node */
+    GString            *path;          /* Path to current node, /-separated */
+    size_t             *pathlen;       /* Stack of path lengths */
+    size_t             pathlen_cap;    /* pathlen capacity */
     const xmlChar      *text;          /* Textual value of current node */
+    unsigned int       depth;          /* Depth of current node, 0 for root */
     const xml_ns_subst *subst_rules;   /* Substitution rules */
     xml_ns_subst       *subst_cache;   /* In the cache, glob-style patterns are
                                           replaced by exact-matching strings */
@@ -47,7 +51,6 @@ __xml_rd_skip_dummy (xml_rd *xml)
 static void
 __xml_rd_invalidate_cache (xml_rd *xml)
 {
-    g_free((void*) xml->name);
     xmlFree((xmlChar*) xml->text);
     xml->name = NULL;
     xml->text = NULL;
@@ -71,9 +74,10 @@ xml_rd_begin (xml_rd **xml, const char *xml_text, size_t xml_len)
     }
 
     (*xml)->node = xmlDocGetRootElement((*xml)->doc);
+    (*xml)->path = g_string_new(NULL);
+
     __xml_rd_skip_dummy(*xml);
     __xml_rd_invalidate_cache(*xml);
-    (*xml)->parent = (*xml)->node ? (*xml)->node->parent : NULL;
 
     return NULL;
 }
@@ -97,6 +101,8 @@ xml_rd_finish (xml_rd **xml)
             g_free((*xml)->subst_cache);
         }
 
+        g_free((*xml)->pathlen);
+        g_string_free((*xml)->path, TRUE);
         g_free(*xml);
         *xml = NULL;
     }
@@ -137,7 +143,7 @@ xml_rd_ns_subst_lookup(xml_rd *xml, const char *prefix, const char *href)
             prefix = xml->subst_rules[i].prefix;
 
             /* Update cache. Grow it if required */
-            if (xml->subst_cache_len >= xml->subst_cache_cap) {
+            if (xml->subst_cache_len == xml->subst_cache_cap) {
                 if (xml->subst_cache_cap == 0) {
                     xml->subst_cache_cap = 4; /* Initial size */
                 } else {
@@ -157,6 +163,14 @@ xml_rd_ns_subst_lookup(xml_rd *xml, const char *prefix, const char *href)
     }
 
     return prefix;
+}
+
+/* Get current node depth in the tree. Root depth is 0
+ */
+unsigned int
+xml_rd_depth (xml_rd *xml)
+{
+    return xml->depth;
 }
 
 /* Check for end-of-document condition
@@ -185,10 +199,32 @@ void
 xml_rd_enter (xml_rd *xml)
 {
     if (xml->node) {
+        /* Save current path length into pathlen stack */
+        if (xml->depth == xml->pathlen_cap) {
+            if (xml->pathlen_cap == 0) {
+                xml->pathlen_cap = 4;
+            } else {
+                xml->pathlen_cap *= 2;
+            }
+
+            xml->pathlen = g_realloc(xml->pathlen,
+                sizeof(*xml->pathlen) * xml->pathlen_cap);
+        }
+
+        xml_rd_node_name(xml);
+        g_string_append_c(xml->path, '/');
+
+        xml->pathlen[xml->depth] = xml->path->len;
+
+        /* Enter the node */
         xml->parent = xml->node;
         xml->node = xml->node->children;
         __xml_rd_skip_dummy(xml);
         __xml_rd_invalidate_cache(xml);
+
+
+        /* Increment depth */
+        xml->depth ++;
     }
 }
 
@@ -197,11 +233,16 @@ xml_rd_enter (xml_rd *xml)
 void
 xml_rd_leave (xml_rd *xml)
 {
-    xml->node = xml->parent;
-    if (xml->node) {
-        xml->parent = xml->node->parent;
+    if (xml->depth > 0) {
+        xml->depth --;
+        xml->node = xml->parent;
+        if (xml->node) {
+            xml->parent = xml->node->parent;
+        }
+
+        g_string_truncate(xml->path, xml->pathlen[xml->depth] - 1);
+        __xml_rd_invalidate_cache(xml);
     }
-    __xml_rd_invalidate_cache(xml);
 }
 
 /* Get name of the current node.
@@ -214,6 +255,7 @@ const char*
 xml_rd_node_name (xml_rd *xml)
 {
     const char *prefix = NULL;
+    size_t     pathlen;
 
     if (xml->name == NULL && xml->node != NULL) {
         if (xml->node->ns != NULL) {
@@ -222,14 +264,29 @@ xml_rd_node_name (xml_rd *xml)
                     (const char*) xml->node->ns->href);
         }
 
+        pathlen = xml->depth ? xml->pathlen[xml->depth - 1] : 0;
+        g_string_truncate(xml->path, pathlen);
+
         if (prefix != NULL) {
-            xml->name = g_strconcat(prefix, ":", xml->node->name, NULL);
-        } else {
-            xml->name = g_strdup((const char*) xml->node->name);
+            g_string_append(xml->path, prefix);
+            g_string_append_c(xml->path, ':');
         }
+
+        g_string_append(xml->path, (const char*) xml->node->name);
+
+        xml->name = xml->path->str + pathlen;
     }
 
     return xml->name;
+}
+
+/* Get full path to the current node, '/'-separated
+ */
+const char*
+xml_rd_node_path (xml_rd *xml)
+{
+    xml_rd_node_name(xml); /* This ensures name is computed */
+    return xml->path->str;
 }
 
 /* Match name of the current node against the pattern
