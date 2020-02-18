@@ -8,17 +8,23 @@
 
 #include "airscan.h"
 
+#include <fnmatch.h>
 #include <libxml/tree.h>
 
 /******************** XML reader ********************/
 /* XML reader
  */
 struct xml_rd {
-    xmlDoc        *doc;    /* XML document */
-    xmlNode       *node;   /* Current node */
-    xmlNode       *parent; /* Parent node */
-    const char    *name;   /* Name of current node */
-    const xmlChar *text;   /* Textual value of current node */
+    xmlDoc             *doc;           /* XML document */
+    xmlNode            *node;          /* Current node */
+    xmlNode            *parent;        /* Parent node */
+    const char         *name;          /* Name of current node */
+    const xmlChar      *text;          /* Textual value of current node */
+    const xml_ns_subst *subst_rules;   /* Substitution rules */
+    xml_ns_subst       *subst_cache;   /* In the cache, glob-style patterns are
+                                          replaced by exact-matching strings */
+    size_t             subst_cache_len;/* Count of subst_cache elements */
+    size_t             subst_cache_cap;/* subst_cache capacity */
 };
 
 /* Skip dummy nodes. This is internal function, don't call directly
@@ -83,9 +89,74 @@ xml_rd_finish (xml_rd **xml)
         }
         __xml_rd_invalidate_cache(*xml);
 
+        if ((*xml)->subst_cache != NULL) {
+            size_t i;
+            for (i = 0; i < (*xml)->subst_cache_len; i ++) {
+                g_free((char*) (*xml)->subst_cache[i].pattern);
+            }
+            g_free((*xml)->subst_cache);
+        }
+
         g_free(*xml);
         *xml = NULL;
     }
+}
+
+/* Setup namespace substitution
+ */
+void
+xml_rd_ns_subst (xml_rd *xml, const xml_ns_subst *subst)
+{
+    xml->subst_rules = subst;
+}
+
+/* Perform namespace prefix substitution. Is substitution
+ * is not setup or no match was found, the original prefix
+ * will be returned
+ */
+static const char*
+xml_rd_ns_subst_lookup(xml_rd *xml, const char *prefix, const char *href)
+{
+    size_t i;
+
+    /* Substitution enabled? */
+    if (xml->subst_rules == NULL) {
+        return prefix;
+    }
+
+    /* Lookup cache first */
+    for (i = 0; i < xml->subst_cache_len; i ++) {
+        if (!strcmp(href, xml->subst_cache[i].pattern)) {
+            return xml->subst_cache[i].prefix;
+        }
+    }
+
+    /* Now try glob-style rules */
+    for (i = 0; xml->subst_rules[i].prefix != NULL; i ++) {
+        if (!fnmatch(xml->subst_rules[i].pattern, href, 0)) {
+            prefix = xml->subst_rules[i].prefix;
+
+            /* Update cache. Grow it if required */
+            if (xml->subst_cache_len >= xml->subst_cache_cap) {
+                if (xml->subst_cache_cap == 0) {
+                    xml->subst_cache_cap = 4; /* Initial size */
+                } else {
+                    xml->subst_cache_cap *= 2;
+                }
+            }
+
+            xml->subst_cache = g_realloc(xml->subst_cache,
+                sizeof(*xml->subst_cache) * xml->subst_cache_cap);
+
+            xml->subst_cache[xml->subst_cache_len].prefix = prefix;
+            xml->subst_cache[xml->subst_cache_len].pattern = g_strdup(href);
+            xml->subst_cache_len ++;
+
+            /* Break out of loop */
+        }
+    }
+
+    return prefix;
 }
 
 /* Check for end-of-document condition
@@ -147,6 +218,8 @@ xml_rd_node_name (xml_rd *xml)
     if (xml->name == NULL && xml->node != NULL) {
         if (xml->node->ns != NULL) {
             prefix = (const char*) xml->node->ns->prefix;
+            prefix = xml_rd_ns_subst_lookup(xml, prefix,
+                    (const char*) xml->node->ns->href);
         }
 
         if (prefix != NULL) {

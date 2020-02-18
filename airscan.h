@@ -709,6 +709,34 @@ size_t
 sane_string_array_max_strlen(SANE_String **a);
 
 /******************** XML utilities ********************/
+/* xml_ns_subst defines namespace substitution rule.
+ *
+ * If namespace substitution is enabled, using xml_rd_ns_subst()
+ * function, each node, which name's namespace matches the pattern,
+ * will be reported with name prefix defined by substitution rule,
+ * regardless of prefix actually used in the document
+ *
+ * Example:
+ *   <namespace:nodes xmlns:namespace="http://www.example.com/namespace">
+ *     <namespace:node1/>
+ *     <namespace:node2/>
+ *     <namespace:node3/>
+ *   </namespace:nodes>
+ *
+ *   rule: {"ns", "http://www.example.com/namespace"}
+ *
+ * With this rule set, all nodes will be reported as if they
+ * had the "ns" prefix, though actually their prefix in document
+ * is different
+ *
+ * Pattern is a glob-style pattern, as used by fnmatch (3)
+ * function with flags = 0
+ */
+typedef struct {
+    const char *prefix;  /* Short prefix */
+    const char *pattern; /* The pattern */
+} xml_ns_subst;
+
 /* XML reader
  */
 typedef struct xml_rd xml_rd;
@@ -726,6 +754,20 @@ xml_rd_begin (xml_rd **xml, const char *xml_text, size_t xml_len);
  */
 void
 xml_rd_finish (xml_rd **xml);
+
+/* Setup namespace substitution, see xml_ns_subst
+ * description for details.
+ *
+ * The subst argument points to array of substitution
+ * rules. Last element must have NULL prefix and
+ * pattern
+ *
+ * Array of rules considered to be statically allocated
+ * (at least, it can remain valid during reader life time)
+ */
+void
+xml_rd_ns_subst (xml_rd *xml, const xml_ns_subst *subst);
+
 
 /* Check for end-of-document condition
  */
