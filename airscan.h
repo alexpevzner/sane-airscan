@@ -784,9 +784,12 @@ void
 xml_rd_next (xml_rd *xml);
 
 /* Shift to the next node, visiting the nested nodes on the way
+ *
+ * If depth > 0, it will not return from nested nodes
+ * upper the specified depth
  */
 void
-xml_rd_deep_next (xml_rd *xml);
+xml_rd_deep_next (xml_rd *xml, unsigned int depth);
 
 /* Enter the current node - iterate its children
  */
