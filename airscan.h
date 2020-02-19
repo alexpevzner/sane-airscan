@@ -783,6 +783,11 @@ xml_rd_end (xml_rd *xml);
 void
 xml_rd_next (xml_rd *xml);
 
+/* Shift to the next node, visiting the nested nodes on the way
+ */
+void
+xml_rd_deep_next (xml_rd *xml);
+
 /* Enter the current node - iterate its children
  */
 void

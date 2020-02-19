@@ -228,6 +228,19 @@ xml_rd_next (xml_rd *xml)
     }
 }
 
+/* Shift to the next node, visiting the nested nodes on the way
+ */
+void
+xml_rd_deep_next (xml_rd *xml)
+{
+    xml_rd_enter(xml);
+
+    while (xml_rd_end(xml) && xml_rd_depth(xml) > 0) {
+        xml_rd_leave(xml);
+        xml_rd_next(xml);
+    }
+}
+
 /* Enter the current node - iterate its children
  */
 void
