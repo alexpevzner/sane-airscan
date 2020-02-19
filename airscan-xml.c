@@ -97,6 +97,15 @@ xml_rd_node_switched (xml_rd *xml)
 error
 xml_rd_begin (xml_rd **xml, const char *xml_text, size_t xml_len)
 {
+    return xml_rd_begin_ns(xml, xml_text, xml_len, NULL);
+}
+
+/* xml_rd_begin with namespace substitution
+ */
+error
+xml_rd_begin_ns (xml_rd **xml, const char *xml_text, size_t xml_len,
+        const xml_ns_subst *subst)
+{
     xmlDoc *doc = xmlParseMemory(xml_text, xml_len);
 
     if (doc == NULL) {
@@ -109,6 +118,7 @@ xml_rd_begin (xml_rd **xml, const char *xml_text, size_t xml_len)
     (*xml)->path = g_string_new(NULL);
     (*xml)->pathlen_cap = 8;
     (*xml)->pathlen = g_malloc(sizeof(*(*xml)->pathlen) * (*xml)->pathlen_cap);
+    (*xml)->subst_rules = subst;
 
     xml_rd_skip_dummy(*xml);
     xml_rd_node_switched(*xml);
@@ -140,14 +150,6 @@ xml_rd_finish (xml_rd **xml)
         g_free(*xml);
         *xml = NULL;
     }
-}
-
-/* Setup namespace substitution
- */
-void
-xml_rd_ns_subst (xml_rd *xml, const xml_ns_subst *subst)
-{
-    xml->subst_rules = subst;
 }
 
 /* Perform namespace prefix substitution. Is substitution

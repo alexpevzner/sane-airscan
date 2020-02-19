@@ -750,13 +750,7 @@ typedef struct xml_rd xml_rd;
 error
 xml_rd_begin (xml_rd **xml, const char *xml_text, size_t xml_len);
 
-/* Finish reading, free allocated resources
- */
-void
-xml_rd_finish (xml_rd **xml);
-
-/* Setup namespace substitution, see xml_ns_subst
- * description for details.
+/* xml_rd_begin with namespace substitution
  *
  * The subst argument points to array of substitution
  * rules. Last element must have NULL prefix and
@@ -765,8 +759,14 @@ xml_rd_finish (xml_rd **xml);
  * Array of rules considered to be statically allocated
  * (at least, it can remain valid during reader life time)
  */
+error
+xml_rd_begin_ns (xml_rd **xml, const char *xml_text, size_t xml_len,
+        const xml_ns_subst *subst);
+
+/* Finish reading, free allocated resources
+ */
 void
-xml_rd_ns_subst (xml_rd *xml, const xml_ns_subst *subst);
+xml_rd_finish (xml_rd **xml);
 
 /* Get current node depth in the tree. Root depth is 0
  */
