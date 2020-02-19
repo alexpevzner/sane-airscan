@@ -31,10 +31,14 @@ struct xml_rd {
     size_t             subst_cache_cap;/* subst_cache capacity */
 };
 
+/* Forward declarations */
+static const char*
+xml_rd_ns_subst_lookup(xml_rd *xml, const char *prefix, const char *href);
+
 /* Skip dummy nodes. This is internal function, don't call directly
  */
 static void
-__xml_rd_skip_dummy (xml_rd *xml)
+xml_rd_skip_dummy (xml_rd *xml)
 {
     xmlNode *node = xml->node;
 
@@ -46,14 +50,42 @@ __xml_rd_skip_dummy (xml_rd *xml)
     xml->node = node;
 }
 
-/* Invalidate cached data. This is internal function, don't call directly
+/* xml_rd_node_switched called when current node is switched.
+ * It invalidates cached value and updates node name
  */
 static void
-__xml_rd_invalidate_cache (xml_rd *xml)
+xml_rd_node_switched (xml_rd *xml)
 {
+    size_t     pathlen;
+
+    /* Invalidate cached value */
     xmlFree((xmlChar*) xml->text);
-    xml->name = NULL;
     xml->text = NULL;
+
+    /* Update node name */
+    pathlen = xml->depth ? xml->pathlen[xml->depth - 1] : 0;
+    g_string_truncate(xml->path, pathlen);
+
+    if (xml->node == NULL) {
+        xml->name = NULL;
+    } else {
+        const char *prefix = NULL;
+
+        if (xml->node->ns != NULL) {
+            prefix = (const char*) xml->node->ns->prefix;
+            prefix = xml_rd_ns_subst_lookup(xml, prefix,
+                    (const char*) xml->node->ns->href);
+        }
+
+        if (prefix != NULL) {
+            g_string_append(xml->path, prefix);
+            g_string_append_c(xml->path, ':');
+        }
+
+        g_string_append(xml->path, (const char*) xml->node->name);
+
+        xml->name = xml->path->str + pathlen;
+    }
 }
 
 /* Parse XML text and initialize reader to iterate
@@ -65,19 +97,21 @@ __xml_rd_invalidate_cache (xml_rd *xml)
 error
 xml_rd_begin (xml_rd **xml, const char *xml_text, size_t xml_len)
 {
-    *xml = g_new0(xml_rd, 1);
+    xmlDoc *doc = xmlParseMemory(xml_text, xml_len);
 
-    (*xml)->doc = xmlParseMemory(xml_text, xml_len);
-    if ((*xml)->doc == NULL) {
-        xml_rd_finish(xml);
+    if (doc == NULL) {
         return ERROR("Failed to parse XML");
     }
 
+    *xml = g_new0(xml_rd, 1);
+    (*xml)->doc = doc;
     (*xml)->node = xmlDocGetRootElement((*xml)->doc);
     (*xml)->path = g_string_new(NULL);
+    (*xml)->pathlen_cap = 8;
+    (*xml)->pathlen = g_malloc(sizeof(*(*xml)->pathlen) * (*xml)->pathlen_cap);
 
-    __xml_rd_skip_dummy(*xml);
-    __xml_rd_invalidate_cache(*xml);
+    xml_rd_skip_dummy(*xml);
+    xml_rd_node_switched(*xml);
 
     return NULL;
 }
@@ -91,7 +125,7 @@ xml_rd_finish (xml_rd **xml)
         if ((*xml)->doc) {
             xmlFreeDoc((*xml)->doc);
         }
-        __xml_rd_invalidate_cache(*xml);
+        xml_rd_node_switched(*xml);
 
         if ((*xml)->subst_cache != NULL) {
             size_t i;
@@ -159,6 +193,7 @@ xml_rd_ns_subst_lookup(xml_rd *xml, const char *prefix, const char *href)
             xml->subst_cache_len ++;
 
             /* Break out of loop */
+            break;
         }
     }
 
@@ -188,8 +223,8 @@ xml_rd_next (xml_rd *xml)
 {
     if (xml->node) {
         xml->node = xml->node->next;
-        __xml_rd_skip_dummy(xml);
-        __xml_rd_invalidate_cache(xml);
+        xml_rd_skip_dummy(xml);
+        xml_rd_node_switched(xml);
     }
 }
 
@@ -201,17 +236,11 @@ xml_rd_enter (xml_rd *xml)
     if (xml->node) {
         /* Save current path length into pathlen stack */
         if (xml->depth == xml->pathlen_cap) {
-            if (xml->pathlen_cap == 0) {
-                xml->pathlen_cap = 4;
-            } else {
-                xml->pathlen_cap *= 2;
-            }
-
+            xml->pathlen_cap *= 2;
             xml->pathlen = g_realloc(xml->pathlen,
                 sizeof(*xml->pathlen) * xml->pathlen_cap);
         }
 
-        xml_rd_node_name(xml);
         g_string_append_c(xml->path, '/');
 
         xml->pathlen[xml->depth] = xml->path->len;
@@ -219,12 +248,11 @@ xml_rd_enter (xml_rd *xml)
         /* Enter the node */
         xml->parent = xml->node;
         xml->node = xml->node->children;
-        __xml_rd_skip_dummy(xml);
-        __xml_rd_invalidate_cache(xml);
+        xml_rd_skip_dummy(xml);
 
-
-        /* Increment depth */
+        /* Increment depth and recompute node name */
         xml->depth ++;
+        xml_rd_node_switched(xml);
     }
 }
 
@@ -240,8 +268,8 @@ xml_rd_leave (xml_rd *xml)
             xml->parent = xml->node->parent;
         }
 
-        g_string_truncate(xml->path, xml->pathlen[xml->depth] - 1);
-        __xml_rd_invalidate_cache(xml);
+        //g_string_truncate(xml->path, xml->pathlen[xml->depth] - 1);
+        xml_rd_node_switched(xml);
     }
 }
 
@@ -254,29 +282,6 @@ xml_rd_leave (xml_rd *xml)
 const char*
 xml_rd_node_name (xml_rd *xml)
 {
-    const char *prefix = NULL;
-    size_t     pathlen;
-
-    if (xml->name == NULL && xml->node != NULL) {
-        if (xml->node->ns != NULL) {
-            prefix = (const char*) xml->node->ns->prefix;
-            prefix = xml_rd_ns_subst_lookup(xml, prefix,
-                    (const char*) xml->node->ns->href);
-        }
-
-        pathlen = xml->depth ? xml->pathlen[xml->depth - 1] : 0;
-        g_string_truncate(xml->path, pathlen);
-
-        if (prefix != NULL) {
-            g_string_append(xml->path, prefix);
-            g_string_append_c(xml->path, ':');
-        }
-
-        g_string_append(xml->path, (const char*) xml->node->name);
-
-        xml->name = xml->path->str + pathlen;
-    }
-
     return xml->name;
 }
 
@@ -285,8 +290,7 @@ xml_rd_node_name (xml_rd *xml)
 const char*
 xml_rd_node_path (xml_rd *xml)
 {
-    xml_rd_node_name(xml); /* This ensures name is computed */
-    return xml->path->str;
+    return xml->node ? xml->path->str : NULL;
 }
 
 /* Match name of the current node against the pattern
