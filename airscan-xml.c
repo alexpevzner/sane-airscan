@@ -42,12 +42,20 @@ xml_rd_skip_dummy (xml_rd *xml)
 {
     xmlNode *node = xml->node;
 
-    while (node  != NULL &&
-           (node->type == XML_COMMENT_NODE || xmlIsBlankNode (node))) {
+    while (node != NULL && node->type != XML_ELEMENT_NODE) {
         node = node->next;
     }
 
     xml->node = node;
+}
+
+/* Invalidate cached value
+ */
+static void
+xml_rd_node_invalidate_value (xml_rd *xml)
+{
+    xmlFree((xmlChar*) xml->text);
+    xml->text = NULL;
 }
 
 /* xml_rd_node_switched called when current node is switched.
@@ -59,8 +67,7 @@ xml_rd_node_switched (xml_rd *xml)
     size_t     pathlen;
 
     /* Invalidate cached value */
-    xmlFree((xmlChar*) xml->text);
-    xml->text = NULL;
+    xml_rd_node_invalidate_value(xml);
 
     /* Update node name */
     pathlen = xml->depth ? xml->pathlen[xml->depth - 1] : 0;
@@ -135,7 +142,7 @@ xml_rd_finish (xml_rd **xml)
         if ((*xml)->doc) {
             xmlFreeDoc((*xml)->doc);
         }
-        xml_rd_node_switched(*xml);
+        xml_rd_node_invalidate_value(*xml);
 
         if ((*xml)->subst_cache != NULL) {
             size_t i;
@@ -267,6 +274,7 @@ xml_rd_enter (xml_rd *xml)
 
         /* Increment depth and recompute node name */
         xml->depth ++;
+        xml_rd_skip_dummy(xml);
         xml_rd_node_switched(xml);
     }
 }
@@ -283,7 +291,6 @@ xml_rd_leave (xml_rd *xml)
             xml->parent = xml->node->parent;
         }
 
-        //g_string_truncate(xml->path, xml->pathlen[xml->depth] - 1);
         xml_rd_node_switched(xml);
     }
 }
