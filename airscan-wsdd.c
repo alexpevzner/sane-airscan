@@ -94,29 +94,33 @@ wsdd_message_free(wsdd_message *msg);
 static void
 wsdd_resolver_send_probe (wsdd_resolver *resolver);
 
-/* Parse a single ProbeMatch
+/* Parse endpoint address.
+ * It works for:
+ *   * s:Envelope/s:Body/d:ProbeMatches/d:ProbeMatch
+ *   * s:Envelope/s:Body/d:Hello
  */
 static void
-wsdd_message_parse_probematch (wsdd_message *msg, xml_rd *xml)
+wsdd_message_parse_endpoint (wsdd_message *msg, xml_rd *xml)
 {
     unsigned int level = xml_rd_depth(xml);
     bool         is_scanner = false;
     char         *endpoint = NULL;
     char         *uri = NULL;
+    size_t       prefixlen = strlen(xml_rd_node_path(xml));
 
     while (!xml_rd_end(xml)) {
-        const char *path = xml_rd_node_path(xml);
+        const char *path = xml_rd_node_path(xml) + prefixlen;
         const char *val;
 
         //log_debug(NULL, ">> %s", path);
 
-        if (!strcmp(path, "s:Envelope/s:Body/d:ProbeMatches/d:ProbeMatch/d:Types")) {
+        if (!strcmp(path, "/d:Types")) {
             val = xml_rd_node_value(xml);
             is_scanner = !!strstr(val, "ScanDeviceType");
-        } else if (!strcmp(path, "s:Envelope/s:Body/d:ProbeMatches/d:ProbeMatch/d:XAddrs")) {
+        } else if (!strcmp(path, "/d:XAddrs")) {
             g_free(uri);
             uri = g_strdup(xml_rd_node_value(xml));
-        } else if (!strcmp(path, "s:Envelope/s:Body/d:ProbeMatches/d:ProbeMatch/a:EndpointReference/a:Address")) {
+        } else if (!strcmp(path, "/a:EndpointReference/a:Address")) {
             g_free(endpoint);
             endpoint = g_strdup(xml_rd_node_value(xml));
         }
@@ -158,8 +162,9 @@ wsdd_message_parse (const char *xml_text, size_t xml_len)
             } else if (strstr(val, "ProbeMatches")) {
                 msg->action = WSDD_ACTION_PROBEMATCHES;
             }
-        } else if (!strcmp(path, "s:Envelope/s:Body/d:ProbeMatches/d:ProbeMatch")) {
-            wsdd_message_parse_probematch(msg, xml);
+        } else if ( !strcmp(path, "s:Envelope/s:Body/d:Hello") ||
+                    !strcmp(path, "s:Envelope/s:Body/d:ProbeMatches/d:ProbeMatch")) {
+            wsdd_message_parse_endpoint(msg, xml);
         }
         xml_rd_deep_next(xml, 0);
     }
@@ -169,6 +174,7 @@ DONE:
     if (err != NULL ||
         msg->action == WSDD_ACTION_UNKNOWN ||
         msg->endpoint == NULL ||
+        (msg->action == WSDD_ACTION_HELLO && msg->uri == NULL) ||
         (msg->action == WSDD_ACTION_PROBEMATCHES && msg->uri == NULL)) {
         wsdd_message_free(msg);
         msg = NULL;
@@ -180,13 +186,46 @@ DONE:
 /* Free wsdd_message
  */
 static void
-wsdd_message_free(wsdd_message *msg)
+wsdd_message_free (wsdd_message *msg)
 {
     if (msg != NULL) {
         g_free((char*) msg->endpoint);
         g_free((char*) msg->uri);
         g_free(msg);
     }
+}
+
+/* Get message action name, for debugging
+ */
+static const char*
+wsdd_message_action_name (const wsdd_message *msg)
+{
+    switch (msg->action) {
+    case WSDD_ACTION_UNKNOWN:
+        break;
+
+    case WSDD_ACTION_HELLO:        return "Hello";
+    case WSDD_ACTION_BYE:          return "Bye";
+    case WSDD_ACTION_PROBEMATCHES: return "ProbeMatches";
+    }
+
+    return "UNKNOWN";
+}
+
+/* Dispatch received WSDD message
+ */
+static void
+wsdd_message_dispatch (wsdd_message *msg)
+{
+    if (msg != NULL) {
+        log_debug(NULL, "WSDD: %s message received:",
+            wsdd_message_action_name(msg));
+        log_debug(NULL, "  endpoint=%s", msg->endpoint);
+        if (msg->uri != NULL) {
+            log_debug(NULL, "  uri=%s", msg->uri);
+        }
+    }
+    wsdd_message_free(msg);
 }
 
 /* Resolver read callback
@@ -214,11 +253,8 @@ wsdd_resolver_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
 
     msg = wsdd_message_parse(wsdd_buf, rc);
     if (msg != NULL) {
-        log_debug(NULL, "WSDD: device found:");
-        log_debug(NULL, "  endpoint=%s", msg->endpoint);
-        log_debug(NULL, "  uri=%s", msg->uri);
+        wsdd_message_dispatch(msg);
     }
-    wsdd_message_free(msg);
     //write(1, wsdd_buf, rc);
 }
 
@@ -300,6 +336,7 @@ wsdd_resolver_new (const netif_addr *addr)
     int           af = addr->ipv6 ? AF_INET6 : AF_INET;
     const char    *af_name = addr->ipv6 ? "AF_INET6" : "AF_INET";
     int           rc;
+    static int    no = 0;
 
     /* Open a socket */
     resolver->ipv6 = addr->ipv6;
@@ -319,6 +356,10 @@ wsdd_resolver_new (const netif_addr *addr)
                     strerror(errno));
             goto FAIL;
         }
+
+        /* Note: error is not a problem here */
+        setsockopt(resolver->fd, IPPROTO_IPV6, IPV6_MULTICAST_LOOP,
+                &no, sizeof(no));
     } else {
         rc = setsockopt(resolver->fd, IPPROTO_IP, IP_MULTICAST_IF,
                 &addr->ip.v4, sizeof(&addr->ip.v4));
@@ -328,6 +369,10 @@ wsdd_resolver_new (const netif_addr *addr)
                     strerror(errno));
             goto FAIL;
         }
+
+        /* Note: error is not a problem here */
+        setsockopt(resolver->fd, IPPROTO_IP, IP_MULTICAST_LOOP,
+                &no, sizeof(no));
     }
 
     /* Bind the socket */
@@ -392,7 +437,8 @@ wsdd_resolver_free (wsdd_resolver *resolver)
 static void
 wsdd_mcsock_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
 {
-    int rc;
+    int          rc;
+    wsdd_message *msg;
 
     (void) data;
     (void) mask;
@@ -401,6 +447,13 @@ wsdd_mcsock_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
     if (rc <= 0) {
         return;
     }
+
+    //log_debug(0, "MULTICAST");
+    msg = wsdd_message_parse(wsdd_buf, rc);
+    if (msg != NULL) {
+        wsdd_message_dispatch(msg);
+    }
+    //write(1, wsdd_buf, rc);
 }
 
 /* Open IPv4 or IPv6 multicast socket
