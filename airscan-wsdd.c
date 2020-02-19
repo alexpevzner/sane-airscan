@@ -47,21 +47,147 @@ static struct sockaddr_in6 wsdd_mcast_ipv6;
 /* XML templates
  */
 static const char *wsdd_probe =
-        "<?xml version=\"1.0\" ?>\n"
-        "<s:Envelope xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\" xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\">\n"
-        "	<s:Header>\n"
-        "		<a:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</a:Action>\n"
-        "		<a:MessageID>urn:uuid:%s</a:MessageID>\n"
-        "		<a:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</a:To>\n"
-        "	</s:Header>\n"
-        "	<s:Body>\n"
-        "		<d:Probe/>\n"
-        "	</s:Body>\n"
-        "</s:Envelope>\n";
+    "<?xml version=\"1.0\" ?>\n"
+    "<s:Envelope xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\" xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\">\n"
+    "	<s:Header>\n"
+    "		<a:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</a:Action>\n"
+    "		<a:MessageID>urn:uuid:%s</a:MessageID>\n"
+    "		<a:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</a:To>\n"
+    "	</s:Header>\n"
+    "	<s:Body>\n"
+    "		<d:Probe/>\n"
+    "	</s:Body>\n"
+    "</s:Envelope>\n";
 
-/* Forward declarations */
+/* XML namespace translation
+ */
+static const xml_ns_subst wsdd_ns_rules[] = {
+    {"s", "http*://schemas.xmlsoap.org/soap/envelope"}, /* SOAP 1.1 */
+    {"s", "http*://www.w3.org/2003/05/soap-envelope"},  /* SOAP 1.2 */
+    {"d", "http*://schemas.xmlsoap.org/ws/2005/04/discovery"},
+    {"a", "http*://schemas.xmlsoap.org/ws/2004/08/addressing"},
+    {NULL, NULL}
+};
+
+/* WSDD_ACTION represents WSDD message action
+ */
+typedef enum {
+    WSDD_ACTION_UNKNOWN,
+    WSDD_ACTION_HELLO,
+    WSDD_ACTION_BYE,
+    WSDD_ACTION_PROBEMATCHES
+} WSDD_ACTION;
+
+/* wsdd_message represents a parsed WSDD message
+ */
+typedef struct {
+    WSDD_ACTION  action;    /* Message action */
+    const char   *endpoint; /* Endpoint reference */
+    const char   *uri;      /* Endpoint URI */
+} wsdd_message;
+
+/* Forward declarations
+ */
+static void
+wsdd_message_free(wsdd_message *msg);
+
 static void
 wsdd_resolver_send_probe (wsdd_resolver *resolver);
+
+/* Parse a single ProbeMatch
+ */
+static void
+wsdd_message_parse_probematch (wsdd_message *msg, xml_rd *xml)
+{
+    unsigned int level = xml_rd_depth(xml);
+    bool         is_scanner = false;
+    char         *endpoint = NULL;
+    char         *uri = NULL;
+
+    while (!xml_rd_end(xml)) {
+        const char *path = xml_rd_node_path(xml);
+        const char *val;
+
+        //log_debug(NULL, ">> %s", path);
+
+        if (!strcmp(path, "s:Envelope/s:Body/d:ProbeMatches/d:ProbeMatch/d:Types")) {
+            val = xml_rd_node_value(xml);
+            is_scanner = !!strstr(val, "ScanDeviceType");
+        } else if (!strcmp(path, "s:Envelope/s:Body/d:ProbeMatches/d:ProbeMatch/d:XAddrs")) {
+            g_free(uri);
+            uri = g_strdup(xml_rd_node_value(xml));
+        } else if (!strcmp(path, "s:Envelope/s:Body/d:ProbeMatches/d:ProbeMatch/a:EndpointReference/a:Address")) {
+            g_free(endpoint);
+            endpoint = g_strdup(xml_rd_node_value(xml));
+        }
+
+        xml_rd_deep_next(xml, level);
+    }
+
+    if (is_scanner && endpoint != NULL && uri != NULL) {
+        msg->endpoint = endpoint;
+        msg->uri = uri;
+    }
+}
+
+/* Parse WSDD message
+ */
+static wsdd_message*
+wsdd_message_parse (const char *xml_text, size_t xml_len)
+{
+    wsdd_message *msg = g_new0(wsdd_message, 1);
+    xml_rd       *xml;
+    error        err;
+
+    err = xml_rd_begin_ns(&xml, xml_text, xml_len, wsdd_ns_rules);
+    if (err != NULL) {
+        goto DONE;
+    }
+
+    while (!xml_rd_end(xml)) {
+        const char *path = xml_rd_node_path(xml);
+        const char *val;
+
+        //log_debug(NULL, "%s", path);
+        if (!strcmp(path, "s:Envelope/s:Header/a:Action")) {
+            val = xml_rd_node_value(xml);
+            if (strstr(val, "Hello")) {
+                msg->action = WSDD_ACTION_HELLO;
+            } else if (strstr(val, "Bye")) {
+                msg->action = WSDD_ACTION_BYE;
+            } else if (strstr(val, "ProbeMatches")) {
+                msg->action = WSDD_ACTION_PROBEMATCHES;
+            }
+        } else if (!strcmp(path, "s:Envelope/s:Body/d:ProbeMatches/d:ProbeMatch")) {
+            wsdd_message_parse_probematch(msg, xml);
+        }
+        xml_rd_deep_next(xml, 0);
+    }
+
+DONE:
+    xml_rd_finish(&xml);
+    if (err != NULL ||
+        msg->action == WSDD_ACTION_UNKNOWN ||
+        msg->endpoint == NULL ||
+        (msg->action == WSDD_ACTION_PROBEMATCHES && msg->uri == NULL)) {
+        wsdd_message_free(msg);
+        msg = NULL;
+    }
+
+    return msg;
+}
+
+/* Free wsdd_message
+ */
+static void
+wsdd_message_free(wsdd_message *msg)
+{
+    if (msg != NULL) {
+        g_free((char*) msg->endpoint);
+        g_free((char*) msg->uri);
+        g_free(msg);
+    }
+}
 
 /* Resolver read callback
  */
@@ -72,6 +198,7 @@ wsdd_resolver_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
     socklen_t               addrlen = sizeof(addr);
     ip_straddr              straddr;
     int                     rc;
+    wsdd_message            *msg;
 
     (void) data;
     (void) mask;
@@ -83,8 +210,15 @@ wsdd_resolver_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
     }
 
     straddr = ip_straddr_from_sockaddr((struct sockaddr*) &addr);
-    log_debug(NULL, "%d bytes received from %s", rc, straddr.text);
+    log_debug(NULL, "WSDD: %d bytes received from %s", rc, straddr.text);
 
+    msg = wsdd_message_parse(wsdd_buf, rc);
+    if (msg != NULL) {
+        log_debug(NULL, "WSDD: device found:");
+        log_debug(NULL, "  endpoint=%s", msg->endpoint);
+        log_debug(NULL, "  uri=%s", msg->uri);
+    }
+    wsdd_message_free(msg);
     //write(1, wsdd_buf, rc);
 }
 
