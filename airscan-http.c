@@ -382,6 +382,20 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
     return q;
 }
 
+/* Create new http_query, relative to base URI
+ *
+ * Newly created http_query takes ownership on body (if not NULL).
+ * The method and content_type assumed to be constant strings.
+ */
+http_query*
+http_query_new_relative(http_client *client,
+        const http_uri *base_uri, const char *path,
+        const char *method, char *body, const char *content_type)
+{
+    http_uri *uri = http_uri_new_relative(base_uri, path, true, false);
+    return http_query_new(client, uri, method, body, content_type);
+}
+
 /* Submit the query.
  *
  * When query is finished, callback will be called. After return from

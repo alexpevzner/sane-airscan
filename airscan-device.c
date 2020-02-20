@@ -409,10 +409,10 @@ device_http_perform (device *dev, const char *path,
         const char *method, char *body,
         void (*callback)(device*, http_query *q))
 {
-    http_uri *uri = http_uri_new_relative(dev->proto_ctx.base_uri, path, true, false);
     http_query *q;
 
-    q = http_query_new(dev->proto_ctx.http, uri, method, body, "text/xml");
+    q = http_query_new_relative(dev->proto_ctx.http, dev->proto_ctx.base_uri,
+        path, method, body, "text/xml");
     http_query_submit(q, callback);
 }
 
