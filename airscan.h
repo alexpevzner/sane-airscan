@@ -495,13 +495,18 @@ typedef struct http_query http_query;
  * Newly created http_query takes ownership on uri and body (if not NULL).
  * The method and content_type assumed to be constant strings.
  *
- * When query is finished, callback will be called. After return from
- * callback, memory, owned by http_query will be invalidated
  */
 http_query*
 http_query_new (http_client *client, http_uri *uri, const char *method,
-        char *body, const char *content_type,
-        void (*callback) (device *dev, http_query *q));
+        char *body, const char *content_type);
+
+/* Submit the query.
+ *
+ * When query is finished, callback will be called. After return from
+ * callback, memory, owned by http_query will be invalidated
+ */
+void
+http_query_submit (http_query *q, void (*callback)(device *dev, http_query *q));
 
 /* Get query error, if any
  *

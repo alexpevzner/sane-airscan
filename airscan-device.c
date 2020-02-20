@@ -406,7 +406,10 @@ device_http_perform (device *dev, const char *path,
         void (*callback)(device*, http_query *q))
 {
     http_uri *uri = http_uri_new_relative(dev->uri_escl, path, true, false);
-    http_query_new(dev->http_client, uri, method, body, "text/xml", callback);
+    http_query *q;
+
+    q = http_query_new(dev->http_client, uri, method, body, "text/xml");
+    http_query_submit(q, callback);
 }
 
 /* Initiate HTTP GET request

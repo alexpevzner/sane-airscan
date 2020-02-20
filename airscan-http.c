@@ -344,14 +344,10 @@ http_query_set_host (http_query *q)
  *
  * Newly created http_query takes ownership on uri and body (if not NULL).
  * The method and content_type assumed to be constant strings.
- *
- * When query is finished, callback will be called. After return from
- * callback, memory, owned by http_query will be invalidated
  */
 http_query*
 http_query_new (http_client *client, http_uri *uri, const char *method,
-        char *body, const char *content_type,
-        void (*callback)(device *dev, http_query *q))
+        char *body, const char *content_type)
 {
     http_query *q = g_new0(http_query, 1);
 
@@ -382,13 +378,24 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
      * as a workaround
      */
     soup_message_headers_append(q->msg->request_headers, "Connection", "close");
-    q->callback = callback;
-
-    log_debug(client->dev, "HTTP %s %s", q->msg->method, http_uri_str(q->uri));
-
-    soup_session_queue_message(http_session, q->msg, http_query_callback, q);
 
     return q;
+}
+
+/* Submit the query.
+ *
+ * When query is finished, callback will be called. After return from
+ * callback, memory, owned by http_query will be invalidated
+ */
+void
+http_query_submit (http_query *q, void (*callback)(device *dev, http_query *q))
+{
+    q->callback = callback;
+
+    log_debug(q->client->dev, "HTTP %s %s",
+        q->msg->method, http_uri_str(q->uri));
+
+    soup_session_queue_message(http_session, q->msg, http_query_callback, q);
 }
 
 /* Cancel unfinished http_query. Callback will not be called and
