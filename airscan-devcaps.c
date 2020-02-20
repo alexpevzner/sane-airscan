@@ -97,6 +97,10 @@ devcaps_source_parse_color_modes (xml_rd *xml, devcaps_source *src)
      */
     src->colormodes &= ~(1 << OPT_COLORMODE_LINEART);
 
+    if (src->colormodes == 0) {
+        return ERROR("no color modes detected");
+    }
+
     OPT_COLORMODE cm;
     for (cm = (OPT_COLORMODE) 0; cm < NUM_OPT_COLORMODE; cm ++) {
         if ((src->colormodes & (1 << cm)) != 0) {
@@ -269,7 +273,7 @@ devcaps_source_parse_resolutions (xml_rd *xml, devcaps_source *src)
     }
 
     if (!(src->flags & (DEVCAPS_SOURCE_RES_DISCRETE|DEVCAPS_SOURCE_RES_RANGE))){
-        err = ERROR("Source resolutions are not defined");
+        err = ERROR("scan resolutions are not defined");
     }
 
     return err;
@@ -454,13 +458,20 @@ devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
 
     /* Update list of sources */
     OPT_SOURCE opt_src;
+    bool       src_ok = false;
 
     sane_string_array_reset(&caps->sane_sources);
     for (opt_src = (OPT_SOURCE) 0; opt_src < NUM_OPT_SOURCE; opt_src ++) {
         if (caps->src[opt_src] != NULL) {
             sane_string_array_append(&caps->sane_sources,
                 (SANE_String) opt_source_to_sane(opt_src));
+            src_ok = true;
         }
+    }
+
+    if (!src_ok) {
+        err = ERROR("XML: neither platen nor ADF sources detected");
+        goto DONE;
     }
 
 DONE:
