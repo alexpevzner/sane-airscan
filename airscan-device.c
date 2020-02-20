@@ -68,12 +68,13 @@ struct device {
     DEVICE_STATE         state;         /* Device state */
     GCond                state_cond;    /* Signaled when state changes */
 
+    /* Protocol handling */
+    proto_ctx            proto_ctx;     /* Protocol handler context */
+
     /* I/O handling (AVAHI and HTTP) */
     zeroconf_addrinfo    *addresses;    /* Device addresses, NULL if
                                            device was statically added */
     zeroconf_addrinfo    *addr_current; /* Current address to probe */
-    http_uri             *uri_escl;     /* eSCL base URI */
-    http_client          *http_client;  /* HTTP client */
     eloop_timer          *http_timer;   /* HTTP retry timer */
     int                  http_retry;    /* HTTP retry count */
     trace                *trace;        /* Protocol trace */
@@ -174,12 +175,14 @@ device_add (const char *name, zeroconf_addrinfo *addresses,
     dev->refcnt = 1;
     dev->name = g_strdup(name);
     dev->flags = DEVICE_LISTED | DEVICE_INIT_WAIT;
+    dev->proto_ctx.proto = proto_handler_escl_new();
+
     if (init_scan) {
         dev->flags |= DEVICE_INIT_WAIT;
     }
     devopt_init(&dev->opt);
 
-    dev->http_client = http_client_new(dev);
+    dev->proto_ctx.http = http_client_new(dev);
     dev->trace = trace_open(name);
 
     dev->job_location = g_string_new(NULL);
@@ -224,13 +227,14 @@ device_unref (device *dev)
 
         /* Release all memory */
         g_free((void*) dev->name);
+        dev->proto_ctx.proto->free(dev->proto_ctx.proto);
 
         devopt_cleanup(&dev->opt);
 
         zeroconf_addrinfo_list_free(dev->addresses);
 
-        http_uri_free(dev->uri_escl);
-        http_client_free(dev->http_client);
+        http_uri_free((http_uri*) dev->proto_ctx.base_uri);
+        http_client_free(dev->proto_ctx.http);
 
         g_string_free(dev->job_location, TRUE);
         g_cond_clear(&dev->state_cond);
@@ -405,10 +409,10 @@ device_http_perform (device *dev, const char *path,
         const char *method, char *body,
         void (*callback)(device*, http_query *q))
 {
-    http_uri *uri = http_uri_new_relative(dev->uri_escl, path, true, false);
+    http_uri *uri = http_uri_new_relative(dev->proto_ctx.base_uri, path, true, false);
     http_query *q;
 
-    q = http_query_new(dev->http_client, uri, method, body, "text/xml");
+    q = http_query_new(dev->proto_ctx.http, uri, method, body, "text/xml");
     http_query_submit(q, callback);
 }
 
@@ -426,7 +430,7 @@ device_http_get (device *dev, const char *path,
 static void
 device_http_cancel (device *dev)
 {
-    http_client_cancel(dev->http_client);
+    http_client_cancel(dev->proto_ctx.http);
     if (dev->http_timer != NULL) {
         eloop_timer_cancel(dev->http_timer);
         dev->http_timer = NULL;
@@ -455,24 +459,27 @@ device_probe_address (device *dev, zeroconf_addrinfo *addrinfo)
 {
     /* Cleanup after previous probe */
     dev->addr_current = addrinfo;
-    if (dev->uri_escl != NULL) {
-        http_uri_free(dev->uri_escl);
+    if (dev->proto_ctx.base_uri != NULL) {
+        http_uri_free((http_uri*) dev->proto_ctx.base_uri);
+        dev->proto_ctx.base_uri = NULL;
     }
 
     /* Parse device URI */
-    dev->uri_escl = http_uri_new(addrinfo->uri, true);
-    log_assert(dev, dev->uri_escl != NULL);
+    http_uri *uri = http_uri_new(addrinfo->uri, true);
+    log_assert(dev, uri != NULL);
 
     /* Make sure eSCL URI's path ends with '/' character */
-    const char *path = http_uri_get_path(dev->uri_escl);
+    const char *path = http_uri_get_path(uri);
     if (!g_str_has_suffix(path, "/")) {
         size_t len = strlen(path);
         char *path2 = g_alloca(len + 2);
         memcpy(path2, path, len);
         path2[len] = '/';
         path2[len+1] = '\0';
-        http_uri_set_path(dev->uri_escl, path2);
+        http_uri_set_path(uri, path2);
     }
+
+    dev->proto_ctx.base_uri = uri;
 
     /* Fetch device capabilities */
     device_http_get(dev, "ScannerCapabilities",
@@ -519,7 +526,7 @@ DONE:
         dev->flags |= DEVICE_READY;
         dev->flags &= ~DEVICE_INIT_WAIT;
 
-        http_client_onerror(dev->http_client, device_http_onerror);
+        http_client_onerror(dev->proto_ctx.http, device_http_onerror);
     }
 
     g_cond_broadcast(&device_table_cond);
@@ -775,7 +782,7 @@ device_escl_start_scan_callback (device *dev, http_query *q)
     }
 
     /* Validate and save location */
-    uri = http_uri_new_relative(dev->uri_escl, location, true, true);
+    uri = http_uri_new_relative(dev->proto_ctx.base_uri, location, true, true);
     if (uri == NULL) {
         err = eloop_eprintf("ScanJobs request: invalid location received");
         status = SANE_STATUS_IO_ERROR;

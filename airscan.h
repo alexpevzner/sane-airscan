@@ -1226,7 +1226,7 @@ typedef struct {
 /* proto_ctx represents request context
  */
 typedef struct {
-    struct proto_handler *handler;  /* Link to proto_handler */
+    struct proto_handler *proto;    /* Link to proto_handler */
     http_client          *http;     /* HTTP client for sending requests */
     const http_uri       *base_uri; /* HTTP base URI for protocol */
     proto_scan_params    params;    /* Scan parameters */
