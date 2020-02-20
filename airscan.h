@@ -1261,6 +1261,10 @@ struct proto_handler {
      */
     void         (*free) (proto_handler *proto);
 
+    /* Reset protocol handler before the next scan
+     */
+    void         (*reset) (proto_handler *proto);
+
     /* Query and decode device capabilities
      */
     http_query*  (*devcaps_query) (const proto_ctx *ctx);
@@ -1269,28 +1273,28 @@ struct proto_handler {
     /* Initiate scanning and decode result. On success, must
      * decode location string
      */
-    http_query   (*scan_query) (const proto_ctx *ctx);
+    http_query*  (*scan_query) (const proto_ctx *ctx);
     proto_result (*scan_decode) (const proto_ctx *ctx);
 
     /* Initiate image downloading and decode result. On success,
      * must decode proto_result::data::image
      */
-    http_query   (*image_query) (const proto_ctx *ctx);
+    http_query*  (*image_query) (const proto_ctx *ctx);
     proto_result (*image_decode) (const proto_ctx *ctx);
 
     /* Request device status and decode result
      */
-    http_query   (*status_query) (const proto_ctx *ctx);
+    http_query*  (*status_query) (const proto_ctx *ctx);
     proto_result (*status_decode) (const proto_ctx *ctx);
 
     /* Cleanup after previous scan
      */
-    http_query   (*cleanup_query) (const proto_ctx *ctx);
+    http_query*  (*cleanup_query) (const proto_ctx *ctx);
     proto_result (*cleanup_decode) (const proto_ctx *ctx);
 
     /* Cancel scan in progress
      */
-    http_query   (*cancel_query) (const proto_ctx *ctx);
+    http_query*  (*cancel_query) (const proto_ctx *ctx);
     proto_result (*cancel_decode) (const proto_ctx *ctx);
 };
 
