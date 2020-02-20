@@ -225,17 +225,25 @@ http_client_cancel (http_client *client)
 }
 
 /******************** HTTP request handling ********************/
+/* http_query_cached represents a cached data, computed
+ * on demand and associated with the http_query. This cache
+ * is mutable, even if http_query is not
+ */
+typedef struct {
+    http_data   *request_data;     /* Request data */
+    http_data   *response_data;    /* Response data */
+} http_query_cached;
+
 /* Type http_query represents HTTP query (both request and response)
  */
 struct http_query {
-    http_client *client;           /* Client that owns the query */
-    http_uri    *uri;              /* Query URI */
-    SoupMessage *msg;              /* Underlying SOUP message */
-    void (*callback) (device *dev, /* Completion callback */
-            http_query *q);
-    http_data   *request_data;     /* Response data, cached */
-    http_data   *response_data;    /* Response data, cached */
-    http_query  *prev, *next;      /* Prev/next query in http_query_list */
+    http_client       *client;                  /* Client that owns the query */
+    http_uri          *uri;                     /* Query URI */
+    SoupMessage       *msg;                     /* Underlying SOUP message */
+    void              (*callback) (device *dev, /* Completion callback */
+                                http_query *q);
+    http_query_cached *cached;                  /* Cached data */
+    http_query        *prev, *next;             /* In the http_query_list */
 };
 
 /* Insert http_query into http_query_list
@@ -275,8 +283,9 @@ http_query_free (http_query *q)
 {
     http_query_list_del(q);
     http_uri_free(q->uri);
-    http_data_unref(q->request_data);
-    http_data_unref(q->response_data);
+    http_data_unref(q->cached->request_data);
+    http_data_unref(q->cached->response_data);
+    g_free(q->cached);
     g_free(q);
 }
 
@@ -352,6 +361,7 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
     q->client = client;
     q->uri = uri;
     q->msg = soup_message_new_from_uri(method, uri->parsed);
+    q->cached = g_new0(http_query_cached, 1);
 
     if (body != NULL) {
         soup_message_set_request(q->msg, content_type, SOUP_MEMORY_TAKE,
@@ -407,7 +417,7 @@ http_query_cancel (http_query *q)
  * considered as errors here
  */
 error
-http_query_error (http_query *q)
+http_query_error (const http_query *q)
 {
     if (!SOUP_STATUS_IS_SUCCESSFUL(q->msg->status_code)) {
         return ERROR(soup_status_get_phrase(q->msg->status_code));
@@ -421,7 +431,7 @@ http_query_error (http_query *q)
  * Only transport errors considered errors here
  */
 error
-http_query_transport_error (http_query *q)
+http_query_transport_error (const http_query *q)
 {
     if (SOUP_STATUS_IS_TRANSPORT_ERROR(q->msg->status_code)) {
         return ERROR(soup_status_get_phrase(q->msg->status_code));
@@ -434,7 +444,7 @@ http_query_transport_error (http_query *q)
  * with transport error
  */
 int
-http_query_status (http_query *q)
+http_query_status (const http_query *q)
 {
     log_assert(q->client->dev,
         !SOUP_STATUS_IS_TRANSPORT_ERROR(q->msg->status_code));
@@ -445,7 +455,7 @@ http_query_status (http_query *q)
 /* Get HTTP status string
  */
 const char*
-http_query_status_string (http_query *q)
+http_query_status_string (const http_query *q)
 {
     return soup_status_get_phrase(http_query_status(q));
 }
@@ -453,7 +463,7 @@ http_query_status_string (http_query *q)
 /* Get query URI
  */
 http_uri*
-http_query_uri (http_query *q)
+http_query_uri (const http_query *q)
 {
     return q->uri;
 }
@@ -461,7 +471,7 @@ http_query_uri (http_query *q)
 /* Get query method
  */
 const char*
-http_query_method (http_query *q)
+http_query_method (const http_query *q)
 {
     return q->msg->method;
 }
@@ -469,7 +479,7 @@ http_query_method (http_query *q)
 /* Get request header
  */
 const char*
-http_query_get_request_header (http_query *q, const char *name)
+http_query_get_request_header (const http_query *q, const char *name)
 {
     return soup_message_headers_get_one(q->msg->request_headers, name);
 }
@@ -478,7 +488,7 @@ http_query_get_request_header (http_query *q, const char *name)
 /* Get response header
  */
 const char*
-http_query_get_response_header(http_query *q, const char *name)
+http_query_get_response_header(const http_query *q, const char *name)
 {
     return soup_message_headers_get_one(q->msg->response_headers, name);
 }
@@ -486,31 +496,31 @@ http_query_get_response_header(http_query *q, const char *name)
 /* Get request data
  */
 http_data*
-http_query_get_request_data (http_query *q)
+http_query_get_request_data (const http_query *q)
 {
-    if (q->request_data == NULL) {
-        q->request_data = http_data_new(q->msg->request_body);
+    if (q->cached->request_data == NULL) {
+        q->cached->request_data = http_data_new(q->msg->request_body);
     }
 
-    return q->request_data;
+    return q->cached->request_data;
 }
 
 /* Get request data
  */
 http_data*
-http_query_get_response_data (http_query *q)
+http_query_get_response_data (const http_query *q)
 {
-    if (q->response_data == NULL) {
-        q->response_data = http_data_new(q->msg->response_body);
+    if (q->cached->response_data == NULL) {
+        q->cached->response_data = http_data_new(q->msg->response_body);
     }
 
-    return q->response_data;
+    return q->cached->response_data;
 }
 
 /* Call callback for each request header
  */
 void
-http_query_foreach_request_header (http_query *q,
+http_query_foreach_request_header (const http_query *q,
         void (*callback)(const char *name, const char *value, void *ptr),
         void *ptr)
 {
@@ -520,7 +530,7 @@ http_query_foreach_request_header (http_query *q,
 /* Call callback for each response header
  */
 void
-http_query_foreach_response_header (http_query *q,
+http_query_foreach_response_header (const http_query *q,
         void (*callback)(const char *name, const char *value, void *ptr),
         void *ptr)
 {

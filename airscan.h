@@ -509,67 +509,67 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
  * considered as errors here
  */
 error
-http_query_error (http_query *q);
+http_query_error (const http_query *q);
 
 /* Get query transport error, if any
  *
  * Only transport errors considered errors here
  */
 error
-http_query_transport_error (http_query *q);
+http_query_transport_error (const http_query *q);
 
 /* Get HTTP status code. Code not available, if query finished
  * with error
  */
 int
-http_query_status (http_query *q);
+http_query_status (const http_query *q);
 
 /* Get HTTP status string
  */
 const char*
-http_query_status_string (http_query *q);
+http_query_status_string (const http_query *q);
 
 /* Get query URI
  */
 http_uri*
-http_query_uri (http_query *q);
+http_query_uri (const http_query *q);
 
 /* Get query method
  */
 const char*
-http_query_method (http_query *q);
+http_query_method (const http_query *q);
 
 /* Get request header
  */
 const char*
-http_query_get_request_header (http_query *q, const char *name);
+http_query_get_request_header (const http_query *q, const char *name);
 
 /* Get response header
  */
 const char*
-http_query_get_response_header (http_query *q, const char *name);
+http_query_get_response_header (const http_query *q, const char *name);
 
 /* Get request data
  */
 http_data*
-http_query_get_request_data (http_query *q);
+http_query_get_request_data (const http_query *q);
 
 /* Get request data
  */
 http_data*
-http_query_get_response_data (http_query *q);
+http_query_get_response_data (const http_query *q);
 
 /* Call callback for each request header
  */
 void
-http_query_foreach_request_header (http_query *q,
+http_query_foreach_request_header (const http_query *q,
         void (*callback)(const char *name, const char *value, void *ptr),
         void *ptr);
 
 /* Call callback for each response header
  */
 void
-http_query_foreach_response_header (http_query *q,
+http_query_foreach_response_header (const http_query *q,
         void (*callback)(const char *name, const char *value, void *ptr),
         void *ptr);
 
