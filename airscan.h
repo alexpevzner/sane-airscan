@@ -1207,6 +1207,98 @@ device_management_init (void);
 void
 device_management_cleanup (void);
 
+/******************** Scan Protocol handling ********************/
+/* proto_scan_params represents scan parameters
+ */
+typedef struct {
+    int           x_off, y_off; /* Scan area X/Y offset */
+    int           wid, hei;     /* Scan area width and height */
+    int           x_res, y_res; /* X/Y resolution */
+    OPT_SOURCE    src;          /* Desired source */
+    OPT_COLORMODE colormode;    /* Desired color mode */
+} proto_scan_params;
+
+/* proto_ctx represents request context
+ */
+typedef struct {
+    struct proto_handler *handler;  /* Link to proto_handler */
+    http_client          *http;     /* HTTP client for sending requests */
+    const http_uri       *base_uri; /* HTTP base URI for protocol */
+    proto_scan_params    params;    /* Scan parameters */
+    const char           *location; /* Image location */
+    const http_query     *query;    /* Passed to xxx_decode callbacks */
+} proto_ctx;
+
+/* PROTO_ACTION represents action to be performed
+ * after query result decoding
+ */
+typedef enum {
+    PROTO_GET_IMAGE,  /* Get image page */
+    PROTO_GET_STATUS, /* Get error status */
+    PROTO_CLEANUP,    /* Cleanup after scan */
+    PROTO_FINISH      /* Finish scanning */
+} PROTO_ACTION;
+
+/* proto_result represents decoded query results
+ */
+typedef struct {
+    PROTO_ACTION action;      /* Action code */
+    SANE_Status  status;      /* Job status */
+    int          delay;       /* Delay before next query, in milliseconds */
+    union {
+        const char *location; /* Image location, protocol-specific */
+        http_data  *image;    /* Image buffer */
+    } data;
+} proto_result;
+
+/* proto represents scan protocol implementation
+ */
+typedef struct proto_handler proto_handler;
+struct proto_handler {
+    const char *name;  /* Protocol name (i.e., "eSCL", "WSD", "IPP") */
+
+    /* Free protocol handler
+     */
+    void         (*free) (proto_handler *proto);
+
+    /* Query and decode device capabilities
+     */
+    http_query*  (*devcaps_query) (const proto_ctx *ctx);
+    error        (*devcaps_decode) (const proto_ctx *ctx, devcaps *caps);
+
+    /* Initiate scanning and decode result. On success, must
+     * decode location string
+     */
+    http_query   (*scan_query) (const proto_ctx *ctx);
+    proto_result (*scan_decode) (const proto_ctx *ctx);
+
+    /* Initiate image downloading and decode result. On success,
+     * must decode proto_result::data::image
+     */
+    http_query   (*image_query) (const proto_ctx *ctx);
+    proto_result (*image_decode) (const proto_ctx *ctx);
+
+    /* Request device status and decode result
+     */
+    http_query   (*status_query) (const proto_ctx *ctx);
+    proto_result (*status_decode) (const proto_ctx *ctx);
+
+    /* Cleanup after previous scan
+     */
+    http_query   (*cleanup_query) (const proto_ctx *ctx);
+    proto_result (*cleanup_decode) (const proto_ctx *ctx);
+
+    /* Cancel scan in progress
+     */
+    http_query   (*cancel_query) (const proto_ctx *ctx);
+    proto_result (*cancel_decode) (const proto_ctx *ctx);
+};
+
+/* proto_handler_escl_new creates new eSCL protocol handler
+ */
+proto_handler*
+proto_handler_escl_new (void);
+
 /******************** Image decoding ********************/
 /* The window withing the image
  *
