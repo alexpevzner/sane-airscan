@@ -66,6 +66,10 @@ If you use one of the following Linux distros:
 [Follow this link](https://software.opensuse.org//download.html?project=home%3Apzz&package=sane-airscan),
 where you will find packages and very detailed installation instructions.
 
+Note, after a fresh build this link sometimes takes too long to update, if you encounter
+"file not found" problems, there is
+a direct link to repositories: [https://download.opensuse.org/repositories/home:/pzz/](https://download.opensuse.org/repositories/home:/pzz/)
+
 I strongly recommend you to choose "Add repository and install manually"
 option rather that "Grab binary packages directly", because it will
 enable automatic updates of the sane-airscan package.
