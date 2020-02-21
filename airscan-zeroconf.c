@@ -204,12 +204,12 @@ zeroconf_addrinfo_new (const AvahiAddress *addr, uint16_t port, const char *rs,
 
         avahi_address_snprint(str_addr, sizeof(str_addr), addr);
     } else {
-        static char link_local[8] = {0xfe, 0x80};
         size_t      len;
 
         addrinfo->ipv6 = true;
-        addrinfo->linklocal = !memcmp(addr->data.ipv6.address,
-            link_local, sizeof(link_local));
+        addrinfo->linklocal =
+            addr->data.ipv6.address[0] == 0xfe &&
+            (addr->data.ipv6.address[1] & 0xc0) == 0x80;
 
         str_addr[0] = '[';
         avahi_address_snprint(str_addr + 1, sizeof(str_addr) - 2, addr);
