@@ -1003,6 +1003,16 @@ typedef struct {
     SANE_Range   win_y_range_mm;         /* Window y range, in mm */
 } devcaps_source;
 
+/* Allocate devcaps_source
+ */
+devcaps_source*
+devcaps_source_new (void);
+
+/* Free devcaps_source
+ */
+void
+devcaps_source_free (devcaps_source *src);
+
 /* Device Capabilities
  */
 typedef struct {
@@ -1025,11 +1035,10 @@ devcaps_init (devcaps *caps);
 void
 devcaps_cleanup (devcaps *caps);
 
-/* Parse device capabilities. devcaps structure must be initialized
- * before calling this function.
+/* Reset Device Capabilities into initial state
  */
-error
-devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len);
+void
+devcaps_reset (devcaps *caps);
 
 /* Dump device capabilities, for debugging
  */
@@ -1060,10 +1069,11 @@ devopt_init (devopt *opt);
 void
 devopt_cleanup (devopt *opt);
 
-/* Parse device capabilities, and set default options values
+/* Set default option values. Before call to this function,
+ * devopt.caps needs to be properly filled.
  */
-error
-devopt_import_caps (devopt *opt, const char *xml_text, size_t xml_len);
+void
+devopt_set_defaults (devopt *opt);
 
 /* Set device option
  */

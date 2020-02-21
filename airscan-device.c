@@ -395,6 +395,27 @@ device_state_set (device *dev, DEVICE_STATE state)
     }
 }
 
+/******************** Underlying protocol operations ********************/
+/* Query device capabilities
+ */
+static void
+device_proto_devcaps_query (device *dev)
+{
+    http_query *q;
+
+    q = dev->proto_ctx.proto->devcaps_query(&dev->proto_ctx);
+    http_query_submit(q, device_scanner_capabilities_callback);
+    dev->proto_ctx.query = q;
+}
+
+/* Decode device capabilities
+ */
+static error
+device_proto_devcaps_decode (device *dev, devcaps *caps)
+{
+    return dev->proto_ctx.proto->devcaps_decode(&dev->proto_ctx, caps);
+}
+
 /******************** HTTP operations ********************/
 /* Initiate HTTP request
  *
@@ -482,8 +503,7 @@ device_probe_address (device *dev, zeroconf_addrinfo *addrinfo)
     dev->proto_ctx.base_uri = uri;
 
     /* Fetch device capabilities */
-    device_http_get(dev, "ScannerCapabilities",
-            device_scanner_capabilities_callback);
+    device_proto_devcaps_query (dev);
 }
 
 /* ScannerCapabilities fetch callback
@@ -501,15 +521,14 @@ device_scanner_capabilities_callback (device *dev, http_query *q)
     }
 
     /* Parse XML response */
-    http_data *data = http_query_get_response_data(q);
-    err = devopt_import_caps(&dev->opt, data->bytes, data->size);
-
+    err = device_proto_devcaps_decode (dev, &dev->opt.caps);
     if (err != NULL) {
         err = eloop_eprintf("ScannerCapabilities: %s", err);
         goto DONE;
     }
 
     devcaps_dump(dev->trace, &dev->opt.caps);
+    devopt_set_defaults(&dev->opt);
 
     /* Cleanup and exit */
 DONE:

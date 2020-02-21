@@ -387,20 +387,13 @@ devopt_set_geom (devopt *opt, SANE_Int option, SANE_Fixed val, SANE_Word *info)
     return SANE_STATUS_GOOD;
 }
 
-/* Parse device capabilities, and set default options values
- *
- * Returns NULL if OK, error string otherwise
+/* Set default option values. Before call to this function,
+ * devopt.caps needs to be properly filled.
  */
-error
-devopt_import_caps (devopt *opt, const char *xml_text, size_t xml_len)
+void
+devopt_set_defaults (devopt *opt)
 {
-    error          err;
     devcaps_source *src;
-
-    err = devcaps_parse (&opt->caps, xml_text, xml_len);
-    if (err != NULL) {
-        return err;
-    }
 
     opt->src = devopt_choose_default_source(opt);
     opt->colormode = devopt_choose_colormode(opt, OPT_COLORMODE_UNKNOWN);
@@ -414,8 +407,6 @@ devopt_import_caps (devopt *opt, const char *xml_text, size_t xml_len)
 
     devopt_rebuild_opt_desc(opt);
     devopt_update_params(opt);
-
-    return NULL;
 }
 
 /* Set device option
