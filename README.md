@@ -81,9 +81,9 @@ section below.
 
 ##### Arch Linux
 
-Thomas Kiss <thokis@gmail.com> maintains package for Arch Linux:
+Thomas Kiss <thomas.kiss001@stud.fh-dortmund.de> maintains package for Arch Linux:
 
-* https://aur.archlinux.org/packages/sane-airscan-git/
+* https://aur.archlinux.org/packages/sane-airscan/
 
 ##### Linux Mint
 
