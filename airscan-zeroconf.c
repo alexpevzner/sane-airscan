@@ -229,13 +229,16 @@ zeroconf_addrinfo_new (const AvahiAddress *addr, uint16_t port, const char *rs,
     }
 
     /* Normalize rs */
-    while (*rs == '/') {
-        rs ++;
-    }
+    rs_len = 0;
+    if (rs != NULL) {
+        while (*rs == '/') {
+            rs ++;
+        }
 
-    rs_len = (int) strlen(rs);
-    while (rs_len != 0 && rs[rs_len - 1] == '/') {
-        rs_len --;
+        rs_len = (int) strlen(rs);
+        while (rs_len != 0 && rs[rs_len - 1] == '/') {
+            rs_len --;
+        }
     }
 
     /* Make eSCL URL */
@@ -260,7 +263,7 @@ zeroconf_addrinfo_copy_single (const zeroconf_addrinfo *addrinfo)
 {
     zeroconf_addrinfo *addrinfo2 = g_new0(zeroconf_addrinfo, 1);
 
-    *addrinfo2 = *addrinfo2;
+    *addrinfo2 = *addrinfo;
     addrinfo2->uri = g_strdup(addrinfo->uri);
     addrinfo2->next = NULL;
 
