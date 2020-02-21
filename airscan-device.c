@@ -670,12 +670,15 @@ DONE:
     trace_printf(dev->trace, "-----");
     if (err != NULL) {
         trace_printf(dev->trace, "Error: %s", ESTRING(err));
+    } else {
+        trace_printf(dev->trace, "Device status: %s",
+            sane_strstatus(device_status));
+        trace_printf(dev->trace, "ADF status: %s",
+            sane_strstatus(adf_status));
+        trace_printf(dev->trace, "Job status: %s",
+            sane_strstatus(status));
+        trace_printf(dev->trace, "");
     }
-
-    trace_printf(dev->trace, "Device status: %s", sane_strstatus(device_status));
-    trace_printf(dev->trace, "ADF status: %s", sane_strstatus(adf_status));
-    trace_printf(dev->trace, "Job status: %s", sane_strstatus(status));
-    trace_printf(dev->trace, "");
 
     device_job_set_status(dev, status);
     if (dev->job_has_location) {
