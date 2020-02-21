@@ -113,6 +113,17 @@ cd sane-airscan
 make
 make install
 ```
+### Code Quality
+I greatly appreciate a good static code analysis tools, as they help to maintain
+a high code quality.
+
+This project compiles without any warning by gcc and clang compilers.
+
+Recently it was checked by [PVS-Studio](https://www.viva64.com/en/pvs-studio/) static code
+analyser, and it found a couple of bugs (that were immediately fixed, of course), so I can
+recommend this tool. Though this tool is commercial, they offer a free subscription for
+open source projects.
+
 ### Reporting bugs
 To report a bug, please [create a new GitHub issue](https://github.com/alexpevzner/sane-airscan/issues/new)
 
