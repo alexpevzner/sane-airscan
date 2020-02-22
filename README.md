@@ -57,49 +57,37 @@ please let me know.
 
 ### Installation from pre-build binaries
 
-Thanks to [openSUSE Build Service](https://build.opensuse.org/), I can
-provide pre-built packages for many popular Linux distros.
+If you use one of the following Linux distros:
+* **Debian** (9.0 and 10)
+* **Fedora** (29, 30 and 31)
+* **openSUSE** (Leap and Tumbleweed)
+* **Ubuntu** (16.04, 18.04, 19.04 and 19.10)
 
-Currently, the following distros are supported "officially" (i.e., by me):
-**Debian** (9.0 and 10), **Fedora** (29, 30 and 31),
-**openSUSE** (Leap and Tumbleweed), **Ubuntu** (16.04, 18.04, 19.04 and 19.10).
-There are also some "3rd party" repos, currently for **Arch Linux**.
-
-To install a pre-build package,
-[follow the link](https://software.opensuse.org//download.html?project=home%3Apzz&package=sane-airscan),
+[Follow this link](https://software.opensuse.org//download.html?project=home%3Apzz&package=sane-airscan),
 where you will find packages and very detailed installation instructions.
+
+Note, after a fresh build this link sometimes takes too long to update, so if you encounter
+"Resource is no longer available!" problems, there is
+a direct link to repositories: [https://download.opensuse.org/repositories/home:/pzz/](https://download.opensuse.org/repositories/home:/pzz/)
 
 I strongly recommend you to choose "Add repository and install manually"
 option rather that "Grab binary packages directly", because it will
 enable automatic updates of the sane-airscan package.
 
+**Linux Mint** users may use Ubuntu packages:
+* Linux Mint 18.x - use packages for Ubuntu 16.04
+* Linux Mint 19.x - use packages for Ubuntu 18.04
+
+For **Arch Linux**, there is a package, maintained by
+Thomas Kiss <thomas.kiss001@stud.fh-dortmund.de>:
+* https://aur.archlinux.org/packages/sane-airscan/
+
+Big thanks to [openSUSE Build Service](https://build.opensuse.org/), for
+providing package build infrastructure.
+
 If your distro is not listed, see
 [Installation from sources](https://github.com/alexpevzner/sane-airscan#installation-from-sources)
 section below.
-
-#### Other distros
-
-##### Arch Linux
-
-Thomas Kiss <thokis@gmail.com> maintains package for Arch Linux:
-
-* https://aur.archlinux.org/packages/sane-airscan-git/
-
-##### Linux Mint
-
-Ubuntu packages usually work on Mint, but Ubuntu version needs to
-be chosen carefully.
-
-The following table represents my approximation of Mint vs Ubuntu
-versions compatibility:
-
-| Linux Mint version | Use Ubuntu package: |
-| ------------------ | ------------------- |
-| 18.x               | 16.04               |
-| 19.x               | 18.04               |
-
-The table may be inaccurate and incomplete. I would appreciate
-Mint community feedback to correct it.
 
 ### Installation from sources
 #### Install required libraries - Fedora and similar
@@ -125,6 +113,17 @@ cd sane-airscan
 make
 make install
 ```
+### Code Quality
+I greatly appreciate a good static code analysis tools, as they help to maintain
+a high code quality.
+
+This project compiles without any warning by gcc and clang compilers.
+
+Recently it was checked by [PVS-Studio](https://www.viva64.com/en/pvs-studio/) static code
+analyser, and it found a couple of bugs (that were immediately fixed, of course), so I can
+recommend this tool. Though this tool is commercial, they offer a free subscription for
+open source projects.
+
 ### Reporting bugs
 To report a bug, please [create a new GitHub issue](https://github.com/alexpevzner/sane-airscan/issues/new)
 
