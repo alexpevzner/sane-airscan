@@ -61,12 +61,14 @@ typedef enum {
  */
 struct device {
     /* Common part */
-    volatile gint        refcnt;        /* Reference counter */
-    const char           *name;         /* Device name */
-    unsigned int         flags;         /* Device flags */
-    devopt               opt;           /* Device options */
-    DEVICE_STATE         state;         /* Device state */
-    GCond                state_cond;    /* Signaled when state changes */
+    volatile gint        refcnt;               /* Reference counter */
+    const char           *name;                /* Device name */
+    unsigned int         flags;                /* Device flags */
+    devopt               opt;                  /* Device options */
+    DEVICE_STATE         state;                /* Device state */
+    DEVICE_STATE         checking_state;       /* State before CHECK_STATUS */
+    int                  checking_http_status; /* HTTP status before CHECK_STATUS */
+    GCond                state_cond;           /* Signaled when state changes */
 
     /* I/O handling (AVAHI and HTTP) */
     zeroconf_addrinfo    *addresses;    /* Device addresses, NULL if
@@ -135,6 +137,9 @@ device_job_abort (device *dev, SANE_Status status);
 
 static void
 device_escl_cleanup (device *dev);
+
+static void
+device_escl_load_retry (device *dev);
 
 static void
 device_escl_load_page (device *dev);
@@ -547,20 +552,17 @@ device_escl_cleanup (device *dev)
 }
 
 /* Parse ScannerStatus response.
- *
- * On success, returns NULL and `idle' is set to true
- * if scanner is idle
  */
-static error
-device_escl_scannerstatus_parse (const char *xml_text, size_t xml_len,
-        SANE_Status *device_status, SANE_Status *adf_status)
+static SANE_Status
+device_escl_decode_scanner_status (device *dev, const char *xml_text, size_t xml_len)
 {
-    error  err = NULL;
-    xml_rd *xml;
+    error       err = NULL;
+    xml_rd      *xml;
+    SANE_Status device_status = SANE_STATUS_UNSUPPORTED;
+    SANE_Status adf_status = SANE_STATUS_UNSUPPORTED;
+    SANE_Status status;
 
-    *device_status = SANE_STATUS_GOOD;
-    *adf_status = SANE_STATUS_GOOD;
-
+    /* Decode XML */
     err = xml_rd_begin(&xml, xml_text, xml_len);
     if (err != NULL) {
         goto DONE;
@@ -576,71 +578,45 @@ device_escl_scannerstatus_parse (const char *xml_text, size_t xml_len,
         if (xml_rd_node_name_match(xml, "pwg:State")) {
             const char *state = xml_rd_node_value(xml);
             if (!strcmp(state, "Idle")) {
-                *device_status = SANE_STATUS_GOOD;
+                device_status = SANE_STATUS_GOOD;
+            } else if (!strcmp(state, "Processing")) {
+                device_status = SANE_STATUS_DEVICE_BUSY;
+            } else {
+                device_status = SANE_STATUS_UNSUPPORTED;
             }
         } else if (xml_rd_node_name_match(xml, "scan:AdfState")) {
             const char *state = xml_rd_node_value(xml);
-            if (!strcmp(state, "ScannerAdfProcessing")) {
-                *adf_status = SANE_STATUS_NO_DOCS;
-            } else if (!strcmp(state, "ScannerAdfLoaded")) {
-                *adf_status = SANE_STATUS_GOOD;
+            if (!strcmp(state, "ScannerAdfLoaded")) {
+                adf_status = SANE_STATUS_GOOD;
+            } else if (!strcmp(state, "ScannerAdfJam")) {
+                adf_status = SANE_STATUS_JAMMED;
+            } else if (!strcmp(state, "ScannerAdfDoorOpen")) {
+                adf_status = SANE_STATUS_COVER_OPEN;
+            } else if (!strcmp(state, "ScannerAdfProcessing")) {
+                adf_status = SANE_STATUS_NO_DOCS;
+            } else {
+                adf_status = SANE_STATUS_UNSUPPORTED;
             }
         }
+    }
+
+    /* Decode Job status */
+    if (device_status != SANE_STATUS_GOOD &&
+        device_status != SANE_STATUS_UNSUPPORTED) {
+        status = device_status;
+    } else if (dev->opt.src == OPT_SOURCE_PLATEN) {
+        status = device_status;
+    } else {
+        status = adf_status;
     }
 
 DONE:
     xml_rd_finish(&xml);
-    return err;
-}
 
-/* HTTP GET ${dev->uri_escl}/ScannerStatus callback
- */
-static void
-device_escl_check_status_callback (device *dev, http_query *q)
-{
-    error       err = NULL;
-    SANE_Status status = SANE_STATUS_IO_ERROR, device_status, adf_status;
-
-    /* Check request status */
-    err = http_query_error(q);
-    if (err != NULL) {
-        err = eloop_eprintf("ScannerStatus query: %s", ESTRING(err));
-        goto DONE;
-    }
-
-    /* Parse XML response */
-    http_data *data = http_query_get_response_data(q);
-    err = device_escl_scannerstatus_parse(data->bytes, data->size,
-            &device_status, &adf_status);
-
-    if (err != NULL) {
-        err = eloop_eprintf("ScannerStatus: %s", err);
-        goto DONE;
-    }
-
-    /* Decode scanner status */
-    if (device_status != SANE_STATUS_GOOD) {
-        status = device_status;
-    } else if (dev->opt.src == OPT_SOURCE_PLATEN) {
-        status = device_status;
-        if (status == SANE_STATUS_GOOD) {
-            status = SANE_STATUS_DEVICE_BUSY;
-        }
-    } else {
-        status = adf_status;
-        if (status == SANE_STATUS_NO_DOCS && dev->job_images_received > 0) {
-            status = SANE_STATUS_GOOD;
-        } else if (status == SANE_STATUS_GOOD) {
-            /* It's just a guess... */
-            status = SANE_STATUS_JAMMED;
-        }
-    }
-
-    /* Cleanup and exit */
-DONE:
     trace_printf(dev->trace, "-----");
     if (err != NULL) {
         trace_printf(dev->trace, "Error: %s", ESTRING(err));
+        status = SANE_STATUS_IO_ERROR;
     } else {
         trace_printf(dev->trace, "Device status: %s",
             sane_strstatus(device_status));
@@ -651,6 +627,56 @@ DONE:
         trace_printf(dev->trace, "");
     }
 
+    return status;
+}
+
+/* HTTP GET ${dev->uri_escl}/ScannerStatus callback
+ */
+static void
+device_escl_check_status_callback (device *dev, http_query *q)
+{
+    error       err = NULL;
+    SANE_Status status;
+
+    /* Decode status */
+    err = http_query_error(q);
+    if (err != NULL) {
+        trace_printf(dev->trace, "ScannerStatus query: %s", ESTRING(err));
+        status = SANE_STATUS_IO_ERROR;
+    } else {
+        http_data *data = http_query_get_response_data(q);
+        status = device_escl_decode_scanner_status(dev, data->bytes, data->size);
+    }
+
+    /* Now it't time to take a decision */
+    if (dev->checking_state == DEVICE_SCAN_LOADING &&
+        dev->checking_http_status == HTTP_STATUS_SERVICE_UNAVAILABLE ) {
+
+        /* Note, some devices may return HTTP_STATUS_SERVICE_UNAVAILABLE
+         * on attempt to load page immediately after job is created
+         *
+         * So if status doesn't cleanly indicate any error, lets retry
+         * several times
+         */
+        switch (status) {
+        case SANE_STATUS_GOOD:
+        case SANE_STATUS_UNSUPPORTED:
+        case SANE_STATUS_DEVICE_BUSY:
+                if ( dev->http_retry + 1 < DEVICE_HTTP_RETRY_ATTEMPTS) {
+                    dev->http_retry ++;
+                    device_escl_load_retry(dev);
+                }
+                return;
+        default:
+            break;
+        }
+    }
+
+    if (status == SANE_STATUS_GOOD || status == SANE_STATUS_UNSUPPORTED) {
+        status = SANE_STATUS_IO_ERROR;
+    }
+
+    /* Cleanup and exit */
     device_job_set_status(dev, status);
     if (dev->job_has_location) {
         device_escl_cleanup(dev);
@@ -665,8 +691,10 @@ DONE:
  * HTTP GET ${dev->uri_escl}/ScannerStatus
  */
 static void
-device_escl_check_status (device *dev)
+device_escl_check_status (device *dev, int http_status)
 {
+    dev->checking_state = dev->state;
+    dev->checking_http_status = http_status;
     device_state_set(dev, DEVICE_SCAN_CHECK_STATUS);
 
     device_http_get(dev, "ScannerStatus",
@@ -688,8 +716,6 @@ device_escl_load_retry_callback (void *data) {
 static void
 device_escl_load_retry (device *dev) {
     device_state_set(dev, DEVICE_SCAN_LOAD_RETRY);
-
-    dev->http_retry ++;
     dev->http_timer = eloop_timer_new(DEVICE_HTTP_RETRY_PAUSE * 1000,
             device_escl_load_retry_callback, dev);
 }
@@ -722,11 +748,15 @@ device_escl_load_page_callback (device *dev, http_query *q)
         } else {
             device_escl_load_page(dev);
         }
-    } else if (http_query_status(q) == HTTP_STATUS_SERVICE_UNAVAILABLE &&
-               dev->http_retry + 1 < DEVICE_HTTP_RETRY_ATTEMPTS) {
-        device_escl_load_retry(dev);
+    } else if (dev->job_images_received > 0) {
+        /* If we have received at least one image, ignore the
+         * error and finish the job with successful status.
+         * User will get the error upon attempt to request
+         * a next image
+         */
+        device_escl_cleanup(dev);
     } else {
-        device_escl_check_status(dev);
+        device_escl_check_status(dev, http_query_status(q));
     }
 }
 
@@ -803,7 +833,7 @@ DONE:
     trace_error(dev->trace, err);
 
     if (status == SANE_STATUS_GOOD) {
-        device_escl_check_status(dev);
+        device_escl_check_status(dev, http_query_status(q));
     } else {
         device_job_set_status(dev, status);
         device_state_set(dev, DEVICE_SCAN_DONE);
@@ -985,10 +1015,17 @@ device_escl_start_scan (device *dev)
 static void
 device_job_set_status (device *dev, SANE_Status status)
 {
+    /* If error status already pending, don't change it
+     * unless cancel request is received
+     */
     if (dev->job_status == SANE_STATUS_GOOD ||
         status == SANE_STATUS_CANCELLED) {
         log_debug(dev, "JOB status=%s", sane_strstatus(status));
         dev->job_status = status;
+
+        if (status == SANE_STATUS_CANCELLED) {
+            device_read_queue_purge(dev);
+        }
     }
 }
 
@@ -1289,20 +1326,22 @@ device_start (device *dev)
     /* Previous multi-page scan job may still be running. Check
      * its state */
     if (dev->state != DEVICE_SCAN_IDLE) {
-        if (dev->job_images->len != 0 &&
-            dev->job_status != SANE_STATUS_CANCELLED) {
-            /* We have more buffered images */
-            if (device_read_push(dev)) {
-                return SANE_STATUS_GOOD;
+        while (dev->state != DEVICE_SCAN_DONE || dev->job_images->len != 0) {
+            if (dev->job_images->len != 0) {
+                /* If we have more buffered images, just start
+                 * decoding the next one
+                 */
+                if (device_read_push(dev)) {
+                    return SANE_STATUS_GOOD;
+                }
+
+                device_job_set_status(dev, SANE_STATUS_IO_ERROR);
+                device_cancel(dev);
+            } else {
+                /* Otherwise, wait for status change
+                 */
+                eloop_cond_wait(&dev->state_cond);
             }
-
-            device_job_set_status(dev, SANE_STATUS_IO_ERROR);
-            device_cancel(dev);
-        }
-
-        /* Just wait until previous job completion */
-        while (dev->state != DEVICE_SCAN_DONE) {
-            eloop_cond_wait(&dev->state_cond);
         }
 
         if (dev->job_status != SANE_STATUS_GOOD) {
@@ -1484,6 +1523,7 @@ DONE:
         trace_error(dev->trace, err);
         http_data_unref(dev->read_image);
         dev->read_image = NULL;
+        device_read_queue_purge(dev);
     }
 
     return err == NULL;
@@ -1614,6 +1654,10 @@ DONE:
     }
     g_free(dev->read_line_buf);
     dev->read_line_buf = NULL;
+
+    if (dev->state == DEVICE_SCAN_DONE && dev->job_images->len == 0) {
+        device_state_set(dev, DEVICE_SCAN_IDLE);
+    }
 
     return status;
 }
