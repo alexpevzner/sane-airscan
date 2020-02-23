@@ -680,8 +680,17 @@ device_escl_check_status_callback (device *dev, http_query *q)
         status = SANE_STATUS_IO_ERROR;
     }
 
-    /* Cleanup and exit */
-    device_job_set_status(dev, status);
+    /* Set job status */
+    if (dev->job_images_received == 0) {
+        /* If we have received at least one image, ignore the
+         * error and finish the job with successful status.
+         * User will get the error upon attempt to request
+         * a next image
+         */
+        device_job_set_status(dev, status);
+    }
+
+    /* Finish the job */
     if (dev->job_has_location) {
         device_escl_cleanup(dev);
     } else {
@@ -752,13 +761,6 @@ device_escl_load_page_callback (device *dev, http_query *q)
         } else {
             device_escl_load_page(dev);
         }
-    } else if (dev->job_images_received > 0) {
-        /* If we have received at least one image, ignore the
-         * error and finish the job with successful status.
-         * User will get the error upon attempt to request
-         * a next image
-         */
-        device_escl_cleanup(dev);
     } else {
         device_escl_check_status(dev, http_query_status(q));
     }
