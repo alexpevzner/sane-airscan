@@ -476,8 +476,63 @@ escl_devcaps_decode (const proto_ctx *ctx, devcaps *caps)
 static http_query*
 escl_scan_query (const proto_ctx *ctx)
 {
-    (void) ctx;
-    return NULL;
+    const proto_scan_params *params = &ctx->params;
+    const char              *source = NULL;
+    const char              *colormode = NULL;
+    const char              *mime = "image/jpeg";
+    const devcaps_source    *src = ctx->devcaps->src[params->src];
+    bool                    duplex = false;
+
+    /* Prepare parameters */
+    switch (params->src) {
+    case OPT_SOURCE_PLATEN:      source = "Platen"; duplex = false; break;
+    case OPT_SOURCE_ADF_SIMPLEX: source = "Feeder"; duplex = false; break;
+    case OPT_SOURCE_ADF_DUPLEX:  source = "Feeder"; duplex = true; break;
+
+    default:
+        log_internal_error(NULL);
+    }
+
+    switch (params->colormode) {
+    case OPT_COLORMODE_COLOR:     colormode = "RGB24"; break;
+    case OPT_COLORMODE_GRAYSCALE: colormode = "Grayscale8"; break;
+    case OPT_COLORMODE_LINEART:   colormode = "BlackAndWhite1"; break;
+
+    default:
+        log_internal_error(NULL);
+    }
+
+    /* Build scan request */
+    xml_wr *xml = xml_wr_begin("scan:ScanSettings");
+
+    xml_wr_add_text(xml, "pwg:Version", "2.0");
+
+    xml_wr_enter(xml, "pwg:ScanRegions");
+    xml_wr_enter(xml, "pwg:ScanRegion");
+    xml_wr_add_text(xml, "pwg:ContentRegionUnits",
+            "escl:ThreeHundredthsOfInches");
+    xml_wr_add_uint(xml, "pwg:XOffset", params->x_off);
+    xml_wr_add_uint(xml, "pwg:YOffset", params->y_off);
+    xml_wr_add_uint(xml, "pwg:Width", params->wid);
+    xml_wr_add_uint(xml, "pwg:Height", params->hei);
+    xml_wr_leave(xml); /* pwg:ScanRegion */
+    xml_wr_leave(xml); /* pwg:ScanRegions */
+
+    //xml_wr_add_text(xml, "scan:InputSource", source);
+    xml_wr_add_text(xml, "pwg:InputSource", source);
+    xml_wr_add_text(xml, "scan:ColorMode", colormode);
+    xml_wr_add_text(xml, "pwg:DocumentFormat", mime);
+    if ((src->flags & DEVCAPS_SOURCE_SCAN_DOCFMT_EXT) != 0) {
+        xml_wr_add_text(xml, "scan:DocumentFormatExt", mime);
+    }
+    xml_wr_add_uint(xml, "scan:XResolution", params->x_res);
+    xml_wr_add_uint(xml, "scan:YResolution", params->y_res);
+    if (params->src != OPT_SOURCE_PLATEN) {
+        xml_wr_add_bool(xml, "scan:Duplex", duplex);
+    }
+
+    /* Send request to device */
+    return escl_http_query(ctx, "ScanJobs", "POST", xml_wr_finish(xml));
 }
 
 /* Decode result of scan request

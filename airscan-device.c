@@ -146,6 +146,9 @@ static void
 device_escl_load_page (device *dev);
 
 static void
+device_escl_start_scan_callback (device *dev, http_query *q);
+
+static void
 device_read_queue_purge (device *dev);
 
 static bool
@@ -181,6 +184,7 @@ device_add (const char *name, zeroconf_addrinfo *addresses,
     dev->name = g_strdup(name);
     dev->flags = DEVICE_LISTED | DEVICE_INIT_WAIT;
     dev->proto_ctx.proto = proto_handler_escl_new();
+    dev->proto_ctx.devcaps = &dev->opt.caps;
 
     if (init_scan) {
         dev->flags |= DEVICE_INIT_WAIT;
@@ -419,6 +423,18 @@ static error
 device_proto_devcaps_decode (device *dev, devcaps *caps)
 {
     return dev->proto_ctx.proto->devcaps_decode(&dev->proto_ctx, caps);
+}
+
+/* Submit scan request
+ */
+static void
+device_proto_scan_query (device *dev)
+{
+    http_query *q;
+
+    q = dev->proto_ctx.proto->scan_query(&dev->proto_ctx);
+    http_query_submit(q, device_escl_start_scan_callback);
+    dev->proto_ctx.query = q;
 }
 
 /******************** HTTP operations ********************/
@@ -940,16 +956,13 @@ device_geom_compute (SANE_Fixed tl, SANE_Fixed br,
 static void
 device_escl_start_scan (device *dev)
 {
-    const char     *source = NULL;
-    const char     *colormode = NULL;
-    bool           duplex = false;
-    const char     *mime = "image/jpeg";
-    //const char     *mime = "application/pdf";
-    SANE_Word      x_resolution = dev->opt.resolution;
-    SANE_Word      y_resolution = dev->opt.resolution;
-    devcaps_source *src = dev->opt.caps.src[dev->opt.src];
-    device_geom    geom_x, geom_y;
-    char           buf[64];
+    device_geom       geom_x, geom_y;
+    proto_ctx         *ctx = &dev->proto_ctx;
+    proto_scan_params *params = &ctx->params;
+    devcaps_source    *src = dev->opt.caps.src[dev->opt.src];
+    SANE_Word         x_resolution = dev->opt.resolution;
+    SANE_Word         y_resolution = dev->opt.resolution;
+    char              buf[64];
 
     /* Prepare window parameters */
     geom_x = device_geom_compute(dev->opt.tl_x, dev->opt.br_x,
@@ -961,30 +974,24 @@ device_escl_start_scan (device *dev)
     dev->job_skip_x = geom_x.skip;
     dev->job_skip_y = geom_y.skip;
 
-    /* Prepare other parameters */
-    switch (dev->opt.src) {
-    case OPT_SOURCE_PLATEN:      source = "Platen"; duplex = false; break;
-    case OPT_SOURCE_ADF_SIMPLEX: source = "Feeder"; duplex = false; break;
-    case OPT_SOURCE_ADF_DUPLEX:  source = "Feeder"; duplex = true; break;
-
-    default:
-        log_internal_error(dev);
-    }
-
-    switch (dev->opt.colormode) {
-    case OPT_COLORMODE_COLOR:     colormode = "RGB24"; break;
-    case OPT_COLORMODE_GRAYSCALE: colormode = "Grayscale8"; break;
-    case OPT_COLORMODE_LINEART:   colormode = "BlackAndWhite1"; break;
-
-    default:
-        log_internal_error(dev);
-    }
+    /* Fill proto_scan_params structure */
+    memset(params, 0, sizeof(*params));
+    params->x_off = geom_x.off;
+    params->y_off = geom_y.off;
+    params->wid = geom_x.len;
+    params->hei = geom_y.len;
+    params->x_res = x_resolution;
+    params->y_res = y_resolution;
+    params->src = dev->opt.src;
+    params->colormode = dev->opt.colormode;
 
     /* Dump parameters */
     trace_printf(dev->trace, "==============================");
     trace_printf(dev->trace, "Starting scan, using the following parameters:");
-    trace_printf(dev->trace, "  source:         %s", source);
-    trace_printf(dev->trace, "  colormode:      %s", colormode);
+    trace_printf(dev->trace, "  source:         %s",
+            opt_source_to_sane(params->src));
+    trace_printf(dev->trace, "  colormode:      %s",
+            opt_colormode_to_sane(params->colormode));
     trace_printf(dev->trace, "  tl_x:           %s mm",
             math_fmt_mm(dev->opt.tl_x, buf));
     trace_printf(dev->trace, "  tl_y:           %s mm",
@@ -993,48 +1000,17 @@ device_escl_start_scan (device *dev)
             math_fmt_mm(dev->opt.br_x, buf));
     trace_printf(dev->trace, "  br_y:           %s mm",
             math_fmt_mm(dev->opt.br_y, buf));
-    trace_printf(dev->trace, "  image size:     %dx%d", geom_x.len, geom_y.len);
-    trace_printf(dev->trace, "  image X offset: %d", geom_x.off);
-    trace_printf(dev->trace, "  image Y offset: %d", geom_y.off);
-    trace_printf(dev->trace, "  x_resolution:   %d", x_resolution);
-    trace_printf(dev->trace, "  y_resolution:   %d", y_resolution);
-    trace_printf(dev->trace, "  image format:   %s", mime);
-    trace_printf(dev->trace, "  duplex:         %s", duplex ? "true" : "false");
+    trace_printf(dev->trace, "  image size:     %dx%d",
+            params->wid, params->hei);
+    trace_printf(dev->trace, "  image X offset: %d", params->x_off);
+    trace_printf(dev->trace, "  image Y offset: %d", params->y_off);
+    trace_printf(dev->trace, "  x_resolution:   %d", params->x_res);
+    trace_printf(dev->trace, "  y_resolution:   %d", params->y_res);
     trace_printf(dev->trace, "");
 
-    /* Build scan request */
-    xml_wr *xml = xml_wr_begin("scan:ScanSettings");
-
-    xml_wr_add_text(xml, "pwg:Version", "2.0");
-
-    xml_wr_enter(xml, "pwg:ScanRegions");
-    xml_wr_enter(xml, "pwg:ScanRegion");
-    xml_wr_add_text(xml, "pwg:ContentRegionUnits",
-            "escl:ThreeHundredthsOfInches");
-    xml_wr_add_uint(xml, "pwg:XOffset", geom_x.off);
-    xml_wr_add_uint(xml, "pwg:YOffset", geom_y.off);
-    xml_wr_add_uint(xml, "pwg:Width", geom_x.len);
-    xml_wr_add_uint(xml, "pwg:Height", geom_y.len);
-    xml_wr_leave(xml); /* pwg:ScanRegion */
-    xml_wr_leave(xml); /* pwg:ScanRegions */
-
-    //xml_wr_add_text(xml, "scan:InputSource", source);
-    xml_wr_add_text(xml, "pwg:InputSource", source);
-    xml_wr_add_text(xml, "scan:ColorMode", colormode);
-    xml_wr_add_text(xml, "pwg:DocumentFormat", mime);
-    if ((src->flags & DEVCAPS_SOURCE_SCAN_DOCFMT_EXT) != 0) {
-        xml_wr_add_text(xml, "scan:DocumentFormatExt", mime);
-    }
-    xml_wr_add_uint(xml, "scan:XResolution", x_resolution);
-    xml_wr_add_uint(xml, "scan:YResolution", y_resolution);
-    if (dev->opt.src != OPT_SOURCE_PLATEN) {
-        xml_wr_add_bool(xml, "scan:Duplex", duplex);
-    }
-
-    /* Send request to device */
+    /* Submit a request */
     device_state_set(dev, DEVICE_SCAN_REQUESTING);
-    device_http_perform(dev, "ScanJobs", "POST", xml_wr_finish(xml),
-            device_escl_start_scan_callback);
+    device_proto_scan_query(dev);
 }
 
 /******************** Scan Job management ********************/
