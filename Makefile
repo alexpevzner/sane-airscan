@@ -89,7 +89,7 @@ install: all
 	install -s -D -t $(PREFIX)$(LIBDIR)/sane $(BACKEND)
 	mkdir -p $(PREFIX)/$(MANDIR)/man5
 	install -m 644 -D -t $(PREFIX)$(MANDIR)/man5 $(MANPAGE)
-	[ "$(COMPRESS)" == "" ] || $(COMPRESS) -f $(PREFIX)$(MANDIR)/man5/$(MANPAGE)
+	[ "$(COMPRESS)" = "" ] || $(COMPRESS) -f $(PREFIX)$(MANDIR)/man5/$(MANPAGE)
 
 clean:
 	rm -f test $(BACKEND) tags
