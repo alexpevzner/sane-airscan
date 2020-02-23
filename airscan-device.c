@@ -593,6 +593,10 @@ device_escl_decode_scanner_status (device *dev, const char *xml_text, size_t xml
             } else if (!strcmp(state, "ScannerAdfDoorOpen")) {
                 adf_status = SANE_STATUS_COVER_OPEN;
             } else if (!strcmp(state, "ScannerAdfProcessing")) {
+                /* Kyocera version */
+                adf_status = SANE_STATUS_NO_DOCS;
+            } else if (!strcmp(state, "ScannerAdfEmpty")) {
+                /* Cannon TR4500, EPSON XP-7100 */
                 adf_status = SANE_STATUS_NO_DOCS;
             } else {
                 adf_status = SANE_STATUS_UNSUPPORTED;
