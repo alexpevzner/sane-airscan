@@ -47,6 +47,7 @@ SRC	= \
 	airscan-uuid.c \
 	airscan-xml.c \
 	airscan-zeroconf.c \
+	airscan-wsd.c \
 	airscan-wsdd.c \
 	sane_strstatus.c
 

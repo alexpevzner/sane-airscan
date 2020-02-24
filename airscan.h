@@ -1335,6 +1335,11 @@ struct proto_handler {
 proto_handler*
 proto_handler_escl_new (void);
 
+/* proto_handler_wsd_new creates new WSD protocol handler
+ */
+proto_handler*
+proto_handler_wsd_new (void);
+
 /******************** Image decoding ********************/
 /* The window withing the image
  *
