@@ -402,7 +402,7 @@ device_state_set (device *dev, DEVICE_STATE state)
 /* Query device capabilities
  */
 static void
-device_proto_devcaps_query (device *dev,
+device_proto_devcaps_submit (device *dev,
         void (*callback) (device*, http_query*))
 {
     http_query *q;
@@ -423,7 +423,7 @@ device_proto_devcaps_decode (device *dev, devcaps *caps)
 /* Submit scan request
  */
 static void
-device_proto_scan_query (device *dev, void (*callback) (device*, http_query*))
+device_proto_scan_submit (device *dev, void (*callback) (device*, http_query*))
 {
     http_query *q;
 
@@ -443,7 +443,7 @@ device_proto_scan_decode (device *dev)
 /* Submit load page request
  */
 static void
-device_proto_load_query (device *dev, void (*callback) (device*, http_query*))
+device_proto_load_submit (device *dev, void (*callback) (device*, http_query*))
 {
     http_query *q;
 
@@ -548,7 +548,7 @@ device_probe_address (device *dev, zeroconf_addrinfo *addrinfo)
     dev->proto_ctx.base_uri = uri;
 
     /* Fetch device capabilities */
-    device_proto_devcaps_query (dev, device_scanner_capabilities_callback);
+    device_proto_devcaps_submit (dev, device_scanner_capabilities_callback);
 }
 
 /* ScannerCapabilities fetch callback
@@ -851,7 +851,7 @@ static void
 device_escl_load_page (device *dev)
 {
     device_state_set(dev, DEVICE_SCAN_REQUESTING);
-    device_proto_load_query(dev, device_escl_load_page_callback);
+    device_proto_load_submit(dev, device_escl_load_page_callback);
 }
 
 /* HTTP POST ${dev->uri_escl}/ScanJobs callback
@@ -1007,7 +1007,7 @@ device_escl_start_scan (device *dev)
 
     /* Submit a request */
     device_state_set(dev, DEVICE_SCAN_REQUESTING);
-    device_proto_scan_query(dev, device_escl_start_scan_callback);
+    device_proto_scan_submit(dev, device_escl_start_scan_callback);
 }
 
 /******************** Scan Job management ********************/
