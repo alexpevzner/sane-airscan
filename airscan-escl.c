@@ -541,8 +541,42 @@ static proto_result
 escl_scan_decode (const proto_ctx *ctx)
 {
     proto_result result = {0};
+    error        err = NULL;
+    const char   *location;
+    http_uri     *uri;
 
-    (void) ctx;
+    /* Check HTTP status */
+    if (http_query_status(ctx->query) != HTTP_STATUS_CREATED) {
+        err = eloop_eprintf("ScanJobs request: unexpected HTTP status %d",
+                http_query_status(ctx->query));
+        result.code = PROTO_CHECK_STATUS;
+        result.err = err;
+        return result;
+    }
+
+    /* Obtain location */
+    location = http_query_get_response_header(ctx->query, "Location");
+    if (location == NULL || *location == '\0') {
+        err = eloop_eprintf("ScanJobs request: empty location received");
+        goto ERROR;
+    }
+
+    /* Validate and save location */
+    uri = http_uri_new_relative(ctx->base_uri, location, true, true);
+    if (uri == NULL) {
+        err = eloop_eprintf("ScanJobs request: invalid location received");
+        goto ERROR;
+    }
+
+    result.data.location = g_strdup(http_uri_get_path(uri));
+    http_uri_free(uri);
+
+    return result;
+
+ERROR:
+    result.code = PROTO_ERROR;
+    result.status = SANE_STATUS_IO_ERROR;
+    result.err = err;
     return result;
 }
 

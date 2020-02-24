@@ -1259,18 +1259,17 @@ typedef struct {
  * after query result decoding
  */
 typedef enum {
-    PROTO_GET_IMAGE,  /* Get image page */
-    PROTO_GET_STATUS, /* Get error status */
-    PROTO_CLEANUP,    /* Cleanup after scan */
-    PROTO_FINISH      /* Finish scanning */
-} PROTO_ACTION;
+    PROTO_OK,           /* Everything is OK */
+    PROTO_ERROR,        /* Job failed, statis in proto_result.status */
+    PROTO_CHECK_STATUS, /* Check device status, then decide */
+} PROTO_RESULT_CODE;
 
 /* proto_result represents decoded query results
  */
 typedef struct {
-    PROTO_ACTION action;      /* Action code */
-    SANE_Status  status;      /* Job status */
-    int          delay;       /* Delay before next query, in milliseconds */
+    PROTO_RESULT_CODE code;   /* Result code */
+    SANE_Status       status; /* Job status */
+    error             err;    /* Error string, may be NULL */
     union {
         const char *location; /* Image location, protocol-specific */
         http_data  *image;    /* Image buffer */

@@ -83,8 +83,7 @@ struct device {
 
     /* Scanning state machinery */
     SANE_Status          job_status;          /* Job completion status */
-    GString              *job_location;       /* Scanned page location */
-    bool                 job_has_location;    /* Location is valid */
+    const char           *job_location;       /* Scanned page location */
     eloop_event          *job_cancel_event;   /* Cancel event */
     bool                 job_cancel_rq;       /* Cancel requested */
     GPtrArray            *job_images;         /* Array of SoupBuffer* */
@@ -194,7 +193,6 @@ device_add (const char *name, zeroconf_addrinfo *addresses,
     dev->proto_ctx.http = http_client_new(dev);
     dev->trace = trace_open(name);
 
-    dev->job_location = g_string_new(NULL);
     g_cond_init(&dev->state_cond);
     dev->job_images = g_ptr_array_new();
 
@@ -245,7 +243,7 @@ device_unref (device *dev)
         http_uri_free((http_uri*) dev->proto_ctx.base_uri);
         http_client_free(dev->proto_ctx.http);
 
-        g_string_free(dev->job_location, TRUE);
+        g_free((char*) dev->job_location);
         g_cond_clear(&dev->state_cond);
         device_read_queue_purge(dev);
         g_ptr_array_free(dev->job_images, TRUE);
@@ -390,7 +388,7 @@ device_state_set (device *dev, DEVICE_STATE state)
     if (dev->state != state) {
         log_debug(dev, "state=%s; has_location=%s; retry=%d",
                 device_state_name(state),
-                dev->job_has_location ? "true" : "false",
+                dev->job_location ? "true" : "false",
                 dev->http_retry);
 
         dev->state = state;
@@ -435,6 +433,14 @@ device_proto_scan_query (device *dev)
     q = dev->proto_ctx.proto->scan_query(&dev->proto_ctx);
     http_query_submit(q, device_escl_start_scan_callback);
     dev->proto_ctx.query = q;
+}
+
+/* Decode scan result
+ */
+static proto_result
+device_proto_scan_decode (device *dev)
+{
+    return dev->proto_ctx.proto->scan_decode(&dev->proto_ctx);
 }
 
 /******************** HTTP operations ********************/
@@ -486,7 +492,7 @@ device_http_onerror (device *dev, error err) {
     log_debug(dev, ESTRING(err));
     device_job_set_status(dev, SANE_STATUS_IO_ERROR);
 
-    if (dev->job_has_location) {
+    if (dev->job_location != NULL) {
         device_escl_cleanup(dev);
     } else {
         device_state_set(dev, DEVICE_SCAN_DONE);
@@ -592,7 +598,7 @@ device_escl_cleanup (device *dev)
 {
     device_state_set(dev, DEVICE_SCAN_CLEANING_UP);
 
-    device_http_perform(dev, dev->job_location->str, "DELETE", NULL,
+    device_http_perform(dev, dev->job_location, "DELETE", NULL,
             device_escl_cleanup_callback);
 }
 
@@ -736,7 +742,7 @@ device_escl_check_status_callback (device *dev, http_query *q)
     }
 
     /* Finish the job */
-    if (dev->job_has_location) {
+    if (dev->job_location != NULL) {
         device_escl_cleanup(dev);
     } else {
         device_state_set(dev, DEVICE_SCAN_DONE);
@@ -818,16 +824,13 @@ device_escl_load_page_callback (device *dev, http_query *q)
 static void
 device_escl_load_page (device *dev)
 {
-    size_t sz = dev->job_location->len;
-    if (sz == 0 || dev->job_location->str[sz-1] != '/') {
-        g_string_append_c(dev->job_location, '/');
-    }
-    g_string_append(dev->job_location, "NextDocument");
+    const char *url, *sep;
+
+    sep = g_str_has_suffix(dev->job_location, "/") ? "" : "/";
+    url = g_strconcat(dev->job_location, sep, "NextDocument", NULL);
 
     device_state_set(dev, DEVICE_SCAN_LOADING);
-
-    device_http_get(dev, dev->job_location->str, device_escl_load_page_callback);
-    g_string_truncate(dev->job_location, sz);
+    device_http_get(dev, url, device_escl_load_page_callback);
 }
 
 /* HTTP POST ${dev->uri_escl}/ScanJobs callback
@@ -835,59 +838,26 @@ device_escl_load_page (device *dev)
 static void
 device_escl_start_scan_callback (device *dev, http_query *q)
 {
-    error       err = NULL;
-    const char  *location;
-    SANE_Status status = SANE_STATUS_GOOD;
-    http_uri    *uri;
+    proto_result result = device_proto_scan_decode(dev);
 
-    /* Check HTTP status */
-    if (http_query_status(q) != HTTP_STATUS_CREATED) {
-        err = eloop_eprintf("ScanJobs request: unexpected HTTP status %d",
-                http_query_status(q));
-        goto DONE;
+    if (result.err != NULL) {
+        log_debug(dev, ESTRING(result.err));
     }
 
-    /* Obtain location */
-    location = http_query_get_response_header(q, "Location");
-    if (location == NULL || *location == '\0') {
-        err = eloop_eprintf("ScanJobs request: empty location received");
-        status = SANE_STATUS_IO_ERROR;
-        goto DONE;
-    }
+    switch (result.code) {
+        case PROTO_OK:
+            dev->job_location = result.data.location;
+            device_escl_load_page(dev);
+            break;
 
-    /* Validate and save location */
-    uri = http_uri_new_relative(dev->proto_ctx.base_uri, location, true, true);
-    if (uri == NULL) {
-        err = eloop_eprintf("ScanJobs request: invalid location received");
-        status = SANE_STATUS_IO_ERROR;
-        goto DONE;
-    }
+        case PROTO_ERROR:
+            device_job_set_status(dev, result.status);
+            device_state_set(dev, DEVICE_SCAN_DONE);
+            break;
 
-    g_string_assign(dev->job_location, http_uri_get_path(uri));
-    dev->job_has_location = true;
-    http_uri_free(uri);
-
-    /* Check for pending cancellation */
-    if (dev->job_cancel_rq) {
-        device_job_set_status(dev, SANE_STATUS_CANCELLED);
-        device_escl_cleanup(dev);
-        return;
-    }
-
-    /* Start loading pages */
-    device_escl_load_page(dev);
-    return;
-
-    /* Cleanup and exit */
-DONE:
-    log_debug(dev, ESTRING(err));
-    trace_error(dev->trace, err);
-
-    if (status == SANE_STATUS_GOOD) {
-        device_escl_check_status(dev, http_query_status(q));
-    } else {
-        device_job_set_status(dev, status);
-        device_state_set(dev, DEVICE_SCAN_DONE);
+        case PROTO_CHECK_STATUS:
+            device_escl_check_status(dev, http_query_status(q));
+            break;
     }
 }
 
@@ -1068,7 +1038,7 @@ device_job_abort (device *dev, SANE_Status status)
     case DEVICE_SCAN_LOAD_RETRY:
     case DEVICE_SCAN_CHECK_STATUS:
         device_http_cancel(dev);
-        if (dev->job_has_location) {
+        if (dev->job_location != NULL) {
             device_escl_cleanup(dev);
         }
         /* Fall through...*/
@@ -1363,8 +1333,8 @@ device_start (device *dev)
     /* Start new scan job */
     device_state_set(dev, DEVICE_SCAN_STARTED);
     dev->job_status = SANE_STATUS_GOOD;
-    g_string_truncate(dev->job_location, 0);
-    dev->job_has_location = false;
+    g_free((char*) dev->job_location);
+    dev->job_location = NULL;
     dev->job_cancel_rq = false;
     dev->job_images_received = 0;
     dev->http_retry = 0;
@@ -1372,7 +1342,7 @@ device_start (device *dev)
     eloop_call(device_start_do, dev);
 
     /* And wait until it reaches "LOADING" state */
-    while (!dev->job_has_location) {
+    while (dev->job_location == NULL) {
         if (dev->state == DEVICE_SCAN_DONE) {
             goto FAIL;
         }
