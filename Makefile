@@ -18,10 +18,11 @@ CC	= gcc
 COMPRESS = gzip
 CFLAGS	= -O2 -g -W -Wall -Werror
 MANDIR	= /usr/share/man/
+PKG_CONFIG = /usr/bin/pkg-config
 
 # These variables are not intended to be user-settable
 CONFDIR = /etc/sane.d
-LIBDIR := $(shell pkg-config --variable=libdir sane-backends)
+LIBDIR := $(shell $(PKG_CONFIG) --variable=libdir sane-backends)
 BACKEND = libsane-airscan.so.1
 MANPAGE = sane-airscan.5
 
@@ -94,7 +95,7 @@ install: all
 	install -s -D -t $(PREFIX)$(LIBDIR)/sane $(BACKEND)
 	mkdir -p $(PREFIX)/$(MANDIR)/man5
 	install -m 644 -D -t $(PREFIX)$(MANDIR)/man5 $(MANPAGE)
-	[ "$(COMPRESS)" == "" ] || $(COMPRESS) -f $(PREFIX)$(MANDIR)/man5/$(MANPAGE)
+	[ "$(COMPRESS)" = "" ] || $(COMPRESS) -f $(PREFIX)$(MANDIR)/man5/$(MANPAGE)
 
 clean:
 	rm -f test $(BACKEND) tags

@@ -638,6 +638,10 @@ device_escl_decode_scanner_status (device *dev, const char *xml_text, size_t xml
             } else if (!strcmp(state, "ScannerAdfDoorOpen")) {
                 adf_status = SANE_STATUS_COVER_OPEN;
             } else if (!strcmp(state, "ScannerAdfProcessing")) {
+                /* Kyocera version */
+                adf_status = SANE_STATUS_NO_DOCS;
+            } else if (!strcmp(state, "ScannerAdfEmpty")) {
+                /* Cannon TR4500, EPSON XP-7100 */
                 adf_status = SANE_STATUS_NO_DOCS;
             } else {
                 adf_status = SANE_STATUS_UNSUPPORTED;
@@ -721,8 +725,17 @@ device_escl_check_status_callback (device *dev, http_query *q)
         status = SANE_STATUS_IO_ERROR;
     }
 
-    /* Cleanup and exit */
-    device_job_set_status(dev, status);
+    /* Set job status */
+    if (dev->job_images_received == 0) {
+        /* If we have received at least one image, ignore the
+         * error and finish the job with successful status.
+         * User will get the error upon attempt to request
+         * a next image
+         */
+        device_job_set_status(dev, status);
+    }
+
+    /* Finish the job */
     if (dev->job_has_location) {
         device_escl_cleanup(dev);
     } else {
@@ -793,13 +806,6 @@ device_escl_load_page_callback (device *dev, http_query *q)
         } else {
             device_escl_load_page(dev);
         }
-    } else if (dev->job_images_received > 0) {
-        /* If we have received at least one image, ignore the
-         * error and finish the job with successful status.
-         * User will get the error upon attempt to request
-         * a next image
-         */
-        device_escl_cleanup(dev);
     } else {
         device_escl_check_status(dev, http_query_status(q));
     }
