@@ -787,7 +787,7 @@ proto_handler_escl_new (void)
 {
     proto_handler_escl *escl = g_new0(proto_handler_escl, 1);
 
-    escl->name = "eSCL";
+    escl->proto.name = "eSCL";
     escl->proto.free = escl_free;
 
     escl->proto.devcaps_query = escl_devcaps_query;
