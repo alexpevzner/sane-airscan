@@ -1243,16 +1243,33 @@ typedef struct {
     OPT_COLORMODE colormode;    /* Desired color mode */
 } proto_scan_params;
 
+/* PROTO_FAILED_OP represents failed operation
+ * for status_decode callback
+ */
+typedef enum {
+    PROTO_FAILED_SCAN,
+    PROTO_FAILED_LOAD
+} PROTO_FAILED_OP;
+
 /* proto_ctx represents request context
  */
 typedef struct {
+    /* Common context */
+    device               *dev;      /* Device (for logging only) */
     struct proto_handler *proto;    /* Link to proto_handler */
     const devcaps        *devcaps;  /* Device capabilities */
     http_client          *http;     /* HTTP client for sending requests */
     const http_uri       *base_uri; /* HTTP base URI for protocol */
     proto_scan_params    params;    /* Scan parameters */
     const char           *location; /* Image location */
+
+    /* Extra context for xxx_decode callbacks */
     const http_query     *query;    /* Passed to xxx_decode callbacks */
+
+    /* Extra context for status_decode callback */
+    PROTO_FAILED_OP      failed_op;          /* Failed operation */
+    int                  failed_http_status; /* Its HTTP status */
+    int                  failed_attempt;     /* Retry count, 0-based */
 } proto_ctx;
 
 /* PROTO_ACTION represents action to be performed

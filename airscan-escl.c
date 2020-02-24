@@ -490,7 +490,7 @@ escl_scan_query (const proto_ctx *ctx)
     case OPT_SOURCE_ADF_DUPLEX:  source = "Feeder"; duplex = true; break;
 
     default:
-        log_internal_error(NULL);
+        log_internal_error(ctx->dev);
     }
 
     switch (params->colormode) {
@@ -499,7 +499,7 @@ escl_scan_query (const proto_ctx *ctx)
     case OPT_COLORMODE_LINEART:   colormode = "BlackAndWhite1"; break;
 
     default:
-        log_internal_error(NULL);
+        log_internal_error(ctx->dev);
     }
 
     /* Build scan request */
@@ -623,8 +623,91 @@ escl_load_decode (const proto_ctx *ctx)
 static http_query*
 escl_status_query (const proto_ctx *ctx)
 {
-    (void) ctx;
-    return NULL;
+    return escl_http_get(ctx, "ScannerStatus");
+}
+
+/* Parse ScannerStatus response.
+ */
+static SANE_Status
+escl_decode_scanner_status (const proto_ctx *ctx,
+        const char *xml_text, size_t xml_len)
+{
+    error       err = NULL;
+    xml_rd      *xml;
+    SANE_Status device_status = SANE_STATUS_UNSUPPORTED;
+    SANE_Status adf_status = SANE_STATUS_UNSUPPORTED;
+    SANE_Status status;
+
+    /* Decode XML */
+    err = xml_rd_begin(&xml, xml_text, xml_len);
+    if (err != NULL) {
+        goto DONE;
+    }
+
+    if (!xml_rd_node_name_match(xml, "scan:ScannerStatus")) {
+        err = ERROR("XML: missed scan:ScannerStatus");
+        goto DONE;
+    }
+
+    xml_rd_enter(xml);
+    for (; !xml_rd_end(xml); xml_rd_next(xml)) {
+        if (xml_rd_node_name_match(xml, "pwg:State")) {
+            const char *state = xml_rd_node_value(xml);
+            if (!strcmp(state, "Idle")) {
+                device_status = SANE_STATUS_GOOD;
+            } else if (!strcmp(state, "Processing")) {
+                device_status = SANE_STATUS_DEVICE_BUSY;
+            } else {
+                device_status = SANE_STATUS_UNSUPPORTED;
+            }
+        } else if (xml_rd_node_name_match(xml, "scan:AdfState")) {
+            const char *state = xml_rd_node_value(xml);
+            if (!strcmp(state, "ScannerAdfLoaded")) {
+                adf_status = SANE_STATUS_GOOD;
+            } else if (!strcmp(state, "ScannerAdfJam")) {
+                adf_status = SANE_STATUS_JAMMED;
+            } else if (!strcmp(state, "ScannerAdfDoorOpen")) {
+                adf_status = SANE_STATUS_COVER_OPEN;
+            } else if (!strcmp(state, "ScannerAdfProcessing")) {
+                /* Kyocera version */
+                adf_status = SANE_STATUS_NO_DOCS;
+            } else if (!strcmp(state, "ScannerAdfEmpty")) {
+                /* Cannon TR4500, EPSON XP-7100 */
+                adf_status = SANE_STATUS_NO_DOCS;
+            } else {
+                adf_status = SANE_STATUS_UNSUPPORTED;
+            }
+        }
+    }
+
+    /* Decode Job status */
+    if (device_status != SANE_STATUS_GOOD &&
+        device_status != SANE_STATUS_UNSUPPORTED) {
+        status = device_status;
+    } else if (ctx->params.src == OPT_SOURCE_PLATEN) {
+        status = device_status;
+    } else {
+        status = adf_status;
+    }
+
+DONE:
+    xml_rd_finish(&xml);
+
+    trace_printf(device_trace(ctx->dev), "-----");
+    if (err != NULL) {
+        trace_printf(device_trace(ctx->dev), "Error: %s", ESTRING(err));
+        status = SANE_STATUS_IO_ERROR;
+    } else {
+        trace_printf(device_trace(ctx->dev), "Device status: %s",
+            sane_strstatus(device_status));
+        trace_printf(device_trace(ctx->dev), "ADF status: %s",
+            sane_strstatus(adf_status));
+        trace_printf(device_trace(ctx->dev), "Job status: %s",
+            sane_strstatus(status));
+        trace_printf(device_trace(ctx->dev), "");
+    }
+
+    return status;
 }
 
 /* Decode result of device status request
@@ -633,8 +716,50 @@ static proto_result
 escl_status_decode (const proto_ctx *ctx)
 {
     proto_result result = {0};
+    error        err = NULL;
+    SANE_Status  status;
 
-    (void) ctx;
+    /* Decode status */
+    err = http_query_error(ctx->query);
+    if (err != NULL) {
+        result.code = PROTO_ERROR;
+        result.status = SANE_STATUS_IO_ERROR;
+        result.err = err;
+        return result;
+    } else {
+        http_data *data = http_query_get_response_data(ctx->query);
+        status = escl_decode_scanner_status(ctx, data->bytes, data->size);
+    }
+
+    /* Now it's time to make a decision */
+    if (ctx->failed_op == PROTO_FAILED_LOAD &&
+        ctx->failed_http_status == HTTP_STATUS_SERVICE_UNAVAILABLE ) {
+
+        /* Note, some devices may return HTTP_STATUS_SERVICE_UNAVAILABLE
+         * on attempt to load page immediately after job is created
+         *
+         * So if status doesn't cleanly indicate any error, lets retry
+         * several times
+         */
+        switch (status) {
+        case SANE_STATUS_GOOD:
+        case SANE_STATUS_UNSUPPORTED:
+        case SANE_STATUS_DEVICE_BUSY:
+                result.code = PROTO_OK; /* Will cause a retry */
+                return result;
+
+        default:
+            break;
+        }
+    }
+
+    if (status == SANE_STATUS_GOOD || status == SANE_STATUS_UNSUPPORTED) {
+        status = SANE_STATUS_IO_ERROR;
+    }
+
+    /* Fill the result */
+    result.code = PROTO_ERROR;
+    result.status = status;
     return result;
 }
 

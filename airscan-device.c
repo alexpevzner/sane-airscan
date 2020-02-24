@@ -78,7 +78,6 @@ struct device {
                                            device was statically added */
     zeroconf_addrinfo    *addr_current; /* Current address to probe */
     eloop_timer          *http_timer;   /* HTTP retry timer */
-    int                  http_retry;    /* HTTP retry count */
     trace                *trace;        /* Protocol trace */
 
     /* Scanning state machinery */
@@ -178,6 +177,7 @@ device_add (const char *name, zeroconf_addrinfo *addresses,
     dev->refcnt = 1;
     dev->name = g_strdup(name);
     dev->flags = DEVICE_LISTED | DEVICE_INIT_WAIT;
+    dev->proto_ctx.dev = dev;
     dev->proto_ctx.proto = proto_handler_escl_new();
     dev->proto_ctx.devcaps = &dev->opt.caps;
 
@@ -385,7 +385,7 @@ device_state_set (device *dev, DEVICE_STATE state)
         log_debug(dev, "state=%s; has_location=%s; retry=%d",
                 device_state_name(state),
                 dev->proto_ctx.location ? "true" : "false",
-                dev->http_retry);
+                dev->proto_ctx.failed_attempt);
 
         dev->state = state;
         g_cond_broadcast(&dev->state_cond);
@@ -460,6 +460,26 @@ device_proto_load_decode (device *dev)
     return dev->proto_ctx.proto->load_decode(&dev->proto_ctx);
 }
 
+/* Submit device status request
+ */
+static void
+device_proto_status_submit (device *dev,
+        void (*callback) (device*, http_query*))
+{
+    http_query *q;
+
+    q = dev->proto_ctx.proto->status_query(&dev->proto_ctx);
+    http_query_submit(q, callback);
+    dev->proto_ctx.query = q;
+}
+
+/* Decode device status result
+ */
+static proto_result
+device_proto_status_decode (device *dev)
+{
+    return dev->proto_ctx.proto->status_decode(&dev->proto_ctx);
+}
 
 /******************** HTTP operations ********************/
 /* Initiate HTTP request
@@ -480,15 +500,6 @@ device_http_perform (device *dev, const char *path,
     q = http_query_new_relative(dev->proto_ctx.http, dev->proto_ctx.base_uri,
         path, method, body, "text/xml");
     http_query_submit(q, callback);
-}
-
-/* Initiate HTTP GET request
- */
-static void
-device_http_get (device *dev, const char *path,
-        void (*callback)(device*, http_query *q))
-{
-    device_http_perform(dev, path, "GET", NULL, callback);
 }
 
 /* Cancel pending HTTP request, if any
@@ -620,150 +631,52 @@ device_escl_cleanup (device *dev)
             device_escl_cleanup_callback);
 }
 
-/* Parse ScannerStatus response.
- */
-static SANE_Status
-device_escl_decode_scanner_status (device *dev, const char *xml_text, size_t xml_len)
-{
-    error       err = NULL;
-    xml_rd      *xml;
-    SANE_Status device_status = SANE_STATUS_UNSUPPORTED;
-    SANE_Status adf_status = SANE_STATUS_UNSUPPORTED;
-    SANE_Status status;
-
-    /* Decode XML */
-    err = xml_rd_begin(&xml, xml_text, xml_len);
-    if (err != NULL) {
-        goto DONE;
-    }
-
-    if (!xml_rd_node_name_match(xml, "scan:ScannerStatus")) {
-        err = ERROR("XML: missed scan:ScannerStatus");
-        goto DONE;
-    }
-
-    xml_rd_enter(xml);
-    for (; !xml_rd_end(xml); xml_rd_next(xml)) {
-        if (xml_rd_node_name_match(xml, "pwg:State")) {
-            const char *state = xml_rd_node_value(xml);
-            if (!strcmp(state, "Idle")) {
-                device_status = SANE_STATUS_GOOD;
-            } else if (!strcmp(state, "Processing")) {
-                device_status = SANE_STATUS_DEVICE_BUSY;
-            } else {
-                device_status = SANE_STATUS_UNSUPPORTED;
-            }
-        } else if (xml_rd_node_name_match(xml, "scan:AdfState")) {
-            const char *state = xml_rd_node_value(xml);
-            if (!strcmp(state, "ScannerAdfLoaded")) {
-                adf_status = SANE_STATUS_GOOD;
-            } else if (!strcmp(state, "ScannerAdfJam")) {
-                adf_status = SANE_STATUS_JAMMED;
-            } else if (!strcmp(state, "ScannerAdfDoorOpen")) {
-                adf_status = SANE_STATUS_COVER_OPEN;
-            } else if (!strcmp(state, "ScannerAdfProcessing")) {
-                /* Kyocera version */
-                adf_status = SANE_STATUS_NO_DOCS;
-            } else if (!strcmp(state, "ScannerAdfEmpty")) {
-                /* Cannon TR4500, EPSON XP-7100 */
-                adf_status = SANE_STATUS_NO_DOCS;
-            } else {
-                adf_status = SANE_STATUS_UNSUPPORTED;
-            }
-        }
-    }
-
-    /* Decode Job status */
-    if (device_status != SANE_STATUS_GOOD &&
-        device_status != SANE_STATUS_UNSUPPORTED) {
-        status = device_status;
-    } else if (dev->opt.src == OPT_SOURCE_PLATEN) {
-        status = device_status;
-    } else {
-        status = adf_status;
-    }
-
-DONE:
-    xml_rd_finish(&xml);
-
-    trace_printf(dev->trace, "-----");
-    if (err != NULL) {
-        trace_printf(dev->trace, "Error: %s", ESTRING(err));
-        status = SANE_STATUS_IO_ERROR;
-    } else {
-        trace_printf(dev->trace, "Device status: %s",
-            sane_strstatus(device_status));
-        trace_printf(dev->trace, "ADF status: %s",
-            sane_strstatus(adf_status));
-        trace_printf(dev->trace, "Job status: %s",
-            sane_strstatus(status));
-        trace_printf(dev->trace, "");
-    }
-
-    return status;
-}
-
 /* HTTP GET ${dev->uri_escl}/ScannerStatus callback
  */
 static void
 device_escl_check_status_callback (device *dev, http_query *q)
 {
-    error       err = NULL;
-    SANE_Status status;
+    proto_result result = device_proto_status_decode(dev);
 
-    /* Decode status */
-    err = http_query_error(q);
-    if (err != NULL) {
-        trace_printf(dev->trace, "ScannerStatus query: %s", ESTRING(err));
-        status = SANE_STATUS_IO_ERROR;
-    } else {
-        http_data *data = http_query_get_response_data(q);
-        status = device_escl_decode_scanner_status(dev, data->bytes, data->size);
+    (void) q;
+
+    if (result.err != NULL) {
+        log_debug(dev, ESTRING(result.err));
     }
 
-    /* Now it't time to take a decision */
-    if (dev->checking_state == DEVICE_SCAN_LOADING &&
-        dev->checking_http_status == HTTP_STATUS_SERVICE_UNAVAILABLE ) {
-
-        /* Note, some devices may return HTTP_STATUS_SERVICE_UNAVAILABLE
-         * on attempt to load page immediately after job is created
-         *
-         * So if status doesn't cleanly indicate any error, lets retry
-         * several times
-         */
-        switch (status) {
-        case SANE_STATUS_GOOD:
-        case SANE_STATUS_UNSUPPORTED:
-        case SANE_STATUS_DEVICE_BUSY:
-                if ( dev->http_retry + 1 < DEVICE_HTTP_RETRY_ATTEMPTS) {
-                    dev->http_retry ++;
-                    device_escl_load_retry(dev);
-                }
-                return;
-        default:
-            break;
+    switch (result.code) {
+    case PROTO_OK:
+        if (dev->proto_ctx.failed_attempt + 1 < DEVICE_HTTP_RETRY_ATTEMPTS) {
+            dev->proto_ctx.failed_attempt ++;
+            device_escl_load_retry(dev);
+            return;
         }
-    }
 
-    if (status == SANE_STATUS_GOOD || status == SANE_STATUS_UNSUPPORTED) {
-        status = SANE_STATUS_IO_ERROR;
-    }
+        result.status = SANE_STATUS_IO_ERROR;
+        /* Fall through... */
 
-    /* Set job status */
-    if (dev->job_images_received == 0) {
-        /* If we have received at least one image, ignore the
-         * error and finish the job with successful status.
-         * User will get the error upon attempt to request
-         * a next image
+    case PROTO_ERROR:
+        if (dev->job_images_received == 0) {
+            /* If we have received at least one image, ignore the
+             * error and finish the job with successful status.
+             * User will get the error upon attempt to request
+             * a next image
+             */
+            device_job_set_status(dev, result.status);
+        }
+
+        /* Finish the job */
+        if (dev->proto_ctx.location != NULL) {
+            device_escl_cleanup(dev);
+        } else {
+            device_state_set(dev, DEVICE_SCAN_DONE);
+        }
+        break;
+
+    case PROTO_CHECK_STATUS:
+        /* status_decode should never return PROTO_CHECK_STATUS code
          */
-        device_job_set_status(dev, status);
-    }
-
-    /* Finish the job */
-    if (dev->proto_ctx.location != NULL) {
-        device_escl_cleanup(dev);
-    } else {
-        device_state_set(dev, DEVICE_SCAN_DONE);
+        log_internal_error(dev);
     }
 }
 
@@ -773,14 +686,16 @@ device_escl_check_status_callback (device *dev, http_query *q)
  * HTTP GET ${dev->uri_escl}/ScannerStatus
  */
 static void
-device_escl_check_status (device *dev, int http_status)
+device_escl_check_status (device *dev, PROTO_FAILED_OP op, int http_status)
 {
+    dev->proto_ctx.failed_op = op;
+    dev->proto_ctx.failed_http_status = http_status;
+
     dev->checking_state = dev->state;
     dev->checking_http_status = http_status;
     device_state_set(dev, DEVICE_SCAN_CHECK_STATUS);
 
-    device_http_get(dev, "ScannerStatus",
-            device_escl_check_status_callback);
+    device_proto_status_submit(dev, device_escl_check_status_callback);
 }
 
 /* LOAD_RETRY timer callback
@@ -814,32 +729,34 @@ device_escl_load_page_callback (device *dev, http_query *q)
     }
 
     switch (result.code) {
-        case PROTO_OK:
-            g_ptr_array_add(dev->job_images, result.data.image);
-            dev->job_images_received ++;
-            dev->http_retry = 0;
+    case PROTO_OK:
+        dev->proto_ctx.failed_attempt = 0;
 
-            if (dev->job_images_received == 1) {
-                if (!device_read_push(dev)) {
-                    device_job_abort(dev, SANE_STATUS_IO_ERROR);
-                    return;
-                }
+        g_ptr_array_add(dev->job_images, result.data.image);
+        dev->job_images_received ++;
+
+        if (dev->job_images_received == 1) {
+            if (!device_read_push(dev)) {
+                device_job_abort(dev, SANE_STATUS_IO_ERROR);
+                return;
             }
+        }
 
-            if (dev->opt.src == OPT_SOURCE_PLATEN) {
-                device_escl_cleanup(dev);
-            } else {
-                device_escl_load_page(dev);
-            }
-            break;
+        if (dev->opt.src == OPT_SOURCE_PLATEN) {
+            device_escl_cleanup(dev);
+        } else {
+            device_escl_load_page(dev);
+        }
+        break;
 
-        case PROTO_ERROR:
-            device_job_abort(dev, SANE_STATUS_IO_ERROR);
-            break;
+    case PROTO_ERROR:
+        device_job_abort(dev, SANE_STATUS_IO_ERROR);
+        break;
 
-        case PROTO_CHECK_STATUS:
-            device_escl_check_status(dev, http_query_status(q));
-            break;
+    case PROTO_CHECK_STATUS:
+        device_escl_check_status(dev,
+            PROTO_FAILED_LOAD, http_query_status(q));
+        break;
     }
 }
 
@@ -866,19 +783,22 @@ device_escl_start_scan_callback (device *dev, http_query *q)
     }
 
     switch (result.code) {
-        case PROTO_OK:
-            dev->proto_ctx.location = result.data.location;
-            device_escl_load_page(dev);
-            break;
+    case PROTO_OK:
+        dev->proto_ctx.failed_attempt = 0;
 
-        case PROTO_ERROR:
-            device_job_set_status(dev, result.status);
-            device_state_set(dev, DEVICE_SCAN_DONE);
-            break;
+        dev->proto_ctx.location = result.data.location;
+        device_escl_load_page(dev);
+        break;
 
-        case PROTO_CHECK_STATUS:
-            device_escl_check_status(dev, http_query_status(q));
-            break;
+    case PROTO_ERROR:
+        device_job_set_status(dev, result.status);
+        device_state_set(dev, DEVICE_SCAN_DONE);
+        break;
+
+    case PROTO_CHECK_STATUS:
+        device_escl_check_status(dev,
+            PROTO_FAILED_SCAN, http_query_status(q));
+        break;
     }
 }
 
@@ -1356,9 +1276,11 @@ device_start (device *dev)
     dev->job_status = SANE_STATUS_GOOD;
     g_free((char*) dev->proto_ctx.location);
     dev->proto_ctx.location = NULL;
+    dev->proto_ctx.failed_attempt = 0;
+
     dev->job_cancel_rq = false;
     dev->job_images_received = 0;
-    dev->http_retry = 0;
+    dev->proto_ctx.failed_attempt = 0;
 
     eloop_call(device_start_do, dev);
 
