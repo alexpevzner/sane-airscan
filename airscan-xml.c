@@ -378,8 +378,9 @@ struct xml_wr_node {
 /* XML writer
  */
 struct xml_wr {
-    xml_wr_node *root;    /* Root node */
-    xml_wr_node *current; /* Current node */
+    xml_wr_node  *root;    /* Root node */
+    xml_wr_node  *current; /* Current node */
+    const xml_ns *ns;     /* Namespace */
 };
 
 /* Create XML writer node
@@ -421,11 +422,12 @@ xml_wr_node_free_recursive (xml_wr_node *node)
 /* Begin writing XML document. Root node will be created automatically
  */
 xml_wr*
-xml_wr_begin (const char *root)
+xml_wr_begin (const char *root, const xml_ns *ns)
 {
     xml_wr *xml = g_new0(xml_wr, 1);
     xml->root = xml_wr_node_new(root, NULL);
     xml->current = xml->root;
+    xml->ns = ns;
     return xml;
 }
 
@@ -445,16 +447,19 @@ xml_wr_format_indent(GString *buf, unsigned int indent)
 /* Format node with its children, recursively
  */
 static void
-xml_wr_format_node (GString *buf, xml_wr_node *node, unsigned int indent)
+xml_wr_format_node (xml_wr *xml, GString *buf,
+        xml_wr_node *node, unsigned int indent)
 {
         xml_wr_format_indent(buf, indent);
 
         g_string_append_printf(buf, "<%s", node->name);
         if (indent == 0) {
             /* Root node defines namespaces */
-            g_string_append_c(buf, ' ');
-            g_string_append(buf, "xmlns:pwg=\"http://www.pwg.org/schemas/2010/12/sm\" ");
-            g_string_append(buf, "xmlns:scan=\"http://schemas.hp.com/imaging/escl/2011/05/03\"");
+            int i;
+            for (i = 0; xml->ns[i].uri != NULL; i ++) {
+                g_string_append_printf(buf, " xmlns:%s=\"%s\"",
+                    xml->ns[i].prefix, xml->ns[i].uri);
+            }
         }
         g_string_append_c(buf, '>');
 
@@ -463,7 +468,7 @@ xml_wr_format_node (GString *buf, xml_wr_node *node, unsigned int indent)
 
             g_string_append_c(buf, '\n');
             for (node2 = node->children; node2 != NULL; node2 = node2->next) {
-                xml_wr_format_node(buf, node2, indent + 1);
+                xml_wr_format_node(xml, buf, node2, indent + 1);
             }
 
             xml_wr_format_indent(buf, indent);
@@ -504,7 +509,7 @@ xml_wr_finish (xml_wr *xml)
     buf = g_string_new("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
 
     xml_wr_revert_children(xml->root);
-    xml_wr_format_node(buf, xml->root, 0);
+    xml_wr_format_node(xml, buf, xml->root, 0);
 
     xml_wr_node_free_recursive(xml->root);
     g_free(xml);

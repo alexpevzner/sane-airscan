@@ -14,6 +14,14 @@ typedef struct {
     proto_handler proto; /* Base class */
 } proto_handler_escl;
 
+/* XML namespace for XML writer
+ */
+static const xml_ns escl_xml_wr_ns[] = {
+    {"pwg",  "http://www.pwg.org/schemas/2010/12/sm"},
+    {"scan", "http://schemas.hp.com/imaging/escl/2011/05/03"},
+    {NULL, NULL}
+};
+
 /******************** HTTP utility functions ********************/
 /* Create HTTP query
  */
@@ -505,7 +513,7 @@ escl_scan_query (const proto_ctx *ctx)
     }
 
     /* Build scan request */
-    xml_wr *xml = xml_wr_begin("scan:ScanSettings");
+    xml_wr *xml = xml_wr_begin("scan:ScanSettings", escl_xml_wr_ns);
 
     xml_wr_add_text(xml, "pwg:Version", "2.0");
 

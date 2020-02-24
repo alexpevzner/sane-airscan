@@ -853,9 +853,11 @@ xml_rd_node_value_uint (xml_rd *xml, SANE_Word *val);
 typedef struct xml_wr xml_wr;
 
 /* Begin writing XML document. Root node will be created automatically
+ *
+ * The ns parameter must be terminated by {NULL, NULL} structure
  */
 xml_wr*
-xml_wr_begin (const char *root);
+xml_wr_begin (const char *root, const xml_ns *ns);
 
 /* Finish writing, generate document string.
  * Caller must g_free() this string after use
