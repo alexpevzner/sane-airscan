@@ -15,20 +15,20 @@
 /* XML reader
  */
 struct xml_rd {
-    xmlDoc             *doc;           /* XML document */
-    xmlNode            *node;          /* Current node */
-    xmlNode            *parent;        /* Parent node */
-    const char         *name;          /* Name of current node */
-    GString            *path;          /* Path to current node, /-separated */
-    size_t             *pathlen;       /* Stack of path lengths */
-    size_t             pathlen_cap;    /* pathlen capacity */
-    const xmlChar      *text;          /* Textual value of current node */
-    unsigned int       depth;          /* Depth of current node, 0 for root */
-    const xml_ns_subst *subst_rules;   /* Substitution rules */
-    xml_ns_subst       *subst_cache;   /* In the cache, glob-style patterns are
-                                          replaced by exact-matching strings */
-    size_t             subst_cache_len;/* Count of subst_cache elements */
-    size_t             subst_cache_cap;/* subst_cache capacity */
+    xmlDoc        *doc;           /* XML document */
+    xmlNode       *node;          /* Current node */
+    xmlNode       *parent;        /* Parent node */
+    const char    *name;          /* Name of current node */
+    GString       *path;          /* Path to current node, /-separated */
+    size_t        *pathlen;       /* Stack of path lengths */
+    size_t        pathlen_cap;    /* pathlen capacity */
+    const xmlChar *text;          /* Textual value of current node */
+    unsigned int  depth;          /* Depth of current node, 0 for root */
+    const xml_ns  *subst_rules;   /* Substitution rules */
+    xml_ns        *subst_cache;   /* In the cache, glob-style patterns are
+                                     replaced by exact-matching strings */
+    size_t        subst_cache_len;/* Count of subst_cache elements */
+    size_t        subst_cache_cap;/* subst_cache capacity */
 };
 
 /* Forward declarations */
@@ -98,20 +98,18 @@ xml_rd_node_switched (xml_rd *xml)
 /* Parse XML text and initialize reader to iterate
  * starting from the root node
  *
+ * The 'ns' argument, if not NULL, points to array of substitution
+ * rules. Last element must have NULL prefix and url
+ *
+ * Array of rules considered to be statically allocated
+ * (at least, it can remain valid during reader life time)
+ *
  * On success, saves newly constructed reader into
  * the xml parameter.
  */
 error
-xml_rd_begin (xml_rd **xml, const char *xml_text, size_t xml_len)
-{
-    return xml_rd_begin_ns(xml, xml_text, xml_len, NULL);
-}
-
-/* xml_rd_begin with namespace substitution
- */
-error
-xml_rd_begin_ns (xml_rd **xml, const char *xml_text, size_t xml_len,
-        const xml_ns_subst *subst)
+xml_rd_begin (xml_rd **xml, const char *xml_text, size_t xml_len,
+        const xml_ns *ns)
 {
     xmlDoc *doc = xmlParseMemory(xml_text, xml_len);
 
@@ -125,7 +123,7 @@ xml_rd_begin_ns (xml_rd **xml, const char *xml_text, size_t xml_len,
     (*xml)->path = g_string_new(NULL);
     (*xml)->pathlen_cap = 8;
     (*xml)->pathlen = g_malloc(sizeof(*(*xml)->pathlen) * (*xml)->pathlen_cap);
-    (*xml)->subst_rules = subst;
+    (*xml)->subst_rules = ns;
 
     xml_rd_skip_dummy(*xml);
     xml_rd_node_switched(*xml);
@@ -147,7 +145,7 @@ xml_rd_finish (xml_rd **xml)
         if ((*xml)->subst_cache != NULL) {
             size_t i;
             for (i = 0; i < (*xml)->subst_cache_len; i ++) {
-                g_free((char*) (*xml)->subst_cache[i].pattern);
+                g_free((char*) (*xml)->subst_cache[i].uri);
             }
             g_free((*xml)->subst_cache);
         }
@@ -175,14 +173,14 @@ xml_rd_ns_subst_lookup(xml_rd *xml, const char *prefix, const char *href)
 
     /* Lookup cache first */
     for (i = 0; i < xml->subst_cache_len; i ++) {
-        if (!strcmp(href, xml->subst_cache[i].pattern)) {
+        if (!strcmp(href, xml->subst_cache[i].uri)) {
             return xml->subst_cache[i].prefix;
         }
     }
 
     /* Now try glob-style rules */
     for (i = 0; xml->subst_rules[i].prefix != NULL; i ++) {
-        if (!fnmatch(xml->subst_rules[i].pattern, href, 0)) {
+        if (!fnmatch(xml->subst_rules[i].uri, href, 0)) {
             prefix = xml->subst_rules[i].prefix;
 
             /* Update cache. Grow it if required */
@@ -198,7 +196,7 @@ xml_rd_ns_subst_lookup(xml_rd *xml, const char *prefix, const char *href)
                 sizeof(*xml->subst_cache) * xml->subst_cache_cap);
 
             xml->subst_cache[xml->subst_cache_len].prefix = prefix;
-            xml->subst_cache[xml->subst_cache_len].pattern = g_strdup(href);
+            xml->subst_cache[xml->subst_cache_len].uri = g_strdup(href);
             xml->subst_cache_len ++;
 
             /* Break out of loop */

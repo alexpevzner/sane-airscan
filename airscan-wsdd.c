@@ -61,7 +61,7 @@ static const char *wsdd_probe =
 
 /* XML namespace translation
  */
-static const xml_ns_subst wsdd_ns_rules[] = {
+static const xml_ns wsdd_ns_rules[] = {
     {"s", "http*://schemas.xmlsoap.org/soap/envelope"}, /* SOAP 1.1 */
     {"s", "http*://www.w3.org/2003/05/soap-envelope"},  /* SOAP 1.2 */
     {"d", "http*://schemas.xmlsoap.org/ws/2005/04/discovery"},
@@ -143,7 +143,7 @@ wsdd_message_parse (const char *xml_text, size_t xml_len)
     xml_rd       *xml;
     error        err;
 
-    err = xml_rd_begin_ns(&xml, xml_text, xml_len, wsdd_ns_rules);
+    err = xml_rd_begin(&xml, xml_text, xml_len, wsdd_ns_rules);
     if (err != NULL) {
         goto DONE;
     }

@@ -356,7 +356,7 @@ escl_devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
     xml_rd *xml;
 
     /* Parse capabilities XML */
-    err = xml_rd_begin(&xml, xml_text, xml_len);
+    err = xml_rd_begin(&xml, xml_text, xml_len, NULL);
     if (err != NULL) {
         goto DONE;
     }
@@ -641,7 +641,7 @@ escl_decode_scanner_status (const proto_ctx *ctx,
     SANE_Status status;
 
     /* Decode XML */
-    err = xml_rd_begin(&xml, xml_text, xml_len);
+    err = xml_rd_begin(&xml, xml_text, xml_len, NULL);
     if (err != NULL) {
         goto DONE;
     }

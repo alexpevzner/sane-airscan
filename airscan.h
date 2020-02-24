@@ -724,11 +724,16 @@ size_t
 sane_string_array_max_strlen(SANE_String **a);
 
 /******************** XML utilities ********************/
-/* xml_ns_subst defines namespace substitution rule.
+/* xml_ns defines XML namespace.
  *
- * If namespace substitution is enabled, using xml_rd_ns_subst()
- * function, each node, which name's namespace matches the pattern,
- * will be reported with name prefix defined by substitution rule,
+ * For XML writer namespaces are simply added to the root
+ * node attributes
+ *
+ * XML reader performs prefix substitutions
+ *
+ * If namespace substitution is enabled, function, each node,
+ * which name's namespace matches the pattern, will be reported
+ * with name prefix defined by substitution rule,
  * regardless of prefix actually used in the document
  *
  * Example:
@@ -744,13 +749,13 @@ sane_string_array_max_strlen(SANE_String **a);
  * had the "ns" prefix, though actually their prefix in document
  * is different
  *
- * Pattern is a glob-style pattern, as used by fnmatch (3)
- * function with flags = 0
+ * XML reader interprets namespace uri as a glob-style pattern,
+ * as used by fnmatch (3) function with flags = 0
  */
 typedef struct {
-    const char *prefix;  /* Short prefix */
-    const char *pattern; /* The pattern */
-} xml_ns_subst;
+    const char *prefix; /* Short prefix */
+    const char *uri;    /* The namespace uri (glob pattern for reader) */
+} xml_ns;
 
 /* XML reader
  */
@@ -759,24 +764,18 @@ typedef struct xml_rd xml_rd;
 /* Parse XML text and initialize reader to iterate
  * starting from the root node
  *
+ * The 'ns' argument, if not NULL, points to array of substitution
+ * rules. Last element must have NULL prefix and url
+ *
+ * Array of rules considered to be statically allocated
+ * (at least, it can remain valid during reader life time)
+ *
  * On success, saves newly constructed reader into
  * the xml parameter.
  */
 error
-xml_rd_begin (xml_rd **xml, const char *xml_text, size_t xml_len);
-
-/* xml_rd_begin with namespace substitution
- *
- * The subst argument points to array of substitution
- * rules. Last element must have NULL prefix and
- * pattern
- *
- * Array of rules considered to be statically allocated
- * (at least, it can remain valid during reader life time)
- */
-error
-xml_rd_begin_ns (xml_rd **xml, const char *xml_text, size_t xml_len,
-        const xml_ns_subst *subst);
+xml_rd_begin (xml_rd **xml, const char *xml_text, size_t xml_len,
+        const xml_ns *ns);
 
 /* Finish reading, free allocated resources
  */
