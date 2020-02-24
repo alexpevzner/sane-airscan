@@ -8,7 +8,7 @@
 
 #include "airscan.h"
 
-/* proto_handler_wsd represents eSCL protocol handler
+/* proto_handler_wsd represents WSD protocol handler
  */
 typedef struct {
     proto_handler proto; /* Base class */
@@ -22,7 +22,7 @@ wsd_free (proto_handler *proto)
     g_free(proto);
 }
 
-/* Query and decode device capabilities
+/* Query device capabilities
  */
 static http_query*
 wsd_devcaps_query (const proto_ctx *ctx)
@@ -31,6 +31,8 @@ wsd_devcaps_query (const proto_ctx *ctx)
     return NULL;
 }
 
+/* Decode device capabilities
+ */
 static error
 wsd_devcaps_decode (const proto_ctx *ctx, devcaps *caps)
 {

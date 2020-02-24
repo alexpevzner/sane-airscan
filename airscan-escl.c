@@ -456,7 +456,7 @@ DONE:
     return err;
 }
 
-/* Query and decode device capabilities
+/* Query device capabilities
  */
 static http_query*
 escl_devcaps_query (const proto_ctx *ctx)
@@ -464,6 +464,8 @@ escl_devcaps_query (const proto_ctx *ctx)
     return escl_http_get(ctx, "ScannerCapabilities");
 }
 
+/* Decode device capabilities
+ */
 static error
 escl_devcaps_decode (const proto_ctx *ctx, devcaps *caps)
 {
