@@ -1304,8 +1304,8 @@ struct proto_handler {
     /* Initiate image downloading and decode result. On success,
      * must decode proto_result::data::image
      */
-    http_query*  (*image_query) (const proto_ctx *ctx);
-    proto_result (*image_decode) (const proto_ctx *ctx);
+    http_query*  (*load_query) (const proto_ctx *ctx);
+    proto_result (*load_decode) (const proto_ctx *ctx);
 
     /* Request device status and decode result
      */

@@ -583,20 +583,38 @@ ERROR:
 /* Initiate image downloading
  */
 static http_query*
-escl_image_query (const proto_ctx *ctx)
+escl_load_query (const proto_ctx *ctx)
 {
-    (void) ctx;
-    return NULL;
+    char *url, *sep;
+    http_query *q;
+
+    sep = g_str_has_suffix(ctx->location, "/") ? "" : "/";
+    url = g_strconcat(ctx->location, sep, "NextDocument", NULL);
+
+    q = escl_http_get(ctx, url);
+    g_free(url);
+
+    return q;
 }
 
 /* Decode result of image request
  */
 static proto_result
-escl_image_decode (const proto_ctx *ctx)
+escl_load_decode (const proto_ctx *ctx)
 {
     proto_result result = {0};
+    error        err = NULL;
 
-    (void) ctx;
+    /* Check HTTP status */
+    err = http_query_error(ctx->query);
+    if (err != NULL) {
+        result.code = PROTO_CHECK_STATUS;
+        result.err = err;
+        return result;
+    }
+
+    result.code = PROTO_OK;
+    result.data.image = http_data_ref(http_query_get_response_data(ctx->query));
     return result;
 }
 
@@ -673,8 +691,8 @@ proto_handler_escl_new (void)
     escl->proto.scan_query = escl_scan_query;
     escl->proto.scan_decode = escl_scan_decode;
 
-    escl->proto.image_query = escl_image_query;
-    escl->proto.image_decode = escl_image_decode;
+    escl->proto.load_query = escl_load_query;
+    escl->proto.load_decode = escl_load_decode;
 
     escl->proto.status_query = escl_status_query;
     escl->proto.status_decode = escl_status_decode;
