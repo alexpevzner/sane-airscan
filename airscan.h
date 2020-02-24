@@ -1303,10 +1303,6 @@ struct proto_handler {
      */
     void         (*free) (proto_handler *proto);
 
-    /* Reset protocol handler before the next scan
-     */
-    void         (*reset) (proto_handler *proto);
-
     /* Query and decode device capabilities
      */
     http_query*  (*devcaps_query) (const proto_ctx *ctx);

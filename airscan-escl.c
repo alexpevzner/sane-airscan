@@ -780,14 +780,6 @@ escl_free (proto_handler *proto)
     g_free(proto);
 }
 
-/* Reset protocol handler before the next operation
- */
-static void
-escl_reset (proto_handler *proto)
-{
-    g_free(proto);
-}
-
 /* proto_handler_escl_new creates new eSCL protocol handler
  */
 proto_handler*
@@ -795,8 +787,8 @@ proto_handler_escl_new (void)
 {
     proto_handler_escl *escl = g_new0(proto_handler_escl, 1);
 
+    escl->name = "eSCL";
     escl->proto.free = escl_free;
-    escl->proto.reset = escl_reset;
 
     escl->proto.devcaps_query = escl_devcaps_query;
     escl->proto.devcaps_decode = escl_devcaps_decode;
