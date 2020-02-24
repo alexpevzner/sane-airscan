@@ -39,8 +39,10 @@ were actually tested.
 
 Sane-airscan was tested and found to work with the following scanners:
 * Canon D570
+* Canon TR4529 (PIXMA TR4500 Series)
 * Canon TS 6151
 * EPSON WF-7710
+* EPSON XP-7100 Series
 * HP Color Laserjet MFP m178-m181
 * HP Color LaserJet MFP M281fdw
 * HP DeskJet 2540
@@ -78,9 +80,10 @@ enable automatic updates of the sane-airscan package.
 * Linux Mint 18.x - use packages for Ubuntu 16.04
 * Linux Mint 19.x - use packages for Ubuntu 18.04
 
-For **Arch Linux**, there is a package, maintained by
+For **Arch Linux**, there are packages, maintained by
 Thomas Kiss <thomas.kiss001@stud.fh-dortmund.de>:
-* https://aur.archlinux.org/packages/sane-airscan/
+* https://aur.archlinux.org/packages/sane-airscan/ - latest release
+* https://aur.archlinux.org/packages/sane-airscan-git/ - GIT snapshot
 
 Big thanks to [openSUSE Build Service](https://build.opensuse.org/), for
 providing package build infrastructure.
