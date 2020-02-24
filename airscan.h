@@ -1329,15 +1329,9 @@ struct proto_handler {
     http_query*  (*status_query) (const proto_ctx *ctx);
     proto_result (*status_decode) (const proto_ctx *ctx);
 
-    /* Cleanup after previous scan
-     */
-    http_query*  (*cleanup_query) (const proto_ctx *ctx);
-    proto_result (*cleanup_decode) (const proto_ctx *ctx);
-
     /* Cancel scan in progress
      */
     http_query*  (*cancel_query) (const proto_ctx *ctx);
-    proto_result (*cancel_decode) (const proto_ctx *ctx);
 };
 
 /* proto_handler_escl_new creates new eSCL protocol handler

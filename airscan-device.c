@@ -481,27 +481,20 @@ device_proto_status_decode (device *dev)
     return dev->proto_ctx.proto->status_decode(&dev->proto_ctx);
 }
 
-/******************** HTTP operations ********************/
-/* Initiate HTTP request
- *
- * If request != NULL, it becomes a request message body. The
- * memory ownership will be taken by this function, assuming
- * request body needs to be released with g_free() after use
- *
- * Content type of the outgoing requests assumed to be "text/xml"
+/* Submit cancel request
  */
 static void
-device_http_perform (device *dev, const char *path,
-        const char *method, char *body,
-        void (*callback)(device*, http_query *q))
+device_proto_cancel_submit (device *dev,
+        void (*callback) (device*, http_query*))
 {
     http_query *q;
 
-    q = http_query_new_relative(dev->proto_ctx.http, dev->proto_ctx.base_uri,
-        path, method, body, "text/xml");
+    q = dev->proto_ctx.proto->cancel_query(&dev->proto_ctx);
     http_query_submit(q, callback);
+    dev->proto_ctx.query = q;
 }
 
+/******************** HTTP operations ********************/
 /* Cancel pending HTTP request, if any
  */
 static void
@@ -626,9 +619,7 @@ static void
 device_escl_cleanup (device *dev)
 {
     device_state_set(dev, DEVICE_SCAN_CLEANING_UP);
-
-    device_http_perform(dev, dev->proto_ctx.location, "DELETE", NULL,
-            device_escl_cleanup_callback);
+    device_proto_cancel_submit(dev, device_escl_cleanup_callback);
 }
 
 /* HTTP GET ${dev->uri_escl}/ScannerStatus callback

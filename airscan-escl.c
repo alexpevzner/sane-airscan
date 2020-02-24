@@ -768,19 +768,7 @@ escl_status_decode (const proto_ctx *ctx)
 static http_query*
 escl_cancel_query (const proto_ctx *ctx)
 {
-    (void) ctx;
-    return NULL;
-}
-
-/* Decode result of cancel request
- */
-static proto_result
-escl_cancel_decode (const proto_ctx *ctx)
-{
-    proto_result result = {0};
-
-    (void) ctx;
-    return result;
+    return escl_http_query(ctx, ctx->location, "DELETE", NULL);
 }
 
 /******************** Constructor/destructor ********************/
@@ -822,12 +810,7 @@ proto_handler_escl_new (void)
     escl->proto.status_query = escl_status_query;
     escl->proto.status_decode = escl_status_decode;
 
-    /* Note, for ESCL cancel and cleanup are the same */
-    escl->proto.cleanup_query = escl_cancel_query;
-    escl->proto.cleanup_decode = escl_cancel_decode;
-
     escl->proto.cancel_query = escl_cancel_query;
-    escl->proto.cancel_decode = escl_cancel_decode;
 
     return &escl->proto;
 }
