@@ -34,7 +34,7 @@ typedef struct zeroconf_devstate zeroconf_devstate;
 struct zeroconf_devstate {
     const char        *name;       /* Device name */
     GPtrArray         *resolvers;  /* Pending resolvers */
-    zeroconf_addrinfo *addresses;  /* Discovered addresses */
+    zeroconf_endpoint *endpoints;  /* Discovered endpoints */
     zeroconf_devstate *next;       /* Next devstate in the list */
     bool              reported;    /* Device reported to device manager */
     bool              init_scan;   /* Device found during initial scan */
@@ -103,7 +103,7 @@ zeroconf_devstate_free (zeroconf_devstate *devstate)
 {
     g_free((char*) devstate->name);
     g_ptr_array_free(devstate->resolvers, TRUE);
-    zeroconf_addrinfo_list_free(devstate->addresses);
+    zeroconf_endpoint_list_free(devstate->endpoints);
     g_free(devstate);
 }
 
@@ -186,28 +186,28 @@ zeroconf_devstate_del_all (bool notify)
     }
 }
 
-/* Create new zeroconf_addrinfo
+/* Create new zeroconf_endpoint
  */
-static zeroconf_addrinfo*
-zeroconf_addrinfo_new (const AvahiAddress *addr, uint16_t port, const char *rs,
+static zeroconf_endpoint*
+zeroconf_endpoint_new (const AvahiAddress *addr, uint16_t port, const char *rs,
         AvahiIfIndex interface)
 {
-    zeroconf_addrinfo *addrinfo = g_new0(zeroconf_addrinfo, 1);
+    zeroconf_endpoint *endpoint = g_new0(zeroconf_endpoint, 1);
     char              str_addr[128];
     int               rs_len;
 
     if (addr->proto == AVAHI_PROTO_INET) {
         /* 169.254.0.0/16 */
         if ((ntohl(addr->data.ipv4.address) & 0xffff0000) == 0xa9fe0000) {
-            addrinfo->linklocal = true;
+            endpoint->linklocal = true;
         }
 
         avahi_address_snprint(str_addr, sizeof(str_addr), addr);
     } else {
         size_t      len;
 
-        addrinfo->ipv6 = true;
-        addrinfo->linklocal =
+        endpoint->ipv6 = true;
+        endpoint->linklocal =
             addr->data.ipv6.address[0] == 0xfe &&
             (addr->data.ipv6.address[1] & 0xc0) == 0x80;
 
@@ -216,7 +216,7 @@ zeroconf_addrinfo_new (const AvahiAddress *addr, uint16_t port, const char *rs,
         len = strlen(str_addr);
 
         /* Connect to link-local address requires explicit scope */
-        if (addrinfo->linklocal) {
+        if (endpoint->linklocal) {
             /* Percent character in the IPv6 address literal
              * needs to be properly escaped, so it becomes %25
              * See RFC6874 for details
@@ -244,100 +244,100 @@ zeroconf_addrinfo_new (const AvahiAddress *addr, uint16_t port, const char *rs,
     /* Make eSCL URL */
     if (rs == NULL) {
         /* Assume /eSCL by default */
-        addrinfo->uri = g_strdup_printf("http://%s:%d/eSCL/", str_addr, port);
+        endpoint->uri = g_strdup_printf("http://%s:%d/eSCL/", str_addr, port);
     } else if (rs_len == 0) {
         /* Empty rs, avoid double '/' */
-        addrinfo->uri = g_strdup_printf("http://%s:%d/", str_addr, port);
+        endpoint->uri = g_strdup_printf("http://%s:%d/", str_addr, port);
     } else {
-        addrinfo->uri = g_strdup_printf("http://%s:%d/%.*s/", str_addr, port,
+        endpoint->uri = g_strdup_printf("http://%s:%d/%.*s/", str_addr, port,
                 rs_len, rs);
     }
 
-    return addrinfo;
+    return endpoint;
 }
 
-/* Clone a single zeroconf_addrinfo
+/* Clone a single zeroconf_endpoint
  */
-static zeroconf_addrinfo*
-zeroconf_addrinfo_copy_single (const zeroconf_addrinfo *addrinfo)
+static zeroconf_endpoint*
+zeroconf_endpoint_copy_single (const zeroconf_endpoint *endpoint)
 {
-    zeroconf_addrinfo *addrinfo2 = g_new0(zeroconf_addrinfo, 1);
+    zeroconf_endpoint *endpoint2 = g_new0(zeroconf_endpoint, 1);
 
-    *addrinfo2 = *addrinfo;
-    addrinfo2->uri = g_strdup(addrinfo->uri);
-    addrinfo2->next = NULL;
+    *endpoint2 = *endpoint;
+    endpoint2->uri = g_strdup(endpoint->uri);
+    endpoint2->next = NULL;
 
-    return addrinfo2;
+    return endpoint2;
 }
 
 
-/* Free single zeroconf_addrinfo
+/* Free single zeroconf_endpoint
  */
 static void
-zeroconf_addrinfo_free_single (zeroconf_addrinfo *addrinfo)
+zeroconf_endpoint_free_single (zeroconf_endpoint *endpoint)
 {
-    g_free((char*) addrinfo->uri);
-    g_free(addrinfo);
+    g_free((char*) endpoint->uri);
+    g_free(endpoint);
 }
 
-/* Create a copy of zeroconf_addrinfo list
+/* Create a copy of zeroconf_endpoint list
  */
-zeroconf_addrinfo*
-zeroconf_addrinfo_list_copy (zeroconf_addrinfo *list)
+zeroconf_endpoint*
+zeroconf_endpoint_list_copy (zeroconf_endpoint *list)
 {
-    zeroconf_addrinfo *newlist = NULL, *last = NULL, *addrinfo;
+    zeroconf_endpoint *newlist = NULL, *last = NULL, *endpoint;
 
     while (list != NULL) {
-        addrinfo = zeroconf_addrinfo_copy_single(list);
+        endpoint = zeroconf_endpoint_copy_single(list);
         if (last != NULL) {
-            last->next = addrinfo;
+            last->next = endpoint;
         } else {
-            newlist = addrinfo;
+            newlist = endpoint;
         }
-        last = addrinfo;
+        last = endpoint;
         list = list->next;
     }
 
     return newlist;
 }
 
-/* Free zeroconf_addrinfo list
+/* Free zeroconf_endpoint list
  */
 void
-zeroconf_addrinfo_list_free (zeroconf_addrinfo *list)
+zeroconf_endpoint_list_free (zeroconf_endpoint *list)
 {
     while (list != NULL) {
-        zeroconf_addrinfo       *next = list->next;
-        zeroconf_addrinfo_free_single(list);
+        zeroconf_endpoint       *next = list->next;
+        zeroconf_endpoint_free_single(list);
         list = next;
     }
 }
 
-/* Compare two zeroconf_addrinfo addresses, for sorting
+/* Compare two endpoints , for sorting
  */
 static int
-zeroconf_addrinfo_cmp (zeroconf_addrinfo *a1, zeroconf_addrinfo *a2)
+zeroconf_endpoint_cmp (zeroconf_endpoint *e1, zeroconf_endpoint *e2)
 {
     /* Prefer normal addresses, rather that link-local */
-    if (a1->linklocal != a2->linklocal) {
-        return (int) a1->linklocal - (int) a2->linklocal;
+    if (e1->linklocal != e2->linklocal) {
+        return (int) e1->linklocal - (int) e2->linklocal;
     }
 
     /* Be in trend: prefer IPv6 addresses */
-    if (a1->ipv6 != a2->ipv6) {
-        return (int) a2->ipv6 - (int) a1->ipv6;
+    if (e1->ipv6 != e2->ipv6) {
+        return (int) e2->ipv6 - (int) e1->ipv6;
     }
 
     /* Otherwise, sort lexicographically */
-    return strcmp(a1->uri, a2->uri);
+    return strcmp(e1->uri, e2->uri);
 }
 
-/* Revert zeroconf_addrinfo list
+/* Revert zeroconf_endpoint list
  */
-static zeroconf_addrinfo*
-zeroconf_addrinfo_list_revert (zeroconf_addrinfo *list)
+static zeroconf_endpoint*
+zeroconf_endpoint_list_revert (zeroconf_endpoint *list)
 {
-    zeroconf_addrinfo   *prev = NULL, *next;
+    zeroconf_endpoint   *prev = NULL, *next;
 
     while (list != NULL) {
         next = list->next;
@@ -349,12 +349,12 @@ zeroconf_addrinfo_list_revert (zeroconf_addrinfo *list)
     return prev;
 }
 
-/* Sort list of addresses
+/* Sort list of endpoints
  */
-static zeroconf_addrinfo*
-zeroconf_addrinfo_list_sort (zeroconf_addrinfo *list)
+static zeroconf_endpoint*
+zeroconf_endpoint_list_sort (zeroconf_endpoint *list)
 {
-    zeroconf_addrinfo *halves[2] = {NULL, NULL};
+    zeroconf_endpoint *halves[2] = {NULL, NULL};
     int               half = 0;
 
     if (list->next == NULL) {
@@ -363,7 +363,7 @@ zeroconf_addrinfo_list_sort (zeroconf_addrinfo *list)
 
     /* Split list into halves */
     while (list != NULL) {
-        zeroconf_addrinfo *next = list->next;
+        zeroconf_endpoint *next = list->next;
 
         list->next = halves[half];
         halves[half] = list;
@@ -374,19 +374,19 @@ zeroconf_addrinfo_list_sort (zeroconf_addrinfo *list)
 
     /* Sort each half, recursively */
     for (half = 0; half < 2; half ++) {
-        halves[half] = zeroconf_addrinfo_list_sort(halves[half]);
+        halves[half] = zeroconf_endpoint_list_sort(halves[half]);
     }
 
     /* Now merge the sorted halves */
     list = NULL;
     while (halves[0] != NULL || halves[1] != NULL) {
-        zeroconf_addrinfo *next;
+        zeroconf_endpoint *next;
 
         if (halves[0] == NULL) {
             half = 1;
         } else if (halves[1] == NULL) {
             half = 0;
-        } else if (zeroconf_addrinfo_cmp(halves[0], halves[1]) < 0) {
+        } else if (zeroconf_endpoint_cmp(halves[0], halves[1]) < 0) {
             half = 0;
         } else {
             half = 1;
@@ -399,27 +399,27 @@ zeroconf_addrinfo_list_sort (zeroconf_addrinfo *list)
     }
 
     /* And revert the list, as after merging it is reverted */
-    return zeroconf_addrinfo_list_revert(list);
+    return zeroconf_endpoint_list_revert(list);
 }
 
-/* Sort list of addresses and remove duplicates
+/* Sort list of endpoints and remove duplicates
  */
-static zeroconf_addrinfo*
-zeroconf_addrinfo_list_sort_dedup (zeroconf_addrinfo *list)
+static zeroconf_endpoint*
+zeroconf_endpoint_list_sort_dedup (zeroconf_endpoint *list)
 {
-    zeroconf_addrinfo   *addr, *next;
+    zeroconf_endpoint   *addr, *next;
 
     if (list == NULL) {
         return NULL;
     }
 
-    list = zeroconf_addrinfo_list_sort(list);
+    list = zeroconf_endpoint_list_sort(list);
 
     addr = list;
     while ((next = addr->next) != NULL) {
-        if (zeroconf_addrinfo_cmp(addr, next) == 0) {
+        if (zeroconf_endpoint_cmp(addr, next) == 0) {
             addr->next = next->next;
-            zeroconf_addrinfo_free_single(next);
+            zeroconf_endpoint_free_single(next);
         } else {
             addr = next;
         }
@@ -428,14 +428,14 @@ zeroconf_addrinfo_list_sort_dedup (zeroconf_addrinfo *list)
     return list;
 }
 
-/* Prepend zeroconf_addrinfo to the list
+/* Prepend zeroconf_endpoint to the list
  */
 static void
-zeroconf_addrinfo_list_prepend (zeroconf_addrinfo **list,
-        zeroconf_addrinfo *addrinfo)
+zeroconf_endpoint_list_prepend (zeroconf_endpoint **list,
+        zeroconf_endpoint *endpoint)
 {
-    addrinfo->next = *list;
-    *list = addrinfo;
+    endpoint->next = *list;
+    *list = endpoint;
 }
 
 /* AVAHI service resolver callback
@@ -455,7 +455,7 @@ zeroconf_avahi_resolver_callback (AvahiServiceResolver *r,
     (void) flags;
 
     zeroconf_devstate *devstate = userdata;
-    zeroconf_addrinfo *addrinfo;
+    zeroconf_endpoint *endpoint;
     AvahiStringList   *rs;
     const char        *rs_text = NULL;
 
@@ -467,8 +467,8 @@ zeroconf_avahi_resolver_callback (AvahiServiceResolver *r,
             rs_text = (char*) (rs->text + 3);
         }
 
-        addrinfo = zeroconf_addrinfo_new(addr, port, rs_text, interface);
-        zeroconf_addrinfo_list_prepend(&devstate->addresses, addrinfo);
+        endpoint = zeroconf_endpoint_new(addr, port, rs_text, interface);
+        zeroconf_endpoint_list_prepend(&devstate->endpoints, endpoint);
         break;
 
     case AVAHI_RESOLVER_FAILURE:
@@ -479,25 +479,25 @@ zeroconf_avahi_resolver_callback (AvahiServiceResolver *r,
     /* Cleanup */
     g_ptr_array_remove(devstate->resolvers, r);
 
-    if (devstate->resolvers->len == 0 && devstate->addresses != NULL) {
-        devstate->addresses = zeroconf_addrinfo_list_sort_dedup(
-                devstate->addresses);
+    if (devstate->resolvers->len == 0 && devstate->endpoints != NULL) {
+        devstate->endpoints = zeroconf_endpoint_list_sort_dedup(
+                devstate->endpoints);
 
         if (conf.dbg_enabled) {
-            zeroconf_addrinfo *addrinfo;
+            zeroconf_endpoint *endpoint;
             int               i = 1;
 
-            log_debug(NULL, "MDNS: \"%s\" addresses resolved:", name);
+            log_debug(NULL, "MDNS: \"%s\" endpoints resolved:", name);
 
-            for (addrinfo = devstate->addresses; addrinfo != NULL;
-                    addrinfo = addrinfo->next, i ++) {
-                log_debug(NULL, "  %d: %s", i, addrinfo->uri);
+            for (endpoint = devstate->endpoints; endpoint != NULL;
+                    endpoint = endpoint->next, i ++) {
+                log_debug(NULL, "  %d: %s", i, endpoint->uri);
             }
         }
 
         devstate->reported = true;
         device_event_found(devstate->name, devstate->init_scan,
-                devstate->addresses);
+                devstate->endpoints);
     }
 }
 

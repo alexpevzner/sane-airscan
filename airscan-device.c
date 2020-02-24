@@ -74,11 +74,10 @@ struct device {
     proto_ctx            proto_ctx;     /* Protocol handler context */
 
     /* I/O handling (AVAHI and HTTP) */
-    zeroconf_addrinfo    *addresses;    /* Device addresses, NULL if
-                                           device was statically added */
-    zeroconf_addrinfo    *addr_current; /* Current address to probe */
-    eloop_timer          *http_timer;   /* HTTP retry timer */
-    trace                *trace;        /* Protocol trace */
+    zeroconf_endpoint    *endpoints;        /* Device endpoints */
+    zeroconf_endpoint    *endpoint_current; /* Current endpoint to probe */
+    eloop_timer          *http_timer;       /* HTTP retry timer */
+    trace                *trace;            /* Protocol trace */
 
     /* Scanning state machinery */
     SANE_Status          job_status;          /* Job completion status */
@@ -125,7 +124,7 @@ static void
 device_scanner_capabilities_callback (device *dev, http_query *q);
 
 static void
-device_probe_address (device *dev, zeroconf_addrinfo *addrinfo);
+device_probe_endpoint (device *dev, zeroconf_endpoint *endpoint);
 
 static void
 device_job_set_status (device *dev, SANE_Status status);
@@ -158,7 +157,7 @@ device_management_start_stop (bool start);
 /* Add device to the table
  */
 static void
-device_add (const char *name, zeroconf_addrinfo *addresses,
+device_add (const char *name, zeroconf_endpoint *endpoints,
         bool init_scan, bool statically)
 {
     device      *dev;
@@ -204,8 +203,8 @@ device_add (const char *name, zeroconf_addrinfo *addresses,
     g_ptr_array_add(device_table, dev);
 
     /* Initialize device I/O */
-    dev->addresses = zeroconf_addrinfo_list_copy(addresses);
-    device_probe_address(dev, dev->addresses);
+    dev->endpoints = zeroconf_endpoint_list_copy(endpoints);
+    device_probe_endpoint(dev, dev->endpoints);
 
     return;
 }
@@ -237,7 +236,7 @@ device_unref (device *dev)
 
         devopt_cleanup(&dev->opt);
 
-        zeroconf_addrinfo_list_free(dev->addresses);
+        zeroconf_endpoint_list_free(dev->endpoints);
 
         http_uri_free((http_uri*) dev->proto_ctx.base_uri);
         http_client_free(dev->proto_ctx.http);
@@ -528,17 +527,17 @@ device_http_onerror (device *dev, error err) {
 /* Probe next device address
  */
 static void
-device_probe_address (device *dev, zeroconf_addrinfo *addrinfo)
+device_probe_endpoint (device *dev, zeroconf_endpoint *endpoint)
 {
     /* Cleanup after previous probe */
-    dev->addr_current = addrinfo;
+    dev->endpoint_current = endpoint;
     if (dev->proto_ctx.base_uri != NULL) {
         http_uri_free((http_uri*) dev->proto_ctx.base_uri);
         dev->proto_ctx.base_uri = NULL;
     }
 
     /* Parse device URI */
-    http_uri *uri = http_uri_new(addrinfo->uri, true);
+    http_uri *uri = http_uri_new(endpoint->uri, true);
     log_assert(dev, uri != NULL);
 
     /* Make sure endpoint URI path ends with '/' character */
@@ -588,8 +587,9 @@ DONE:
         log_debug(dev, ESTRING(err));
         trace_error(dev->trace, err);
 
-        if (dev->addr_current != NULL && dev->addr_current->next != NULL) {
-            device_probe_address(dev, dev->addr_current->next);
+        if (dev->endpoint_current != NULL &&
+            dev->endpoint_current->next != NULL) {
+            device_probe_endpoint(dev, dev->endpoint_current->next);
         } else {
             device_del(dev);
         }
@@ -1589,20 +1589,20 @@ DONE:
 static void
 device_statically_configured (const char *name, const char *uri)
 {
-    zeroconf_addrinfo addrinfo;
+    zeroconf_endpoint endpoint;
 
-    memset(&addrinfo, 0, sizeof(addrinfo));
-    addrinfo.uri = uri;
-    device_add(name, &addrinfo, true, true);
+    memset(&endpoint, 0, sizeof(endpoint));
+    endpoint.uri = uri;
+    device_add(name, &endpoint, true, true);
 }
 
 /* Device found notification -- called by ZeroConf
  */
 void
 device_event_found (const char *name, bool init_scan,
-        zeroconf_addrinfo *addresses)
+        zeroconf_endpoint *endpoints)
 {
-    device_add(name, addresses, init_scan, false);
+    device_add(name, endpoints, init_scan, false);
 }
 
 /* Device removed notification -- called by ZeroConf

@@ -1089,12 +1089,12 @@ devopt_get_option (devopt *opt, SANE_Int option, void *value);
 /******************** ZeroConf (device discovery) ********************/
 /* ZeroConf resolved address information
  */
-typedef struct zeroconf_addrinfo zeroconf_addrinfo;
-struct zeroconf_addrinfo {
+typedef struct zeroconf_endpoint zeroconf_endpoint;
+struct zeroconf_endpoint {
     const char        *uri;      /* I.e, "http://192.168.1.1:8080/eSCL/" */
     bool              ipv6;      /* This is an IPv6 address */
     bool              linklocal; /* This is a link-local address */
-    zeroconf_addrinfo *next;     /* Next address in the list */
+    zeroconf_endpoint *next;     /* Next address in the list */
 };
 
 /* Initialize ZeroConf
@@ -1112,15 +1112,15 @@ zeroconf_cleanup (void);
 bool
 zeroconf_init_scan (void);
 
-/* Create a copy of zeroconf_addrinfo list
+/* Create a copy of zeroconf_endpoint list
  */
-zeroconf_addrinfo*
-zeroconf_addrinfo_list_copy (zeroconf_addrinfo *list);
+zeroconf_endpoint*
+zeroconf_endpoint_list_copy (zeroconf_endpoint *list);
 
-/* Free zeroconf_addrinfo list
+/* Free zeroconf_endpoint list
  */
 void
-zeroconf_addrinfo_list_free (zeroconf_addrinfo *list);
+zeroconf_endpoint_list_free (zeroconf_endpoint *list);
 
 /******************** WS-Discovery ********************/
 /* Initialize WS-Discovery
@@ -1211,7 +1211,7 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len);
  */
 void
 device_event_found (const char *name, bool init_scan,
-        zeroconf_addrinfo *addresses);
+        zeroconf_endpoint *endpoints);
 
 /* Device removed notification -- called by ZeroConf
  */
