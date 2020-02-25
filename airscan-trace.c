@@ -253,8 +253,10 @@ trace_dump_body (trace *t, http_data *data, const char *content_type)
         content_type = "";
     }
 
-    if (!strncmp(content_type, "text/", 5) ||
-            !strcmp(content_type, "application/xml")) {
+    if (g_str_has_prefix(content_type, "text/") ||
+        g_str_has_prefix(content_type, "application/xml") ||
+        g_str_has_prefix(content_type, "application/soap+xml"))
+    {
         trace_dump_text(t, data, content_type);
     } else {
         trace_dump_data(t, data, content_type);
