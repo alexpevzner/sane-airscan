@@ -32,7 +32,7 @@
 
 /* Sane-airscan configuration file and subdirectory names
  */
-#define CONFIG_AIRSCAN_CONF             "airscan.conf"
+#define CONFIG_AIRSCAN_CONF             "airscan-wsd.conf"
 #define CONFIG_AIRSCAN_D                "airscan.d"
 
 /* Environment variables
