@@ -1036,6 +1036,10 @@ typedef struct {
     const char     *model;              /* Device model */
     const char     *vendor;             /* Device vendor */
 
+    /* Fundamental values */
+    const char     *protocol;            /* Protocol name */
+    SANE_Word      units;                /* Size units, pixels per inch */
+
     /* Sources */
     SANE_String    *sane_sources;        /* Sources, in SANE format */
     devcaps_source *src[NUM_OPT_SOURCE]; /* Missed sources are NULL */
@@ -1562,22 +1566,6 @@ static inline SANE_Word
 math_mm2px_res (SANE_Fixed mm, SANE_Word res)
 {
     return (SANE_Word) roundl(SANE_UNFIX(mm) * res / 25.4);
-}
-
-/* Convert pixels to millimeters, assuming 300 DPI
- */
-static inline SANE_Fixed
-math_px2mm (SANE_Word px)
-{
-    return math_px2mm_res(px, 300);
-}
-
-/* Convert millimeters to pixels, assuming 300 DPI
- */
-static inline SANE_Word
-math_mm2px (SANE_Fixed mm)
-{
-    return math_mm2px_res(mm, 300);
 }
 
 /* Format millimeters, for printing

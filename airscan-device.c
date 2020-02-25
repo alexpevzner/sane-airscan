@@ -855,28 +855,28 @@ device_geom;
  *   First of all, we use 3 different units to deal with geometrical
  *   parameters:
  *     1) we communicate with frontend in millimeters
- *     2) we communicate with scanner in pixels, assuming 300 DPI
- *     3) when we deal with image, sizes are in pixels in real
- *        resolution
+ *     2) we communicate with scanner in pixels, assuming protoc-specific DPI
+ *        (defined by devcaps::units)
+ *     3) when we deal with image, sizes are in pixels in real resolution
  *
  *   Second, scanner returns minimal and maximal window size, but
  *   to simplify frontend's life, we pretend there is no such thing,
  *   as a minimal width or height, otherwise TL and BR ranges become
  *   dependent from each other. Instead, we always request image from
  *   scanner not smaller that scanner's minimum, and clip excessive
- *   image parts, if required.
+ *   image parts if required.
  *
  *   This all makes things non-trivial. This function handles
  *   this complexity
  */
 static device_geom
 device_geom_compute (SANE_Fixed tl, SANE_Fixed br,
-        SANE_Word minlen, SANE_Word maxlen, SANE_Word res)
+        SANE_Word minlen, SANE_Word maxlen, SANE_Word res, SANE_Word units)
 {
     device_geom geom;
 
-    geom.off = math_mm2px(tl);
-    geom.len = math_mm2px(br - tl);
+    geom.off = math_mm2px_res(tl, units);
+    geom.len = math_mm2px_res(br - tl, units);
     geom.skip = 0;
 
     minlen = math_max(minlen, 1);
@@ -886,7 +886,7 @@ device_geom_compute (SANE_Fixed tl, SANE_Fixed br,
         geom.skip = geom.off + geom.len - maxlen;
         geom.off -= geom.skip;
 
-        geom.skip = math_muldiv(geom.skip, res, 300);
+        geom.skip = math_muldiv(geom.skip, res, units);
     }
 
     return geom;
@@ -907,10 +907,10 @@ device_stm_start_scan (device *dev)
 
     /* Prepare window parameters */
     geom_x = device_geom_compute(dev->opt.tl_x, dev->opt.br_x,
-        src->min_wid_px, src->max_wid_px, x_resolution);
+        src->min_wid_px, src->max_wid_px, x_resolution, dev->opt.caps.units);
 
     geom_y = device_geom_compute(dev->opt.tl_y, dev->opt.br_y,
-        src->min_hei_px, src->max_hei_px, y_resolution);
+        src->min_hei_px, src->max_hei_px, y_resolution, dev->opt.caps.units);
 
     dev->job_skip_x = geom_x.skip;
     dev->job_skip_y = geom_y.skip;

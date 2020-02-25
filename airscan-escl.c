@@ -334,8 +334,8 @@ escl_devcaps_source_parse (xml_rd *xml, devcaps_source **out)
 
         /* Set window ranges */
         src->win_x_range_mm.min = src->win_y_range_mm.min = 0;
-        src->win_x_range_mm.max = math_px2mm(src->max_wid_px);
-        src->win_y_range_mm.max = math_px2mm(src->max_hei_px);
+        src->win_x_range_mm.max = math_px2mm_res(src->max_wid_px, 300);
+        src->win_y_range_mm.max = math_px2mm_res(src->max_hei_px, 300);
     }
 
 DONE:
@@ -478,6 +478,10 @@ static error
 escl_devcaps_decode (const proto_ctx *ctx, devcaps *caps)
 {
     http_data *data = http_query_get_response_data(ctx->query);
+
+    caps->units = 300;
+    caps->protocol = ctx->proto->name;
+
     return escl_devcaps_parse(caps, data->bytes, data->size);
 }
 

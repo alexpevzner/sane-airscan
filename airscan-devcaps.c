@@ -75,8 +75,10 @@ devcaps_dump (trace *t, devcaps *caps)
     GString *buf = g_string_new(NULL);
 
     trace_printf(t, "===== device capabilities =====");
-    trace_printf(t, "  Model:   \"%s\"", caps->model);
-    trace_printf(t, "  Vendor:  \"%s\"", caps->vendor);
+    trace_printf(t, "  Model:      \"%s\"", caps->model);
+    trace_printf(t, "  Vendor:     \"%s\"", caps->vendor);
+    trace_printf(t, "  Size units: %d DPI", caps->units);
+    trace_printf(t, "  Protocol:   %s", caps->protocol);
 
     g_string_truncate(buf, 0);
     for (i = 0; caps->sane_sources[i] != NULL; i ++) {
@@ -86,7 +88,7 @@ devcaps_dump (trace *t, devcaps *caps)
         g_string_append_printf(buf, "%s", caps->sane_sources[i]);
     }
 
-    trace_printf(t, "  Sources: %s", buf->str);
+    trace_printf(t, "  Sources:    %s", buf->str);
 
     OPT_SOURCE opt_src;
     for (opt_src = (OPT_SOURCE) 0; opt_src < NUM_OPT_SOURCE; opt_src ++) {
@@ -100,14 +102,14 @@ devcaps_dump (trace *t, devcaps *caps)
         trace_printf(t, "");
         trace_printf(t, "  %s:", opt_source_to_sane(opt_src));
 
-        math_fmt_mm(math_px2mm(src->min_wid_px), xbuf);
-        math_fmt_mm(math_px2mm(src->min_hei_px), ybuf);
+        math_fmt_mm(math_px2mm_res(src->min_wid_px, caps->units), xbuf);
+        math_fmt_mm(math_px2mm_res(src->min_hei_px, caps->units), ybuf);
 
         trace_printf(t, "    Min window:  %dx%d px, %sx%s mm",
                 src->min_wid_px, src->min_hei_px, xbuf, ybuf);
 
-        math_fmt_mm(math_px2mm(src->max_wid_px), xbuf);
-        math_fmt_mm(math_px2mm(src->max_hei_px), ybuf);
+        math_fmt_mm(math_px2mm_res(src->max_wid_px, caps->units), xbuf);
+        math_fmt_mm(math_px2mm_res(src->max_hei_px, caps->units), ybuf);
 
         trace_printf(t, "    Max window:  %dx%d px, %sx%s mm",
                 src->max_wid_px, src->max_hei_px, xbuf, ybuf);
