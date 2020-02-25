@@ -11,7 +11,8 @@
 #include <stdio.h>
 #include <sys/random.h>
 
-/* Generate new random UUID
+/* Generate new random UUID. Generated UUID has a following form:
+ *    urn:uuid:ede05377-460e-4b4a-a5c0-423f9e02e8fa
  */
 uuid
 uuid_new (void)
@@ -23,6 +24,7 @@ uuid_new (void)
 
     // ede05377-460e-4b4a-a5c0-423f9e02e8fa
     sprintf(u.text,
+        "urn:uuid:"
         "%.2x%.2x%.2x%.2x-%.2x%.2x-%.2x%.2x-%.2x%.2x-%.2x%.2x%.2x%.2x%.2x%.2x",
         rnd[0], rnd[1], rnd[2], rnd[3], rnd[4], rnd[5], rnd[6], rnd[7],
         rnd[8], rnd[9], rnd[10], rnd[11], rnd[12], rnd[13], rnd[14], rnd[15]);

@@ -627,10 +627,11 @@ http_cleanup (void);
  * by value, without need to mess with memory allocation
  */
 typedef struct {
-    char text[sizeof("ede05377-460e-4b4a-a5c0-423f9e02e8fa")];
+    char text[sizeof("urn:uuid:ede05377-460e-4b4a-a5c0-423f9e02e8fa")];
 } uuid;
 
-/* Generate new random UUID
+/* Generate new random UUID. Generated UUID has a following form:
+ *    urn:uuid:ede05377-460e-4b4a-a5c0-423f9e02e8fa
  */
 uuid
 uuid_new (void);
