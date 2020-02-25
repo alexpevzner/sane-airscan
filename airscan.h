@@ -1351,6 +1351,22 @@ proto_handler_escl_new (void);
 proto_handler*
 proto_handler_wsd_new (void);
 
+/* proto_handler_new creates new protocol handler by protocol ID
+ */
+static inline proto_handler*
+proto_handler_new (CONF_PROTO proto)
+{
+    switch (proto) {
+    case CONF_PROTO_ESCL:
+        return proto_handler_escl_new();
+    case CONF_PROTO_WSD:
+        return proto_handler_wsd_new();
+    default:
+        return NULL;
+    }
+}
+
+
 /******************** Image decoding ********************/
 /* The window withing the image
  *

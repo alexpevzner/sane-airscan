@@ -121,6 +121,9 @@ static void
 device_http_onerror (device *dev, error err);
 
 static void
+device_proto_set (device *dev, CONF_PROTO proto);
+
+static void
 device_scanner_capabilities_callback (device *dev, http_query *q);
 
 static void
@@ -180,7 +183,6 @@ device_add (const char *name, zeroconf_endpoint *endpoints,
     dev->name = g_strdup(name);
     dev->flags = DEVICE_LISTED | DEVICE_INIT_WAIT;
     dev->proto_ctx.dev = dev;
-    dev->proto_ctx.proto = proto_handler_escl_new();
     dev->proto_ctx.devcaps = &dev->opt.caps;
 
     if (init_scan) {
@@ -231,8 +233,7 @@ device_unref (device *dev)
         log_assert(dev, (dev->flags & DEVICE_OPENED) == 0);
 
         /* Release all memory */
-        g_free((void*) dev->name);
-        dev->proto_ctx.proto->free(dev->proto_ctx.proto);
+        device_proto_set(dev, CONF_PROTO_UNKNOWN);
 
         devopt_cleanup(&dev->opt);
 
@@ -249,6 +250,7 @@ device_unref (device *dev)
         image_decoder_free(dev->read_decoder_jpeg);
         pollable_free(dev->read_pollable);
 
+        g_free((void*) dev->name);
         g_free(dev);
     }
 }
@@ -401,6 +403,26 @@ device_state_set (device *dev, DEVICE_STATE state)
 }
 
 /******************** Underlying protocol operations ********************/
+/* Set protocol handler
+ */
+static void
+device_proto_set (device *dev, CONF_PROTO proto)
+{
+    if (dev->proto_ctx.proto != NULL) {
+        log_debug(dev, "closed protocol \"%s\"",
+            dev->proto_ctx.proto->name);
+        dev->proto_ctx.proto->free(dev->proto_ctx.proto);
+        dev->proto_ctx.proto = NULL;
+    }
+
+    if (proto != CONF_PROTO_UNKNOWN) {
+        dev->proto_ctx.proto = proto_handler_new(proto);
+        log_assert(dev, dev->proto_ctx.proto != NULL);
+        log_debug(dev, "using protocol \"%s\"",
+            dev->proto_ctx.proto->name);
+    }
+}
+
 /* Query device capabilities
  */
 static void
@@ -530,6 +552,11 @@ static void
 device_probe_endpoint (device *dev, zeroconf_endpoint *endpoint)
 {
     /* Cleanup after previous probe */
+    if (dev->endpoint_current == NULL ||
+        dev->endpoint_current->proto != endpoint->proto) {
+        device_proto_set(dev, endpoint->proto);
+    }
+
     dev->endpoint_current = endpoint;
     if (dev->proto_ctx.base_uri != NULL) {
         http_uri_free((http_uri*) dev->proto_ctx.base_uri);
