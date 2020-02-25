@@ -8,6 +8,36 @@
 
 #include "airscan.h"
 
+/* Protocol constants */
+#define WSD_ADDR_ANONYMOUS   \
+        "http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous"
+
+#define WSD_ACTION_GET_SCANNER_ELEMENTS \
+        "http://schemas.microsoft.com/windows/2006/08/wdp/scan/GetScannerElements"
+
+#if     0
+/* XML namespace translation for XML reader
+ */
+static const xml_ns wsd_ns_rd[] = {
+    {"s", "http*://schemas.xmlsoap.org/soap/envelope"}, /* SOAP 1.1 */
+    {"s", "http*://www.w3.org/2003/05/soap-envelope"},  /* SOAP 1.2 */
+    {"d", "http*://schemas.xmlsoap.org/ws/2005/04/discovery"},
+    {"a", "http*://schemas.xmlsoap.org/ws/2004/08/addressing"},
+    {NULL, NULL}
+};
+#endif
+
+/* XML namespace definitions for XML writer
+ */
+static const xml_ns wsd_ns_wr[] = {
+    {"s",    "http://www.w3.org/2003/05/soap-envelope"},  /* SOAP 1.2 */
+    {"d",    "http://schemas.xmlsoap.org/ws/2005/04/discovery"},
+    {"a",    "http://schemas.xmlsoap.org/ws/2004/08/addressing"},
+    {"scan", "http://schemas.microsoft.com/windows/2006/08/wdp/scan"},
+    {NULL, NULL}
+};
+
+
 /* proto_handler_wsd represents WSD protocol handler
  */
 typedef struct {
@@ -22,13 +52,41 @@ wsd_free (proto_handler *proto)
     g_free(proto);
 }
 
+/* Create a HTTP POST request
+ */
+static http_query*
+wsd_http_post (const proto_ctx *ctx, char *body)
+{
+    return http_query_new(ctx->http, http_uri_clone(ctx->base_uri),
+        "POST", body, "application/soap+xml; charset=utf-8");
+}
+
 /* Query device capabilities
  */
 static http_query*
 wsd_devcaps_query (const proto_ctx *ctx)
 {
-    (void) ctx;
-    return NULL;
+    xml_wr *xml = xml_wr_begin("s:Envelope", wsd_ns_wr);
+    uuid   u = uuid_new();
+
+    xml_wr_enter(xml, "s:Header");
+    xml_wr_add_text(xml, "a:MessageID", u.text);
+    xml_wr_add_text(xml, "a:To", WSD_ADDR_ANONYMOUS);
+    xml_wr_add_text(xml, "a:ReplyTo", WSD_ADDR_ANONYMOUS);
+    xml_wr_add_text(xml, "a:Action", WSD_ACTION_GET_SCANNER_ELEMENTS);
+    xml_wr_leave(xml);
+
+    xml_wr_enter(xml, "s:Body");
+    xml_wr_enter(xml, "scan:GetScannerElementsRequest");
+    xml_wr_enter(xml, "scan:RequestedElements");
+    xml_wr_add_text(xml, "scan:Name", "scan:ScannerDescription");
+    xml_wr_add_text(xml, "scan:Name", "scan:ScannerConfiguration");
+    xml_wr_add_text(xml, "scan:Name", "scan:ScannerStatus");
+    xml_wr_leave(xml);
+    xml_wr_leave(xml);
+    xml_wr_leave(xml);
+
+    return wsd_http_post(ctx, xml_wr_finish(xml));
 }
 
 /* Decode device capabilities
@@ -38,7 +96,7 @@ wsd_devcaps_decode (const proto_ctx *ctx, devcaps *caps)
 {
     (void) ctx;
     (void) caps;
-    return NULL;
+    return ERROR("not implemented");
 }
 
 /* Initiate scanning
