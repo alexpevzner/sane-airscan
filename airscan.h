@@ -423,6 +423,11 @@ typedef struct http_uri http_uri;
 http_uri*
 http_uri_new (const char *str, bool strip_fragment);
 
+/* Clone an URI
+ */
+http_uri*
+http_uri_clone (const http_uri *old);
+
 /* Create URI, relative to base URI. If `path_only' is
  * true, scheme, host and port are taken from the
  * base URI

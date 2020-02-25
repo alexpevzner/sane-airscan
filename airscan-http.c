@@ -54,6 +54,16 @@ http_uri_new (const char *str, bool strip_fragment)
     return uri;
 }
 
+/* Clone an URI
+ */
+http_uri*
+http_uri_clone (const http_uri *old)
+{
+    http_uri *uri = g_new0(http_uri, 1);
+    uri->parsed = soup_uri_copy(old->parsed);
+    return uri;
+}
+
 /* Create URI, relative to base URI. If `path_only' is
  * true, scheme, host and port are taken from the
  * base URI
