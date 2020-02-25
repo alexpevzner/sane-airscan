@@ -196,6 +196,8 @@ zeroconf_endpoint_new (const AvahiAddress *addr, uint16_t port, const char *rs,
     char              str_addr[128];
     int               rs_len;
 
+    endpoint->proto = CONF_PROTO_ESCL; /* FIXME, hard-coded for now */
+
     if (addr->proto == AVAHI_PROTO_INET) {
         /* 169.254.0.0/16 */
         if ((ntohl(addr->data.ipv4.address) & 0xffff0000) == 0xa9fe0000) {

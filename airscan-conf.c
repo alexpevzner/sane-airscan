@@ -625,10 +625,11 @@ conf_device_list_free (void)
 /* Prepend device conf.devices list
  */
 static void
-conf_device_list_prepend (const char *name, const char *uri)
+conf_device_list_prepend (const char *name, const char *uri, CONF_PROTO proto)
 {
     conf_device *dev = g_new0(conf_device, 1);
     dev->name = g_strdup(name);
+    dev->proto = proto;
     dev->uri = uri ? g_strdup(uri) : NULL;
     dev->next = conf.devices;
     conf.devices = dev;
@@ -678,6 +679,49 @@ conf_perror (const inifile_record *rec, const char *err)
     log_debug(NULL, "%s:%d: %s", rec->file, rec->line, err);
 }
 
+/* Decode CONF_PROTO
+ */
+static CONF_PROTO
+conf_decode_proto (const char *name)
+{
+    if (!strcasecmp(name, "escl")) {
+        return CONF_PROTO_ESCL;
+    } else if (!strcasecmp(name, "wsd")) {
+        return CONF_PROTO_WSD;
+    }
+
+    return CONF_PROTO_UNKNOWN;
+}
+
+/* Decode a device configuration
+ */
+static void
+conf_decode_device (const inifile_record *rec) {
+    http_uri   *uri = NULL;
+    CONF_PROTO proto = CONF_PROTO_ESCL;
+    const char *uri_name = rec->tokc > 0 ? rec->tokv[0] : NULL;
+    const char *proto_name = rec->tokc > 1 ? rec->tokv[1] : NULL;
+
+    if (conf_device_list_lookup(rec->variable) != NULL) {
+        conf_perror(rec, "device already defined");
+    } else if (!strcmp(rec->value, CONF_DEVICE_DISABLE)) {
+        conf_device_list_prepend(rec->variable, NULL, CONF_PROTO_UNKNOWN);
+    } else if (rec->tokc != 1 && rec->tokc != 2) {
+        conf_perror(rec, "usage: \"device name\" = URL[,protocol]");
+    } else if ((uri = http_uri_new(uri_name, true)) == NULL) {
+        conf_perror(rec, "invalid URL");
+    } else if (proto_name != NULL&&
+               (proto = conf_decode_proto(proto_name) == CONF_PROTO_UNKNOWN)) {
+        conf_perror(rec, "protocol must be \"escl\" or \"wsd\"");
+    }
+
+    if (uri != NULL && proto != CONF_PROTO_UNKNOWN) {
+        conf_device_list_prepend(rec->variable, http_uri_str(uri), proto);
+    }
+
+    http_uri_free(uri);
+}
+
 /* Load configuration from opened inifile
  */
 static void
@@ -692,18 +736,7 @@ conf_load_from_ini (inifile *ini)
 
         case INIFILE_VARIABLE:
             if (inifile_match_name(rec->section, "devices")) {
-                http_uri *uri;
-
-                if (conf_device_list_lookup(rec->variable) != NULL) {
-                    conf_perror(rec, "device already defined");
-                } else if (!strcmp(rec->value, CONF_DEVICE_DISABLE)) {
-                    conf_device_list_prepend(rec->variable, NULL);
-                } else if ((uri = http_uri_new(rec->value, true)) != NULL) {
-                    conf_device_list_prepend(rec->variable, http_uri_str(uri));
-                    http_uri_free(uri);
-                } else {
-                    conf_perror(rec, "invalid URL");
-                }
+                conf_decode_device(rec);
             } else if (inifile_match_name(rec->section, "options")) {
                 if (inifile_match_name(rec->variable, "discovery")) {
                     if (inifile_match_name(rec->value, "enable")) {

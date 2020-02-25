@@ -1587,11 +1587,12 @@ DONE:
 /* Add statically configured device
  */
 static void
-device_statically_configured (const char *name, const char *uri)
+device_statically_configured (const char *name, const char *uri, CONF_PROTO proto)
 {
     zeroconf_endpoint endpoint;
 
     memset(&endpoint, 0, sizeof(endpoint));
+    endpoint.proto = proto;
     endpoint.uri = uri;
     device_add(name, &endpoint, true, true);
 }
@@ -1660,7 +1661,8 @@ device_management_start (void)
 
     for (dev_conf = conf.devices; dev_conf != NULL; dev_conf = dev_conf->next) {
         if (dev_conf->uri != NULL) {
-            device_statically_configured(dev_conf->name, dev_conf->uri);
+            device_statically_configured(dev_conf->name,
+                dev_conf->uri, dev_conf->proto);
         }
     }
 }

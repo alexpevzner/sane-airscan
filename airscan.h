@@ -89,11 +89,20 @@ ESTRING (error err)
  */
 #define CONF_DEVICE_DISABLE     "disable"
 
+/* Protocol
+ */
+typedef enum {
+    CONF_PROTO_UNKNOWN = -1,
+    CONF_PROTO_ESCL,
+    CONF_PROTO_WSD
+} CONF_PROTO;
+
 /* Device configuration, for manually added devices
  */
 typedef struct conf_device conf_device;
 struct conf_device {
     const char  *name; /* Device name */
+    CONF_PROTO  proto; /* Protocol to use */
     const char  *uri;  /* Device URI, parsed; NULL if device disabled */
     conf_device *next; /* Next device in the list */
 };
@@ -1091,6 +1100,7 @@ devopt_get_option (devopt *opt, SANE_Int option, void *value);
  */
 typedef struct zeroconf_endpoint zeroconf_endpoint;
 struct zeroconf_endpoint {
+    CONF_PROTO        proto;     /* The protocol */
     const char        *uri;      /* I.e, "http://192.168.1.1:8080/eSCL/" */
     bool              ipv6;      /* This is an IPv6 address */
     bool              linklocal; /* This is a link-local address */
