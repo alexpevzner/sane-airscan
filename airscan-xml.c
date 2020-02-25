@@ -477,7 +477,8 @@ xml_wr_format_node (xml_wr *xml, GString *buf,
                 g_string_append_c(buf, '\n');
             }
         } else {
-            g_string_append_printf(buf, "%s</%s>\n", node->value, node->name);
+            g_string_append_printf(buf, "%s</%s>\n",
+                    node->value ? node->value : "", node->name);
         }
 }
 
