@@ -133,7 +133,7 @@ To report a bug, please [create a new GitHub issue](https://github.com/alexpevzn
 To create a helpful bug report, please perform the following steps:
 
 1. Enable protocol trace in the sane-airscan, by adding the following
-entries into the configuration file (`/etc/sane.d/airscan.conf`):
+entries into the configuration file <br> (**/etc/sane.d/airscan.conf**):
 ```
 [debug]
 trace = ~/airscan/trace ; Path to directory where trace files will be saved
