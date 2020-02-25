@@ -711,7 +711,7 @@ conf_decode_device (const inifile_record *rec) {
     } else if ((uri = http_uri_new(uri_name, true)) == NULL) {
         conf_perror(rec, "invalid URL");
     } else if (proto_name != NULL&&
-               (proto = conf_decode_proto(proto_name) == CONF_PROTO_UNKNOWN)) {
+               (proto = conf_decode_proto(proto_name)) == CONF_PROTO_UNKNOWN) {
         conf_perror(rec, "protocol must be \"escl\" or \"wsd\"");
     }
 
