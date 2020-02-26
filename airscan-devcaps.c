@@ -33,6 +33,33 @@ devcaps_source_free (devcaps_source *src)
     }
 }
 
+/* Clone a source
+ */
+devcaps_source*
+devcaps_source_clone (const devcaps_source *src)
+{
+    devcaps_source *src2 = g_new0(devcaps_source, 1);
+    unsigned int   i, len;
+
+    *src2 = *src;
+
+    sane_string_array_init(&src2->sane_colormodes);
+    sane_word_array_init(&src2->resolutions);
+
+    len = sane_string_array_len((SANE_String**) &src->sane_colormodes);
+    for (i = 0; i < len; i ++) {
+        sane_string_array_append(&src2->sane_colormodes,
+            src->sane_colormodes[i]);
+    }
+
+    len = sane_word_array_len((SANE_Word**) &src->resolutions);
+    for (i = 1; i <= len; i ++) {
+        sane_word_array_append(&src2->resolutions, src->resolutions[i]);
+    }
+
+    return src2;
+}
+
 /* Merge two sources, resulting the source that contains
  * only capabilities, supported by two input sources
  *

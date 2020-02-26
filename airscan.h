@@ -1060,6 +1060,11 @@ devcaps_source_new (void);
 void
 devcaps_source_free (devcaps_source *src);
 
+/* Clone a source
+ */
+devcaps_source*
+devcaps_source_clone (const devcaps_source *src);
+
 /* Merge two sources, resulting the source that contains
  * only capabilities, supported by two input sources
  *
