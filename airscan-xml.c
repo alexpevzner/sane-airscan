@@ -245,7 +245,7 @@ xml_rd_deep_next (xml_rd *xml, unsigned int depth)
 {
     xml_rd_enter(xml);
 
-    while (xml_rd_end(xml) && xml_rd_depth(xml) > depth) {
+    while (xml_rd_end(xml) && xml_rd_depth(xml) > depth + 1) {
         xml_rd_leave(xml);
         xml_rd_next(xml);
     }
