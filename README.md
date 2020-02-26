@@ -48,6 +48,7 @@ Sane-airscan was tested and found to work with the following scanners:
 * HP DeskJet 2540
 * HP ENVY 4500
 * HP LaserJet Pro M28w
+* HP Officejet 4630
 * HP Officejet Pro 6970
 * HP OfficeJet Pro 6978
 * HP OfficeJet Pro 8730
