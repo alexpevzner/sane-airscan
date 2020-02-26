@@ -106,5 +106,23 @@ opt_colormode_to_sane (OPT_COLORMODE mode)
         G_N_ELEMENTS(opt_colormode_name_map), (SANE_Word) mode);
 }
 
+/* Export set of colormodes (1 << OPT_COLORMODE) as sane
+ * array of strings
+ *
+ * The result is appended to 'out' array -- it needs to
+ * be initialized before call to this function
+ */
+void
+opt_colormodes_to_sane (SANE_String **out, unsigned int colormodes)
+{
+    OPT_COLORMODE cm;
+    for (cm = (OPT_COLORMODE) 0; cm < NUM_OPT_COLORMODE; cm ++) {
+        if ((colormodes & (1 << cm)) != 0) {
+            SANE_String s = (SANE_String) opt_colormode_to_sane(cm);
+            sane_string_array_append(out, s);
+        }
+    }
+}
+
 /* vim:ts=8:sw=4:et
  */

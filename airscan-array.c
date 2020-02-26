@@ -84,6 +84,32 @@ sane_word_array_sort(SANE_Word **a)
     }
 }
 
+/* Intersect two sorted arrays. Result is appended
+ * to the 'out' argument (it must be initialized)
+ */
+void
+sane_word_array_intersect_sorted (SANE_Word **out,
+        SANE_Word *a1, SANE_Word *a2)
+{
+    SANE_Word *end1 = a1 + sane_word_array_len(&a1) + 1;
+    SANE_Word *end2 = a2 + sane_word_array_len(&a2) + 1;
+
+    a1 ++;
+    a2 ++;
+
+    while (a1 < end1 && a2 < end2) {
+        if (*a1 < *a2) {
+            a1 ++;
+        } else if (*a1 > *a2) {
+            a2 ++;
+        } else {
+            sane_word_array_append(out, *a1);
+            a1 ++;
+            a2 ++;
+        }
+    }
+}
+
 /* Initialize array of SANE_String
  */
 void

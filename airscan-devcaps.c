@@ -33,6 +33,78 @@ devcaps_source_free (devcaps_source *src)
     }
 }
 
+/* Merge two sources, resulting the source that contains
+ * only capabilities, supported by two input sources
+ *
+ * Returns NULL, if sources cannot be merged
+ */
+devcaps_source*
+devcaps_source_merge (const devcaps_source *s1, const devcaps_source *s2)
+{
+    devcaps_source *src = devcaps_source_new();
+
+    /* Merge flags */
+    src->flags = s1->flags & s2->flags;
+    if ((src->flags & DEVCAPS_SOURCE_FMT_ALL) == 0) {
+        goto FAIL;
+    }
+
+    /* Merge colormodes */
+    src->colormodes = s1->colormodes & s2->colormodes;
+    if (src->colormodes == 0) {
+        goto FAIL;
+    }
+
+    opt_colormodes_to_sane(&src->sane_colormodes, src->colormodes);
+
+    /* Merge dimensions */
+    src->min_wid_px = math_max(s1->min_wid_px, s2->min_wid_px);
+    src->max_wid_px = math_min(s1->max_wid_px, s2->max_wid_px);
+    src->min_hei_px = math_max(s1->min_hei_px, s2->min_hei_px);
+    src->max_hei_px = math_min(s1->max_hei_px, s2->max_hei_px);
+
+    if ((src->min_wid_px > src->max_wid_px) ||
+        (src->min_hei_px > src->max_hei_px)) {
+        goto FAIL;
+    }
+
+    if (!math_range_merge(&src->win_x_range_mm,
+            &s1->win_x_range_mm, &s2->win_x_range_mm)) {
+            goto FAIL;
+    }
+
+    if (!math_range_merge(&src->win_y_range_mm,
+            &s1->win_y_range_mm, &s2->win_y_range_mm)) {
+            goto FAIL;
+    }
+
+    /* Merge resolutions */
+    if ((src->flags & DEVCAPS_SOURCE_RES_DISCRETE) != 0) {
+        sane_word_array_intersect_sorted(&src->resolutions,
+            s1->resolutions, s2->resolutions);
+        if (sane_word_array_len(&src->resolutions) == 0) {
+            src->flags &= ~DEVCAPS_SOURCE_RES_DISCRETE;
+        }
+    }
+
+    if ((src->flags & DEVCAPS_SOURCE_RES_RANGE) != 0) {
+        if (!math_range_merge(&src->res_range,
+            &s1->res_range, &s2->res_range)) {
+            src->flags &= ~DEVCAPS_SOURCE_RES_RANGE;
+        }
+    }
+
+    if ((src->flags & DEVCAPS_SOURCE_RES_ALL) == 0) {
+        goto FAIL;
+    }
+
+    return src;
+
+FAIL:
+    devcaps_source_free(src);
+    return NULL;
+}
+
 /* Initialize Device Capabilities
  */
 void

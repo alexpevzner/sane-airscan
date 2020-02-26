@@ -701,12 +701,19 @@ sane_word_array_len (SANE_Word **a);
 /* Append word to array
  */
 void
-sane_word_array_append(SANE_Word **a, SANE_Word w);
+sane_word_array_append (SANE_Word **a, SANE_Word w);
 
 /* Sort array of SANE_Word in increasing order
  */
 void
-sane_word_array_sort(SANE_Word **a);
+sane_word_array_sort (SANE_Word **a);
+
+/* Intersect two sorted arrays. Result is appended
+ * to the 'out' argument (it must be initialized)
+ */
+void
+sane_word_array_intersect_sorted (SANE_Word **out,
+        SANE_Word *a1, SANE_Word *a2);
 
 /* Initialize array of SANE_String
  */
@@ -977,6 +984,15 @@ opt_colormode_from_sane (SANE_String_Const name);
 SANE_String_Const
 opt_colormode_to_sane (OPT_COLORMODE mode);
 
+/* Export set of colormodes (1 << OPT_COLORMODE) as sane
+ * array of strings
+ *
+ * The result is appended to 'out' array -- it needs to
+ * be initialized before call to this function
+ */
+void
+opt_colormodes_to_sane (SANE_String **out, unsigned int colormodes);
+
 /******************** Device Capabilities ********************/
 /* Source flags
  */
@@ -987,14 +1003,29 @@ enum {
     DEVCAPS_SOURCE_INTENT_PHOTO         = (1 << 5),
     DEVCAPS_SOURCE_INTENT_PREVIEW       = (1 << 6),
 
+    DEVCAPS_SOURCE_INTENT_ALL =
+        DEVCAPS_SOURCE_INTENT_DOCUMENT |
+        DEVCAPS_SOURCE_INTENT_TXT_AND_GRAPH |
+        DEVCAPS_SOURCE_INTENT_PHOTO |
+        DEVCAPS_SOURCE_INTENT_PREVIEW,
+
     /* How resolutions are defined */
     DEVCAPS_SOURCE_RES_DISCRETE = (1 << 7), /* Discrete resolutions */
     DEVCAPS_SOURCE_RES_RANGE    = (1 << 8), /* Range of resolutions */
+
+    DEVCAPS_SOURCE_RES_ALL =
+        DEVCAPS_SOURCE_RES_DISCRETE |
+        DEVCAPS_SOURCE_RES_RANGE,
 
     /* Supported document formats */
     DEVCAPS_SOURCE_FMT_JPEG = (1 << 9),  /* JPEG image */
     DEVCAPS_SOURCE_FMT_PNG  = (1 << 10), /* PNG image */
     DEVCAPS_SOURCE_FMT_PDF  = (1 << 11), /* PDF image */
+
+    DEVCAPS_SOURCE_FMT_ALL =
+        DEVCAPS_SOURCE_FMT_JPEG |
+        DEVCAPS_SOURCE_FMT_PNG |
+        DEVCAPS_SOURCE_FMT_PDF,
 
     /* Miscellaneous flags */
     DEVCAPS_SOURCE_HAS_SIZE = (1 << 12), /* max_width, max_height and
@@ -1028,6 +1059,14 @@ devcaps_source_new (void);
  */
 void
 devcaps_source_free (devcaps_source *src);
+
+/* Merge two sources, resulting the source that contains
+ * only capabilities, supported by two input sources
+ *
+ * Returns NULL, if sources cannot be merged
+ */
+devcaps_source*
+devcaps_source_merge (const devcaps_source *s1, const devcaps_source *s2);
 
 /* Device Capabilities
  */
