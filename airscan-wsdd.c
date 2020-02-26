@@ -671,6 +671,11 @@ wsdd_start_stop_callback (bool start)
 SANE_Status
 wsdd_init (void)
 {
+    if (!conf.discovery) {
+        log_debug(NULL, "WSDD: devices discovery disabled");
+        return SANE_STATUS_GOOD;
+    }
+
     /* Create IPv4/IPv6 multicast addresses */
     wsdd_mcast_ipv4.sin_family = AF_INET;
     inet_pton(AF_INET, "239.255.255.250", &wsdd_mcast_ipv4.sin_addr);
