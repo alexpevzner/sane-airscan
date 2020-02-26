@@ -432,6 +432,8 @@ escl_devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
     } else if (make_and_model != NULL) {
         caps->model = make_and_model;
         make_and_model = NULL;
+    } else {
+        caps->model = g_strdup("Unknown");
     }
 
     /* Update list of sources */
