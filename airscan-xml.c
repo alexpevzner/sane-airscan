@@ -113,6 +113,7 @@ xml_rd_begin (xml_rd **xml, const char *xml_text, size_t xml_len,
 {
     xmlDoc *doc = xmlParseMemory(xml_text, xml_len);
 
+    *xml = NULL;
     if (doc == NULL) {
         return ERROR("Failed to parse XML");
     }
