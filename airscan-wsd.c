@@ -81,6 +81,7 @@ wsd_devcaps_query (const proto_ctx *ctx)
     xml_wr_enter(xml, "scan:RequestedElements");
     xml_wr_add_text(xml, "scan:Name", "scan:ScannerDescription");
     xml_wr_add_text(xml, "scan:Name", "scan:ScannerConfiguration");
+    xml_wr_add_text(xml, "scan:Name", "scan:DefaultScanTicket");
     //xml_wr_add_text(xml, "scan:Name", "scan:ScannerStatus");
     xml_wr_leave(xml);
     xml_wr_leave(xml);
@@ -504,9 +505,8 @@ wsd_scan_query (const proto_ctx *ctx)
     xml_wr_enter(xml, "s:Header");
     xml_wr_add_text(xml, "a:MessageID", u.text);
     xml_wr_add_text(xml, "a:To", WSD_ADDR_ANONYMOUS);
-    //xml_wr_add_text(xml, "a:ReplyTo", WSD_ADDR_ANONYMOUS);
     xml_wr_add_text(xml, "a:Action", WSD_ACTION_CREATE_SCAN_JOB);
-    xml_wr_leave(xml);
+    xml_wr_leave(xml); // s:Header
 
     xml_wr_enter(xml, "s:Body");
     xml_wr_enter(xml, "scan:CreateScanJobRequest");
@@ -515,53 +515,47 @@ wsd_scan_query (const proto_ctx *ctx)
     xml_wr_enter(xml, "scan:JobDescription");
     xml_wr_add_text(xml, "scan:JobName", "sane-airscan request");
     xml_wr_add_text(xml, "scan:JobOriginatingUserName", "sane-airscan");
-    xml_wr_leave(xml);
+    xml_wr_leave(xml); // scan:JobDescription
 
     xml_wr_enter(xml, "scan:DocumentParameters");
     xml_wr_add_text(xml, "scan:Format", "jfif"); // FIXME
     xml_wr_add_text(xml, "scan:ImagesToTransfer", "0");
-    xml_wr_enter(xml, "scan:InputSize");
 
+    xml_wr_enter(xml, "scan:InputSize");
     xml_wr_enter(xml, "scan:InputMediaSize");
     xml_wr_add_uint(xml, "scan:Width", params->wid);
     xml_wr_add_uint(xml, "scan:Height", params->hei);
-    xml_wr_leave(xml);
+    xml_wr_leave(xml); // scan:InputMediaSize
+    xml_wr_leave(xml); // scan:InputSize
 
     xml_wr_add_text(xml, "scan:InputSource", source);
 
-    xml_wr_enter(xml, "MediaSides");
+    xml_wr_enter(xml, "scan:MediaSides");
     for (i = 0; sides[i] != NULL; i ++) {
         xml_wr_enter(xml, sides[i]);
 
-#if     0
-        xml_wr_enter(xml, "scan:ColorProcessing");
-        xml_wr_add_text(xml, "scan:ColorEntry", colormode);
-        xml_wr_leave(xml);
-#else
         xml_wr_add_text(xml, "scan:ColorProcessing", colormode);
-#endif
 
         xml_wr_enter(xml, "scan:Resolution");
         xml_wr_add_uint(xml, "scan:Width", params->x_res);
         xml_wr_add_uint(xml, "scan:Height", params->y_res);
-        xml_wr_leave(xml);
+        xml_wr_leave(xml); // scan:Resolution
 
         xml_wr_enter(xml, "scan:ScanRegion");
-        xml_wr_add_uint(xml, "scan:ScanRegionWidth", params->wid);
-        xml_wr_add_uint(xml, "scan:ScanRegionHeight", params->hei);
         xml_wr_add_uint(xml, "scan:ScanRegionXOffset", params->x_off);
         xml_wr_add_uint(xml, "scan:ScanRegionYOffset", params->y_off);
-        xml_wr_leave(xml);
+        xml_wr_add_uint(xml, "scan:ScanRegionWidth", params->wid);
+        xml_wr_add_uint(xml, "scan:ScanRegionHeight", params->hei);
+        xml_wr_leave(xml); // scan:ScanRegion
 
         xml_wr_leave(xml);
     }
-    xml_wr_leave(xml);
+    xml_wr_leave(xml); // scan:MediaSides
 
-    xml_wr_leave(xml);
-    xml_wr_leave(xml);
-    xml_wr_leave(xml);
-    xml_wr_leave(xml);
-    xml_wr_leave(xml);
+    xml_wr_leave(xml); // scan:DocumentParameters
+    xml_wr_leave(xml); // scan:ScanTicket
+    xml_wr_leave(xml); // scan:CreateScanJobRequest
+    xml_wr_leave(xml); // s:Body
 
 //log_debug(0, "%s", xml_wr_finish(xml)); exit(0);
 
