@@ -793,7 +793,7 @@ device_stm_load_page_callback (device *dev, http_query *q)
 static void
 device_stm_load_page (device *dev)
 {
-    device_state_set(dev, DEVICE_SCAN_REQUESTING);
+    device_state_set(dev, DEVICE_SCAN_LOADING);
     device_proto_load_submit(dev, device_stm_load_page_callback);
 }
 
