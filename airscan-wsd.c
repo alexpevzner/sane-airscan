@@ -9,11 +9,14 @@
 #include "airscan.h"
 
 /* Protocol constants */
-#define WSD_ADDR_ANONYMOUS   \
+#define WSD_ADDR_ANONYMOUS              \
         "http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous"
 
 #define WSD_ACTION_GET_SCANNER_ELEMENTS \
         "http://schemas.microsoft.com/windows/2006/08/wdp/scan/GetScannerElements"
+
+#define WSD_ACTION_CREATE_SCAN_JOB      \
+        "http://schemas.microsoft.com/windows/2006/08/wdp/scan/CreateScanJob"
 
 /* XML namespace translation for XML reader
  */
@@ -466,8 +469,103 @@ wsd_devcaps_decode (const proto_ctx *ctx, devcaps *caps)
 static http_query*
 wsd_scan_query (const proto_ctx *ctx)
 {
-    (void) ctx;
-    return NULL;
+    const proto_scan_params *params = &ctx->params;
+    xml_wr                  *xml = xml_wr_begin("s:Envelope", wsd_ns_wr);
+    uuid                    u = uuid_new();
+    const char              *source = NULL;
+    const char              *colormode = NULL;
+    static const char       *sides_simplex[] = {"MediaFront", NULL};
+    static const char       *sides_duplex[] = {"MediaFront", "MediaBack", NULL};
+    const char              **sides;
+    int                     i;
+
+    /* Prepare parameters */
+    switch (params->src) {
+    case OPT_SOURCE_PLATEN:      source = "Platen"; break;
+    case OPT_SOURCE_ADF_SIMPLEX: source = "ADF"; break;
+    case OPT_SOURCE_ADF_DUPLEX:  source = "ADFDuplex"; break;
+
+    default:
+        log_internal_error(ctx->dev);
+    }
+
+    sides = params->src == OPT_SOURCE_ADF_DUPLEX ? sides_duplex : sides_simplex;
+
+    switch (params->colormode) {
+    case OPT_COLORMODE_COLOR:     colormode = "RGB24"; break;
+    case OPT_COLORMODE_GRAYSCALE: colormode = "Grayscale8"; break;
+    case OPT_COLORMODE_BW1:       colormode = "BlackAndWhite1"; break;
+
+    default:
+        log_internal_error(ctx->dev);
+    }
+
+    /* Create scan request */
+    xml_wr_enter(xml, "s:Header");
+    xml_wr_add_text(xml, "a:MessageID", u.text);
+    xml_wr_add_text(xml, "a:To", WSD_ADDR_ANONYMOUS);
+    //xml_wr_add_text(xml, "a:ReplyTo", WSD_ADDR_ANONYMOUS);
+    xml_wr_add_text(xml, "a:Action", WSD_ACTION_CREATE_SCAN_JOB);
+    xml_wr_leave(xml);
+
+    xml_wr_enter(xml, "s:Body");
+    xml_wr_enter(xml, "scan:CreateScanJobRequest");
+    xml_wr_enter(xml, "scan:ScanTicket");
+
+    xml_wr_enter(xml, "scan:JobDescription");
+    xml_wr_add_text(xml, "scan:JobName", "sane-airscan request");
+    xml_wr_add_text(xml, "scan:JobOriginatingUserName", "sane-airscan");
+    xml_wr_leave(xml);
+
+    xml_wr_enter(xml, "scan:DocumentParameters");
+    xml_wr_add_text(xml, "scan:Format", "jfif"); // FIXME
+    xml_wr_add_text(xml, "scan:ImagesToTransfer", "0");
+    xml_wr_enter(xml, "scan:InputSize");
+
+    xml_wr_enter(xml, "scan:InputMediaSize");
+    xml_wr_add_uint(xml, "scan:Width", params->wid);
+    xml_wr_add_uint(xml, "scan:Height", params->hei);
+    xml_wr_leave(xml);
+
+    xml_wr_add_text(xml, "scan:InputSource", source);
+
+    xml_wr_enter(xml, "MediaSides");
+    for (i = 0; sides[i] != NULL; i ++) {
+        xml_wr_enter(xml, sides[i]);
+
+#if     0
+        xml_wr_enter(xml, "scan:ColorProcessing");
+        xml_wr_add_text(xml, "scan:ColorEntry", colormode);
+        xml_wr_leave(xml);
+#else
+        xml_wr_add_text(xml, "scan:ColorProcessing", colormode);
+#endif
+
+        xml_wr_enter(xml, "scan:Resolution");
+        xml_wr_add_uint(xml, "scan:Width", params->x_res);
+        xml_wr_add_uint(xml, "scan:Height", params->y_res);
+        xml_wr_leave(xml);
+
+        xml_wr_enter(xml, "scan:ScanRegion");
+        xml_wr_add_uint(xml, "scan:ScanRegionWidth", params->wid);
+        xml_wr_add_uint(xml, "scan:ScanRegionHeight", params->hei);
+        xml_wr_add_uint(xml, "scan:ScanRegionXOffset", params->x_off);
+        xml_wr_add_uint(xml, "scan:ScanRegionYOffset", params->y_off);
+        xml_wr_leave(xml);
+
+        xml_wr_leave(xml);
+    }
+    xml_wr_leave(xml);
+
+    xml_wr_leave(xml);
+    xml_wr_leave(xml);
+    xml_wr_leave(xml);
+    xml_wr_leave(xml);
+    xml_wr_leave(xml);
+
+//log_debug(0, "%s", xml_wr_finish(xml)); exit(0);
+
+    return wsd_http_post(ctx, xml_wr_finish(xml));
 }
 
 /* Decode result of scan request
@@ -475,7 +573,7 @@ wsd_scan_query (const proto_ctx *ctx)
 static proto_result
 wsd_scan_decode (const proto_ctx *ctx)
 {
-    proto_result result = {0};
+    proto_result result = {.code = PROTO_ERROR, .status = SANE_STATUS_ACCESS_DENIED};
 
     (void) ctx;
     return result;
