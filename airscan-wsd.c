@@ -21,6 +21,9 @@
 #define WSD_ACTION_RETRIEVE_IMAGE       \
         "http://schemas.microsoft.com/windows/2006/08/wdp/scan/RetrieveImage"
 
+#define WSD_ACTION_CANCEL_JOB           \
+        "http://schemas.microsoft.com/windows/2006/08/wdp/scan/CancelJob"
+
 /* XML namespace translation for XML reader
  */
 static const xml_ns wsd_ns_rd[] = {
@@ -706,8 +709,33 @@ wsd_status_decode (const proto_ctx *ctx)
 static http_query*
 wsd_cancel_query (const proto_ctx *ctx)
 {
-    (void) ctx;
-    return NULL;
+    xml_wr *xml = xml_wr_begin("s:Envelope", wsd_ns_wr);
+    uuid   u = uuid_new();
+    char   *job_id, *job_token;
+
+    /* Split location into JobId and JobToken */
+    job_id = g_alloca(strlen(ctx->location) + 1);
+    strcpy(job_id, ctx->location);
+    job_token = strchr(job_id, ':');
+    *job_token ++ = '\0';
+
+    /* Build CancelJob Request */
+    xml_wr_enter(xml, "s:Header");
+    xml_wr_add_text(xml, "a:MessageID", u.text);
+    xml_wr_add_text(xml, "a:To", WSD_ADDR_ANONYMOUS);
+    xml_wr_add_text(xml, "a:ReplyTo", WSD_ADDR_ANONYMOUS);
+    xml_wr_add_text(xml, "a:Action", WSD_ACTION_CANCEL_JOB);
+    xml_wr_leave(xml);
+
+    xml_wr_enter(xml, "s:Body");
+    xml_wr_enter(xml, "scan:CancelJobRequest");
+
+    xml_wr_add_text(xml, "scan:JobId", job_id);
+
+    xml_wr_leave(xml);
+    xml_wr_leave(xml);
+
+    return wsd_http_post(ctx, xml_wr_finish(xml));
 }
 
 /* proto_handler_wsd_new creates new eSCL protocol handler
