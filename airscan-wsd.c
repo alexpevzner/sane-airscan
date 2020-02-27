@@ -18,6 +18,9 @@
 #define WSD_ACTION_CREATE_SCAN_JOB      \
         "http://schemas.microsoft.com/windows/2006/08/wdp/scan/CreateScanJob"
 
+#define WSD_ACTION_RETRIEVE_IMAGE       \
+        "http://schemas.microsoft.com/windows/2006/08/wdp/scan/RetrieveImage"
+
 /* XML namespace translation for XML reader
  */
 static const xml_ns wsd_ns_rd[] = {
@@ -567,9 +570,64 @@ wsd_scan_query (const proto_ctx *ctx)
 static proto_result
 wsd_scan_decode (const proto_ctx *ctx)
 {
-    proto_result result = {.code = PROTO_ERROR, .status = SANE_STATUS_ACCESS_DENIED};
+    proto_result result = {0};
+    error        err = NULL;
+    xml_rd       *xml = NULL;
+    http_data    *data;
+    SANE_Word    job_id = -1;
+    char         *job_token = NULL;
 
-    (void) ctx;
+    /* Decode CreateScanJobResponse */
+    err = http_query_error(ctx->query);
+    if (err != NULL) {
+        goto DONE;
+    }
+
+    data = http_query_get_response_data(ctx->query);
+    err = xml_rd_begin(&xml, data->bytes, data->size, wsd_ns_rd);
+    if (err != NULL) {
+        goto DONE;
+    }
+
+    while (!xml_rd_end(xml)) {
+        const char *path = xml_rd_node_path(xml);
+        log_debug(NULL, "%s", path);
+
+        if (!strcmp(path, "s:Envelope/s:Body/scan:CreateScanJobResponse"
+                "/scan:JobId")) {
+            err = xml_rd_node_value_uint(xml, &job_id);
+        } else if (!strcmp(path, "s:Envelope/s:Body/scan:CreateScanJobResponse"
+                "/scan:JobToken")) {
+            g_free(job_token);
+            job_token = g_strdup(xml_rd_node_value(xml));
+        }
+
+        xml_rd_deep_next(xml, 0);
+    }
+
+    if (job_id == -1) {
+        err = ERROR("missed JobId");
+        goto DONE;
+    }
+
+    if (job_token == NULL) {
+        err = ERROR("missed JobToken");
+        goto DONE;
+    }
+
+    result.data.location = g_strdup_printf("%u:%s", job_id, job_token);
+
+    /* Cleanup and exit */
+DONE:
+    xml_rd_finish(&xml);
+    g_free(job_token);
+
+    if (err != NULL) {
+        result.code = PROTO_ERROR;
+        result.status = SANE_STATUS_IO_ERROR;
+        result.err = eloop_eprintf("CreateScanJobResponse: %s", ESTRING(err));
+    }
+
     return result;
 }
 
@@ -578,8 +636,38 @@ wsd_scan_decode (const proto_ctx *ctx)
 static http_query*
 wsd_load_query (const proto_ctx *ctx)
 {
-    (void) ctx;
-    return NULL;
+    xml_wr *xml = xml_wr_begin("s:Envelope", wsd_ns_wr);
+    uuid   u = uuid_new();
+    char   *job_id, *job_token;
+
+    /* Split location into JobId and JobToken */
+    job_id = g_alloca(strlen(ctx->location) + 1);
+    strcpy(job_id, ctx->location);
+    job_token = strchr(job_id, ':');
+    *job_token ++ = '\0';
+
+    /* Build RetrieveImageRequest */
+    xml_wr_enter(xml, "s:Header");
+    xml_wr_add_text(xml, "a:MessageID", u.text);
+    xml_wr_add_text(xml, "a:To", WSD_ADDR_ANONYMOUS);
+    xml_wr_add_text(xml, "a:ReplyTo", WSD_ADDR_ANONYMOUS);
+    xml_wr_add_text(xml, "a:Action", WSD_ACTION_RETRIEVE_IMAGE);
+    xml_wr_leave(xml);
+
+    xml_wr_enter(xml, "s:Body");
+    xml_wr_enter(xml, "scan:RetrieveImageRequest");
+
+    xml_wr_enter(xml, "scan:DocumentDescription");
+    xml_wr_add_text(xml, "scan:DocumentName", "IMAGE000.JPG");
+    xml_wr_leave(xml);
+
+    xml_wr_add_text(xml, "scan:JobId", job_id);
+    xml_wr_add_text(xml, "scan:JobToken", job_token);
+
+    xml_wr_leave(xml);
+    xml_wr_leave(xml);
+
+    return wsd_http_post(ctx, xml_wr_finish(xml));
 }
 
 /* Decode result of image request
@@ -587,7 +675,7 @@ wsd_load_query (const proto_ctx *ctx)
 static proto_result
 wsd_load_decode (const proto_ctx *ctx)
 {
-    proto_result result = {0};
+    proto_result result = {.code = PROTO_ERROR, .status = SANE_STATUS_ACCESS_DENIED};
 
     (void) ctx;
     return result;
