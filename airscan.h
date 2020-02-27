@@ -952,10 +952,19 @@ typedef enum {
     OPT_COLORMODE_UNKNOWN = -1, /* Unknown */
     OPT_COLORMODE_COLOR,        /* RGB-24 */
     OPT_COLORMODE_GRAYSCALE,    /* 8-bit gray scale */
-    OPT_COLORMODE_LINEART,      /* 1-bit black and white */
+    OPT_COLORMODE_BW1,          /* 1-bit black and white */
 
     NUM_OPT_COLORMODE
 } OPT_COLORMODE;
+
+/* Supported color modes
+ *
+ * Note, currently the only image format we support is JPEG
+ * With JPEG, OPT_COLORMODE_BW1 cannot be supported
+ */
+#define OPT_COLORMODES_SUPPORTED        \
+    ((1 << OPT_COLORMODE_COLOR) |       \
+     (1 << OPT_COLORMODE_GRAYSCALE))
 
 /* String constants for certain SANE options values
  * (missed from sane/sameopt.h)
@@ -1027,6 +1036,9 @@ enum {
         DEVCAPS_SOURCE_FMT_PNG |
         DEVCAPS_SOURCE_FMT_PDF,
 
+    DEVCAPS_SOURCE_FMT_SUPPORTED =
+        DEVCAPS_SOURCE_FMT_JPEG,
+
     /* Miscellaneous flags */
     DEVCAPS_SOURCE_HAS_SIZE = (1 << 12), /* max_width, max_height and
                                             derivatives are valid */
@@ -1041,7 +1053,6 @@ enum {
 typedef struct {
     unsigned int flags;                  /* Source flags */
     unsigned int colormodes;             /* Set of 1 << OPT_COLORMODE */
-    SANE_String  *sane_colormodes;       /* Color modes, in SANE format */
     SANE_Word    min_wid_px, max_wid_px; /* Min/max width, in pixels */
     SANE_Word    min_hei_px, max_hei_px; /* Min/max height, in pixels */
     SANE_Word    *resolutions;           /* Discrete resolutions, in DPI */
@@ -1121,6 +1132,7 @@ typedef struct {
     SANE_Fixed             tl_x, tl_y;        /* Top-left x/y */
     SANE_Fixed             br_x, br_y;        /* Bottom-right x/y */
     SANE_Parameters        params;            /* Scan parameters */
+    SANE_String            *sane_colormodes;  /* Color modes in SANE format */
 } devopt;
 
 /* Initialize device options

@@ -214,7 +214,7 @@ wsd_devcaps_parse_source (devcaps *caps, xml_rd *xml, OPT_SOURCE src_id)
                    !strcmp(path, "/scan:ADFColor/scan:ColorEntry")) {
             const char *v = xml_rd_node_value(xml);
             if (!strcmp(v, "BlackAndWhite1")) {
-                src->colormodes |= 1 << OPT_COLORMODE_LINEART;
+                src->colormodes |= 1 << OPT_COLORMODE_BW1;
             } else if (!strcmp(v, "Grayscale8")) {
                 src->colormodes |= 1 << OPT_COLORMODE_GRAYSCALE;
             } else if (!strcmp(v, "RGB24")) {
@@ -244,6 +244,7 @@ wsd_devcaps_parse_source (devcaps *caps, xml_rd *xml, OPT_SOURCE src_id)
     }
 
     /* Check things */
+    src->colormodes &= OPT_COLORMODES_SUPPORTED;
     if (err == NULL && src->colormodes == 0) {
         err = ERROR("no color modes defined");
     }
@@ -277,8 +278,6 @@ wsd_devcaps_parse_source (devcaps *caps, xml_rd *xml, OPT_SOURCE src_id)
     src->max_wid_px = max_wid;
     src->min_hei_px = min_hei;
     src->max_hei_px = max_hei;
-
-    opt_colormodes_to_sane(&src->sane_colormodes, src->colormodes);
 
     /* Save source */
     if (err == NULL) {

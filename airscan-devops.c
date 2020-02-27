@@ -20,6 +20,7 @@ devopt_init (devopt *opt)
     opt->src = OPT_SOURCE_UNKNOWN;
     opt->colormode = OPT_COLORMODE_UNKNOWN;
     opt->resolution = CONFIG_DEFAULT_RESOLUTION;
+    sane_string_array_init(&opt->sane_colormodes);
 }
 
 /* Cleanup device options
@@ -27,6 +28,7 @@ devopt_init (devopt *opt)
 void
 devopt_cleanup (devopt *opt)
 {
+    sane_string_array_cleanup(&opt->sane_colormodes);
     devcaps_cleanup(&opt->caps);
 }
 
@@ -113,6 +115,9 @@ devopt_rebuild_opt_desc (devopt *opt)
 
     memset(opt->desc, 0, sizeof(opt->desc));
 
+    sane_string_array_reset(&opt->sane_colormodes);
+    opt_colormodes_to_sane(&opt->sane_colormodes, src->colormodes);
+
     /* OPT_NUM_OPTIONS */
     desc = &opt->desc[OPT_NUM_OPTIONS];
     desc->name = SANE_NAME_NUM_OPTIONS;
@@ -153,10 +158,10 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->title = SANE_TITLE_SCAN_MODE;
     desc->desc = SANE_DESC_SCAN_MODE;
     desc->type = SANE_TYPE_STRING;
-    desc->size = sane_string_array_max_strlen(&src->sane_colormodes) + 1;
+    desc->size = sane_string_array_max_strlen(&opt->sane_colormodes) + 1;
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->constraint_type = SANE_CONSTRAINT_STRING_LIST;
-    desc->constraint.string_list = (SANE_String_Const*) src->sane_colormodes;
+    desc->constraint.string_list = (SANE_String_Const*) opt->sane_colormodes;
 
     /* OPT_SCAN_SOURCE */
     desc = &opt->desc[OPT_SCAN_SOURCE];
@@ -252,7 +257,7 @@ devopt_update_params (devopt *opt)
         opt->params.bytes_per_line = opt->params.pixels_per_line;
         break;
 
-    case OPT_COLORMODE_LINEART:
+    case OPT_COLORMODE_BW1:
         opt->params.format = SANE_FRAME_GRAY;
         opt->params.depth = 1;
         opt->params.bytes_per_line =

@@ -48,14 +48,13 @@ static error
 escl_devcaps_source_parse_color_modes (xml_rd *xml, devcaps_source *src)
 {
     src->colormodes = 0;
-    sane_string_array_reset(&src->sane_colormodes);
 
     xml_rd_enter(xml);
     for (; !xml_rd_end(xml); xml_rd_next(xml)) {
         if(xml_rd_node_name_match(xml, "scan:ColorMode")) {
             const char *v = xml_rd_node_value(xml);
             if (!strcmp(v, "BlackAndWhite1")) {
-                src->colormodes |= 1 << OPT_COLORMODE_LINEART;
+                src->colormodes |= 1 << OPT_COLORMODE_BW1;
             } else if (!strcmp(v, "Grayscale8")) {
                 src->colormodes |= 1 << OPT_COLORMODE_GRAYSCALE;
             } else if (!strcmp(v, "RGB24")) {
@@ -65,24 +64,9 @@ escl_devcaps_source_parse_color_modes (xml_rd *xml, devcaps_source *src)
     }
     xml_rd_leave(xml);
 
-    /* FIXME
-     *
-     * The only image format that we currently support is JPEG,
-     * and LINEART images are not representable in JPEG, so lets
-     * disable it for now (until PDF decoder will be implemented)
-     */
-    src->colormodes &= ~(1 << OPT_COLORMODE_LINEART);
-
+    src->colormodes &= OPT_COLORMODES_SUPPORTED;
     if (src->colormodes == 0) {
         return ERROR("no color modes detected");
-    }
-
-    OPT_COLORMODE cm;
-    for (cm = (OPT_COLORMODE) 0; cm < NUM_OPT_COLORMODE; cm ++) {
-        if ((src->colormodes & (1 << cm)) != 0) {
-            SANE_String s = (SANE_String) opt_colormode_to_sane(cm);
-            sane_string_array_append(&src->sane_colormodes, s);
-        }
     }
 
     return NULL;
@@ -512,7 +496,7 @@ escl_scan_query (const proto_ctx *ctx)
     switch (params->colormode) {
     case OPT_COLORMODE_COLOR:     colormode = "RGB24"; break;
     case OPT_COLORMODE_GRAYSCALE: colormode = "Grayscale8"; break;
-    case OPT_COLORMODE_LINEART:   colormode = "BlackAndWhite1"; break;
+    case OPT_COLORMODE_BW1:       colormode = "BlackAndWhite1"; break;
 
     default:
         log_internal_error(ctx->dev);

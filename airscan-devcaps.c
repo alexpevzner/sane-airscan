@@ -16,7 +16,6 @@ devcaps_source*
 devcaps_source_new (void)
 {
     devcaps_source *src = g_new0(devcaps_source, 1);
-    sane_string_array_init(&src->sane_colormodes);
     sane_word_array_init(&src->resolutions);
     return src;
 }
@@ -27,7 +26,6 @@ void
 devcaps_source_free (devcaps_source *src)
 {
     if (src != NULL) {
-        sane_string_array_cleanup(&src->sane_colormodes);
         sane_word_array_cleanup(&src->resolutions);
         g_free(src);
     }
@@ -43,14 +41,7 @@ devcaps_source_clone (const devcaps_source *src)
 
     *src2 = *src;
 
-    sane_string_array_init(&src2->sane_colormodes);
     sane_word_array_init(&src2->resolutions);
-
-    len = sane_string_array_len((SANE_String**) &src->sane_colormodes);
-    for (i = 0; i < len; i ++) {
-        sane_string_array_append(&src2->sane_colormodes,
-            src->sane_colormodes[i]);
-    }
 
     len = sane_word_array_len((SANE_Word**) &src->resolutions);
     for (i = 1; i <= len; i ++) {
@@ -81,8 +72,6 @@ devcaps_source_merge (const devcaps_source *s1, const devcaps_source *s2)
     if (src->colormodes == 0) {
         goto FAIL;
     }
-
-    opt_colormodes_to_sane(&src->sane_colormodes, src->colormodes);
 
     /* Merge dimensions */
     src->min_wid_px = math_max(s1->min_wid_px, s2->min_wid_px);
@@ -170,8 +159,11 @@ devcaps_reset (devcaps *caps)
 void
 devcaps_dump (trace *t, devcaps *caps)
 {
-    int     i;
-    GString *buf = g_string_new(NULL);
+    int          i;
+    GString      *buf = g_string_new(NULL);
+    SANE_String *list;
+
+    sane_string_array_init(&list);
 
     trace_printf(t, "===== device capabilities =====");
     trace_printf(t, "  Model:      \"%s\"", caps->model);
@@ -226,11 +218,14 @@ devcaps_dump (trace *t, devcaps *caps)
         }
 
         g_string_truncate(buf, 0);
-        for (i = 0; src->sane_colormodes[i] != NULL; i ++) {
+        sane_string_array_reset(&list);
+        opt_colormodes_to_sane(&list, src->colormodes);
+
+        for (i = 0; list[i] != NULL; i ++) {
             if (i != 0) {
                 g_string_append(buf, ", ");
             }
-            g_string_append_printf(buf, "%s", src->sane_colormodes[i]);
+            g_string_append_printf(buf, "%s", list[i]);
         }
 
         trace_printf(t, "    Color modes: %s", buf->str);
@@ -238,6 +233,8 @@ devcaps_dump (trace *t, devcaps *caps)
 
     g_string_free(buf, TRUE);
     trace_printf(t, "");
+
+    sane_string_array_cleanup(&list);
 }
 
 /* vim:ts=8:sw=4:et
