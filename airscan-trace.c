@@ -157,7 +157,7 @@ trace_message_headers_foreach_callback (const char *name, const char *value,
  * Returns name of file, where data was saved
  */
 static void
-trace_dump_data (trace *t, http_data *data, const char *content_type)
+trace_dump_data (trace *t, http_data *data)
 {
     tar_header hdr;
     guint32 chsum;
@@ -169,12 +169,14 @@ trace_dump_data (trace *t, http_data *data, const char *content_type)
 
     /* Guess file extension */
     ext = "";
-    if (!strncmp(content_type, "image/", 6)) {
-        ext = content_type + 6;
-    } else if (!strncmp(content_type, "application/", 12)) {
-        ext = content_type + 12;
-    } else if (!strncmp(content_type, "text/", 5)) {
-        ext = content_type + 5;
+    if (!strncmp(data->content_type, "image/", 6)) {
+        ext = data->content_type + 6;
+    } else if (!strncmp(data->content_type, "application/octet-stream", 24)) {
+        ext = "dat";
+    } else if (!strncmp(data->content_type, "application/", 12)) {
+        ext = data->content_type + 12;
+    } else if (!strncmp(data->content_type, "text/", 5)) {
+        ext = data->content_type + 5;
     }
 
     if (!*ext) {
@@ -182,7 +184,7 @@ trace_dump_data (trace *t, http_data *data, const char *content_type)
     }
 
     /* Make file name */
-    sprintf(hdr.name, "%8.8d.%s", t->index, ext);
+    sprintf(hdr.name, "%8.8d.%s", t->index ++, ext);
 
     /* Make tar header */
     strcpy(hdr.mode, "644");
@@ -221,12 +223,10 @@ trace_dump_data (trace *t, http_data *data, const char *content_type)
 /* Dump text data. The data will be saved directly to the log file
  */
 static void
-trace_dump_text (trace *t, http_data *data, const char *content_type)
+trace_dump_text (trace *t, http_data *data)
 {
     const char *d, *end = (char*) data->bytes + data->size;
     int last = -1;
-
-    (void) content_type;
 
     for (d = data->bytes; d < end; d ++) {
         if (*d != '\r') {
@@ -243,23 +243,19 @@ trace_dump_text (trace *t, http_data *data, const char *content_type)
 /* Dump message body
  */
 static void
-trace_dump_body (trace *t, http_data *data, const char *content_type)
+trace_dump_body (trace *t, http_data *data)
 {
     if (data->size == 0) {
         goto DONE;
     }
 
-    if (content_type == NULL) {
-        content_type = "";
-    }
-
-    if (g_str_has_prefix(content_type, "text/") ||
-        g_str_has_prefix(content_type, "application/xml") ||
-        g_str_has_prefix(content_type, "application/soap+xml"))
+    if (g_str_has_prefix(data->content_type, "text/") ||
+        g_str_has_prefix(data->content_type, "application/xml") ||
+        g_str_has_prefix(data->content_type, "application/soap+xml"))
     {
-        trace_dump_text(t, data, content_type);
+        trace_dump_text(t, data);
     } else {
-        trace_dump_data(t, data, content_type);
+        trace_dump_data(t, data);
     }
 
     putc('\n', t->log);
@@ -284,25 +280,33 @@ trace_http_query_hook (trace *t, http_query *q)
         http_query_foreach_request_header(q,
                 trace_message_headers_foreach_callback, t);
         fprintf(t->log, "\n");
-        trace_dump_body(t, http_query_get_request_data(q),
-                http_query_get_request_header(q, "Content-Type"));
+        trace_dump_body(t, http_query_get_request_data(q));
 
         /* Dump response */
         err = http_query_transport_error(q);
         if (err != NULL) {
             fprintf(t->log, "Error: %s\n", ESTRING(err));
         } else {
+            int mp_count;
+
             fprintf(t->log, "Status: %d %s\n", http_query_status(q),
                     http_query_status_string(q));
 
             http_query_foreach_response_header(q,
                 trace_message_headers_foreach_callback, t);
             fprintf(t->log, "\n");
-            trace_dump_body(t, http_query_get_response_data(q),
-                    http_query_get_response_header(q, "Content-Type"));
-        }
 
-        t->index ++;
+            mp_count = http_query_get_mp_response_count(q);
+            if (mp_count == 0) {
+                trace_dump_body(t, http_query_get_response_data(q));
+            } else {
+                int i;
+
+                for (i = 0; i < mp_count; i ++) {
+                    trace_dump_body(t, http_query_get_mp_response_data(q, i));
+                }
+            }
+        }
 
         fflush(t->log);
         fflush(t->data);
