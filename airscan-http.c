@@ -26,6 +26,9 @@ http_data_new_internal(const void *bytes, size_t size,
     SoupBuffer *buf, http_multipart *mp);
 
 static void
+http_data_set_content_type (http_data *data, const char *content_type);
+
+static void
 http_query_cancel (http_query *q);
 
 /******************** HTTP URI ********************/
@@ -192,12 +195,35 @@ http_multipart_find_boundary (const char *boundary, size_t boundary_len,
  *   2) fetch content type
  */
 static bool
-http_multipart_adjust_part (http_data *part) {
-    const char *split = memmem(part->bytes, part->size, "\r\n\r\n", 4);
+http_multipart_adjust_part (http_data *part)
+{
+    const char         *split;
+    SoupMessageHeaders *hdr;
+    size_t              hdr_len;
+    bool                hdr_ok;
+
+    /* Locate end of headers */
+    split = memmem(part->bytes, part->size, "\r\n\r\n", 4);
     if (split == NULL) {
         return false;
     }
 
+    /* Parse headers and obtain content-type */
+    hdr = soup_message_headers_new (SOUP_MESSAGE_HEADERS_MULTIPART);
+    hdr_len = 4 + split - (char*) part->bytes;
+    hdr_ok = soup_headers_parse(part->bytes, hdr_len - 2, hdr);
+
+    if (hdr_ok) {
+        const char *ct = soup_message_headers_get_content_type(hdr, NULL);
+        http_data_set_content_type(part, ct);
+    }
+
+    soup_message_headers_free(hdr);
+    if (!hdr_ok) {
+        return false;
+    }
+
+    /* Cut of header */
     split += 4;
     part->size -= (split - (char*) part->bytes);
     part->bytes = split;
@@ -290,13 +316,11 @@ http_multipart_new (SoupMessageHeaders *headers, http_data *data)
             if (data_prev != NULL) {
                 http_data *body = http_data_new_internal(data_prev,
                     part - data_prev, NULL, mp);
-                body->content_type = g_strdup("application/octet-stream");
                 http_multipart_add_body(mp, body);
 
                 if (!http_multipart_adjust_part(body)) {
                     goto ERROR;
                 }
-
             }
 
             data_prev = part;
@@ -359,7 +383,7 @@ http_data_new (const char *content_type, SoupMessageBody *body)
     SoupBuffer *buf = soup_message_body_flatten(body);
 
     data = http_data_new_internal(buf->data, buf->length, buf, NULL);
-    data->content_type = g_strdup(content_type ? content_type : "text/plain");
+    http_data_set_content_type(data, content_type);
 
     s = strchr(data->content_type, ';');
     if (s != NULL) {
@@ -367,6 +391,15 @@ http_data_new (const char *content_type, SoupMessageBody *body)
     }
 
     return data;
+}
+
+/* Set Content-type
+ */
+static void
+http_data_set_content_type (http_data *data, const char *content_type)
+{
+    g_free((char*) data->content_type);
+    data->content_type = g_strdup(content_type ? content_type : "text/plain");
 }
 
 /* Ref http_data
