@@ -459,8 +459,9 @@ http_uri_set_path (http_uri *uri, const char *path);
 /* HTTP data
  */
 typedef struct {
-    const void *bytes; /* Data bytes */
-    size_t     size;  /* Data size */
+    const char *content_type; /* Content type, with stripped directives */
+    const void *bytes;        /* Data bytes */
+    size_t     size;          /* Data size */
 } http_data;
 
 /* Ref http_data
@@ -579,14 +580,33 @@ const char*
 http_query_get_response_header (const http_query *q, const char *name);
 
 /* Get request data
+ *
+ * You need to http_data_ref(), if you want data to remain valid
+ * after query end of life
  */
 http_data*
 http_query_get_request_data (const http_query *q);
 
 /* Get request data
+ *
+ * You need to http_data_ref(), if you want data to remain valid
+ * after query end of life
  */
 http_data*
 http_query_get_response_data (const http_query *q);
+
+/* Get count of parts of multipart response
+ */
+int
+http_query_get_mp_response_count (const http_query *q);
+
+/* Get data of Nth part of multipart response
+ *
+ * You need to http_data_ref(), if you want data to remain valid
+ * after query end of life
+ */
+http_data*
+http_query_get_mp_response_data (const http_query *q, int n);
 
 /* Call callback for each request header
  */

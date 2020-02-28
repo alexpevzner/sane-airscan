@@ -16,6 +16,12 @@ static SoupSession *http_session;
 static http_query  *http_query_list;
 
 /******************** Forward declarations ********************/
+typedef struct http_multipart http_multipart;
+
+static http_data*
+http_data_new_from_buf (const char *content_type,
+        SoupBuffer *buf, http_multipart *mp);
+
 static void
 http_query_cancel (http_query *q);
 
@@ -135,28 +141,123 @@ http_uri_set_path (http_uri *uri, const char *path)
     uri->str = NULL;
 }
 
+/******************** HTTP multipart ********************/
+/* http_multipart represents a decoded multipart message
+ */
+struct http_multipart {
+    volatile gint refcnt;     /* Reference counter */
+    SoupMultipart *multipart; /* Underlying SoupMultipart */
+    int           count;      /* Count of bodies */
+    http_data     *bodies[1]; /* Multipart bodies, var-size */
+};
+
+/* Create http_multipart
+ */
+static http_multipart*
+http_multipart_new (SoupMessageHeaders *headers, SoupMessageBody *body)
+{
+    SoupMultipart        *multipart;
+    int                  i, count;
+    http_multipart       *mp;
+
+    multipart = soup_multipart_new_from_message(headers, body);
+
+    if (multipart == NULL) {
+        return NULL;
+    }
+
+    count = soup_multipart_get_length(multipart);
+    if (count == 0) {
+        soup_multipart_free(multipart);
+        return NULL;
+    }
+
+    mp = g_malloc0(offsetof(http_multipart, bodies[count]));
+
+    mp->refcnt = 0; /* Refered by bodies */
+    mp->multipart = multipart;
+    mp->count = count;
+
+    for (i = 0; i < count; i ++) {
+        SoupMessageHeaders  *hdr;
+        SoupBuffer          *buf;
+        const char          *ct;
+
+        ct = soup_message_headers_get_content_type(hdr, NULL);
+
+        soup_multipart_get_part(multipart, i, &hdr, &buf);
+        mp->bodies[i] = http_data_new_from_buf(ct, buf, mp);
+    }
+
+    return mp;
+}
+
+/* Ref http_multipart
+ */
+static http_multipart*
+http_multipart_ref (http_multipart *mp)
+{
+    g_atomic_int_inc(&mp->refcnt);
+    return mp;
+}
+
+/* Unref http_multipart
+ */
+static void
+http_multipart_unref (http_multipart *mp)
+{
+    if (g_atomic_int_dec_and_test(&mp->refcnt)) {
+        soup_multipart_free(mp->multipart);
+        g_free(mp);
+    }
+}
+
 /******************** HTTP data ********************/
 /* http_data + SoupBuffer
  */
 typedef struct {
-    http_data     data;   /* HTTP data */
-    volatile gint refcnt; /* Reference counter */
-    SoupBuffer    *buf;   /* Underlying SoupBuffer */
+    http_data      data;    /* HTTP data */
+    volatile gint  refcnt;  /* Reference counter */
+    SoupBuffer     *buf;    /* Underlying SoupBuffer */
+    http_multipart *mp;     /* Multipart that owns the SoupBuffer, if any */
 } http_data_ex;
+
+/* Create http_data from SoupBuffer
+ */
+static http_data*
+http_data_new_from_buf (const char *content_type,
+        SoupBuffer *buf, http_multipart *mp)
+{
+    http_data_ex *data_ex = g_new0(http_data_ex, 1);
+    char         *s;
+
+    if (content_type == NULL) {
+        content_type = "text/plain";
+    }
+
+    data_ex->refcnt = 1;
+    data_ex->buf = buf;
+    data_ex->mp = mp ? http_multipart_ref(mp) : NULL;
+
+    data_ex->data.content_type = g_strdup(content_type);
+    data_ex->data.bytes = data_ex->buf->data;
+    data_ex->data.size = data_ex->buf->length;
+
+    s = strchr(data_ex->data.content_type, ';');
+    if (s != NULL) {
+        *s = '\0';
+    }
+
+    return &data_ex->data;
+}
 
 /* Create http_data
  */
 static http_data*
-http_data_new (SoupMessageBody *body)
+http_data_new (const char *content_type, SoupMessageBody *body)
 {
-    http_data_ex *data_ex = g_new0(http_data_ex, 1);
-
-    data_ex->buf = soup_message_body_flatten(body);
-    data_ex->refcnt = 1;
-    data_ex->data.bytes = data_ex->buf->data;
-    data_ex->data.size = data_ex->buf->length;
-
-    return &data_ex->data;
+    return http_data_new_from_buf(content_type,
+        soup_message_body_flatten(body), NULL);
 }
 
 /* Ref http_data
@@ -177,7 +278,12 @@ http_data_unref (http_data *data)
     if (data != NULL) {
         http_data_ex *data_ex = OUTER_STRUCT(data, http_data_ex, data);
         if (g_atomic_int_dec_and_test(&data_ex->refcnt)) {
-            soup_buffer_free(data_ex->buf);
+            if (data_ex->mp != NULL) {
+                http_multipart_unref(data_ex->mp);
+            } else {
+                soup_buffer_free(data_ex->buf);
+            }
+
             g_free(data_ex);
         }
     }
@@ -240,8 +346,9 @@ http_client_cancel (http_client *client)
  * is mutable, even if http_query is not
  */
 typedef struct {
-    http_data   *request_data;     /* Request data */
-    http_data   *response_data;    /* Response data */
+    http_data      *request_data;        /* Request data */
+    http_data      *response_data;       /* Response data */
+    http_multipart *response_multipart;  /* Multipart response bodies */
 } http_query_cached;
 
 /* Type http_query represents HTTP query (both request and response)
@@ -293,8 +400,13 @@ http_query_free (http_query *q)
 {
     http_query_list_del(q);
     http_uri_free(q->uri);
+
     http_data_unref(q->cached->request_data);
     http_data_unref(q->cached->response_data);
+    if (q->cached->response_multipart != NULL) {
+        http_multipart_unref(q->cached->response_multipart);
+    }
+
     g_free(q->cached);
     g_free(q);
 }
@@ -530,7 +642,11 @@ http_data*
 http_query_get_request_data (const http_query *q)
 {
     if (q->cached->request_data == NULL) {
-        q->cached->request_data = http_data_new(q->msg->request_body);
+        const char         *ct;
+        SoupMessageHeaders *hdr = q->msg->request_headers;
+
+        ct = soup_message_headers_get_content_type(hdr, NULL);
+        q->cached->request_data = http_data_new(ct, q->msg->request_body);
     }
 
     return q->cached->request_data;
@@ -542,10 +658,51 @@ http_data*
 http_query_get_response_data (const http_query *q)
 {
     if (q->cached->response_data == NULL) {
-        q->cached->response_data = http_data_new(q->msg->response_body);
+        const char         *ct;
+        SoupMessageHeaders *hdr = q->msg->response_headers;
+
+        ct = soup_message_headers_get_content_type(hdr, NULL);
+        q->cached->response_data = http_data_new(ct, q->msg->response_body);
     }
 
     return q->cached->response_data;
+}
+
+/* Get multipart response bodies. For non-multipart response
+ * returns NULL
+ */
+static http_multipart*
+http_query_get_mp_response (const http_query *q)
+{
+    if (q->cached->response_multipart == NULL) {
+        q->cached->response_multipart = http_multipart_new(
+            q->msg->response_headers, q->msg->response_body);
+    }
+
+    return q->cached->response_multipart;
+}
+
+/* Get count of parts of multipart response
+ */
+int
+http_query_get_mp_response_count (const http_query *q)
+{
+    http_multipart *mp = http_query_get_mp_response(q);
+    return mp ? soup_multipart_get_length(mp->multipart) : 0;
+}
+
+/* Get data of Nth part of multipart response
+ */
+http_data*
+http_query_get_mp_response_data (const http_query *q, int n)
+{
+    http_multipart      *mp = http_query_get_mp_response(q);
+
+    if (mp == NULL || n < 0 || n >= mp->count) {
+        return NULL;
+    }
+
+    return mp->bodies[n];
 }
 
 /* Call callback for each request header
