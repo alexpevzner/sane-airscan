@@ -200,7 +200,6 @@ wsd_devcaps_parse_source (devcaps *caps, xml_rd *xml, OPT_SOURCE src_id)
 
     while (!xml_rd_end(xml)) {
         const char *path = xml_rd_node_path(xml) + prefixlen;
-        log_debug(NULL, "SRC: %s", path);
 
         if (!strcmp(path, "/scan:PlatenResolutions/scan:Widths/scan:Width") ||
             !strcmp(path, "/scan:ADFResolutions/scan:Widths/scan:Width")) {
@@ -421,7 +420,6 @@ wsd_devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
 
     while (!xml_rd_end(xml)) {
         const char *path = xml_rd_node_path(xml);
-        log_debug(NULL, "%s", path);
 
         if (!strcmp(path, "s:Envelope/s:Body"
                  "/scan:GetScannerElementsResponse/scan:ScannerElements/"
@@ -447,7 +445,6 @@ DONE:
 
     xml_rd_finish(&xml);
 
-    //err = ERROR("not implemented"); // FIXME
     return err;
 }
 
@@ -594,7 +591,6 @@ wsd_scan_decode (const proto_ctx *ctx)
 
     while (!xml_rd_end(xml)) {
         const char *path = xml_rd_node_path(xml);
-        log_debug(NULL, "%s", path);
 
         if (!strcmp(path, "s:Envelope/s:Body/scan:CreateScanJobResponse"
                 "/scan:JobId")) {
