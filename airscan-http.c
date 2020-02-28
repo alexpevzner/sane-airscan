@@ -5,11 +5,12 @@
  *
  * HTTP Client
  */
+#define _GNU_SOURCE
+#include <string.h>
 
 #include "airscan.h"
 
 #include <libsoup/soup.h>
-#include <string.h>
 
 /******************** Static variables ********************/
 static SoupSession *http_session;
@@ -18,9 +19,11 @@ static http_query  *http_query_list;
 /******************** Forward declarations ********************/
 typedef struct http_multipart http_multipart;
 
+/* http_data constructor, internal version
+ */
 static http_data*
-http_data_new_from_buf (const char *content_type,
-        SoupBuffer *buf, http_multipart *mp);
+http_data_new_internal(const void *bytes, size_t size,
+    SoupBuffer *buf, http_multipart *mp);
 
 static void
 http_query_cancel (http_query *q);
@@ -145,51 +148,63 @@ http_uri_set_path (http_uri *uri, const char *path)
 /* http_multipart represents a decoded multipart message
  */
 struct http_multipart {
-    volatile gint refcnt;     /* Reference counter */
-    SoupMultipart *multipart; /* Underlying SoupMultipart */
-    int           count;      /* Count of bodies */
-    http_data     *bodies[1]; /* Multipart bodies, var-size */
+    volatile gint refcnt;   /* Reference counter */
+    int           count;    /* Count of bodies */
+    http_data     *data;    /* Response data */
+    http_data     **bodies; /* Multipart bodies, var-size */
 };
 
-/* Create http_multipart
+/* Add multipart body
  */
-static http_multipart*
-http_multipart_new (SoupMessageHeaders *headers, SoupMessageBody *body)
-{
-    SoupMultipart        *multipart;
-    int                  i, count;
-    http_multipart       *mp;
-
-    multipart = soup_multipart_new_from_message(headers, body);
-
-    if (multipart == NULL) {
-        return NULL;
+static void
+http_multipart_add_body (http_multipart *mp, http_data *body) {
+    /* Expand bodies array, if size is zero or reached power of two */
+    if (!(mp->count & (mp->count - 1))) {
+        int cap = mp->count ? mp->count * 2 : 4;
+        mp->bodies = g_renew(http_data*, mp->bodies, cap);
     }
 
-    count = soup_multipart_get_length(multipart);
-    if (count == 0) {
-        soup_multipart_free(multipart);
-        return NULL;
+    /* Append new body */
+    mp->bodies[mp->count ++] = body;
+}
+
+/* Find boundary within the multipart message data
+ */
+static const char*
+http_multipart_find_boundary (const char *boundary, size_t boundary_len,
+        const char *data, size_t size) {
+    const char *found = memmem(data, size, boundary, boundary_len);
+
+    if (found != NULL) {
+        ptrdiff_t off = found - data;
+
+        /* Boundary must be either at beginning or preceded by CR/LF */
+        if (off == 0 || (off >= 2 && found[-2] == '\r' && found[-1] == '\n')) {
+            return found;
+        }
     }
 
-    mp = g_malloc0(offsetof(http_multipart, bodies[count]));
+    return NULL;
+}
 
-    mp->refcnt = 0; /* Refered by bodies */
-    mp->multipart = multipart;
-    mp->count = count;
-
-    for (i = 0; i < count; i ++) {
-        SoupMessageHeaders  *hdr;
-        SoupBuffer          *buf;
-        const char          *ct;
-
-        ct = soup_message_headers_get_content_type(hdr, NULL);
-
-        soup_multipart_get_part(multipart, i, &hdr, &buf);
-        mp->bodies[i] = http_data_new_from_buf(ct, buf, mp);
+/* Adjust part of multipart message:
+ *   1) skip header
+ *   2) fetch content type
+ */
+static bool
+http_multipart_adjust_part (http_data *part) {
+    const char *split = memmem(part->bytes, part->size, "\r\n\r\n", 4);
+    if (split == NULL) {
+        return false;
     }
 
-    return mp;
+    split += 4;
+    part->size -= (split - (char*) part->bytes);
+    part->bytes = split;
+
+    part->size -= 2; /* CR/LF preceding next boundary */
+
+    return true;
 }
 
 /* Ref http_multipart
@@ -207,9 +222,104 @@ static void
 http_multipart_unref (http_multipart *mp)
 {
     if (g_atomic_int_dec_and_test(&mp->refcnt)) {
-        soup_multipart_free(mp->multipart);
+        g_free(mp->bodies);
+        http_data_unref(mp->data);
         g_free(mp);
     }
+}
+
+/* Create http_multipart
+ */
+static http_multipart*
+http_multipart_new (SoupMessageHeaders *headers, http_data *data)
+{
+    http_multipart *mp;
+    GHashTable     *params;
+    const char     *boundary;
+    size_t         boundary_len;
+    const char     *data_beg, *data_end, *data_prev;
+    int            i;
+
+    /* Note, believe or not, but libsoup multipart parser is broken, so
+     * we have to parse by hand
+     */
+
+    /* Check MIME type */
+    if (strncmp(data->content_type, "multipart/", 10)) {
+        return NULL;
+    }
+
+    /* Obtain boundary */
+    if (!soup_message_headers_get_content_type(headers, &params)) {
+        return NULL;
+    }
+
+    boundary = g_hash_table_lookup (params, "boundary");
+    if (boundary) {
+        char *s;
+
+        boundary_len = strlen(boundary) + 2;
+        s = g_alloca(boundary_len + 1);
+
+        s[0] = '-';
+        s[1] = '-';
+        strcpy(s + 2, boundary);
+        boundary = s;
+    }
+    g_hash_table_destroy(params);
+
+    if (!boundary) {
+        return NULL;
+    }
+
+    /* Create http_multipart structure */
+    mp = g_new0(http_multipart, 1);
+    mp->data = http_data_ref(data);
+
+    /* Split data into parts */
+    data_beg = data->bytes;
+    data_end = data_beg + data->size;
+    data_prev = NULL;
+
+    while (data_beg != data_end) {
+        const char *part = http_multipart_find_boundary(boundary, boundary_len,
+            data_beg, data_end - data_beg);
+        const char *next = data_end;
+
+        if (part != NULL) {
+            if (data_prev != NULL) {
+                http_data *body = http_data_new_internal(data_prev,
+                    part - data_prev, NULL, mp);
+                body->content_type = g_strdup("application/octet-stream");
+                http_multipart_add_body(mp, body);
+
+                if (!http_multipart_adjust_part(body)) {
+                    goto ERROR;
+                }
+
+            }
+
+            data_prev = part;
+
+            const char *tail = part + boundary_len;
+            if (data_end - tail >= 2 && tail[0] == '\r' && tail[1] == '\n') {
+                next = tail + 2;
+            }
+        }
+
+        data_beg = next;
+    }
+
+    return mp;
+
+    /* Error: cleanup and exit */
+ERROR:
+    http_multipart_ref(mp);
+    for (i = 0; i < mp->count; i ++) {
+        http_data_unref(mp->bodies[i]);
+    }
+    http_multipart_unref(mp);
+    return NULL;
 }
 
 /******************** HTTP data ********************/
@@ -219,34 +329,22 @@ typedef struct {
     http_data      data;    /* HTTP data */
     volatile gint  refcnt;  /* Reference counter */
     SoupBuffer     *buf;    /* Underlying SoupBuffer */
-    http_multipart *mp;     /* Multipart that owns the SoupBuffer, if any */
+    http_multipart *mp;
 } http_data_ex;
 
-/* Create http_data from SoupBuffer
+/* http_data constructor, internal version
  */
 static http_data*
-http_data_new_from_buf (const char *content_type,
-        SoupBuffer *buf, http_multipart *mp)
+http_data_new_internal(const void *bytes, size_t size,
+    SoupBuffer *buf, http_multipart *mp)
 {
     http_data_ex *data_ex = g_new0(http_data_ex, 1);
-    char         *s;
 
-    if (content_type == NULL) {
-        content_type = "text/plain";
-    }
-
+    data_ex->data.bytes = bytes;
+    data_ex->data.size = size;
     data_ex->refcnt = 1;
     data_ex->buf = buf;
     data_ex->mp = mp ? http_multipart_ref(mp) : NULL;
-
-    data_ex->data.content_type = g_strdup(content_type);
-    data_ex->data.bytes = data_ex->buf->data;
-    data_ex->data.size = data_ex->buf->length;
-
-    s = strchr(data_ex->data.content_type, ';');
-    if (s != NULL) {
-        *s = '\0';
-    }
 
     return &data_ex->data;
 }
@@ -256,8 +354,19 @@ http_data_new_from_buf (const char *content_type,
 static http_data*
 http_data_new (const char *content_type, SoupMessageBody *body)
 {
-    return http_data_new_from_buf(content_type,
-        soup_message_body_flatten(body), NULL);
+    http_data  *data;
+    char       *s;
+    SoupBuffer *buf = soup_message_body_flatten(body);
+
+    data = http_data_new_internal(buf->data, buf->length, buf, NULL);
+    data->content_type = g_strdup(content_type ? content_type : "text/plain");
+
+    s = strchr(data->content_type, ';');
+    if (s != NULL) {
+        *s = '\0';
+    }
+
+    return data;
 }
 
 /* Ref http_data
@@ -280,10 +389,11 @@ http_data_unref (http_data *data)
         if (g_atomic_int_dec_and_test(&data_ex->refcnt)) {
             if (data_ex->mp != NULL) {
                 http_multipart_unref(data_ex->mp);
-            } else {
+            } else if (data_ex->buf != NULL) {
                 soup_buffer_free(data_ex->buf);
             }
 
+            g_free((char*) data_ex->data.content_type);
             g_free(data_ex);
         }
     }
@@ -676,7 +786,8 @@ http_query_get_mp_response (const http_query *q)
 {
     if (q->cached->response_multipart == NULL) {
         q->cached->response_multipart = http_multipart_new(
-            q->msg->response_headers, q->msg->response_body);
+            q->msg->response_headers,
+            http_query_get_response_data(q));
     }
 
     return q->cached->response_multipart;
@@ -688,7 +799,7 @@ int
 http_query_get_mp_response_count (const http_query *q)
 {
     http_multipart *mp = http_query_get_mp_response(q);
-    return mp ? soup_multipart_get_length(mp->multipart) : 0;
+    return mp ? mp->count : 0;
 }
 
 /* Get data of Nth part of multipart response
