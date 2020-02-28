@@ -251,7 +251,8 @@ trace_dump_body (trace *t, http_data *data)
 
     if (g_str_has_prefix(data->content_type, "text/") ||
         g_str_has_prefix(data->content_type, "application/xml") ||
-        g_str_has_prefix(data->content_type, "application/soap+xml"))
+        g_str_has_prefix(data->content_type, "application/soap+xml") ||
+        g_str_has_prefix(data->content_type, "application/xop+xml"))
     {
         trace_dump_text(t, data);
     } else {
@@ -303,7 +304,10 @@ trace_http_query_hook (trace *t, http_query *q)
                 int i;
 
                 for (i = 0; i < mp_count; i ++) {
-                    trace_dump_body(t, http_query_get_mp_response_data(q, i));
+                    http_data *part = http_query_get_mp_response_data(q, i);
+                    fprintf(t->log, "===== Part %d =====\n", i);
+                    fprintf(t->log, "Content-Type: %s\n", part->content_type);
+                    trace_dump_body(t, part);
                 }
             }
         }
