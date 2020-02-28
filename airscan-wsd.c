@@ -678,9 +678,29 @@ wsd_load_query (const proto_ctx *ctx)
 static proto_result
 wsd_load_decode (const proto_ctx *ctx)
 {
-    proto_result result = {.code = PROTO_ERROR, .status = SANE_STATUS_ACCESS_DENIED};
+    proto_result result;
+    http_data    *data;
+    error        err;
 
-    (void) ctx;
+    /* Check HTTP status */
+    err = http_query_error(ctx->query);
+    if (err != NULL) {
+        result.code = PROTO_ERROR;
+        result.err = err;
+        return result;
+    }
+
+    /* We expect multipart message with attached image */
+    data = http_query_get_mp_response_data(ctx->query, 1);
+    if (data == NULL) {
+        result.code = PROTO_ERROR;
+        result.err = ERROR("RetrieveImageRequest: invalid response");
+        return result;
+    }
+
+    result.code = PROTO_OK;
+    result.data.image = http_data_ref(data);
+
     return result;
 }
 
