@@ -1073,14 +1073,14 @@ device_list_get (void)
         dev_list[i] = info;
 
         info->name = g_strdup(devices[i]->name);
+        info->vendor = g_strdup(devices[i]->opt.caps.vendor);
         if (conf.model_is_netname) {
-            info->vendor = g_strdup("AirScan");
             info->model = g_strdup(devices[i]->name);
         } else {
-            info->vendor = g_strdup(devices[i]->opt.caps.vendor);
             info->model = g_strdup(devices[i]->opt.caps.model);
         }
-        info->type = "eSCL network scanner";
+        info->type = g_strdup_printf("%s network scanner",
+            devices[i]->proto_ctx.proto->name);
     }
 
     qsort(dev_list, count, sizeof(*dev_list), device_list_qsort_cmp);
@@ -1101,6 +1101,7 @@ device_list_free (const SANE_Device **dev_list)
             g_free((void*) info->name);
             g_free((void*) info->vendor);
             g_free((void*) info->model);
+            g_free((void*) info->type);
             g_free((void*) info);
         }
 
