@@ -373,7 +373,6 @@ struct xml_wr_node {
     xml_wr_node *children; /* Node children, if any */
     xml_wr_node *next;     /* Next sibling node, if any */
     xml_wr_node *parent;   /* Parent node, if any */
-
 };
 
 /* XML writer
@@ -435,7 +434,7 @@ xml_wr_begin (const char *root, const xml_ns *ns)
 /* Format indentation space
  */
 static void
-xml_wr_format_indent(GString *buf, unsigned int indent)
+xml_wr_format_indent (GString *buf, unsigned int indent)
 {
         unsigned int i;
 
@@ -443,6 +442,25 @@ xml_wr_format_indent(GString *buf, unsigned int indent)
             g_string_append_c(buf, ' ');
             g_string_append_c(buf, ' ');
         }
+}
+
+/* Format node's value
+ */
+static void
+xml_wr_format_value (GString *buf, const char *value)
+{
+    for (;;) {
+        char c = *value ++;
+        switch (c) {
+        case '&':  g_string_append(buf, "&amp;"); break;
+        case '<':  g_string_append(buf, "&lt;"); break;
+        case '>':  g_string_append(buf, "&gt;"); break;
+        case '"':  g_string_append(buf, "&quot;"); break;
+        case '\'': g_string_append(buf, "&apos;"); break;
+        case '\0': return;
+        default:   g_string_append_c(buf, c);
+        }
+    }
 }
 
 /* Format node with its children, recursively
@@ -478,8 +496,10 @@ xml_wr_format_node (xml_wr *xml, GString *buf,
                 g_string_append_c(buf, '\n');
             }
         } else {
-            g_string_append_printf(buf, "%s</%s>\n",
-                    node->value ? node->value : "", node->name);
+            if (node->value != NULL) {
+                xml_wr_format_value(buf, node->value);
+            }
+            g_string_append_printf(buf,"</%s>\n", node->name);
         }
 }
 
