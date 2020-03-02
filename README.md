@@ -1,3 +1,9 @@
+# WARNING WARNING WARNING WARNING
+
+This project is a fork of [sane-airscan](https://github.com/alexpevzner/sane-airscan-wsd/)
+made with intend to add WSD protocol support. It is not intended for common use. When this code
+will be stable enough, these two project will merge again.
+
 # sane-airscan -- Linux support of Apple AirScan (eSCL) compatible document scanners
 
 If you are a lucky owner of scanner or MFP which works via network with
