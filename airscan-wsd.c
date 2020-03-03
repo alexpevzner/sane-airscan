@@ -499,8 +499,8 @@ wsd_scan_query (const proto_ctx *ctx)
     uuid                    u = uuid_new();
     const char              *source = NULL;
     const char              *colormode = NULL;
-    static const char       *sides_simplex[] = {"MediaFront", NULL};
-    static const char       *sides_duplex[] = {"MediaFront", "MediaBack", NULL};
+    static const char       *sides_simplex[] = {"scan:MediaFront", NULL};
+    static const char       *sides_duplex[] = {"scan:MediaFront", "scan:MediaBack", NULL};
     const char              **sides;
     int                     i;
 
