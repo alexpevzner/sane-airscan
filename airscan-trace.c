@@ -223,10 +223,14 @@ trace_dump_data (trace *t, http_data *data)
 /* Dump text data. The data will be saved directly to the log file
  */
 static void
-trace_dump_text (trace *t, http_data *data)
+trace_dump_text (trace *t, http_data *data, bool xml)
 {
     const char *d, *end = (char*) data->bytes + data->size;
     int last = -1;
+
+    if (xml && xml_format(t->log, data->bytes, data->size)) {
+        return;
+    }
 
     for (d = data->bytes; d < end; d ++) {
         if (*d != '\r') {
@@ -254,7 +258,7 @@ trace_dump_body (trace *t, http_data *data)
         g_str_has_prefix(data->content_type, "application/soap+xml") ||
         g_str_has_prefix(data->content_type, "application/xop+xml"))
     {
-        trace_dump_text(t, data);
+        trace_dump_text(t, data, strstr(data->content_type, "xml") != NULL);
     } else {
         trace_dump_data(t, data);
     }

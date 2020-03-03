@@ -932,6 +932,12 @@ xml_wr_enter (xml_wr *xml, const char *name);
 void
 xml_wr_leave (xml_wr *xml);
 
+/* Format XML to file. It either succeeds, writes a formatted XML
+ * and returns true, or fails, writes nothing to file and returns false
+ */
+bool
+xml_format (FILE *fp, const char *xml_text, size_t xml_len);
+
 /******************** Sane Options********************/
 /* Options numbers, for internal use
  */

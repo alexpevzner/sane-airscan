@@ -594,5 +594,30 @@ xml_wr_leave (xml_wr *xml)
     xml->current = xml->current->parent;
 }
 
+/* Format XML to file. It either succeeds, writes a formatted XML
+ * and returns true, or fails, writes nothing to file and returns false
+ */
+bool
+xml_format (FILE *fp, const char *xml_text, size_t xml_len)
+{
+    xmlDoc  *doc = xmlParseMemory(xml_text, xml_len);
+    xmlChar *out_data;
+    int     out_size;
+
+    if (doc == NULL) {
+        return false;
+    }
+
+    xmlDocDumpFormatMemory(doc, &out_data, &out_size, 1);
+    if (out_size > 0) {
+        fwrite(out_data, out_size, 1, fp);
+    }
+
+    xmlFree(out_data);
+    xmlFreeDoc(doc);
+
+    return out_size > 0;
+}
+
 /* vim:ts=8:sw=4:et
  */
