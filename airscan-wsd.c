@@ -282,6 +282,27 @@ wsd_devcaps_parse_source (devcaps *caps, xml_rd *xml, OPT_SOURCE src_id)
         err = ERROR("minimum height > maximum height");
     }
 
+    /* Fix things
+     *
+     * Note. Some scanners (namely, Kyocera ECOSYS M2040dn)
+     * return width and height swapped. As a workaround,
+     * we flip if back, if width is greater that heigh
+     *
+     * FIXME: more reliable detection of need to flip
+     * width and height is required
+     */
+    if (max_wid > max_hei) {
+        SANE_Word tmp;
+
+        tmp = max_wid;
+        max_wid = max_hei;
+        max_hei = tmp;
+
+        tmp = min_wid;
+        min_wid = min_hei;
+        min_hei = tmp;
+    }
+
     /* Save min/max width and height */
     src->min_wid_px = min_wid;
     src->max_wid_px = max_wid;
