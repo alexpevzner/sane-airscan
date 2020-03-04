@@ -732,7 +732,7 @@ escl_status_decode (const proto_ctx *ctx)
     }
 
     /* Now it's time to make a decision */
-    if (ctx->failed_op == PROTO_FAILED_LOAD &&
+    if (ctx->failed_op == PROTO_OP_LOAD &&
         ctx->failed_http_status == HTTP_STATUS_SERVICE_UNAVAILABLE ) {
 
         /* Note, some devices may return HTTP_STATUS_SERVICE_UNAVAILABLE

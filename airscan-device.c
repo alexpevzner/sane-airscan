@@ -444,16 +444,81 @@ device_proto_devcaps_decode (device *dev, devcaps *caps)
     return dev->proto_ctx.proto->devcaps_decode(&dev->proto_ctx, caps);
 }
 
+/* Get operation name, for loging
+ */
+static const char*
+device_proto_op_name (device *dev, PROTO_OP op)
+{
+    switch (op) {
+    case PROTO_OP_NONE:    return "PROTO_OP_NONE";
+    case PROTO_OP_SCAN:    return "PROTO_OP_SCAN";
+    case PROTO_OP_LOAD:    return "PROTO_OP_LOAD";
+    case PROTO_OP_CHECK:   return "PROTO_OP_CHECK";
+    case PROTO_OP_CANCEL:  return "PROTO_OP_CANCEL";
+    case PROTO_OP_CLEANUP: return "PROTO_OP_CLEANUP";
+    case PROTO_OP_FINISH:  return "PROTO_OP_FINISH";
+    }
+
+    log_internal_error(dev);
+    return NULL;
+}
+
+/* Submit operation request
+ */
+static void
+device_proto_op_submit (device *dev, PROTO_OP op,
+    void (*callback) (device*, http_query*))
+{
+    http_query *(*func) (const proto_ctx *ctx) = NULL;
+    http_query *q;
+
+    switch (op) {
+    case PROTO_OP_NONE:    log_internal_error(dev); break;
+    case PROTO_OP_SCAN:    func = dev->proto_ctx.proto->scan_query; break;
+    case PROTO_OP_LOAD:    func = dev->proto_ctx.proto->load_query; break;
+    case PROTO_OP_CHECK:   func = dev->proto_ctx.proto->status_query; break;
+    case PROTO_OP_CANCEL:  func = dev->proto_ctx.proto->cancel_query; break;
+    case PROTO_OP_CLEANUP: func = dev->proto_ctx.proto->cancel_query; break;
+    case PROTO_OP_FINISH:  log_internal_error(dev); break;
+    }
+
+    log_assert(dev, func != NULL);
+
+    log_debug(dev, "submitting: %s", device_proto_op_name(dev, op));
+    q = func(&dev->proto_ctx);
+    http_query_submit(q, callback);
+    dev->proto_ctx.query = q;
+}
+
+/* Decode operation response
+ */
+static proto_result
+device_proto_op_decode (device *dev, PROTO_OP op)
+{
+    proto_result (*func) (const proto_ctx *ctx) = NULL;
+
+    switch (op) {
+    case PROTO_OP_NONE:    log_internal_error(dev); break;
+    case PROTO_OP_SCAN:    func = dev->proto_ctx.proto->scan_decode; break;
+    case PROTO_OP_LOAD:    func = dev->proto_ctx.proto->load_decode; break;
+    case PROTO_OP_CHECK:   func = dev->proto_ctx.proto->status_decode; break;
+    case PROTO_OP_CANCEL:  log_internal_error(dev); break;
+    case PROTO_OP_CLEANUP: log_internal_error(dev); break;
+    case PROTO_OP_FINISH:  log_internal_error(dev); break;
+    }
+
+    log_assert(dev, func != NULL);
+
+    log_debug(dev, "decoding: %s", device_proto_op_name(dev, op));
+    return func(&dev->proto_ctx);
+}
+
 /* Submit scan request
  */
 static void
 device_proto_scan_submit (device *dev, void (*callback) (device*, http_query*))
 {
-    http_query *q;
-
-    q = dev->proto_ctx.proto->scan_query(&dev->proto_ctx);
-    http_query_submit(q, callback);
-    dev->proto_ctx.query = q;
+    return device_proto_op_submit(dev, PROTO_OP_SCAN, callback);
 }
 
 /* Decode scan result
@@ -461,7 +526,7 @@ device_proto_scan_submit (device *dev, void (*callback) (device*, http_query*))
 static proto_result
 device_proto_scan_decode (device *dev)
 {
-    return dev->proto_ctx.proto->scan_decode(&dev->proto_ctx);
+    return device_proto_op_decode(dev, PROTO_OP_SCAN);
 }
 
 /* Submit load page request
@@ -469,11 +534,7 @@ device_proto_scan_decode (device *dev)
 static void
 device_proto_load_submit (device *dev, void (*callback) (device*, http_query*))
 {
-    http_query *q;
-
-    q = dev->proto_ctx.proto->load_query(&dev->proto_ctx);
-    http_query_submit(q, callback);
-    dev->proto_ctx.query = q;
+    return device_proto_op_submit(dev, PROTO_OP_LOAD, callback);
 }
 
 /* Decode load page result
@@ -481,7 +542,7 @@ device_proto_load_submit (device *dev, void (*callback) (device*, http_query*))
 static proto_result
 device_proto_load_decode (device *dev)
 {
-    return dev->proto_ctx.proto->load_decode(&dev->proto_ctx);
+    return device_proto_op_decode(dev, PROTO_OP_LOAD);
 }
 
 /* Submit device status request
@@ -490,11 +551,7 @@ static void
 device_proto_status_submit (device *dev,
         void (*callback) (device*, http_query*))
 {
-    http_query *q;
-
-    q = dev->proto_ctx.proto->status_query(&dev->proto_ctx);
-    http_query_submit(q, callback);
-    dev->proto_ctx.query = q;
+    return device_proto_op_submit(dev, PROTO_OP_CHECK, callback);
 }
 
 /* Decode device status result
@@ -502,7 +559,7 @@ device_proto_status_submit (device *dev,
 static proto_result
 device_proto_status_decode (device *dev)
 {
-    return dev->proto_ctx.proto->status_decode(&dev->proto_ctx);
+    return device_proto_op_decode(dev, PROTO_OP_CHECK);
 }
 
 /* Submit cancel request
@@ -511,11 +568,7 @@ static void
 device_proto_cancel_submit (device *dev,
         void (*callback) (device*, http_query*))
 {
-    http_query *q;
-
-    q = dev->proto_ctx.proto->cancel_query(&dev->proto_ctx);
-    http_query_submit(q, callback);
-    dev->proto_ctx.query = q;
+    return device_proto_op_submit(dev, PROTO_OP_CANCEL, callback);
 }
 
 /******************** HTTP operations ********************/
@@ -703,7 +756,7 @@ device_stm_check_status_callback (device *dev, http_query *q)
  * clarify reasons)
  */
 static void
-device_stm_check_status (device *dev, PROTO_FAILED_OP op, int http_status)
+device_stm_check_status (device *dev, PROTO_OP op, int http_status)
 {
     dev->proto_ctx.failed_op = op;
     dev->proto_ctx.failed_http_status = http_status;
@@ -723,11 +776,11 @@ device_stm_load_retry_callback (void *data) {
     dev->http_timer = NULL;
 
     switch (dev->proto_ctx.failed_op) {
-    case PROTO_FAILED_SCAN:
+    case PROTO_OP_SCAN:
         device_stm_start_scan(dev);
         break;
 
-    case PROTO_FAILED_LOAD:
+    case PROTO_OP_LOAD:
         device_stm_load_page(dev);
         break;
 
@@ -782,8 +835,7 @@ device_stm_load_page_callback (device *dev, http_query *q)
         break;
 
     case PROTO_CHECK_STATUS:
-        device_stm_check_status(dev,
-            PROTO_FAILED_LOAD, http_query_status(q));
+        device_stm_check_status(dev, PROTO_OP_LOAD, http_query_status(q));
         break;
     }
 }
@@ -822,8 +874,7 @@ device_stm_start_scan_callback (device *dev, http_query *q)
         break;
 
     case PROTO_CHECK_STATUS:
-        device_stm_check_status(dev,
-            PROTO_FAILED_SCAN, http_query_status(q));
+        device_stm_check_status(dev, PROTO_OP_SCAN, http_query_status(q));
         break;
     }
 }

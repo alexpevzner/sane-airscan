@@ -1369,6 +1369,18 @@ void
 device_management_cleanup (void);
 
 /******************** Scan Protocol handling ********************/
+/* PROTO_OP represents operation
+ */
+typedef enum {
+    PROTO_OP_NONE,    /* No operation */
+    PROTO_OP_SCAN,    /* New scan */
+    PROTO_OP_LOAD,    /* Load image */
+    PROTO_OP_CHECK,   /* Check device status */
+    PROTO_OP_CANCEL,  /* Cancel current job */
+    PROTO_OP_CLEANUP, /* Cleanup after scan */
+    PROTO_OP_FINISH   /* Finish scanning */
+} PROTO_OP;
+
 /* proto_scan_params represents scan parameters
  */
 typedef struct {
@@ -1378,14 +1390,6 @@ typedef struct {
     OPT_SOURCE    src;          /* Desired source */
     OPT_COLORMODE colormode;    /* Desired color mode */
 } proto_scan_params;
-
-/* PROTO_FAILED_OP represents failed operation
- * for status_decode callback
- */
-typedef enum {
-    PROTO_FAILED_SCAN,
-    PROTO_FAILED_LOAD
-} PROTO_FAILED_OP;
 
 /* proto_ctx represents request context
  */
@@ -1403,7 +1407,7 @@ typedef struct {
     const http_query     *query;    /* Passed to xxx_decode callbacks */
 
     /* Extra context for status_decode callback */
-    PROTO_FAILED_OP      failed_op;          /* Failed operation */
+    PROTO_OP             failed_op;          /* Failed operation */
     int                  failed_http_status; /* Its HTTP status */
     int                  failed_attempt;     /* Retry count, 0-based */
 } proto_ctx;
