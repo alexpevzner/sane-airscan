@@ -799,6 +799,16 @@ typedef struct {
     const char *uri;    /* The namespace uri (glob pattern for reader) */
 } xml_ns;
 
+/* xml_attr represents an XML attribute.
+ *
+ * Attributes are supported by XML writer. Array of attributes
+ * is terminated by the {NULL, NULL} attribute
+ */
+typedef struct {
+    const char *name;   /* Attribute name */
+    const char *value;  /* Attribute value */
+} xml_attr;
+
 /* XML reader
  */
 typedef struct xml_rd xml_rd;
@@ -912,20 +922,43 @@ xml_wr_finish (xml_wr *xml);
 void
 xml_wr_add_text (xml_wr *xml, const char *name, const char *value);
 
+/* Add text node with attributes
+ */
+void
+xml_wr_add_text_attr (xml_wr *xml, const char *name, const char *value,
+        const xml_attr *attrs);
+
 /* Add node with unsigned integer value
  */
 void
 xml_wr_add_uint (xml_wr *xml, const char *name, unsigned int value);
+
+/* Add node with unsigned integer value and attributes
+ */
+void
+xml_wr_add_uint_attr (xml_wr *xml, const char *name, unsigned int value,
+        const xml_attr *attrs);
 
 /* Add node with boolean value
  */
 void
 xml_wr_add_bool (xml_wr *xml, const char *name, bool value);
 
+/* Add node with boolean value and attributes
+ */
+void
+xml_wr_add_bool_attr (xml_wr *xml, const char *name, bool value,
+        const xml_attr *attrs);
+
 /* Create node with children and enter newly added node
  */
 void
 xml_wr_enter (xml_wr *xml, const char *name);
+
+/* xml_wr_enter with attributes
+ */
+void
+xml_wr_enter_attr (xml_wr *xml, const char *name, const xml_attr *attrs);
 
 /* Leave the current node
  */

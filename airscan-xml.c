@@ -368,11 +368,12 @@ xml_rd_node_value_uint (xml_rd *xml, SANE_Word *val)
  */
 typedef struct xml_wr_node xml_wr_node;
 struct xml_wr_node {
-    const char *name;      /* Node name */
-    const char *value;     /* Node value, if any */
-    xml_wr_node *children; /* Node children, if any */
-    xml_wr_node *next;     /* Next sibling node, if any */
-    xml_wr_node *parent;   /* Parent node, if any */
+    const char     *name;     /* Node name */
+    const char     *value;    /* Node value, if any */
+    const xml_attr *attrs;    /* Attributes, if any */
+    xml_wr_node    *children; /* Node children, if any */
+    xml_wr_node    *next;     /* Next sibling node, if any */
+    xml_wr_node    *parent;   /* Parent node, if any */
 };
 
 /* XML writer
@@ -386,10 +387,11 @@ struct xml_wr {
 /* Create XML writer node
  */
 static xml_wr_node*
-xml_wr_node_new (const char *name, const char *value)
+xml_wr_node_new (const char *name, const char *value, const xml_attr *attrs)
 {
     xml_wr_node *node = g_new0(xml_wr_node, 1);
     node->name = g_strdup(name);
+    node->attrs = attrs;
     if (value != NULL) {
         node->value = g_strdup(value);
     }
@@ -425,7 +427,7 @@ xml_wr*
 xml_wr_begin (const char *root, const xml_ns *ns)
 {
     xml_wr *xml = g_new0(xml_wr, 1);
-    xml->root = xml_wr_node_new(root, NULL);
+    xml->root = xml_wr_node_new(root, NULL, NULL);
     xml->current = xml->root;
     xml->ns = ns;
     return xml;
@@ -478,6 +480,13 @@ xml_wr_format_node (xml_wr *xml, GString *buf,
             for (i = 0; xml->ns[i].uri != NULL; i ++) {
                 g_string_append_printf(buf, " xmlns:%s=\"%s\"",
                     xml->ns[i].prefix, xml->ns[i].uri);
+            }
+        }
+        if (node->attrs != NULL) {
+            int i;
+            for (i = 0; node->attrs[i].name != NULL; i ++) {
+                g_string_append_printf(buf, " %s=\"%s\"",
+                    node->attrs[i].name, node->attrs[i].value);
             }
         }
         g_string_append_c(buf, '>');
@@ -554,7 +563,16 @@ xml_wr_add_node (xml_wr *xml, xml_wr_node *node)
 void
 xml_wr_add_text (xml_wr *xml, const char *name, const char *value)
 {
-    xml_wr_add_node(xml, xml_wr_node_new(name, value));
+    xml_wr_add_text_attr(xml, name, value, NULL);
+}
+
+/* Add text node with attributes
+ */
+void
+xml_wr_add_text_attr (xml_wr *xml, const char *name, const char *value,
+        const xml_attr *attrs)
+{
+    xml_wr_add_node(xml, xml_wr_node_new(name, value, attrs));
 }
 
 /* Add node with unsigned integer value
@@ -562,9 +580,18 @@ xml_wr_add_text (xml_wr *xml, const char *name, const char *value)
 void
 xml_wr_add_uint (xml_wr *xml, const char *name, unsigned int value)
 {
+    xml_wr_add_uint_attr(xml, name, value, NULL);
+}
+
+/* Add node with unsigned integer value and attributes
+ */
+void
+xml_wr_add_uint_attr (xml_wr *xml, const char *name, unsigned int value,
+        const xml_attr *attrs)
+{
     char buf[64];
     sprintf(buf, "%u", value);
-    xml_wr_add_text(xml, name, buf);
+    xml_wr_add_text_attr(xml, name, buf, attrs);
 }
 
 /* Add node with boolean value
@@ -572,7 +599,16 @@ xml_wr_add_uint (xml_wr *xml, const char *name, unsigned int value)
 void
 xml_wr_add_bool (xml_wr *xml, const char *name, bool value)
 {
-    xml_wr_add_text(xml, name, value ? "true" : "false");
+    xml_wr_add_bool_attr(xml, name, value, NULL);
+}
+
+/* Add node with boolean value and attributes
+ */
+void
+xml_wr_add_bool_attr (xml_wr *xml, const char *name, bool value,
+        const xml_attr *attrs)
+{
+    xml_wr_add_text_attr(xml, name, value ? "true" : "false", attrs);
 }
 
 /* Create node with children and enter newly added node
@@ -580,7 +616,15 @@ xml_wr_add_bool (xml_wr *xml, const char *name, bool value)
 void
 xml_wr_enter (xml_wr *xml, const char *name)
 {
-    xml_wr_node *node = xml_wr_node_new(name, NULL);
+    xml_wr_enter_attr(xml, name, NULL);
+}
+
+/* xml_wr_enter with attributes
+ */
+void
+xml_wr_enter_attr (xml_wr *xml, const char *name, const xml_attr *attrs)
+{
+    xml_wr_node *node = xml_wr_node_new(name, NULL, attrs);
     xml_wr_add_node(xml, node);
     xml->current = node;
 }
