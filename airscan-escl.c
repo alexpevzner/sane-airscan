@@ -8,6 +8,17 @@
 
 #include "airscan.h"
 
+/******************** Protocol constants ********************/
+/* If HTTP 503 reply is received, how many retry attempts
+ * to perform before giving up
+ */
+#define ESCL_LOAD_RETRY_ATTEMPTS        10
+
+/* And pause between retries, in milliseconds
+ */
+#define ESCL_LOAD_RETRY_PAUSE           1000
+
+
 /* proto_handler_escl represents eSCL protocol handler
  */
 typedef struct {
@@ -549,7 +560,7 @@ escl_scan_decode (const proto_ctx *ctx)
     if (http_query_status(ctx->query) != HTTP_STATUS_CREATED) {
         err = eloop_eprintf("ScanJobs request: unexpected HTTP status %d",
                 http_query_status(ctx->query));
-        result.code = PROTO_CHECK_STATUS;
+        result.next = PROTO_OP_CHECK;
         result.err = err;
         return result;
     }
@@ -571,10 +582,12 @@ escl_scan_decode (const proto_ctx *ctx)
     result.data.location = g_strdup(http_uri_get_path(uri));
     http_uri_free(uri);
 
+    result.next = PROTO_OP_LOAD;
+
     return result;
 
 ERROR:
-    result.code = PROTO_ERROR;
+    result.next = PROTO_OP_FINISH;
     result.status = SANE_STATUS_IO_ERROR;
     result.err = err;
     return result;
@@ -608,12 +621,12 @@ escl_load_decode (const proto_ctx *ctx)
     /* Check HTTP status */
     err = http_query_error(ctx->query);
     if (err != NULL) {
-        result.code = PROTO_CHECK_STATUS;
+        result.next = PROTO_OP_CHECK;
         result.err = err;
         return result;
     }
 
-    result.code = PROTO_OK;
+    result.next = PROTO_OP_LOAD;
     result.data.image = http_data_ref(http_query_get_response_data(ctx->query));
     return result;
 }
@@ -722,10 +735,8 @@ escl_status_decode (const proto_ctx *ctx)
     /* Decode status */
     err = http_query_error(ctx->query);
     if (err != NULL) {
-        result.code = PROTO_ERROR;
-        result.status = SANE_STATUS_IO_ERROR;
-        result.err = err;
-        return result;
+        status = SANE_STATUS_IO_ERROR;
+        goto FAIL;
     } else {
         http_data *data = http_query_get_response_data(ctx->query);
         status = escl_decode_scanner_status(ctx, data->bytes, data->size);
@@ -733,7 +744,8 @@ escl_status_decode (const proto_ctx *ctx)
 
     /* Now it's time to make a decision */
     if (ctx->failed_op == PROTO_OP_LOAD &&
-        ctx->failed_http_status == HTTP_STATUS_SERVICE_UNAVAILABLE ) {
+        ctx->failed_http_status == HTTP_STATUS_SERVICE_UNAVAILABLE &&
+        ctx->failed_attempt < ESCL_LOAD_RETRY_ATTEMPTS) {
 
         /* Note, some devices may return HTTP_STATUS_SERVICE_UNAVAILABLE
          * on attempt to load page immediately after job is created
@@ -745,7 +757,8 @@ escl_status_decode (const proto_ctx *ctx)
         case SANE_STATUS_GOOD:
         case SANE_STATUS_UNSUPPORTED:
         case SANE_STATUS_DEVICE_BUSY:
-                result.code = PROTO_OK; /* Will cause a retry */
+                result.next = PROTO_OP_LOAD;
+                result.delay = ESCL_LOAD_RETRY_PAUSE;
                 return result;
 
         default:
@@ -758,8 +771,11 @@ escl_status_decode (const proto_ctx *ctx)
     }
 
     /* Fill the result */
-    result.code = PROTO_ERROR;
+FAIL:
+    result.next = ctx->location ? PROTO_OP_CLEANUP : PROTO_OP_FINISH;
     result.status = status;
+    result.err = err;
+
     return result;
 }
 

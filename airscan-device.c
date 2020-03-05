@@ -34,28 +34,40 @@ enum {
     DEVICE_HALTED           = (1 << 2), /* Device is halted */
     DEVICE_INIT_WAIT        = (1 << 3), /* Device was found during initial
                                            scan and not ready yet */
-    DEVICE_OPENED           = (1 << 4), /* Device currently opened */
     DEVICE_SCANNING         = (1 << 5), /* We are between sane_start() and
                                            final sane_read() */
-    DEVICE_CLOSING          = (1 << 6), /* Close in progress */
 
     DEVICE_ALL_FLAGS        = 0xffffffff
 };
 
-/* Device states
+/* Device state diagram
+ *
+ *  ----->CLOSED
+ *  |       |
+ *  |       V
+ *  |  -->IDLE
+ *  |  |    |
+ *  |  |    V
+ *  |  |  SCANNING -> CANCEL_REQ -> CANCEL_WAIT ---
+ *  |  |    |                           |         |
+ *  |  |    V                           V         |
+ *  |  |  CLEANUP                   CANCELLING    |
+ *  |  |    |                           |         |
+ *  |  |    V                           |         |
+ *  |  ---DONE<------------------------------------
+ *  |       |
+ *  --------
  */
 typedef enum {
-    DEVICE_SCAN_IDLE,
-    DEVICE_SCAN_STARTED,
-    DEVICE_SCAN_REQUESTING,
-    DEVICE_SCAN_LOADING,
-    DEVICE_SCAN_LOAD_RETRY,
-    DEVICE_SCAN_CHECK_STATUS,
-    DEVICE_SCAN_CLEANING_UP,
-
-    DEVICE_SCAN_DONE
-
-} DEVICE_STATE;
+    DEVICE_STM_CLOSED,
+    DEVICE_STM_IDLE,
+    DEVICE_STM_SCANNING,
+    DEVICE_STM_CANCEL_REQ,
+    DEVICE_STM_CANCEL_WAIT,
+    DEVICE_STM_CANCELLING,
+    DEVICE_STM_CLEANUP,
+    DEVICE_STM_DONE
+} DEVICE_STM_STATE;
 
 /* Device descriptor
  */
@@ -65,13 +77,17 @@ struct device {
     const char           *name;                /* Device name */
     unsigned int         flags;                /* Device flags */
     devopt               opt;                  /* Device options */
-    DEVICE_STATE         state;                /* Device state */
-    DEVICE_STATE         checking_state;       /* State before CHECK_STATUS */
     int                  checking_http_status; /* HTTP status before CHECK_STATUS */
-    GCond                state_cond;           /* Signaled when state changes */
+
+    /* State machinery */
+    DEVICE_STM_STATE     stm_state;         /* Device state */
+    GCond                stm_cond;          /* Signalled when state changes */
+    eloop_event          *stm_cancel_event; /* Signalled to initiate cancel */
+    eloop_timer          *stm_timer;        /* Delay timer */
 
     /* Protocol handling */
-    proto_ctx            proto_ctx;     /* Protocol handler context */
+    proto_ctx            proto_ctx;        /* Protocol handler context */
+    PROTO_OP             proto_op_current; /* Current operation */
 
     /* I/O handling (AVAHI and HTTP) */
     zeroconf_endpoint    *endpoints;        /* Device endpoints */
@@ -81,8 +97,6 @@ struct device {
 
     /* Scanning state machinery */
     SANE_Status          job_status;          /* Job completion status */
-    eloop_event          *job_cancel_event;   /* Cancel event */
-    bool                 job_cancel_rq;       /* Cancel requested */
     GPtrArray            *job_images;         /* Array of SoupBuffer* */
     unsigned int         job_images_received; /* How many images received */
     SANE_Word            job_skip_x;          /* How much pixels to skip, */
@@ -132,20 +146,17 @@ device_probe_endpoint (device *dev, zeroconf_endpoint *endpoint);
 static void
 device_job_set_status (device *dev, SANE_Status status);
 
-static void
-device_job_abort (device *dev, SANE_Status status);
+static inline DEVICE_STM_STATE
+device_stm_state_get (device *dev);
 
 static void
-device_stm_cleanup (device *dev);
+device_stm_state_set (device *dev, DEVICE_STM_STATE state);
+
+static bool
+device_stm_cancel_perform (device *dev);
 
 static void
-device_stm_load_retry (device *dev);
-
-static void
-device_stm_load_page (device *dev);
-
-static void
-device_stm_start_scan (device *dev);
+device_stm_op_callback (device *dev, http_query *q);
 
 static void
 device_read_queue_purge (device *dev);
@@ -193,7 +204,7 @@ device_add (const char *name, zeroconf_endpoint *endpoints,
     dev->proto_ctx.http = http_client_new(dev);
     dev->trace = trace_open(name);
 
-    g_cond_init(&dev->state_cond);
+    g_cond_init(&dev->stm_cond);
     dev->job_images = g_ptr_array_new();
 
     dev->read_decoder_jpeg = image_decoder_jpeg_new();
@@ -230,7 +241,7 @@ device_unref (device *dev)
 
         log_assert(dev, (dev->flags & DEVICE_LISTED) == 0);
         log_assert(dev, (dev->flags & DEVICE_HALTED) != 0);
-        log_assert(dev, (dev->flags & DEVICE_OPENED) == 0);
+        log_assert(dev, device_stm_state_get(dev) == DEVICE_STM_CLOSED);
 
         /* Release all memory */
         device_proto_set(dev, CONF_PROTO_UNKNOWN);
@@ -243,7 +254,7 @@ device_unref (device *dev)
         http_client_free(dev->proto_ctx.http);
         g_free((char*) dev->proto_ctx.location);
 
-        g_cond_clear(&dev->state_cond);
+        g_cond_clear(&dev->stm_cond);
         device_read_queue_purge(dev);
         g_ptr_array_free(dev->job_images, TRUE);
 
@@ -360,48 +371,6 @@ device_table_ready (void)
     return device_table_collect(DEVICE_INIT_WAIT, NULL) == 0;
 }
 
-/******************** Device state management ********************/
-/* Get device state name, for debugging
- */
-static inline const char*
-device_state_name (DEVICE_STATE state)
-{
-    switch (state) {
-    case DEVICE_SCAN_IDLE:         return "SCAN_IDLE";
-    case DEVICE_SCAN_STARTED:      return "SCAN_STARTED";
-    case DEVICE_SCAN_REQUESTING:   return "SCAN_REQUESTING";
-    case DEVICE_SCAN_LOADING:      return "SCAN_LOADING";
-    case DEVICE_SCAN_LOAD_RETRY:   return "SCAN_LOAD_RETRY";
-    case DEVICE_SCAN_CHECK_STATUS: return "SCAN_CHECK_STATUS";
-    case DEVICE_SCAN_CLEANING_UP:  return "SCAN_CLEANING_UP";
-    case DEVICE_SCAN_DONE:         return "SCAN_DONE";
-    }
-
-    return "UNKNOWN";
-}
-
-/* Set device state
- */
-static void
-device_state_set (device *dev, DEVICE_STATE state)
-{
-    if (dev->state != state) {
-        log_debug(dev, "state=%s; has_location=%s; retry=%d",
-                device_state_name(state),
-                dev->proto_ctx.location ? "true" : "false",
-                dev->proto_ctx.failed_attempt);
-
-        dev->state = state;
-        g_cond_broadcast(&dev->state_cond);
-
-        if (dev->state == DEVICE_SCAN_DONE) {
-            if ((dev->flags & DEVICE_SCANNING) != 0) {
-                pollable_signal(dev->read_pollable);
-            }
-        }
-    }
-}
-
 /******************** Underlying protocol operations ********************/
 /* Set protocol handler
  */
@@ -485,9 +454,23 @@ device_proto_op_submit (device *dev, PROTO_OP op,
     log_assert(dev, func != NULL);
 
     log_debug(dev, "submitting: %s", device_proto_op_name(dev, op));
+    dev->proto_op_current = op;
     q = func(&dev->proto_ctx);
     http_query_submit(q, callback);
     dev->proto_ctx.query = q;
+}
+
+/* Dummy decode for PROTO_OP_CANCEL and PROTO_OP_CLEANUP
+ */
+static proto_result
+device_proto_dummy_decode (const proto_ctx *ctx)
+{
+    proto_result result = {0};
+
+    (void) ctx;
+    result.next = PROTO_OP_FINISH;
+
+    return result;
 }
 
 /* Decode operation response
@@ -502,8 +485,8 @@ device_proto_op_decode (device *dev, PROTO_OP op)
     case PROTO_OP_SCAN:    func = dev->proto_ctx.proto->scan_decode; break;
     case PROTO_OP_LOAD:    func = dev->proto_ctx.proto->load_decode; break;
     case PROTO_OP_CHECK:   func = dev->proto_ctx.proto->status_decode; break;
-    case PROTO_OP_CANCEL:  log_internal_error(dev); break;
-    case PROTO_OP_CLEANUP: log_internal_error(dev); break;
+    case PROTO_OP_CANCEL:  func = device_proto_dummy_decode; break;
+    case PROTO_OP_CLEANUP: func = device_proto_dummy_decode; break;
     case PROTO_OP_FINISH:  log_internal_error(dev); break;
     }
 
@@ -511,64 +494,6 @@ device_proto_op_decode (device *dev, PROTO_OP op)
 
     log_debug(dev, "decoding: %s", device_proto_op_name(dev, op));
     return func(&dev->proto_ctx);
-}
-
-/* Submit scan request
- */
-static void
-device_proto_scan_submit (device *dev, void (*callback) (device*, http_query*))
-{
-    return device_proto_op_submit(dev, PROTO_OP_SCAN, callback);
-}
-
-/* Decode scan result
- */
-static proto_result
-device_proto_scan_decode (device *dev)
-{
-    return device_proto_op_decode(dev, PROTO_OP_SCAN);
-}
-
-/* Submit load page request
- */
-static void
-device_proto_load_submit (device *dev, void (*callback) (device*, http_query*))
-{
-    return device_proto_op_submit(dev, PROTO_OP_LOAD, callback);
-}
-
-/* Decode load page result
- */
-static proto_result
-device_proto_load_decode (device *dev)
-{
-    return device_proto_op_decode(dev, PROTO_OP_LOAD);
-}
-
-/* Submit device status request
- */
-static void
-device_proto_status_submit (device *dev,
-        void (*callback) (device*, http_query*))
-{
-    return device_proto_op_submit(dev, PROTO_OP_CHECK, callback);
-}
-
-/* Decode device status result
- */
-static proto_result
-device_proto_status_decode (device *dev)
-{
-    return device_proto_op_decode(dev, PROTO_OP_CHECK);
-}
-
-/* Submit cancel request
- */
-static void
-device_proto_cancel_submit (device *dev,
-        void (*callback) (device*, http_query*))
-{
-    return device_proto_op_submit(dev, PROTO_OP_CANCEL, callback);
 }
 
 /******************** HTTP operations ********************/
@@ -591,10 +516,8 @@ device_http_onerror (device *dev, error err) {
     log_debug(dev, ESTRING(err));
     device_job_set_status(dev, SANE_STATUS_IO_ERROR);
 
-    if (dev->proto_ctx.location != NULL) {
-        device_stm_cleanup(dev);
-    } else {
-        device_state_set(dev, DEVICE_SCAN_DONE);
+    if (!device_stm_cancel_perform(dev)) {
+        device_stm_state_set(dev, DEVICE_STM_DONE);
     }
 }
 
@@ -684,199 +607,191 @@ DONE:
 }
 
 /******************** Scan state machinery ********************/
-/* Cleanup callback
+/* Get state name, for debugging
  */
-static void
-device_stm_cleanup_callback (device *dev, http_query *q)
+static const char*
+device_stm_state_name (DEVICE_STM_STATE state)
 {
-    (void) q;
-
-    device_state_set(dev, DEVICE_SCAN_DONE);
-}
-
-/* Cleanup after scan (delete current job)
- */
-static void
-device_stm_cleanup (device *dev)
-{
-    device_state_set(dev, DEVICE_SCAN_CLEANING_UP);
-    device_proto_cancel_submit(dev, device_stm_cleanup_callback);
-}
-
-/* Check scanner status callback
- */
-static void
-device_stm_check_status_callback (device *dev, http_query *q)
-{
-    proto_result result = device_proto_status_decode(dev);
-
-    (void) q;
-
-    if (result.err != NULL) {
-        log_debug(dev, ESTRING(result.err));
+    switch (state) {
+    case DEVICE_STM_CLOSED:      return "DEVICE_STM_CLOSED";
+    case DEVICE_STM_IDLE:        return "DEVICE_STM_IDLE";
+    case DEVICE_STM_SCANNING:    return "DEVICE_STM_SCANNING";
+    case DEVICE_STM_CANCEL_REQ:  return "DEVICE_STM_CANCEL_REQ";
+    case DEVICE_STM_CANCEL_WAIT: return "DEVICE_STM_CANCEL_WAIT";
+    case DEVICE_STM_CANCELLING:  return "DEVICE_STM_CANCELLING";
+    case DEVICE_STM_CLEANUP:     return "DEVICE_STM_CLEANUP";
+    case DEVICE_STM_DONE:        return "DEVICE_STM_DONE";
     }
 
-    switch (result.code) {
-    case PROTO_OK:
-        if (dev->proto_ctx.failed_attempt + 1 < DEVICE_HTTP_RETRY_ATTEMPTS) {
-            dev->proto_ctx.failed_attempt ++;
-            device_stm_load_retry(dev);
-            return;
+    return NULL;
+}
+
+/* Get state
+ */
+static inline DEVICE_STM_STATE
+device_stm_state_get (device *dev)
+{
+    return __atomic_load_n(&dev->stm_state, __ATOMIC_SEQ_CST);
+}
+
+/* Check if device is in working state
+ */
+static bool
+device_stm_state_working (device *dev)
+{
+    DEVICE_STM_STATE state = device_stm_state_get(dev);
+    return state > DEVICE_STM_IDLE && state < DEVICE_STM_DONE;
+}
+
+/* Set state
+ */
+static void
+device_stm_state_set (device *dev, DEVICE_STM_STATE state)
+{
+    if (dev->stm_state != state) {
+        log_debug(dev, "state=%s", device_stm_state_name(state));
+        __atomic_store_n(&dev->stm_state, state, __ATOMIC_SEQ_CST);
+        g_cond_broadcast(&dev->stm_cond);
+
+        if (!device_stm_state_working(dev)) {
+            pollable_signal(dev->read_pollable);
         }
-
-        result.status = SANE_STATUS_IO_ERROR;
-        /* Fall through... */
-
-    case PROTO_ERROR:
-        if (dev->job_images_received == 0) {
-            /* If we have received at least one image, ignore the
-             * error and finish the job with successful status.
-             * User will get the error upon attempt to request
-             * a next image
-             */
-            device_job_set_status(dev, result.status);
-        }
-
-        /* Finish the job */
-        if (dev->proto_ctx.location != NULL) {
-            device_stm_cleanup(dev);
-        } else {
-            device_state_set(dev, DEVICE_SCAN_DONE);
-        }
-        break;
-
-    case PROTO_CHECK_STATUS:
-        /* status_decode should never return PROTO_CHECK_STATUS code
-         */
-        log_internal_error(dev);
     }
 }
 
-/* Check scanner status (used after failed scan request to
- * clarify reasons)
+/* Perform cancel, if possible
  */
-static void
-device_stm_check_status (device *dev, PROTO_OP op, int http_status)
+static bool
+device_stm_cancel_perform (device *dev)
 {
-    dev->proto_ctx.failed_op = op;
-    dev->proto_ctx.failed_http_status = http_status;
+    if (dev->proto_ctx.location != NULL) {
+        device_http_cancel(dev);
+        device_stm_state_set(dev, DEVICE_STM_CANCELLING);
+        device_proto_op_submit(dev, PROTO_OP_CANCEL, device_stm_op_callback);
+        device_job_set_status(dev, SANE_STATUS_CANCELLED);
+        return true;
+    }
 
-    dev->checking_state = dev->state;
-    dev->checking_http_status = http_status;
-    device_state_set(dev, DEVICE_SCAN_CHECK_STATUS);
-
-    device_proto_status_submit(dev, device_stm_check_status_callback);
+    return false;
 }
 
-/* LOAD_RETRY timer callback
+/* stm_cancel_event callback
  */
 static void
-device_stm_load_retry_callback (void *data) {
+device_stm_cancel_event_callback (void *data)
+{
     device *dev = data;
-    dev->http_timer = NULL;
 
-    switch (dev->proto_ctx.failed_op) {
-    case PROTO_OP_SCAN:
-        device_stm_start_scan(dev);
-        break;
-
-    case PROTO_OP_LOAD:
-        device_stm_load_page(dev);
-        break;
-
-    default:
-        log_internal_error(dev);
+    log_debug(dev, "cancel requested");
+    if (!device_stm_cancel_perform(dev)) {
+        device_stm_state_set(dev, DEVICE_STM_CANCEL_WAIT);
     }
 }
 
-/* Retry failed operation after some delay
+/* Request cancel
  */
 static void
-device_stm_load_retry (device *dev) {
-    device_state_set(dev, DEVICE_SCAN_LOAD_RETRY);
-    dev->http_timer = eloop_timer_new(DEVICE_HTTP_RETRY_PAUSE * 1000,
-            device_stm_load_retry_callback, dev);
+device_stm_cancel_req (device *dev)
+{
+    static DEVICE_STM_STATE expected = DEVICE_STM_SCANNING;
+    bool ok = __atomic_compare_exchange_n(&dev->stm_state, &expected,
+        DEVICE_STM_CANCEL_REQ, true, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+
+    if (ok) {
+        eloop_event_trigger(dev->stm_cancel_event);
+    }
 }
 
-/* Load next page callback
+/* stm_timer callback
  */
 static void
-device_stm_load_page_callback (device *dev, http_query *q)
+device_stm_timer_callback (void *data)
 {
-    proto_result result = device_proto_load_decode(dev);
+    device *dev = data;
+    device_proto_op_submit(dev, dev->proto_op_current, device_stm_op_callback);
+}
+
+/* Operation callback
+ */
+static void
+device_stm_op_callback (device *dev, http_query *q)
+{
+    proto_result result = device_proto_op_decode(dev, dev->proto_op_current);
+
+    (void) q;
 
     if (result.err != NULL) {
-        log_debug(dev, ESTRING(result.err));
+        log_debug(dev, "%s", ESTRING(result.err));
     }
 
-    switch (result.code) {
-    case PROTO_OK:
-        dev->proto_ctx.failed_attempt = 0;
+    /* Save useful result, if any */
+    if (dev->proto_op_current == PROTO_OP_SCAN) {
+        if (result.data.location != NULL) {
+            g_free((char*) dev->proto_ctx.location); /* Just in case */
+            dev->proto_ctx.location = result.data.location;
+            dev->proto_ctx.failed_attempt = 0;
+            g_cond_broadcast(&dev->stm_cond);
+        }
+    } else if (dev->proto_op_current == PROTO_OP_LOAD) {
+        if (result.data.image != NULL) {
+            g_ptr_array_add(dev->job_images, result.data.image);
+            dev->job_images_received ++;
+            dev->proto_ctx.failed_attempt = 0;
+            g_cond_broadcast(&dev->stm_cond);
 
-        g_ptr_array_add(dev->job_images, result.data.image);
-        dev->job_images_received ++;
-
-        if (dev->job_images_received == 1) {
-            if (!device_read_push(dev)) {
-                device_job_abort(dev, SANE_STATUS_IO_ERROR);
-                return;
+            if (dev->job_images_received == 1) {
+                if (!device_read_push(dev)) {
+                    dev->job_images_received --;
+                    result.next = PROTO_OP_CANCEL;
+                    result.status = SANE_STATUS_IO_ERROR;
+                }
             }
         }
+    }
 
-        if (dev->opt.src == OPT_SOURCE_PLATEN) {
-            device_stm_cleanup(dev);
-        } else {
-            device_stm_load_page(dev);
+    /* Update job status */
+    device_job_set_status(dev, result.status);
+
+    /* Check for FINISH */
+    if (result.next == PROTO_OP_FINISH) {
+        if (dev->job_images_received == 0) {
+            /* If no images received, and no error status
+             * yet set, use SANE_STATUS_IO_ERROR as default
+             * error code
+             */
+            device_job_set_status(dev, SANE_STATUS_IO_ERROR);
         }
-        break;
 
-    case PROTO_ERROR:
-        device_job_abort(dev, SANE_STATUS_IO_ERROR);
-        break;
-
-    case PROTO_CHECK_STATUS:
-        device_stm_check_status(dev, PROTO_OP_LOAD, http_query_status(q));
-        break;
-    }
-}
-
-/* Load next page
- */
-static void
-device_stm_load_page (device *dev)
-{
-    device_state_set(dev, DEVICE_SCAN_LOADING);
-    device_proto_load_submit(dev, device_stm_load_page_callback);
-}
-
-/* Request scan callback
- */
-static void
-device_stm_start_scan_callback (device *dev, http_query *q)
-{
-    proto_result result = device_proto_scan_decode(dev);
-
-    if (result.err != NULL) {
-        log_debug(dev, ESTRING(result.err));
+        device_stm_state_set(dev, DEVICE_STM_DONE);
+        return;
     }
 
-    switch (result.code) {
-    case PROTO_OK:
-        dev->proto_ctx.failed_attempt = 0;
-
-        dev->proto_ctx.location = result.data.location;
-        device_stm_load_page(dev);
-        break;
-
-    case PROTO_ERROR:
-        device_job_set_status(dev, result.status);
-        device_state_set(dev, DEVICE_SCAN_DONE);
-        break;
-
-    case PROTO_CHECK_STATUS:
-        device_stm_check_status(dev, PROTO_OP_SCAN, http_query_status(q));
-        break;
+    /* Handle delayed cancellation */
+    if (device_stm_state_get(dev) == DEVICE_STM_CANCEL_WAIT) {
+        if (!device_stm_cancel_perform(dev)) {
+            device_stm_state_set(dev, DEVICE_STM_DONE);
+        }
+        return;
     }
+
+    /* Update state, if needed */
+    if (result.next == PROTO_OP_CANCEL) {
+        device_stm_state_set(dev, DEVICE_STM_CANCELLING);
+    } else if (result.next == PROTO_OP_CLEANUP) {
+        device_stm_state_set(dev, DEVICE_STM_CLEANUP);
+    }
+
+    /* Handle delay */
+    if (result.delay != 0) {
+        log_assert(dev, dev->stm_timer == NULL);
+        dev->stm_timer = eloop_timer_new(result.delay,
+            device_stm_timer_callback, dev);
+        dev->proto_op_current = result.next;
+        return;
+    }
+
+    /* Submit next operation */
+    device_proto_op_submit(dev, result.next, device_stm_op_callback);
 }
 
 /* Geometrical scan parameters
@@ -1001,84 +916,50 @@ device_stm_start_scan (device *dev)
     trace_printf(dev->trace, "");
 
     /* Submit a request */
-    device_state_set(dev, DEVICE_SCAN_REQUESTING);
-    device_proto_scan_submit(dev, device_stm_start_scan_callback);
+    device_stm_state_set(dev, DEVICE_STM_SCANNING);
+    device_proto_op_submit(dev, PROTO_OP_SCAN, device_stm_op_callback);
 }
 
 /******************** Scan Job management ********************/
-/* Set job status. If status already set, it will not be
- * changed
+/* Set job status. If status already set, it will not be changed
  */
 static void
 device_job_set_status (device *dev, SANE_Status status)
 {
-    /* If error status already pending, don't change it
-     * unless cancel request is received
+    /* Check status, new and present
      */
-    if (dev->job_status == SANE_STATUS_GOOD ||
-        status == SANE_STATUS_CANCELLED) {
+    switch (status) {
+    case SANE_STATUS_GOOD:
+        return;
+
+    case SANE_STATUS_CANCELLED:
+        break;
+
+    default:
+        /* Ignore the error if we have received at least
+         * one image. User will get the error upon attempt
+         * to request a next image
+         */
+        if (dev->job_images_received > 0) {
+            return;
+        }
+
+        /* If error already the pending, leave it as is
+         */
+        if (dev->job_status != SANE_STATUS_GOOD) {
+            return;
+        }
+    }
+
+    /* Update status
+     */
+    if (status != dev->job_status) {
         log_debug(dev, "JOB status=%s", sane_strstatus(status));
         dev->job_status = status;
 
         if (status == SANE_STATUS_CANCELLED) {
             device_read_queue_purge(dev);
         }
-    }
-}
-
-/* Abort the job with specified status code
- */
-static void
-device_job_abort (device *dev, SANE_Status status)
-{
-    if (dev->job_cancel_rq) {
-        return; /* We are already working on it */
-    }
-
-    if (dev->state != DEVICE_SCAN_IDLE) {
-        log_debug(dev, "JOB aborted: %s", sane_strstatus(status));
-    }
-
-    switch (dev->state) {
-    case DEVICE_SCAN_IDLE:
-    case DEVICE_SCAN_DONE:
-        /* Nothing to do */
-        break;
-
-    case DEVICE_SCAN_STARTED:
-    case DEVICE_SCAN_REQUESTING:
-        dev->job_cancel_rq = true;
-        break;
-
-    case DEVICE_SCAN_LOADING:
-    case DEVICE_SCAN_LOAD_RETRY:
-    case DEVICE_SCAN_CHECK_STATUS:
-        device_http_cancel(dev);
-        if (dev->proto_ctx.location != NULL) {
-            device_stm_cleanup(dev);
-        }
-        /* Fall through...*/
-
-    case DEVICE_SCAN_CLEANING_UP:
-        device_job_set_status(dev, status);
-
-        if (dev->state != DEVICE_SCAN_CLEANING_UP) {
-            device_state_set(dev, DEVICE_SCAN_DONE);
-        }
-        break;
-    }
-}
-
-/* dev->job_cancel_event callback
- */
-static void
-device_job_cancel_event_callback (void *data)
-{
-    device *dev = data;
-
-    log_debug(dev, "cancel requested");
-    if ((dev->flags & (DEVICE_SCANNING | DEVICE_CLOSING)) != 0) {
-        device_job_abort(dev, SANE_STATUS_CANCELLED);
     }
 }
 
@@ -1203,17 +1084,17 @@ device_open (const char *name, device **out)
     }
 
     /* Check device state */
-    if ((dev->flags & DEVICE_OPENED) != 0) {
+    if (device_stm_state_get(dev) != DEVICE_STM_CLOSED) {
         return SANE_STATUS_DEVICE_BUSY;
     }
 
     /* Proceed with open */
-    dev->job_cancel_event = eloop_event_new(device_job_cancel_event_callback, dev);
-    if (dev->job_cancel_event == NULL) {
+    dev->stm_cancel_event = eloop_event_new(device_stm_cancel_event_callback, dev);
+    if (dev->stm_cancel_event == NULL) {
         return SANE_STATUS_NO_MEM;
     }
 
-    dev->flags |= DEVICE_OPENED;
+    device_stm_state_set(dev, DEVICE_STM_IDLE);
     *out = device_ref(dev);
 
     return SANE_STATUS_GOOD;
@@ -1224,21 +1105,20 @@ device_open (const char *name, device **out)
 void
 device_close (device *dev)
 {
-    if ((dev->flags & DEVICE_OPENED) != 0) {
+    if (device_stm_state_get(dev) != DEVICE_STM_CLOSED) {
         /* Cancel job in progress, if any */
-        if (dev->state != DEVICE_SCAN_IDLE && dev->state != DEVICE_SCAN_DONE) {
-            dev->flags |= DEVICE_CLOSING;
-            device_cancel(dev);
+        if (device_stm_state_working(dev)) {
+            device_stm_cancel_req(dev);
 
-            while (dev->state != DEVICE_SCAN_DONE) {
-                eloop_cond_wait(&dev->state_cond);
+            while (device_stm_state_working(dev)) {
+                eloop_cond_wait(&dev->stm_cond);
             }
         }
 
         /* Close the device */
-        eloop_event_free(dev->job_cancel_event);
-        dev->job_cancel_event = NULL;
-        dev->flags &= ~(DEVICE_OPENED | DEVICE_CLOSING);
+        eloop_event_free(dev->stm_cancel_event);
+        dev->stm_cancel_event = NULL;
+        device_stm_state_set(dev, DEVICE_STM_CLOSED);
         device_unref(dev);
     }
 }
@@ -1291,12 +1171,7 @@ device_start_do (gpointer data)
 {
     device      *dev = data;
 
-    if (dev->job_cancel_rq) {
-        device_state_set(dev, DEVICE_SCAN_DONE);
-        device_job_set_status(dev, SANE_STATUS_CANCELLED);
-    } else {
-        device_stm_start_scan(dev);
-    }
+    device_stm_start_scan(dev);
 
     return FALSE;
 }
@@ -1321,63 +1196,51 @@ device_start (device *dev)
     pollable_reset(dev->read_pollable);
     dev->read_non_blocking = SANE_FALSE;
 
-    /* Previous multi-page scan job may still be running. Check
-     * its state */
-    if (dev->state != DEVICE_SCAN_IDLE) {
-        while (dev->state != DEVICE_SCAN_DONE || dev->job_images->len != 0) {
-            if (dev->job_images->len != 0) {
-                /* If we have more buffered images, just start
-                 * decoding the next one
-                 */
-                if (device_read_push(dev)) {
-                    return SANE_STATUS_GOOD;
-                }
-
-                device_job_set_status(dev, SANE_STATUS_IO_ERROR);
-                device_cancel(dev);
-            } else {
-                /* Otherwise, wait for status change
-                 */
-                eloop_cond_wait(&dev->state_cond);
-            }
+    /* If we have more buffered images, just start
+     * decoding the next one
+     */
+    if (dev->job_images->len != 0) {
+        /* If we have more buffered images, just start
+         * decoding the next one
+         */
+        if (device_read_push(dev)) {
+            return SANE_STATUS_GOOD;
         }
 
-        if (dev->job_status != SANE_STATUS_GOOD) {
-            goto FAIL;
+        device_cancel(dev);
+
+        while (device_stm_state_working(dev)) {
+            eloop_cond_wait(&dev->stm_cond);
         }
+
+        device_stm_state_set(dev, DEVICE_STM_IDLE);
+        device_read_queue_purge(dev);
+        dev->flags &= ~DEVICE_SCANNING;
+
+        return SANE_STATUS_IO_ERROR;
+    }
+
+
+    /* Previous job may be still running. Synchronize with it
+     */
+    if (device_stm_state_working(dev)) {
+        return SANE_STATUS_GOOD;
     }
 
     /* Start new scan job */
-    device_state_set(dev, DEVICE_SCAN_STARTED);
     dev->job_status = SANE_STATUS_GOOD;
     g_free((char*) dev->proto_ctx.location);
     dev->proto_ctx.location = NULL;
     dev->proto_ctx.failed_attempt = 0;
-
-    dev->job_cancel_rq = false;
     dev->job_images_received = 0;
-    dev->proto_ctx.failed_attempt = 0;
 
     eloop_call(device_start_do, dev);
 
-    /* And wait until it reaches "LOADING" state */
-    while (dev->proto_ctx.location == NULL) {
-        if (dev->state == DEVICE_SCAN_DONE) {
-            goto FAIL;
-        }
-
-        eloop_cond_wait(&dev->state_cond);
+    while (device_stm_state_get(dev) == DEVICE_STM_IDLE) {
+        eloop_cond_wait(&dev->stm_cond);
     }
 
     return SANE_STATUS_GOOD;
-
-    /* Cleanup after error */
-FAIL:
-    device_state_set(dev, DEVICE_SCAN_IDLE);
-    device_read_queue_purge(dev);
-    dev->flags &= ~DEVICE_SCANNING;
-
-    return dev->job_status;
 }
 
 /* Cancel scanning operation
@@ -1385,9 +1248,7 @@ FAIL:
 void
 device_cancel (device *dev)
 {
-    if (dev->job_cancel_event != NULL) {
-        eloop_event_trigger(dev->job_cancel_event);
-    }
+    device_stm_cancel_req(dev);
 }
 
 /* Set I/O mode
@@ -1592,7 +1453,7 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
     }
 
     /* Wait until device is ready */
-    while (dev->read_image == NULL && dev->state != DEVICE_SCAN_DONE) {
+    while (dev->read_image == NULL && device_stm_state_working(dev)) {
         if (dev->read_non_blocking) {
             *len_out = 0;
             return SANE_STATUS_GOOD;
@@ -1655,8 +1516,9 @@ DONE:
     g_free(dev->read_line_buf);
     dev->read_line_buf = NULL;
 
-    if (dev->state == DEVICE_SCAN_DONE && dev->job_images->len == 0) {
-        device_state_set(dev, DEVICE_SCAN_IDLE);
+    if (device_stm_state_get(dev) == DEVICE_STM_DONE &&
+        dev->job_images->len == 0) {
+        device_stm_state_set(dev, DEVICE_STM_IDLE);
     }
 
     return status;

@@ -601,12 +601,14 @@ wsd_scan_decode (const proto_ctx *ctx)
     /* Decode CreateScanJobResponse */
     err = http_query_error(ctx->query);
     if (err != NULL) {
+        err = eloop_eprintf("HTTP: %s", ESTRING(err));
         goto DONE;
     }
 
     data = http_query_get_response_data(ctx->query);
     err = xml_rd_begin(&xml, data->bytes, data->size, wsd_ns_rd);
     if (err != NULL) {
+        err = eloop_eprintf("XML: %s", ESTRING(err));
         goto DONE;
     }
 
@@ -642,8 +644,10 @@ DONE:
     xml_rd_finish(&xml);
     g_free(job_token);
 
-    if (err != NULL) {
-        result.code = PROTO_ERROR;
+    if (err == NULL) {
+        result.next = PROTO_OP_LOAD;
+    } else {
+        result.next = PROTO_OP_FINISH;
         result.status = SANE_STATUS_IO_ERROR;
         result.err = eloop_eprintf("CreateScanJobResponse: %s", ESTRING(err));
     }
@@ -702,7 +706,7 @@ wsd_load_decode (const proto_ctx *ctx)
     /* Check HTTP status */
     err = http_query_error(ctx->query);
     if (err != NULL) {
-        result.code = PROTO_ERROR;
+        result.next = PROTO_OP_FINISH;
         result.err = err;
         return result;
     }
@@ -710,12 +714,12 @@ wsd_load_decode (const proto_ctx *ctx)
     /* We expect multipart message with attached image */
     data = http_query_get_mp_response_data(ctx->query, 1);
     if (data == NULL) {
-        result.code = PROTO_ERROR;
+        result.next = PROTO_OP_FINISH;
         result.err = ERROR("RetrieveImageRequest: invalid response");
         return result;
     }
 
-    result.code = PROTO_OK;
+    result.next = PROTO_OP_FINISH;
     result.data.image = http_data_ref(data);
 
     return result;

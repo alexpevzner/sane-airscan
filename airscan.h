@@ -1412,19 +1412,11 @@ typedef struct {
     int                  failed_attempt;     /* Retry count, 0-based */
 } proto_ctx;
 
-/* PROTO_ACTION represents action to be performed
- * after query result decoding
- */
-typedef enum {
-    PROTO_OK,           /* Everything is OK */
-    PROTO_ERROR,        /* Job failed, statis in proto_result.status */
-    PROTO_CHECK_STATUS, /* Check device status, then decide */
-} PROTO_RESULT_CODE;
-
 /* proto_result represents decoded query results
  */
 typedef struct {
-    PROTO_RESULT_CODE code;   /* Result code */
+    PROTO_OP          next;   /* Next operation */
+    int               delay;  /* In milliseconds */
     SANE_Status       status; /* Job status */
     error             err;    /* Error string, may be NULL */
     union {
