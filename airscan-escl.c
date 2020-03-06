@@ -622,7 +622,7 @@ escl_load_decode (const proto_ctx *ctx)
     err = http_query_error(ctx->query);
     if (err != NULL) {
         result.next = PROTO_OP_CHECK;
-        result.err = err;
+        result.err = eloop_eprintf("HTTP: %s", ESTRING(err));
         return result;
     }
 
@@ -649,7 +649,7 @@ escl_decode_scanner_status (const proto_ctx *ctx,
     xml_rd      *xml;
     SANE_Status device_status = SANE_STATUS_UNSUPPORTED;
     SANE_Status adf_status = SANE_STATUS_UNSUPPORTED;
-    SANE_Status status;
+    SANE_Status status = SANE_STATUS_IO_ERROR;
 
     /* Decode XML */
     err = xml_rd_begin(&xml, xml_text, xml_len, NULL);
