@@ -474,6 +474,49 @@ http_data_ref (http_data *data);
 void
 http_data_unref (http_data *data);
 
+/* http_data_queue represents a queue of http_data items
+ */
+typedef struct http_data_queue http_data_queue;
+
+/* Create new http_data_queue
+ */
+http_data_queue*
+http_data_queue_new (void);
+
+/* Destroy http_data_queue
+ */
+void
+http_data_queue_free (http_data_queue *queue);
+
+/* Push item into the http_data_queue.
+ * If queue is not empty, it will be purged
+ */
+void
+http_data_queue_push (http_data_queue *queue, http_data *data);
+
+/* Pull an item from the http_data_queue. Returns NULL if queue is empty
+ */
+http_data*
+http_data_queue_pull (http_data_queue *queue);
+
+/* Get queue length
+ */
+int
+http_data_queue_len (const http_data_queue *queue);
+
+/* Check if queue is empty
+ */
+static inline bool
+http_data_queue_empty (const http_data_queue *queue)
+{
+    return http_data_queue_len(queue) == 0;
+}
+
+/* Purge the queue
+ */
+void
+http_data_queue_purge (http_data_queue *queue);
+
 /* Type http_client represents HTTP client instance
  */
 typedef struct http_client http_client;

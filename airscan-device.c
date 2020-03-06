@@ -36,6 +36,7 @@ enum {
                                            scan and not ready yet */
     DEVICE_SCANNING         = (1 << 5), /* We are between sane_start() and
                                            final sane_read() */
+    DEVICE_READING          = (1 << 6), /* sane_read() can be called */
 
     DEVICE_ALL_FLAGS        = 0xffffffff
 };
@@ -97,8 +98,7 @@ struct device {
 
     /* Scanning state machinery */
     SANE_Status          job_status;          /* Job completion status */
-    GPtrArray            *job_images;         /* Array of SoupBuffer* */
-    unsigned int         job_images_received; /* How many images received */
+    unsigned int         job_images_received; /* Total count of received images */
     SANE_Word            job_skip_x;          /* How much pixels to skip, */
     SANE_Word            job_skip_y;          /*    from left and top */
 
@@ -107,6 +107,7 @@ struct device {
     image_decoder        *read_decoder_jpeg; /* JPEG decoder */
     pollable             *read_pollable;     /* Signalled when read won't
                                                 block */
+    http_data_queue      *read_queue;        /* Queue of received images */
     http_data            *read_image;        /* Current image */
     SANE_Byte            *read_line_buf;     /* Single-line buffer */
     SANE_Int             read_line_num;      /* Current image line 0-based */
@@ -159,12 +160,6 @@ static void
 device_stm_op_callback (device *dev, http_query *q);
 
 static void
-device_read_queue_purge (device *dev);
-
-static bool
-device_read_push (device *dev);
-
-static void
 device_management_start_stop (bool start);
 
 /******************** Device table management ********************/
@@ -205,10 +200,10 @@ device_add (const char *name, zeroconf_endpoint *endpoints,
     dev->trace = trace_open(name);
 
     g_cond_init(&dev->stm_cond);
-    dev->job_images = g_ptr_array_new();
 
     dev->read_decoder_jpeg = image_decoder_jpeg_new();
     dev->read_pollable = pollable_new();
+    dev->read_queue = http_data_queue_new();
 
     log_debug(dev, "device created");
 
@@ -255,10 +250,9 @@ device_unref (device *dev)
         g_free((char*) dev->proto_ctx.location);
 
         g_cond_clear(&dev->stm_cond);
-        device_read_queue_purge(dev);
-        g_ptr_array_free(dev->job_images, TRUE);
 
         image_decoder_free(dev->read_decoder_jpeg);
+        http_data_queue_free(dev->read_queue);
         pollable_free(dev->read_pollable);
 
         g_free((void*) dev->name);
@@ -734,18 +728,12 @@ device_stm_op_callback (device *dev, http_query *q)
         }
     } else if (dev->proto_op_current == PROTO_OP_LOAD) {
         if (result.data.image != NULL) {
-            g_ptr_array_add(dev->job_images, result.data.image);
+            http_data_queue_push(dev->read_queue, result.data.image);
             dev->job_images_received ++;
+            pollable_signal(dev->read_pollable);
+
             dev->proto_ctx.failed_attempt = 0;
             g_cond_broadcast(&dev->stm_cond);
-
-            if (dev->job_images_received == 1) {
-                if (!device_read_push(dev)) {
-                    dev->job_images_received --;
-                    result.next = PROTO_OP_CANCEL;
-                    result.status = SANE_STATUS_IO_ERROR;
-                }
-            }
         }
     }
 
@@ -920,6 +908,26 @@ device_stm_start_scan (device *dev)
     device_proto_op_submit(dev, PROTO_OP_SCAN, device_stm_op_callback);
 }
 
+/* Wait until device leaves the working state
+ */
+static void
+device_stm_wait_while_working (device *dev)
+{
+    while (device_stm_state_working(dev)) {
+        eloop_cond_wait(&dev->stm_cond);
+    }
+}
+
+
+/* Cancel scanning and wait until device leaves the working state
+ */
+static void
+device_stm_cancel_wait (device *dev)
+{
+    device_stm_cancel_req(dev);
+    device_stm_wait_while_working(dev);
+}
+
 /******************** Scan Job management ********************/
 /* Set job status. If status already set, it will not be changed
  */
@@ -958,7 +966,7 @@ device_job_set_status (device *dev, SANE_Status status)
         dev->job_status = status;
 
         if (status == SANE_STATUS_CANCELLED) {
-            device_read_queue_purge(dev);
+            http_data_queue_purge(dev->read_queue);
         }
     }
 }
@@ -1108,11 +1116,7 @@ device_close (device *dev)
     if (device_stm_state_get(dev) != DEVICE_STM_CLOSED) {
         /* Cancel job in progress, if any */
         if (device_stm_state_working(dev)) {
-            device_stm_cancel_req(dev);
-
-            while (device_stm_state_working(dev)) {
-                eloop_cond_wait(&dev->stm_cond);
-            }
+            device_stm_cancel_wait(dev);
         }
 
         /* Close the device */
@@ -1196,38 +1200,23 @@ device_start (device *dev)
     pollable_reset(dev->read_pollable);
     dev->read_non_blocking = SANE_FALSE;
 
+    /* Previous job may be still running. Synchronize with it
+     */
+    while (device_stm_state_working(dev)
+        && http_data_queue_len(dev->read_queue) == 0) {
+        eloop_cond_wait(&dev->stm_cond);
+    }
+
     /* If we have more buffered images, just start
      * decoding the next one
      */
-    if (dev->job_images->len != 0) {
-        /* If we have more buffered images, just start
-         * decoding the next one
-         */
-        if (device_read_push(dev)) {
-            return SANE_STATUS_GOOD;
-        }
-
-        device_cancel(dev);
-
-        while (device_stm_state_working(dev)) {
-            eloop_cond_wait(&dev->stm_cond);
-        }
-
-        device_stm_state_set(dev, DEVICE_STM_IDLE);
-        device_read_queue_purge(dev);
-        dev->flags &= ~DEVICE_SCANNING;
-
-        return SANE_STATUS_IO_ERROR;
-    }
-
-
-    /* Previous job may be still running. Synchronize with it
-     */
-    if (device_stm_state_working(dev)) {
+    if (http_data_queue_len(dev->read_queue) > 0) {
+        dev->flags |= DEVICE_READING;
         return SANE_STATUS_GOOD;
     }
 
     /* Start new scan job */
+    device_stm_state_set(dev, DEVICE_STM_IDLE);
     dev->job_status = SANE_STATUS_GOOD;
     g_free((char*) dev->proto_ctx.location);
     dev->proto_ctx.location = NULL;
@@ -1240,6 +1229,7 @@ device_start (device *dev)
         eloop_cond_wait(&dev->stm_cond);
     }
 
+    dev->flags |= DEVICE_READING;
     return SANE_STATUS_GOOD;
 }
 
@@ -1279,22 +1269,10 @@ device_get_select_fd (device *dev, SANE_Int *fd)
 
 
 /******************** Read machinery ********************/
-/* Purge all images from the read queue
+/* Pull next image from the read queue and start decoding
  */
-static void
-device_read_queue_purge (device *dev)
-{
-    while (dev->job_images->len > 0) {
-        http_data *p = g_ptr_array_remove_index(dev->job_images, 0);
-        http_data_unref(p);
-    }
-}
-
-/* Push next image to reader. Returns false, if image
- * decoding cannot be started
- */
-static bool
-device_read_push (device *dev)
+static SANE_Status
+device_read_next (device *dev)
 {
     error           err;
     size_t          line_capacity;
@@ -1302,7 +1280,10 @@ device_read_push (device *dev)
     image_decoder   *decoder = dev->read_decoder_jpeg;
     int             wid, hei;
 
-    dev->read_image = g_ptr_array_remove_index(dev->job_images, 0);
+    dev->read_image = http_data_queue_pull(dev->read_queue);
+    if (dev->read_image == NULL) {
+        return SANE_STATUS_EOF;
+    }
 
     /* Start new image decoding */
     err = image_decoder_begin(decoder,
@@ -1384,10 +1365,10 @@ DONE:
         trace_error(dev->trace, err);
         http_data_unref(dev->read_image);
         dev->read_image = NULL;
-        device_read_queue_purge(dev);
+        return SANE_STATUS_IO_ERROR;
     }
 
-    return err == NULL;
+    return SANE_STATUS_GOOD;
 }
 
 /* Decode next image line
@@ -1443,7 +1424,7 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
     *len_out = 0; /* Must return 0, if status is not GOOD */
 
     /* Check device state */
-    if ((dev->flags & DEVICE_SCANNING) == 0) {
+    if ((dev->flags & DEVICE_READING) == 0) {
         return SANE_STATUS_INVAL;
     }
 
@@ -1453,26 +1434,32 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
     }
 
     /* Wait until device is ready */
-    while (dev->read_image == NULL && device_stm_state_working(dev)) {
-        if (dev->read_non_blocking) {
-            *len_out = 0;
-            return SANE_STATUS_GOOD;
+    if (dev->read_image == NULL) {
+        while (device_stm_state_working(dev) &&
+               http_data_queue_empty(dev->read_queue)) {
+            if (dev->read_non_blocking) {
+                *len_out = 0;
+                return SANE_STATUS_GOOD;
+            }
+
+            eloop_cond_wait(&dev->stm_cond);
         }
 
-        eloop_mutex_unlock();
-        pollable_wait(dev->read_pollable);
-        eloop_mutex_lock();
-    }
+        if (dev->job_status == SANE_STATUS_CANCELLED) {
+            status = SANE_STATUS_CANCELLED;
+            goto DONE;
+        }
 
-    if (dev->job_status == SANE_STATUS_CANCELLED) {
-        status = SANE_STATUS_CANCELLED;
-        goto DONE;
-    }
+        if (http_data_queue_empty(dev->read_queue)) {
+            status = dev->job_status;
+            log_assert(dev, status != SANE_STATUS_GOOD);
+            goto DONE;
+        }
 
-    if (dev->read_image == NULL) {
-        status = dev->job_status;
-        log_assert(dev, status != SANE_STATUS_GOOD);
-        goto DONE;
+        status = device_read_next(dev);
+        if (status != SANE_STATUS_GOOD) {
+            goto DONE;
+        }
     }
 
     /* Read line by line */
@@ -1507,7 +1494,7 @@ DONE:
     }
 
     /* Scan and read finished - cleanup device */
-    dev->flags &= ~DEVICE_SCANNING;
+    dev->flags &= ~(DEVICE_SCANNING | DEVICE_READING);
     image_decoder_reset(dev->read_decoder_jpeg);
     if (dev->read_image != NULL) {
         http_data_unref(dev->read_image);
@@ -1517,7 +1504,7 @@ DONE:
     dev->read_line_buf = NULL;
 
     if (device_stm_state_get(dev) == DEVICE_STM_DONE &&
-        dev->job_images->len == 0) {
+        http_data_queue_len(dev->read_queue) == 0) {
         device_stm_state_set(dev, DEVICE_STM_IDLE);
     }
 
