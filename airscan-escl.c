@@ -818,6 +818,7 @@ proto_handler_escl_new (void)
     escl->proto.status_query = escl_status_query;
     escl->proto.status_decode = escl_status_decode;
 
+    escl->proto.cleanup_query = escl_cancel_query;
     escl->proto.cancel_query = escl_cancel_query;
 
     return &escl->proto;

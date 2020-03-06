@@ -1483,14 +1483,14 @@ struct proto_handler {
     http_query*  (*devcaps_query) (const proto_ctx *ctx);
     error        (*devcaps_decode) (const proto_ctx *ctx, devcaps *caps);
 
-    /* Initiate scanning and decode result. On success, must
-     * decode location string
+    /* Initiate scanning and decode result.
+     * On success, scan_decode must set ctx->data.location
      */
     http_query*  (*scan_query) (const proto_ctx *ctx);
     proto_result (*scan_decode) (const proto_ctx *ctx);
 
-    /* Initiate image downloading and decode result. On success,
-     * must decode proto_result::data::image
+    /* Initiate image downloading and decode result.
+     * On success, load_decode must set ctx->data.image
      */
     http_query*  (*load_query) (const proto_ctx *ctx);
     proto_result (*load_decode) (const proto_ctx *ctx);
@@ -1499,6 +1499,10 @@ struct proto_handler {
      */
     http_query*  (*status_query) (const proto_ctx *ctx);
     proto_result (*status_decode) (const proto_ctx *ctx);
+
+    /* Cleanup after scan
+     */
+    http_query*  (*cleanup_query) (const proto_ctx *ctx);
 
     /* Cancel scan in progress
      */

@@ -441,7 +441,7 @@ device_proto_op_submit (device *dev, PROTO_OP op,
     case PROTO_OP_LOAD:    func = dev->proto_ctx.proto->load_query; break;
     case PROTO_OP_CHECK:   func = dev->proto_ctx.proto->status_query; break;
     case PROTO_OP_CANCEL:  func = dev->proto_ctx.proto->cancel_query; break;
-    case PROTO_OP_CLEANUP: func = dev->proto_ctx.proto->cancel_query; break;
+    case PROTO_OP_CLEANUP: func = dev->proto_ctx.proto->cleanup_query; break;
     case PROTO_OP_FINISH:  log_internal_error(dev); break;
     }
 
