@@ -444,6 +444,8 @@ wsd_devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
 {
     error  err = NULL;
     xml_rd *xml;
+    bool   found_description = false;
+    bool   found_configuration = false;
 
     /* Parse capabilities XML */
     err = xml_rd_begin(&xml, xml_text, xml_len, wsd_ns_rd);
@@ -469,6 +471,13 @@ wsd_devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
         }
 
         xml_rd_deep_next(xml, 0);
+    }
+
+    /* Check things */
+    if (!found_description) {
+        err = ERROR("ScannerDescription missed");
+    } else if (!found_configuration) {
+        err = ERROR("ScannerConfiguration missed");
     }
 
 DONE:
