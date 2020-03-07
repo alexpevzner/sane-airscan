@@ -303,6 +303,18 @@ wsd_devcaps_parse_source (devcaps *caps, xml_rd *xml, OPT_SOURCE src_id)
         min_hei = tmp;
     }
 
+    /* Workaround for yet another Kyocera bug. This device doesn't
+     * honor scan region settings. I.e., it understands it,
+     * properly mirrors in DocumentFinalParameters, but completely
+     * ignores when generating the image.
+     *
+     * So we can't rely on device's ability to clip the image and
+     * must implement clipping in software. It can be enforced
+     * in our backend by the following two lines:
+     */
+    min_wid = max_wid;
+    min_hei = max_hei;
+
     /* Save min/max width and height */
     src->min_wid_px = min_wid;
     src->max_wid_px = max_wid;
