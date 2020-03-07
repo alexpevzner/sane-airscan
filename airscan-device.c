@@ -554,7 +554,7 @@ device_probe_endpoint (device *dev, zeroconf_endpoint *endpoint)
     device_proto_devcaps_submit (dev, device_scanner_capabilities_callback);
 }
 
-/* ScannerCapabilities fetch callback
+/* Scanner capabilities fetch callback
  */
 static void
 device_scanner_capabilities_callback (device *dev, http_query *q)
@@ -564,14 +564,14 @@ device_scanner_capabilities_callback (device *dev, http_query *q)
     /* Check request status */
     err = http_query_error(q);
     if (err != NULL) {
-        err = eloop_eprintf("ScannerCapabilities query: %s", ESTRING(err));
+        err = eloop_eprintf("scanner capabilities query: %s", ESTRING(err));
         goto DONE;
     }
 
     /* Parse XML response */
     err = device_proto_devcaps_decode (dev, &dev->opt.caps);
     if (err != NULL) {
-        err = eloop_eprintf("ScannerCapabilities: %s", err);
+        err = eloop_eprintf("scanner capabilities: %s", err);
         goto DONE;
     }
 
