@@ -598,10 +598,13 @@ wsd_scan_decode (const proto_ctx *ctx)
     SANE_Word    job_id = -1;
     char         *job_token = NULL;
 
+    result.next = PROTO_OP_FINISH;
+
     /* Decode CreateScanJobResponse */
     err = http_query_error(ctx->query);
     if (err != NULL) {
         err = eloop_eprintf("HTTP: %s", ESTRING(err));
+        result.next = PROTO_OP_CHECK;
         goto DONE;
     }
 
@@ -637,6 +640,7 @@ wsd_scan_decode (const proto_ctx *ctx)
         goto DONE;
     }
 
+    result.next = PROTO_OP_LOAD;
     result.data.location = g_strdup_printf("%u:%s", job_id, job_token);
 
     /* Cleanup and exit */
@@ -644,12 +648,12 @@ DONE:
     xml_rd_finish(&xml);
     g_free(job_token);
 
-    if (err == NULL) {
-        result.next = PROTO_OP_LOAD;
-    } else {
-        result.next = PROTO_OP_FINISH;
-        result.status = SANE_STATUS_IO_ERROR;
+    if (err != NULL) {
         result.err = eloop_eprintf("CreateScanJobResponse: %s", ESTRING(err));
+    }
+
+    if (result.next == PROTO_OP_FINISH) {
+        result.status = SANE_STATUS_IO_ERROR;
     }
 
     return result;
@@ -730,8 +734,25 @@ wsd_load_decode (const proto_ctx *ctx)
 static http_query*
 wsd_status_query (const proto_ctx *ctx)
 {
-    (void) ctx;
-    return NULL;
+    xml_wr *xml = xml_wr_begin("s:Envelope", wsd_ns_wr);
+    uuid   u = uuid_new();
+
+    xml_wr_enter(xml, "s:Header");
+    xml_wr_add_text(xml, "a:MessageID", u.text);
+    xml_wr_add_text(xml, "a:To", WSD_ADDR_ANONYMOUS);
+    xml_wr_add_text(xml, "a:ReplyTo", WSD_ADDR_ANONYMOUS);
+    xml_wr_add_text(xml, "a:Action", WSD_ACTION_GET_SCANNER_ELEMENTS);
+    xml_wr_leave(xml);
+
+    xml_wr_enter(xml, "s:Body");
+    xml_wr_enter(xml, "scan:GetScannerElementsRequest");
+    xml_wr_enter(xml, "scan:RequestedElements");
+    xml_wr_add_text(xml, "scan:Name", "scan:ScannerStatus");
+    xml_wr_leave(xml);
+    xml_wr_leave(xml);
+    xml_wr_leave(xml);
+
+    return wsd_http_post(ctx, xml_wr_finish(xml));
 }
 
 /* Decode result of device status request
@@ -740,6 +761,8 @@ static proto_result
 wsd_status_decode (const proto_ctx *ctx)
 {
     proto_result result = {0};
+
+    result.next = PROTO_OP_FINISH;
 
     (void) ctx;
     return result;
