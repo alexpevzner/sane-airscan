@@ -459,10 +459,12 @@ wsd_devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
         if (!strcmp(path, "s:Envelope/s:Body"
                  "/scan:GetScannerElementsResponse/scan:ScannerElements/"
                  "scan:ElementData/scan:ScannerDescription")) {
+            found_description = true;
             err = wsd_devcaps_parse_description(caps, xml);
         } else if (!strcmp(path, "s:Envelope/s:Body"
                 "/scan:GetScannerElementsResponse/scan:ScannerElements/"
                 "scan:ElementData/scan:ScannerConfiguration")) {
+            found_configuration = true;
             err = wsd_devcaps_parse_configuration(caps, xml);
         }
 
