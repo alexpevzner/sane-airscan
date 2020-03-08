@@ -884,7 +884,7 @@ device_stm_start_scan (device *dev)
     trace_printf(dev->trace, "==============================");
     trace_printf(dev->trace, "Starting scan, using the following parameters:");
     trace_printf(dev->trace, "  source:         %s",
-            opt_source_to_sane(params->src));
+            id_source_sane_name(params->src));
     trace_printf(dev->trace, "  colormode:      %s",
             opt_colormode_to_sane(params->colormode));
     trace_printf(dev->trace, "  tl_x:           %s mm",

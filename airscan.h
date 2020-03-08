@@ -105,6 +105,29 @@ id_proto_name (ID_PROTO proto);
 ID_PROTO
 id_proto_by_name (const char* name);
 
+/* ID_SOURCE represents scanning source
+ */
+typedef enum {
+    ID_SOURCE_UNKNOWN = -1,
+    ID_SOURCE_PLATEN,
+    ID_SOURCE_ADF_SIMPLEX,
+    ID_SOURCE_ADF_DUPLEX,
+
+    NUM_ID_SOURCE
+} ID_SOURCE;
+
+/* id_source_sane_name returns SANE name for the source
+ * For unknown ID returns NULL
+ */
+const char*
+id_source_sane_name (ID_SOURCE id);
+
+/* id_source_by_sane_name returns ID_SOURCE by its SANE name
+ * For unknown name returns ID_SOURCE_UNKNOWN
+ */
+ID_SOURCE
+id_source_by_sane_name (const char *name);
+
 /******************** Configuration file loader ********************/
 /* Device URI for manually disabled device
  */
@@ -1050,17 +1073,6 @@ enum {
     NUM_OPTIONS
 };
 
-/* Source numbers, for internal use
- */
-typedef enum {
-    OPT_SOURCE_UNKNOWN = -1, /* Unknown */
-    OPT_SOURCE_PLATEN,       /* Flatbed (a.k.a platen) scanner */
-    OPT_SOURCE_ADF_SIMPLEX,  /* ADF in simplex mode */
-    OPT_SOURCE_ADF_DUPLEX,   /* ADF in duplex mode */
-
-    NUM_OPT_SOURCE
-} OPT_SOURCE;
-
 /* Color mode numbers, for internal use
  */
 typedef enum {
@@ -1087,16 +1099,6 @@ typedef enum {
 #define OPTVAL_SOURCE_PLATEN      "Flatbed"
 #define OPTVAL_SOURCE_ADF_SIMPLEX "ADF"
 #define OPTVAL_SOURCE_ADF_DUPLEX  "ADF Duplex"
-
-/* Decode OPT_SOURCE from SANE name
- */
-OPT_SOURCE
-opt_source_from_sane (SANE_String_Const name);
-
-/* Get SANE name of OPT_SOURCE
- */
-SANE_String_Const
-opt_source_to_sane (OPT_SOURCE source);
 
 /* Decode OPT_COLORMODE from SANE name
  */
@@ -1212,7 +1214,7 @@ typedef struct {
 
     /* Sources */
     SANE_String    *sane_sources;        /* Sources, in SANE format */
-    devcaps_source *src[NUM_OPT_SOURCE]; /* Missed sources are NULL */
+    devcaps_source *src[NUM_ID_SOURCE];  /* Missed sources are NULL */
 } devcaps;
 
 /* Initialize Device Capabilities
@@ -1241,7 +1243,7 @@ devcaps_dump (trace *t, devcaps *caps);
 typedef struct {
     devcaps                caps;              /* Device capabilities */
     SANE_Option_Descriptor desc[NUM_OPTIONS]; /* Option descriptors */
-    OPT_SOURCE             src;               /* Current source */
+    ID_SOURCE              src;               /* Current source */
     OPT_COLORMODE          colormode;         /* Color mode */
     SANE_Word              resolution;        /* Current resolution */
     SANE_Fixed             tl_x, tl_y;        /* Top-left x/y */
@@ -1443,7 +1445,7 @@ typedef struct {
     int           x_off, y_off; /* Scan area X/Y offset */
     int           wid, hei;     /* Scan area width and height */
     int           x_res, y_res; /* X/Y resolution */
-    OPT_SOURCE    src;          /* Desired source */
+    ID_SOURCE     src;          /* Desired source */
     OPT_COLORMODE colormode;    /* Desired color mode */
 } proto_scan_params;
 

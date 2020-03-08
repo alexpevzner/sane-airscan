@@ -139,7 +139,7 @@ devcaps_cleanup (devcaps *caps)
     g_free((void*) caps->model);
 
     unsigned int i;
-    for (i = 0; i < NUM_OPT_SOURCE; i ++) {
+    for (i = 0; i < NUM_ID_SOURCE; i ++) {
         devcaps_source_free(caps->src[i]);
     }
 }
@@ -181,9 +181,9 @@ devcaps_dump (trace *t, devcaps *caps)
 
     trace_printf(t, "  Sources:    %s", buf->str);
 
-    OPT_SOURCE opt_src;
-    for (opt_src = (OPT_SOURCE) 0; opt_src < NUM_OPT_SOURCE; opt_src ++) {
-        devcaps_source *src = caps->src[opt_src];
+    ID_SOURCE id_src;
+    for (id_src = (ID_SOURCE) 0; id_src < NUM_ID_SOURCE; id_src ++) {
+        devcaps_source *src = caps->src[id_src];
         char           xbuf[64], ybuf[64];
 
         if (src == NULL) {
@@ -191,7 +191,7 @@ devcaps_dump (trace *t, devcaps *caps)
         }
 
         trace_printf(t, "");
-        trace_printf(t, "  %s:", opt_source_to_sane(opt_src));
+        trace_printf(t, "  %s:", id_source_sane_name(id_src));
 
         math_fmt_mm(math_px2mm_res(src->min_wid_px, caps->units), xbuf);
         math_fmt_mm(math_px2mm_res(src->min_hei_px, caps->units), ybuf);

@@ -17,7 +17,7 @@ void
 devopt_init (devopt *opt)
 {
     devcaps_init(&opt->caps);
-    opt->src = OPT_SOURCE_UNKNOWN;
+    opt->src = ID_SOURCE_UNKNOWN;
     opt->colormode = OPT_COLORMODE_UNKNOWN;
     opt->resolution = CONFIG_DEFAULT_RESOLUTION;
     sane_string_array_init(&opt->sane_colormodes);
@@ -34,18 +34,18 @@ devopt_cleanup (devopt *opt)
 
 /* Choose default source
  */
-static OPT_SOURCE
+static ID_SOURCE
 devopt_choose_default_source (devopt *opt)
 {
     /* Choose initial source */
-    OPT_SOURCE opt_src = (OPT_SOURCE) 0;
-    while (opt_src < NUM_OPT_SOURCE &&
-            (opt->caps.src[opt_src]) == NULL) {
-        opt_src ++;
+    ID_SOURCE id_src = (ID_SOURCE) 0;
+    while (id_src < NUM_ID_SOURCE &&
+            (opt->caps.src[id_src]) == NULL) {
+        id_src ++;
     }
 
-    log_assert(NULL, opt_src != NUM_OPT_SOURCE);
-    return opt_src;
+    log_assert(NULL, id_src != NUM_ID_SOURCE);
+    return id_src;
 }
 
 /* Choose appropriate color mode
@@ -312,19 +312,19 @@ devopt_set_colormode (devopt *opt, OPT_COLORMODE opt_colormode, SANE_Word *info)
 /* Set current source. Affects many other options
  */
 static SANE_Status
-devopt_set_source (devopt *opt, OPT_SOURCE opt_src, SANE_Word *info)
+devopt_set_source (devopt *opt, ID_SOURCE id_src, SANE_Word *info)
 {
-    devcaps_source *src = opt->caps.src[opt_src];
+    devcaps_source *src = opt->caps.src[id_src];
 
     if (src == NULL) {
         return SANE_STATUS_INVAL;
     }
 
-    if (opt->src == opt_src) {
+    if (opt->src == id_src) {
         return SANE_STATUS_GOOD;
     }
 
-    opt->src = opt_src;
+    opt->src = id_src;
 
     /* Try to preserve current color mode */
     opt->colormode = devopt_choose_colormode(opt, opt->colormode);
@@ -420,7 +420,7 @@ SANE_Status
 devopt_set_option (devopt *opt, SANE_Int option, void *value, SANE_Word *info)
 {
     SANE_Status    status = SANE_STATUS_GOOD;
-    OPT_SOURCE     opt_src;
+    ID_SOURCE      id_src;
     OPT_COLORMODE  opt_colormode;
 
     /* Simplify life of options handlers by ensuring info != NULL  */
@@ -447,11 +447,11 @@ devopt_set_option (devopt *opt, SANE_Int option, void *value, SANE_Word *info)
         break;
 
     case OPT_SCAN_SOURCE:
-        opt_src = opt_source_from_sane(value);
-        if (opt_src == OPT_SOURCE_UNKNOWN) {
+        id_src = id_source_by_sane_name(value);
+        if (id_src == ID_SOURCE_UNKNOWN) {
             status = SANE_STATUS_INVAL;
         } else {
-            status = devopt_set_source(opt, opt_src, info);
+            status = devopt_set_source(opt, id_src, info);
         }
         break;
 
@@ -499,7 +499,7 @@ devopt_get_option (devopt *opt, SANE_Int option, void *value)
         break;
 
     case OPT_SCAN_SOURCE:
-        strcpy(value, opt_source_to_sane(opt->src));
+        strcpy(value, id_source_sane_name(opt->src));
         break;
 
     case OPT_SCAN_TL_X:

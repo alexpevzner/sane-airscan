@@ -381,7 +381,7 @@ escl_devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
             xml_rd_enter(xml);
             if (xml_rd_node_name_match(xml, "scan:PlatenInputCaps")) {
                 err = escl_devcaps_source_parse(xml,
-                    &caps->src[OPT_SOURCE_PLATEN]);
+                    &caps->src[ID_SOURCE_PLATEN]);
             }
             xml_rd_leave(xml);
         } else if (xml_rd_node_name_match(xml, "scan:Adf")) {
@@ -389,11 +389,11 @@ escl_devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
             while (!xml_rd_end(xml)) {
                 if (xml_rd_node_name_match(xml, "scan:AdfSimplexInputCaps")) {
                     err = escl_devcaps_source_parse(xml,
-                        &caps->src[OPT_SOURCE_ADF_SIMPLEX]);
+                        &caps->src[ID_SOURCE_ADF_SIMPLEX]);
                 } else if (xml_rd_node_name_match(xml,
                         "scan:AdfDuplexInputCaps")) {
                     err = escl_devcaps_source_parse(xml,
-                        &caps->src[OPT_SOURCE_ADF_DUPLEX]);
+                        &caps->src[ID_SOURCE_ADF_DUPLEX]);
                 }
                 xml_rd_next(xml);
             }
@@ -432,14 +432,14 @@ escl_devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
     }
 
     /* Update list of sources */
-    OPT_SOURCE opt_src;
-    bool       src_ok = false;
+    ID_SOURCE id_src;
+    bool      src_ok = false;
 
     sane_string_array_reset(&caps->sane_sources);
-    for (opt_src = (OPT_SOURCE) 0; opt_src < NUM_OPT_SOURCE; opt_src ++) {
-        if (caps->src[opt_src] != NULL) {
+    for (id_src = (ID_SOURCE) 0; id_src < NUM_ID_SOURCE; id_src ++) {
+        if (caps->src[id_src] != NULL) {
             sane_string_array_append(&caps->sane_sources,
-                (SANE_String) opt_source_to_sane(opt_src));
+                (SANE_String) id_source_sane_name(id_src));
             src_ok = true;
         }
     }
@@ -496,9 +496,9 @@ escl_scan_query (const proto_ctx *ctx)
 
     /* Prepare parameters */
     switch (params->src) {
-    case OPT_SOURCE_PLATEN:      source = "Platen"; duplex = false; break;
-    case OPT_SOURCE_ADF_SIMPLEX: source = "Feeder"; duplex = false; break;
-    case OPT_SOURCE_ADF_DUPLEX:  source = "Feeder"; duplex = true; break;
+    case ID_SOURCE_PLATEN:      source = "Platen"; duplex = false; break;
+    case ID_SOURCE_ADF_SIMPLEX: source = "Feeder"; duplex = false; break;
+    case ID_SOURCE_ADF_DUPLEX:  source = "Feeder"; duplex = true; break;
 
     default:
         log_internal_error(ctx->dev);
@@ -538,7 +538,7 @@ escl_scan_query (const proto_ctx *ctx)
     }
     xml_wr_add_uint(xml, "scan:XResolution", params->x_res);
     xml_wr_add_uint(xml, "scan:YResolution", params->y_res);
-    if (params->src != OPT_SOURCE_PLATEN) {
+    if (params->src != ID_SOURCE_PLATEN) {
         xml_wr_add_bool(xml, "scan:Duplex", duplex);
     }
 
@@ -697,7 +697,7 @@ escl_decode_scanner_status (const proto_ctx *ctx,
     if (device_status != SANE_STATUS_GOOD &&
         device_status != SANE_STATUS_UNSUPPORTED) {
         status = device_status;
-    } else if (ctx->params.src == OPT_SOURCE_PLATEN) {
+    } else if (ctx->params.src == ID_SOURCE_PLATEN) {
         status = device_status;
     } else {
         status = adf_status;

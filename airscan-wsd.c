@@ -186,7 +186,7 @@ wsd_devcaps_parse_res (SANE_Word **res, xml_rd *xml)
 /* Parse source configuration
  */
 static error
-wsd_devcaps_parse_source (devcaps *caps, xml_rd *xml, OPT_SOURCE src_id)
+wsd_devcaps_parse_source (devcaps *caps, xml_rd *xml, ID_SOURCE src_id)
 {
     error          err = NULL;
     unsigned int   level = xml_rd_depth(xml);
@@ -356,12 +356,12 @@ wsd_devcaps_parse_configuration (devcaps *caps, xml_rd *xml)
         if (!strcmp(path, "/scan:DeviceSettings/scan:FormatsSupported")) {
             err = wsd_devcaps_parse_formats(caps, xml, &formats);
         } else if (!strcmp(path, "/scan:Platen")) {
-            err = wsd_devcaps_parse_source(caps, xml, OPT_SOURCE_PLATEN);
+            err = wsd_devcaps_parse_source(caps, xml, ID_SOURCE_PLATEN);
         } else if (!strcmp(path, "/scan:ADF/scan:ADFFront")) {
             adf = true;
-            err = wsd_devcaps_parse_source(caps, xml, OPT_SOURCE_ADF_SIMPLEX);
+            err = wsd_devcaps_parse_source(caps, xml, ID_SOURCE_ADF_SIMPLEX);
         } else if (!strcmp(path, "/scan:ADF/scan:ADFBack")) {
-            err = wsd_devcaps_parse_source(caps, xml, OPT_SOURCE_ADF_DUPLEX);
+            err = wsd_devcaps_parse_source(caps, xml, ID_SOURCE_ADF_DUPLEX);
         } else if (!strcmp(path, "/scan:ADF/scan:ADFSupportsDuplex")) {
             const char *v = xml_rd_node_value(xml);
             duplex = !strcmp(v, "1") || !strcmp(v, "true");
@@ -377,7 +377,7 @@ wsd_devcaps_parse_configuration (devcaps *caps, xml_rd *xml)
     }
 
     /* Adjust sources */
-    for (i = 0; i < NUM_OPT_SOURCE; i ++) {
+    for (i = 0; i < NUM_ID_SOURCE; i ++) {
         devcaps_source *src = caps->src[i];
 
         if (src != NULL) {
@@ -401,31 +401,31 @@ wsd_devcaps_parse_configuration (devcaps *caps, xml_rd *xml)
      * to back, if back is missed
      */
     if (adf && duplex) {
-        log_assert(NULL, caps->src[OPT_SOURCE_ADF_SIMPLEX] != NULL);
-        if (caps->src[OPT_SOURCE_ADF_DUPLEX] == NULL) {
-            caps->src[OPT_SOURCE_ADF_DUPLEX] =
-                devcaps_source_clone(caps->src[OPT_SOURCE_ADF_SIMPLEX]);
+        log_assert(NULL, caps->src[ID_SOURCE_ADF_SIMPLEX] != NULL);
+        if (caps->src[ID_SOURCE_ADF_DUPLEX] == NULL) {
+            caps->src[ID_SOURCE_ADF_DUPLEX] =
+                devcaps_source_clone(caps->src[ID_SOURCE_ADF_SIMPLEX]);
         } else {
             devcaps_source *src;
-            src = devcaps_source_merge(caps->src[OPT_SOURCE_ADF_SIMPLEX],
-                caps->src[OPT_SOURCE_ADF_DUPLEX]);
-            devcaps_source_free(caps->src[OPT_SOURCE_ADF_DUPLEX]);
-            caps->src[OPT_SOURCE_ADF_DUPLEX] = src;
+            src = devcaps_source_merge(caps->src[ID_SOURCE_ADF_SIMPLEX],
+                caps->src[ID_SOURCE_ADF_DUPLEX]);
+            devcaps_source_free(caps->src[ID_SOURCE_ADF_DUPLEX]);
+            caps->src[ID_SOURCE_ADF_DUPLEX] = src;
         }
-    } else if (caps->src[OPT_SOURCE_ADF_DUPLEX] != NULL) {
-        devcaps_source_free(caps->src[OPT_SOURCE_ADF_DUPLEX]);
-        caps->src[OPT_SOURCE_ADF_DUPLEX] = NULL;
+    } else if (caps->src[ID_SOURCE_ADF_DUPLEX] != NULL) {
+        devcaps_source_free(caps->src[ID_SOURCE_ADF_DUPLEX]);
+        caps->src[ID_SOURCE_ADF_DUPLEX] = NULL;
     }
 
     /* Update list of sources */
-    OPT_SOURCE opt_src;
-    bool       src_ok = false;
+    ID_SOURCE id_src;
+    bool      src_ok = false;
 
     sane_string_array_reset(&caps->sane_sources);
-    for (opt_src = (OPT_SOURCE) 0; opt_src < NUM_OPT_SOURCE; opt_src ++) {
-        if (caps->src[opt_src] != NULL) {
+    for (id_src = (ID_SOURCE) 0; id_src < NUM_ID_SOURCE; id_src ++) {
+        if (caps->src[id_src] != NULL) {
             sane_string_array_append(&caps->sane_sources,
-                (SANE_String) opt_source_to_sane(opt_src));
+                (SANE_String) id_source_sane_name(id_src));
             src_ok = true;
         }
     }
@@ -529,15 +529,15 @@ wsd_scan_query (const proto_ctx *ctx)
 
     /* Prepare parameters */
     switch (params->src) {
-    case OPT_SOURCE_PLATEN:      source = "Platen"; break;
-    case OPT_SOURCE_ADF_SIMPLEX: source = "ADF"; break;
-    case OPT_SOURCE_ADF_DUPLEX:  source = "ADFDuplex"; break;
+    case ID_SOURCE_PLATEN:      source = "Platen"; break;
+    case ID_SOURCE_ADF_SIMPLEX: source = "ADF"; break;
+    case ID_SOURCE_ADF_DUPLEX:  source = "ADFDuplex"; break;
 
     default:
         log_internal_error(ctx->dev);
     }
 
-    sides = params->src == OPT_SOURCE_ADF_DUPLEX ? sides_duplex : sides_simplex;
+    sides = params->src == ID_SOURCE_ADF_DUPLEX ? sides_duplex : sides_simplex;
 
     switch (params->colormode) {
     case OPT_COLORMODE_COLOR:     colormode = "RGB24"; break;
