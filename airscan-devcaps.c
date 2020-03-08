@@ -160,9 +160,6 @@ devcaps_dump (trace *t, devcaps *caps)
 {
     int          i;
     GString      *buf = g_string_new(NULL);
-    SANE_String *list;
-
-    sane_string_array_init(&list);
 
     trace_printf(t, "===== device capabilities =====");
     trace_printf(t, "  Model:      \"%s\"", caps->model);
@@ -219,14 +216,14 @@ devcaps_dump (trace *t, devcaps *caps)
         }
 
         g_string_truncate(buf, 0);
-        sane_string_array_reset(&list);
-        opt_colormodes_to_sane(&list, src->colormodes);
 
-        for (i = 0; list[i] != NULL; i ++) {
-            if (i != 0) {
-                g_string_append(buf, ", ");
+        for (i = 0; i < NUM_ID_COLORMODE; i ++) {
+            if ((src->colormodes & (1 << i)) != 0) {
+                if (buf->len != 0) {
+                    g_string_append(buf, ", ");
+                }
+                g_string_append(buf, id_colormode_sane_name(i));
             }
-            g_string_append_printf(buf, "%s", list[i]);
         }
 
         trace_printf(t, "    Color modes: %s", buf->str);
@@ -234,8 +231,6 @@ devcaps_dump (trace *t, devcaps *caps)
 
     g_string_free(buf, TRUE);
     trace_printf(t, "");
-
-    sane_string_array_cleanup(&list);
 }
 
 /* vim:ts=8:sw=4:et

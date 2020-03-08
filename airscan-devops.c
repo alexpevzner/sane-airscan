@@ -18,7 +18,7 @@ devopt_init (devopt *opt)
 {
     devcaps_init(&opt->caps);
     opt->src = ID_SOURCE_UNKNOWN;
-    opt->colormode = OPT_COLORMODE_UNKNOWN;
+    opt->colormode = ID_COLORMODE_UNKNOWN;
     opt->resolution = CONFIG_DEFAULT_RESOLUTION;
     sane_string_array_init(&opt->sane_sources);
     sane_string_array_init(&opt->sane_colormodes);
@@ -52,15 +52,15 @@ devopt_choose_default_source (devopt *opt)
 
 /* Choose appropriate color mode
  */
-static OPT_COLORMODE
-devopt_choose_colormode(devopt *opt, OPT_COLORMODE wanted)
+static ID_COLORMODE
+devopt_choose_colormode(devopt *opt, ID_COLORMODE wanted)
 {
     devcaps_source *src = opt->caps.src[opt->src];
 
     /* Prefer wanted mode if possible and if not, try to find
      * a reasonable downgrade */
-    if (wanted != OPT_COLORMODE_UNKNOWN) {
-        while (wanted < NUM_OPT_COLORMODE) {
+    if (wanted != ID_COLORMODE_UNKNOWN) {
+        while (wanted < NUM_ID_COLORMODE) {
             if ((src->colormodes & (1 << wanted)) != 0) {
                 return wanted;
             }
@@ -70,9 +70,9 @@ devopt_choose_colormode(devopt *opt, OPT_COLORMODE wanted)
 
     /* Nothing found in a previous step. Just choose the best mode
      * supported by the scanner */
-    wanted = (OPT_COLORMODE) 0;
+    wanted = (ID_COLORMODE) 0;
     while ((src->colormodes & (1 << wanted)) == 0) {
-        log_assert(NULL, wanted < NUM_OPT_COLORMODE);
+        log_assert(NULL, wanted < NUM_ID_COLORMODE);
         wanted ++;
     }
 
@@ -128,7 +128,12 @@ devopt_rebuild_opt_desc (devopt *opt)
         }
     }
 
-    opt_colormodes_to_sane(&opt->sane_colormodes, src->colormodes);
+    for (i = 0; i < NUM_ID_COLORMODE; i ++) {
+        if ((src->colormodes & (1 << i)) != 0) {
+            sane_string_array_append(&opt->sane_colormodes,
+                (SANE_String) id_colormode_sane_name(i));
+        }
+    }
 
     /* OPT_NUM_OPTIONS */
     desc = &opt->desc[OPT_NUM_OPTIONS];
@@ -257,19 +262,19 @@ devopt_update_params (devopt *opt)
     opt->params.lines = math_mm2px_res(hei, opt->resolution);
 
     switch (opt->colormode) {
-    case OPT_COLORMODE_COLOR:
+    case ID_COLORMODE_COLOR:
         opt->params.format = SANE_FRAME_RGB;
         opt->params.depth = 8;
         opt->params.bytes_per_line = opt->params.pixels_per_line * 3;
         break;
 
-    case OPT_COLORMODE_GRAYSCALE:
+    case ID_COLORMODE_GRAYSCALE:
         opt->params.format = SANE_FRAME_GRAY;
         opt->params.depth = 8;
         opt->params.bytes_per_line = opt->params.pixels_per_line;
         break;
 
-    case OPT_COLORMODE_BW1:
+    case ID_COLORMODE_BW1:
         opt->params.format = SANE_FRAME_GRAY;
         opt->params.depth = 1;
         opt->params.bytes_per_line =
@@ -303,19 +308,19 @@ devopt_set_resolution (devopt *opt, SANE_Word opt_resolution, SANE_Word *info)
 /* Set color mode
  */
 static SANE_Status
-devopt_set_colormode (devopt *opt, OPT_COLORMODE opt_colormode, SANE_Word *info)
+devopt_set_colormode (devopt *opt, ID_COLORMODE id_colormode, SANE_Word *info)
 {
     devcaps_source *src = opt->caps.src[opt->src];
 
-    if (opt->colormode == opt_colormode) {
+    if (opt->colormode == id_colormode) {
         return SANE_STATUS_GOOD;
     }
 
-    if ((src->colormodes & (1 <<opt_colormode)) == 0) {
+    if ((src->colormodes & (1 << id_colormode)) == 0) {
         return SANE_STATUS_INVAL;
     }
 
-    opt->colormode = opt_colormode;
+    opt->colormode = id_colormode;
     *info |= SANE_INFO_RELOAD_PARAMS;
 
     return SANE_STATUS_GOOD;
@@ -413,7 +418,7 @@ devopt_set_defaults (devopt *opt)
     devcaps_source *src;
 
     opt->src = devopt_choose_default_source(opt);
-    opt->colormode = devopt_choose_colormode(opt, OPT_COLORMODE_UNKNOWN);
+    opt->colormode = devopt_choose_colormode(opt, ID_COLORMODE_UNKNOWN);
     opt->resolution = devopt_choose_resolution(opt, CONFIG_DEFAULT_RESOLUTION);
 
     src = opt->caps.src[opt->src];
@@ -433,7 +438,7 @@ devopt_set_option (devopt *opt, SANE_Int option, void *value, SANE_Word *info)
 {
     SANE_Status    status = SANE_STATUS_GOOD;
     ID_SOURCE      id_src;
-    OPT_COLORMODE  opt_colormode;
+    ID_COLORMODE   id_colormode;
 
     /* Simplify life of options handlers by ensuring info != NULL  */
     if (info == NULL) {
@@ -450,11 +455,11 @@ devopt_set_option (devopt *opt, SANE_Int option, void *value, SANE_Word *info)
         break;
 
     case OPT_SCAN_COLORMODE:
-        opt_colormode = opt_colormode_from_sane(value);
-        if (opt_colormode == OPT_COLORMODE_UNKNOWN) {
+        id_colormode = id_colormode_by_sane_name(value);
+        if (id_colormode == ID_COLORMODE_UNKNOWN) {
             status = SANE_STATUS_INVAL;
         } else {
-            status = devopt_set_colormode(opt, opt_colormode, info);
+            status = devopt_set_colormode(opt, id_colormode, info);
         }
         break;
 
@@ -507,7 +512,7 @@ devopt_get_option (devopt *opt, SANE_Int option, void *value)
         break;
 
     case OPT_SCAN_COLORMODE:
-        strcpy(value, opt_colormode_to_sane(opt->colormode));
+        strcpy(value, id_colormode_sane_name(opt->colormode));
         break;
 
     case OPT_SCAN_SOURCE:

@@ -42,7 +42,6 @@ SRC	= \
 	airscan-log.c \
 	airscan-math.c \
 	airscan-netif.c \
-	airscan-opt.c \
 	airscan-pollable.c \
 	airscan-trace.c \
 	airscan-uuid.c \

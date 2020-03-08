@@ -107,5 +107,34 @@ id_source_by_sane_name (const char *name)
     return id_by_name(name, strcmp, id_source_sane_name_table);
 }
 
+/******************** ID_COLORMODE ********************/
+/* id_colormode_sane_name_table represents ID_COLORMODE to
+ * SANE name mapping
+ */
+static id_name_table id_colormode_sane_name_table[] = {
+    {ID_COLORMODE_BW1,       SANE_VALUE_SCAN_MODE_HALFTONE},
+    {ID_COLORMODE_GRAYSCALE, SANE_VALUE_SCAN_MODE_GRAY},
+    {ID_COLORMODE_COLOR,     SANE_VALUE_SCAN_MODE_COLOR},
+    {-1, NULL}
+};
+
+/* id_colormode_sane_name returns SANE name for the color mode
+ * For unknown ID returns NULL
+ */
+const char*
+id_colormode_sane_name (ID_COLORMODE id)
+{
+    return id_name(id, id_colormode_sane_name_table);
+}
+
+/* id_colormode_by_sane_name returns ID_COLORMODE nu its SANE name
+ * For unknown name returns ID_COLORMODE_UNKNOWN
+ */
+ID_COLORMODE
+id_colormode_by_sane_name (const char *name)
+{
+    return id_by_name(name, strcmp, id_colormode_sane_name_table);
+}
+
 /* vim:ts=8:sw=4:et
  */

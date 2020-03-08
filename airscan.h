@@ -128,6 +128,29 @@ id_source_sane_name (ID_SOURCE id);
 ID_SOURCE
 id_source_by_sane_name (const char *name);
 
+/* ID_COLORMODE represents color mode
+ */
+typedef enum {
+    ID_COLORMODE_UNKNOWN = -1,
+    ID_COLORMODE_COLOR,
+    ID_COLORMODE_GRAYSCALE,
+    ID_COLORMODE_BW1,
+
+    NUM_ID_COLORMODE
+} ID_COLORMODE;
+
+/* id_colormode_sane_name returns SANE name for the color mode
+ * For unknown ID returns NULL
+ */
+const char*
+id_colormode_sane_name (ID_COLORMODE id);
+
+/* id_colormode_by_sane_name returns ID_COLORMODE nu its SANE name
+ * For unknown name returns ID_COLORMODE_UNKNOWN
+ */
+ID_COLORMODE
+id_colormode_by_sane_name (const char *name);
+
 /******************** Configuration file loader ********************/
 /* Device URI for manually disabled device
  */
@@ -1073,25 +1096,14 @@ enum {
     NUM_OPTIONS
 };
 
-/* Color mode numbers, for internal use
- */
-typedef enum {
-    OPT_COLORMODE_UNKNOWN = -1, /* Unknown */
-    OPT_COLORMODE_COLOR,        /* RGB-24 */
-    OPT_COLORMODE_GRAYSCALE,    /* 8-bit gray scale */
-    OPT_COLORMODE_BW1,          /* 1-bit black and white */
-
-    NUM_OPT_COLORMODE
-} OPT_COLORMODE;
-
 /* Supported color modes
  *
  * Note, currently the only image format we support is JPEG
- * With JPEG, OPT_COLORMODE_BW1 cannot be supported
+ * With JPEG, ID_COLORMODE_BW1 cannot be supported
  */
 #define OPT_COLORMODES_SUPPORTED        \
-    ((1 << OPT_COLORMODE_COLOR) |       \
-     (1 << OPT_COLORMODE_GRAYSCALE))
+    ((1 << ID_COLORMODE_COLOR) |       \
+     (1 << ID_COLORMODE_GRAYSCALE))
 
 /* String constants for certain SANE options values
  * (missed from sane/sameopt.h)
@@ -1099,25 +1111,6 @@ typedef enum {
 #define OPTVAL_SOURCE_PLATEN      "Flatbed"
 #define OPTVAL_SOURCE_ADF_SIMPLEX "ADF"
 #define OPTVAL_SOURCE_ADF_DUPLEX  "ADF Duplex"
-
-/* Decode OPT_COLORMODE from SANE name
- */
-OPT_COLORMODE
-opt_colormode_from_sane (SANE_String_Const name);
-
-/* Get SANE name of OPT_COLORMODE
- */
-SANE_String_Const
-opt_colormode_to_sane (OPT_COLORMODE mode);
-
-/* Export set of colormodes (1 << OPT_COLORMODE) as sane
- * array of strings
- *
- * The result is appended to 'out' array -- it needs to
- * be initialized before call to this function
- */
-void
-opt_colormodes_to_sane (SANE_String **out, unsigned int colormodes);
 
 /******************** Device Capabilities ********************/
 /* Source flags
@@ -1169,7 +1162,7 @@ enum {
  */
 typedef struct {
     unsigned int flags;                  /* Source flags */
-    unsigned int colormodes;             /* Set of 1 << OPT_COLORMODE */
+    unsigned int colormodes;             /* Set of 1 << ID_COLORMODE */
     SANE_Word    min_wid_px, max_wid_px; /* Min/max width, in pixels */
     SANE_Word    min_hei_px, max_hei_px; /* Min/max height, in pixels */
     SANE_Word    *resolutions;           /* Discrete resolutions, in DPI */
@@ -1243,7 +1236,7 @@ typedef struct {
     devcaps                caps;              /* Device capabilities */
     SANE_Option_Descriptor desc[NUM_OPTIONS]; /* Option descriptors */
     ID_SOURCE              src;               /* Current source */
-    OPT_COLORMODE          colormode;         /* Color mode */
+    ID_COLORMODE           colormode;         /* Current color mode */
     SANE_Word              resolution;        /* Current resolution */
     SANE_Fixed             tl_x, tl_y;        /* Top-left x/y */
     SANE_Fixed             br_x, br_y;        /* Bottom-right x/y */
@@ -1446,7 +1439,7 @@ typedef struct {
     int           wid, hei;     /* Scan area width and height */
     int           x_res, y_res; /* X/Y resolution */
     ID_SOURCE     src;          /* Desired source */
-    OPT_COLORMODE colormode;    /* Desired color mode */
+    ID_COLORMODE  colormode;    /* Desired color mode */
 } proto_scan_params;
 
 /* proto_ctx represents request context

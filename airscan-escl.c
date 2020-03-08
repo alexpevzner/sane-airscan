@@ -65,11 +65,11 @@ escl_devcaps_source_parse_color_modes (xml_rd *xml, devcaps_source *src)
         if(xml_rd_node_name_match(xml, "scan:ColorMode")) {
             const char *v = xml_rd_node_value(xml);
             if (!strcmp(v, "BlackAndWhite1")) {
-                src->colormodes |= 1 << OPT_COLORMODE_BW1;
+                src->colormodes |= 1 << ID_COLORMODE_BW1;
             } else if (!strcmp(v, "Grayscale8")) {
-                src->colormodes |= 1 << OPT_COLORMODE_GRAYSCALE;
+                src->colormodes |= 1 << ID_COLORMODE_GRAYSCALE;
             } else if (!strcmp(v, "RGB24")) {
-                src->colormodes |= 1 << OPT_COLORMODE_COLOR;
+                src->colormodes |= 1 << ID_COLORMODE_COLOR;
             }
         }
     }
@@ -502,9 +502,9 @@ escl_scan_query (const proto_ctx *ctx)
     }
 
     switch (params->colormode) {
-    case OPT_COLORMODE_COLOR:     colormode = "RGB24"; break;
-    case OPT_COLORMODE_GRAYSCALE: colormode = "Grayscale8"; break;
-    case OPT_COLORMODE_BW1:       colormode = "BlackAndWhite1"; break;
+    case ID_COLORMODE_COLOR:     colormode = "RGB24"; break;
+    case ID_COLORMODE_GRAYSCALE: colormode = "Grayscale8"; break;
+    case ID_COLORMODE_BW1:       colormode = "BlackAndWhite1"; break;
 
     default:
         log_internal_error(ctx->dev);
