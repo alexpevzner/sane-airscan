@@ -625,7 +625,7 @@ conf_device_list_free (void)
 /* Prepend device conf.devices list
  */
 static void
-conf_device_list_prepend (const char *name, const char *uri, CONF_PROTO proto)
+conf_device_list_prepend (const char *name, const char *uri, ID_PROTO proto)
 {
     conf_device *dev = g_new0(conf_device, 1);
     dev->name = g_strdup(name);
@@ -679,43 +679,29 @@ conf_perror (const inifile_record *rec, const char *err)
     log_debug(NULL, "%s:%d: %s", rec->file, rec->line, err);
 }
 
-/* Decode CONF_PROTO
- */
-static CONF_PROTO
-conf_decode_proto (const char *name)
-{
-    if (!strcasecmp(name, "escl")) {
-        return CONF_PROTO_ESCL;
-    } else if (!strcasecmp(name, "wsd")) {
-        return CONF_PROTO_WSD;
-    }
-
-    return CONF_PROTO_UNKNOWN;
-}
-
 /* Decode a device configuration
  */
 static void
 conf_decode_device (const inifile_record *rec) {
     http_uri   *uri = NULL;
-    CONF_PROTO proto = CONF_PROTO_ESCL;
+    ID_PROTO   proto = ID_PROTO_ESCL;
     const char *uri_name = rec->tokc > 0 ? rec->tokv[0] : NULL;
     const char *proto_name = rec->tokc > 1 ? rec->tokv[1] : NULL;
 
     if (conf_device_list_lookup(rec->variable) != NULL) {
         conf_perror(rec, "device already defined");
     } else if (!strcmp(rec->value, CONF_DEVICE_DISABLE)) {
-        conf_device_list_prepend(rec->variable, NULL, CONF_PROTO_UNKNOWN);
+        conf_device_list_prepend(rec->variable, NULL, ID_PROTO_UNKNOWN);
     } else if (rec->tokc != 1 && rec->tokc != 2) {
         conf_perror(rec, "usage: \"device name\" = URL[,protocol]");
     } else if ((uri = http_uri_new(uri_name, true)) == NULL) {
         conf_perror(rec, "invalid URL");
     } else if (proto_name != NULL&&
-               (proto = conf_decode_proto(proto_name)) == CONF_PROTO_UNKNOWN) {
+               (proto = id_proto_by_name(proto_name)) == ID_PROTO_UNKNOWN) {
         conf_perror(rec, "protocol must be \"escl\" or \"wsd\"");
     }
 
-    if (uri != NULL && proto != CONF_PROTO_UNKNOWN) {
+    if (uri != NULL && proto != ID_PROTO_UNKNOWN) {
         conf_device_list_prepend(rec->variable, http_uri_str(uri), proto);
     }
 

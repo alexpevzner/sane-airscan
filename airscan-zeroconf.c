@@ -196,7 +196,7 @@ zeroconf_endpoint_new (const AvahiAddress *addr, uint16_t port, const char *rs,
     char              str_addr[128];
     int               rs_len;
 
-    endpoint->proto = CONF_PROTO_ESCL; /* FIXME, hard-coded for now */
+    endpoint->proto = ID_PROTO_ESCL; /* FIXME, hard-coded for now */
 
     if (addr->proto == AVAHI_PROTO_INET) {
         /* 169.254.0.0/16 */

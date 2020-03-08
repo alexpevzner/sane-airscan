@@ -36,6 +36,7 @@ SRC	= \
 	airscan-eloop.c \
 	airscan-escl.c \
 	airscan-http.c \
+	airscan-id.c \
 	airscan-ip.c \
 	airscan-jpeg.c \
 	airscan-log.c \

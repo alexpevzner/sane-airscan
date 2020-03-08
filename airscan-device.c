@@ -136,7 +136,7 @@ static void
 device_http_onerror (device *dev, error err);
 
 static void
-device_proto_set (device *dev, CONF_PROTO proto);
+device_proto_set (device *dev, ID_PROTO proto);
 
 static void
 device_scanner_capabilities_callback (device *dev, http_query *q);
@@ -239,7 +239,7 @@ device_unref (device *dev)
         log_assert(dev, device_stm_state_get(dev) == DEVICE_STM_CLOSED);
 
         /* Release all memory */
-        device_proto_set(dev, CONF_PROTO_UNKNOWN);
+        device_proto_set(dev, ID_PROTO_UNKNOWN);
 
         devopt_cleanup(&dev->opt);
 
@@ -369,7 +369,7 @@ device_table_ready (void)
 /* Set protocol handler
  */
 static void
-device_proto_set (device *dev, CONF_PROTO proto)
+device_proto_set (device *dev, ID_PROTO proto)
 {
     if (dev->proto_ctx.proto != NULL) {
         log_debug(dev, "closed protocol \"%s\"",
@@ -378,7 +378,7 @@ device_proto_set (device *dev, CONF_PROTO proto)
         dev->proto_ctx.proto = NULL;
     }
 
-    if (proto != CONF_PROTO_UNKNOWN) {
+    if (proto != ID_PROTO_UNKNOWN) {
         dev->proto_ctx.proto = proto_handler_new(proto);
         log_assert(dev, dev->proto_ctx.proto != NULL);
         log_debug(dev, "using protocol \"%s\"",
@@ -1515,7 +1515,7 @@ DONE:
 /* Add statically configured device
  */
 static void
-device_statically_configured (const char *name, const char *uri, CONF_PROTO proto)
+device_statically_configured (const char *name, const char *uri, ID_PROTO proto)
 {
     zeroconf_endpoint endpoint;
 

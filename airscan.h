@@ -84,25 +84,38 @@ ESTRING (error err)
     return (const char*) err;
 }
 
+/******************** Various identifiers ********************/
+/* ID_PROTO represents protocol identifier
+ */
+typedef enum {
+    ID_PROTO_UNKNOWN = -1,
+    ID_PROTO_ESCL,
+    ID_PROTO_WSD
+} ID_PROTO;
+
+/* id_proto_name returns protocol name
+ * For unknown ID returns NULL
+ */
+const char*
+id_proto_name (ID_PROTO proto);
+
+/* id_proto_by_name returns protocol identifier by name
+ * For unknown name returns ID_PROTO_UNKNOWN
+ */
+ID_PROTO
+id_proto_by_name (const char* name);
+
 /******************** Configuration file loader ********************/
 /* Device URI for manually disabled device
  */
 #define CONF_DEVICE_DISABLE     "disable"
-
-/* Protocol
- */
-typedef enum {
-    CONF_PROTO_UNKNOWN = -1,
-    CONF_PROTO_ESCL,
-    CONF_PROTO_WSD
-} CONF_PROTO;
 
 /* Device configuration, for manually added devices
  */
 typedef struct conf_device conf_device;
 struct conf_device {
     const char  *name; /* Device name */
-    CONF_PROTO  proto; /* Protocol to use */
+    ID_PROTO    proto; /* Protocol to use */
     const char  *uri;  /* Device URI, parsed; NULL if device disabled */
     conf_device *next; /* Next device in the list */
 };
@@ -1268,7 +1281,7 @@ devopt_get_option (devopt *opt, SANE_Int option, void *value);
  */
 typedef struct zeroconf_endpoint zeroconf_endpoint;
 struct zeroconf_endpoint {
-    CONF_PROTO        proto;     /* The protocol */
+    ID_PROTO          proto;     /* The protocol */
     const char        *uri;      /* I.e, "http://192.168.1.1:8080/eSCL/" */
     bool              ipv6;      /* This is an IPv6 address */
     bool              linklocal; /* This is a link-local address */
@@ -1522,18 +1535,17 @@ proto_handler_wsd_new (void);
 /* proto_handler_new creates new protocol handler by protocol ID
  */
 static inline proto_handler*
-proto_handler_new (CONF_PROTO proto)
+proto_handler_new (ID_PROTO proto)
 {
     switch (proto) {
-    case CONF_PROTO_ESCL:
+    case ID_PROTO_ESCL:
         return proto_handler_escl_new();
-    case CONF_PROTO_WSD:
+    case ID_PROTO_WSD:
         return proto_handler_wsd_new();
     default:
         return NULL;
     }
 }
-
 
 /******************** Image decoding ********************/
 /* The window withing the image
