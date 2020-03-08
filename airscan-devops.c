@@ -20,6 +20,7 @@ devopt_init (devopt *opt)
     opt->src = ID_SOURCE_UNKNOWN;
     opt->colormode = OPT_COLORMODE_UNKNOWN;
     opt->resolution = CONFIG_DEFAULT_RESOLUTION;
+    sane_string_array_init(&opt->sane_sources);
     sane_string_array_init(&opt->sane_colormodes);
 }
 
@@ -28,6 +29,7 @@ devopt_init (devopt *opt)
 void
 devopt_cleanup (devopt *opt)
 {
+    sane_string_array_cleanup(&opt->sane_sources);
     sane_string_array_cleanup(&opt->sane_colormodes);
     devcaps_cleanup(&opt->caps);
 }
@@ -112,10 +114,20 @@ devopt_rebuild_opt_desc (devopt *opt)
 {
     SANE_Option_Descriptor *desc;
     devcaps_source         *src = opt->caps.src[opt->src];
+    int                    i;
 
     memset(opt->desc, 0, sizeof(opt->desc));
 
+    sane_string_array_reset(&opt->sane_sources);
     sane_string_array_reset(&opt->sane_colormodes);
+
+    for (i = 0; i < NUM_ID_SOURCE; i ++) {
+        if (opt->caps.src[i] != NULL) {
+            sane_string_array_append(&opt->sane_sources,
+                (SANE_String) id_source_sane_name(i));
+        }
+    }
+
     opt_colormodes_to_sane(&opt->sane_colormodes, src->colormodes);
 
     /* OPT_NUM_OPTIONS */
@@ -169,10 +181,10 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->title = SANE_TITLE_SCAN_SOURCE;
     desc->desc = SANE_DESC_SCAN_SOURCE;
     desc->type = SANE_TYPE_STRING;
-    desc->size = sane_string_array_max_strlen(&opt->caps.sane_sources) + 1;
+    desc->size = sane_string_array_max_strlen(&opt->sane_sources) + 1;
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->constraint_type = SANE_CONSTRAINT_STRING_LIST;
-    desc->constraint.string_list = (SANE_String_Const*) opt->caps.sane_sources;
+    desc->constraint.string_list = (SANE_String_Const*) opt->sane_sources;
 
     /* OPT_GROUP_GEOMETRY */
     desc = &opt->desc[OPT_GROUP_GEOMETRY];

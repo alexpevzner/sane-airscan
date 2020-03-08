@@ -1213,7 +1213,6 @@ typedef struct {
     SANE_Word      units;                /* Size units, pixels per inch */
 
     /* Sources */
-    SANE_String    *sane_sources;        /* Sources, in SANE format */
     devcaps_source *src[NUM_ID_SOURCE];  /* Missed sources are NULL */
 } devcaps;
 
@@ -1249,6 +1248,7 @@ typedef struct {
     SANE_Fixed             tl_x, tl_y;        /* Top-left x/y */
     SANE_Fixed             br_x, br_y;        /* Bottom-right x/y */
     SANE_Parameters        params;            /* Scan parameters */
+    SANE_String            *sane_sources;     /* Sources, in SANE format */
     SANE_String            *sane_colormodes;  /* Color modes in SANE format */
 } devopt;
 

@@ -417,15 +417,12 @@ wsd_devcaps_parse_configuration (devcaps *caps, xml_rd *xml)
         caps->src[ID_SOURCE_ADF_DUPLEX] = NULL;
     }
 
-    /* Update list of sources */
+    /* Check that we have at least one source */
     ID_SOURCE id_src;
     bool      src_ok = false;
 
-    sane_string_array_reset(&caps->sane_sources);
     for (id_src = (ID_SOURCE) 0; id_src < NUM_ID_SOURCE; id_src ++) {
         if (caps->src[id_src] != NULL) {
-            sane_string_array_append(&caps->sane_sources,
-                (SANE_String) id_source_sane_name(id_src));
             src_ok = true;
         }
     }

@@ -126,7 +126,7 @@ FAIL:
 void
 devcaps_init (devcaps *caps)
 {
-    sane_string_array_init(&caps->sane_sources);
+    (void) caps;
 }
 
 /* Cleanup Device Capabilities
@@ -134,7 +134,6 @@ devcaps_init (devcaps *caps)
 void
 devcaps_cleanup (devcaps *caps)
 {
-    sane_string_array_cleanup(&caps->sane_sources);
     g_free((void*) caps->vendor);
     g_free((void*) caps->model);
 
@@ -172,11 +171,13 @@ devcaps_dump (trace *t, devcaps *caps)
     trace_printf(t, "  Protocol:   %s", caps->protocol);
 
     g_string_truncate(buf, 0);
-    for (i = 0; caps->sane_sources[i] != NULL; i ++) {
-        if (i != 0) {
-            g_string_append(buf, ", ");
+    for (i = 0; i < NUM_ID_SOURCE; i ++) {
+        if (caps->src[i] != NULL) {
+            if (buf->len != 0) {
+                g_string_append(buf, ", ");
+            }
+            g_string_append(buf, id_source_sane_name(i));
         }
-        g_string_append_printf(buf, "%s", caps->sane_sources[i]);
     }
 
     trace_printf(t, "  Sources:    %s", buf->str);

@@ -431,15 +431,12 @@ escl_devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
         caps->model = g_strdup("Unknown");
     }
 
-    /* Update list of sources */
+    /* Check that we have at least one source */
     ID_SOURCE id_src;
     bool      src_ok = false;
 
-    sane_string_array_reset(&caps->sane_sources);
     for (id_src = (ID_SOURCE) 0; id_src < NUM_ID_SOURCE; id_src ++) {
         if (caps->src[id_src] != NULL) {
-            sane_string_array_append(&caps->sane_sources,
-                (SANE_String) id_source_sane_name(id_src));
             src_ok = true;
         }
     }
