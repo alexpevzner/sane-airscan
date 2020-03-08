@@ -687,7 +687,7 @@ device_stm_cancel_event_callback (void *data)
 static void
 device_stm_cancel_req (device *dev)
 {
-    static DEVICE_STM_STATE expected = DEVICE_STM_SCANNING;
+    DEVICE_STM_STATE expected = DEVICE_STM_SCANNING;
     bool ok = __atomic_compare_exchange_n(&dev->stm_state, &expected,
         DEVICE_STM_CANCEL_REQ, true, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
 
