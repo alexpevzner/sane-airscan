@@ -60,6 +60,8 @@ $(OBJDIR)%.o: %.c Makefile airscan.h
 	mkdir -p $(OBJDIR)
 	$(CC) -c -o $@ $< $(CPPFLAGS) $(airscan_CFLAGS)
 
+.PHONY: all clean install
+
 all:	$(BACKEND) test
 
 $(BACKEND): $(OBJ) Makefile airscan.sym
