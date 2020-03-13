@@ -1231,7 +1231,7 @@ devcaps_reset (devcaps *caps);
 /* Dump device capabilities, for debugging
  */
 void
-devcaps_dump (trace *t, devcaps *caps);
+devcaps_dump (log_ctx *log, devcaps *caps);
 
 /******************** Device options ********************/
 /* Scan options
@@ -1338,11 +1338,6 @@ device_list_free (const SANE_Device **dev_list);
  */
 log_ctx*
 device_log_ctx (device *dev);
-
-/* Get device's trace handle
- */
-trace*
-device_trace (device *dev);
 
 /* Open a device
  */
@@ -1786,7 +1781,7 @@ log_configure (void);
 /* log_ctx_new creates new logging context
  */
 log_ctx*
-log_ctx_new (const char *name, trace *trace);
+log_ctx_new (const char *name);
 
 /* log_ctx_free destroys logging context
  */
@@ -1802,6 +1797,11 @@ log_ctx_trace (log_ctx *log);
  */
 void
 log_debug (log_ctx *log, const char *fmt, ...);
+
+/* Write a protocol trace message
+ */
+void
+log_trace (log_ctx *log, const char *fmt, ...);
 
 /* Write an error message and terminate a program.
  */

@@ -76,7 +76,6 @@ struct device {
     /* Common part */
     volatile gint        refcnt;               /* Reference counter */
     const char           *name;                /* Device name */
-    trace                *trace;               /* Protocol trace */
     log_ctx              *log;                 /* Logging context */
     unsigned int         flags;                /* Device flags */
     devopt               opt;                  /* Device options */
@@ -188,8 +187,7 @@ device_add (const char *name, zeroconf_endpoint *endpoints,
 
     dev->refcnt = 1;
     dev->name = g_strdup(name);
-    dev->trace = trace_open(name);
-    dev->log = log_ctx_new(name, dev->trace);
+    dev->log = log_ctx_new(name);
 
     dev->flags = DEVICE_LISTED | DEVICE_INIT_WAIT;
     dev->proto_ctx.log = dev->log;
@@ -259,8 +257,6 @@ device_unref (device *dev)
         pollable_free(dev->read_pollable);
 
         log_ctx_free(dev->log);
-        trace_close(dev->trace);
-
         g_free((void*) dev->name);
         g_free(dev);
     }
@@ -579,14 +575,13 @@ device_scanner_capabilities_callback (device *dev, http_query *q)
         goto DONE;
     }
 
-    devcaps_dump(dev->trace, &dev->opt.caps);
+    devcaps_dump(dev->log, &dev->opt.caps);
     devopt_set_defaults(&dev->opt);
 
     /* Cleanup and exit */
 DONE:
     if (err != NULL) {
         log_debug(dev->log, ESTRING(err));
-        trace_error(dev->trace, err);
 
         if (dev->endpoint_current != NULL &&
             dev->endpoint_current->next != NULL) {
@@ -885,27 +880,20 @@ device_stm_start_scan (device *dev)
     params->colormode = dev->opt.colormode;
 
     /* Dump parameters */
-    trace_printf(dev->trace, "==============================");
-    trace_printf(dev->trace, "Starting scan, using the following parameters:");
-    trace_printf(dev->trace, "  source:         %s",
-            id_source_sane_name(params->src));
-    trace_printf(dev->trace, "  colormode:      %s",
-            id_colormode_sane_name(params->colormode));
-    trace_printf(dev->trace, "  tl_x:           %s mm",
-            math_fmt_mm(dev->opt.tl_x, buf));
-    trace_printf(dev->trace, "  tl_y:           %s mm",
-            math_fmt_mm(dev->opt.tl_y, buf));
-    trace_printf(dev->trace, "  br_x:           %s mm",
-            math_fmt_mm(dev->opt.br_x, buf));
-    trace_printf(dev->trace, "  br_y:           %s mm",
-            math_fmt_mm(dev->opt.br_y, buf));
-    trace_printf(dev->trace, "  image size:     %dx%d",
-            params->wid, params->hei);
-    trace_printf(dev->trace, "  image X offset: %d", params->x_off);
-    trace_printf(dev->trace, "  image Y offset: %d", params->y_off);
-    trace_printf(dev->trace, "  x_resolution:   %d", params->x_res);
-    trace_printf(dev->trace, "  y_resolution:   %d", params->y_res);
-    trace_printf(dev->trace, "");
+    log_trace(dev->log, "==============================");
+    log_trace(dev->log, "Starting scan, using the following parameters:");
+    log_trace(dev->log, "  source:         %s", id_source_sane_name(params->src));
+    log_trace(dev->log, "  colormode:      %s", id_colormode_sane_name(params->colormode));
+    log_trace(dev->log, "  tl_x:           %s mm", math_fmt_mm(dev->opt.tl_x, buf));
+    log_trace(dev->log, "  tl_y:           %s mm", math_fmt_mm(dev->opt.tl_y, buf));
+    log_trace(dev->log, "  br_x:           %s mm", math_fmt_mm(dev->opt.br_x, buf));
+    log_trace(dev->log, "  br_y:           %s mm", math_fmt_mm(dev->opt.br_y, buf));
+    log_trace(dev->log, "  image size:     %dx%d", params->wid, params->hei);
+    log_trace(dev->log, "  image X offset: %d", params->x_off);
+    log_trace(dev->log, "  image Y offset: %d", params->y_off);
+    log_trace(dev->log, "  x_resolution:   %d", params->x_res);
+    log_trace(dev->log, "  y_resolution:   %d", params->y_res);
+    log_trace(dev->log, "");
 
     /* Submit a request */
     device_stm_state_set(dev, DEVICE_STM_SCANNING);
@@ -1058,15 +1046,7 @@ device_list_free (const SANE_Device **dev_list)
 log_ctx*
 device_log_ctx (device *dev)
 {
-    return dev->log;
-}
-
-/* Get device's trace handle
- */
-trace*
-device_trace (device *dev)
-{
-    return dev->trace;
+    return dev ? dev->log : NULL;
 }
 
 /* Open a device
@@ -1309,15 +1289,15 @@ device_read_next (device *dev)
     hei = params.lines;
 
     /* Dump parameters */
-    trace_printf(dev->trace, "==============================");
-    trace_printf(dev->trace, "Starting image decoding, image parameters are:");
-    trace_printf(dev->trace, "  content type:   %s", image_content_type(decoder));
-    trace_printf(dev->trace, "  frame format:   %s",
+    log_trace(dev->log, "==============================");
+    log_trace(dev->log, "Starting image decoding, image parameters are:");
+    log_trace(dev->log, "  content type:   %s", image_content_type(decoder));
+    log_trace(dev->log, "  frame format:   %s",
             params.format == SANE_FRAME_GRAY ? "Gray" : "RGB" );
-    trace_printf(dev->trace, "  image size:     %dx%d", params.pixels_per_line,
+    log_trace(dev->log, "  image size:     %dx%d", params.pixels_per_line,
             params.lines);
-    trace_printf(dev->trace, "  color depth:    %d", params.depth);
-    trace_printf(dev->trace, "");
+    log_trace(dev->log, "  color depth:    %d", params.depth);
+    log_trace(dev->log, "");
 
     /* Setup image clipping */
     if (dev->job_skip_x >= wid || dev->job_skip_y >= hei) {
@@ -1366,7 +1346,6 @@ device_read_next (device *dev)
 DONE:
     if (err != NULL) {
         log_debug(dev->log, ESTRING(err));
-        trace_error(dev->trace, err);
         http_data_unref(dev->read_image);
         dev->read_image = NULL;
         return SANE_STATUS_IO_ERROR;
@@ -1406,7 +1385,6 @@ device_read_decode_line (device *dev)
 
         if (err != NULL) {
             log_debug(dev->log, ESTRING(err));
-            trace_error(dev->trace, err);
             return SANE_STATUS_IO_ERROR;
         }
     }

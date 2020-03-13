@@ -673,7 +673,7 @@ http_query_callback (SoupSession *session, SoupMessage *msg, gpointer userdata)
                 http_uri_str(q->uri),
                 soup_status_get_phrase(msg->status_code));
 
-        trace_http_query_hook(device_trace(dev), q);
+        trace_http_query_hook(log_ctx_trace(device_log_ctx(dev)), q);
 
         if (err != NULL && q->client->onerror != NULL) {
             q->client->onerror(dev, err);

@@ -109,11 +109,11 @@ struct log_ctx {
 /* log_ctx_new creates new logging context
  */
 log_ctx*
-log_ctx_new (const char *name, trace *trace)
+log_ctx_new (const char *name)
 {
     log_ctx *log = g_new0(log_ctx, 1);
     log->name = name;
-    log->trace = trace;
+    log->trace = trace_open(name);
     return log;
 }
 
@@ -122,6 +122,7 @@ log_ctx_new (const char *name, trace *trace)
 void
 log_ctx_free (log_ctx *log)
 {
+    trace_close(log->trace);
     g_free(log);
 }
 
@@ -136,12 +137,12 @@ log_ctx_trace (log_ctx *log)
 /* Write a log message
  */
 static void
-log_message (log_ctx *log, bool force, const char *fmt, va_list ap)
+log_message (log_ctx *log, bool trace_only, bool force, const char *fmt, va_list ap)
 {
     trace *t = log ? log->trace : NULL;
     char  msg[4096];
     int   len = 0;
-    bool  dont_log = log_configured && !conf.dbg_enabled && !force;
+    bool  dont_log = trace_only || (log_configured && !conf.dbg_enabled && !force);
 
     /* If logs suppressed and trace not in use, we have nothing
      * to do */
@@ -181,7 +182,18 @@ log_debug (log_ctx *log, const char *fmt, ...)
 {
     va_list      ap;
     va_start(ap, fmt);
-    log_message(log, false, fmt, ap);
+    log_message(log, false, false, fmt, ap);
+    va_end(ap);
+}
+
+/* Write a protocol trace message
+ */
+void
+log_trace (log_ctx *log, const char *fmt, ...)
+{
+    va_list      ap;
+    va_start(ap, fmt);
+    log_message(log, true, false, fmt, ap);
     va_end(ap);
 }
 
@@ -200,7 +212,7 @@ log_panic (log_ctx *log, const char *fmt, ...)
     g_string_truncate(log_buffer, 0);
 
     va_start(ap, fmt);
-    log_message(log, true, fmt, ap);
+    log_message(log, false, true, fmt, ap);
     va_end(ap);
     abort();
 }

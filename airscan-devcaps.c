@@ -156,16 +156,16 @@ devcaps_reset (devcaps *caps)
 /* Dump device capabilities, for debugging
  */
 void
-devcaps_dump (trace *t, devcaps *caps)
+devcaps_dump (log_ctx *log, devcaps *caps)
 {
     int          i;
     GString      *buf = g_string_new(NULL);
 
-    trace_printf(t, "===== device capabilities =====");
-    trace_printf(t, "  Model:      \"%s\"", caps->model);
-    trace_printf(t, "  Vendor:     \"%s\"", caps->vendor);
-    trace_printf(t, "  Size units: %d DPI", caps->units);
-    trace_printf(t, "  Protocol:   %s", caps->protocol);
+    log_trace(log, "===== device capabilities =====");
+    log_trace(log, "  Model:      \"%s\"", caps->model);
+    log_trace(log, "  Vendor:     \"%s\"", caps->vendor);
+    log_trace(log, "  Size units: %d DPI", caps->units);
+    log_trace(log, "  Protocol:   %s", caps->protocol);
 
     g_string_truncate(buf, 0);
     for (i = 0; i < NUM_ID_SOURCE; i ++) {
@@ -177,7 +177,7 @@ devcaps_dump (trace *t, devcaps *caps)
         }
     }
 
-    trace_printf(t, "  Sources:    %s", buf->str);
+    log_trace(log, "  Sources:    %s", buf->str);
 
     ID_SOURCE id_src;
     for (id_src = (ID_SOURCE) 0; id_src < NUM_ID_SOURCE; id_src ++) {
@@ -188,19 +188,19 @@ devcaps_dump (trace *t, devcaps *caps)
             continue;
         }
 
-        trace_printf(t, "");
-        trace_printf(t, "  %s:", id_source_sane_name(id_src));
+        log_trace(log, "");
+        log_trace(log, "  %s:", id_source_sane_name(id_src));
 
         math_fmt_mm(math_px2mm_res(src->min_wid_px, caps->units), xbuf);
         math_fmt_mm(math_px2mm_res(src->min_hei_px, caps->units), ybuf);
 
-        trace_printf(t, "    Min window:  %dx%d px, %sx%s mm",
+        log_trace(log, "    Min window:  %dx%d px, %sx%s mm",
                 src->min_wid_px, src->min_hei_px, xbuf, ybuf);
 
         math_fmt_mm(math_px2mm_res(src->max_wid_px, caps->units), xbuf);
         math_fmt_mm(math_px2mm_res(src->max_hei_px, caps->units), ybuf);
 
-        trace_printf(t, "    Max window:  %dx%d px, %sx%s mm",
+        log_trace(log, "    Max window:  %dx%d px, %sx%s mm",
                 src->max_wid_px, src->max_hei_px, xbuf, ybuf);
 
         if (src->flags & DEVCAPS_SOURCE_RES_DISCRETE) {
@@ -212,7 +212,7 @@ devcaps_dump (trace *t, devcaps *caps)
                 g_string_append_printf(buf, "%d", src->resolutions[i+1]);
             }
 
-            trace_printf(t, "    Resolutions: %s", buf->str);
+            log_trace(log, "    Resolutions: %s", buf->str);
         }
 
         g_string_truncate(buf, 0);
@@ -226,11 +226,11 @@ devcaps_dump (trace *t, devcaps *caps)
             }
         }
 
-        trace_printf(t, "    Color modes: %s", buf->str);
+        log_trace(log, "    Color modes: %s", buf->str);
     }
 
     g_string_free(buf, TRUE);
-    trace_printf(t, "");
+    log_trace(log, "");
 }
 
 /* vim:ts=8:sw=4:et
