@@ -133,13 +133,13 @@ static void
 device_http_cancel (device *dev);
 
 static void
-device_http_onerror (device *dev, error err);
+device_http_onerror (void *ptr, error err);
 
 static void
 device_proto_set (device *dev, ID_PROTO proto);
 
 static void
-device_scanner_capabilities_callback (device *dev, http_query *q);
+device_scanner_capabilities_callback (void *ptr, http_query *q);
 
 static void
 device_probe_endpoint (device *dev, zeroconf_endpoint *endpoint);
@@ -157,7 +157,7 @@ static bool
 device_stm_cancel_perform (device *dev);
 
 static void
-device_stm_op_callback (device *dev, http_query *q);
+device_stm_op_callback (void *ptr, http_query *q);
 
 static void
 device_management_start_stop (bool start);
@@ -198,7 +198,7 @@ device_add (const char *name, zeroconf_endpoint *endpoints,
     }
     devopt_init(&dev->opt);
 
-    dev->proto_ctx.http = http_client_new(dev);
+    dev->proto_ctx.http = http_client_new(dev->log, dev);
 
     g_cond_init(&dev->stm_cond);
 
@@ -389,8 +389,7 @@ device_proto_set (device *dev, ID_PROTO proto)
 /* Query device capabilities
  */
 static void
-device_proto_devcaps_submit (device *dev,
-        void (*callback) (device*, http_query*))
+device_proto_devcaps_submit (device *dev, void (*callback) (void*, http_query*))
 {
     http_query *q;
 
@@ -429,8 +428,7 @@ device_proto_op_name (device *dev, PROTO_OP op)
 /* Submit operation request
  */
 static void
-device_proto_op_submit (device *dev, PROTO_OP op,
-    void (*callback) (device*, http_query*))
+device_proto_op_submit (device *dev, PROTO_OP op, void (*callback) (void*, http_query*))
 {
     http_query *(*func) (const proto_ctx *ctx) = NULL;
     http_query *q;
@@ -506,7 +504,9 @@ device_http_cancel (device *dev)
 /* http_client onerror callback
  */
 static void
-device_http_onerror (device *dev, error err) {
+device_http_onerror (void *ptr, error err) {
+    device *dev = ptr;
+
     log_debug(dev->log, ESTRING(err));
     device_job_set_status(dev, SANE_STATUS_IO_ERROR);
 
@@ -557,9 +557,10 @@ device_probe_endpoint (device *dev, zeroconf_endpoint *endpoint)
 /* Scanner capabilities fetch callback
  */
 static void
-device_scanner_capabilities_callback (device *dev, http_query *q)
+device_scanner_capabilities_callback (void *ptr, http_query *q)
 {
-    error err = NULL;
+    error err   = NULL;
+    device *dev = ptr;
 
     /* Check request status */
     err = http_query_error(q);
@@ -707,8 +708,9 @@ device_stm_timer_callback (void *data)
 /* Operation callback
  */
 static void
-device_stm_op_callback (device *dev, http_query *q)
+device_stm_op_callback (void *ptr, http_query *q)
 {
+    device       *dev = ptr;
     proto_result result = device_proto_op_decode(dev, dev->proto_op_current);
 
     (void) q;

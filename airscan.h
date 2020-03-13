@@ -44,10 +44,6 @@
 #define CONFIG_DEFAULT_RESOLUTION       300
 
 /******************** Forward declarations ********************/
-/* Type device represents a scanner devise
- */
-typedef struct device device;
-
 /* log_ctx represents logging context
  */
 typedef struct log_ctx log_ctx;
@@ -587,7 +583,7 @@ typedef struct http_client http_client;
 /* Create new http_client
  */
 http_client*
-http_client_new (device *dev);
+http_client_new (log_ctx *log, void *ptr);
 
 /* Destroy http_client
  */
@@ -605,7 +601,7 @@ http_client_cancel (http_client *client);
  */
 void
 http_client_onerror (http_client *client,
-        void (*callback)(device *dev, error err));
+        void (*callback)(void *ptr, error err));
 
 /* Type http_query represents HTTP query (both request and response)
  */
@@ -637,7 +633,7 @@ http_query_new_relative(http_client *client,
  * callback, memory, owned by http_query will be invalidated
  */
 void
-http_query_submit (http_query *q, void (*callback)(device *dev, http_query *q));
+http_query_submit (http_query *q, void (*callback)(void *ptr, http_query *q));
 
 /* Get query error, if any
  *
@@ -1334,10 +1330,9 @@ device_list_get (void);
 void
 device_list_free (const SANE_Device **dev_list);
 
-/* Get device's logging context
+/* Type device represents a scanner devise
  */
-log_ctx*
-device_log_ctx (device *dev);
+typedef struct device device;
 
 /* Open a device
  */
@@ -1348,6 +1343,11 @@ device_open (const char *name, device **out);
  */
 void
 device_close (device *dev);
+
+/* Get device's logging context
+ */
+log_ctx*
+device_log_ctx (device *dev);
 
 /* Get option descriptor
  */

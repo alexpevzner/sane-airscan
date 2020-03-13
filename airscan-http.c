@@ -535,19 +535,21 @@ http_data_queue_purge (http_data_queue *queue);
 /* Type http_client represents HTTP client instance
  */
 struct http_client {
-    device     *dev;       /* Device that owns the client */
+    void       *ptr;       /* Callback's user data */
+    log_ctx    *log;       /* Logging context */
     http_query *query;     /* Current http_query, if any */
     void       (*onerror)( /* Callback to be called on transport error */
-            device *dev, error err);
+            void *ptr, error err);
 };
 
 /* Create new http_client
  */
 http_client*
-http_client_new (device *dev)
+http_client_new (log_ctx *log, void *ptr)
 {
     http_client *client = g_new0(http_client, 1);
-    client->dev = dev;
+    client->ptr = ptr;
+    client->log = log;
     return client;
 }
 
@@ -556,7 +558,7 @@ http_client_new (device *dev)
 void
 http_client_free (http_client *client)
 {
-    log_assert(device_log_ctx(client->dev), client->query == NULL);
+    log_assert(client->log, client->query == NULL);
     g_free(client);
 }
 
@@ -566,7 +568,7 @@ http_client_free (http_client *client)
  */
 void
 http_client_onerror (http_client *client,
-        void (*callback)(device *dev, error err))
+        void (*callback)(void *ptr, error err))
 {
     client->onerror = callback;
 }
@@ -599,7 +601,7 @@ struct http_query {
     http_client       *client;                  /* Client that owns the query */
     http_uri          *uri;                     /* Query URI */
     SoupMessage       *msg;                     /* Underlying SOUP message */
-    void              (*callback) (device *dev, /* Completion callback */
+    void              (*callback) (void *ptr,   /* Completion callback */
                                 http_query *q);
     http_query_cached *cached;                  /* Cached data */
     http_query        *prev, *next;             /* In the http_query_list */
@@ -663,22 +665,21 @@ http_query_callback (SoupSession *session, SoupMessage *msg, gpointer userdata)
     (void) session;
 
     if (msg->status_code != SOUP_STATUS_CANCELLED) {
-        device *dev = q->client->dev;
         error  err = http_query_transport_error(q);
 
-        log_assert(device_log_ctx(q->client->dev), q->client->query == q);
+        log_assert(q->client->log, q->client->query == q);
         q->client->query = NULL;
 
-        log_debug(device_log_ctx(dev), "HTTP %s %s: %s", q->msg->method,
+        log_debug(q->client->log, "HTTP %s %s: %s", q->msg->method,
                 http_uri_str(q->uri),
                 soup_status_get_phrase(msg->status_code));
 
-        trace_http_query_hook(log_ctx_trace(device_log_ctx(dev)), q);
+        trace_http_query_hook(log_ctx_trace(q->client->log), q);
 
         if (err != NULL && q->client->onerror != NULL) {
-            q->client->onerror(dev, err);
+            q->client->onerror(q->client->ptr, err);
         } else if (q->callback != NULL) {
-            q->callback(dev, q);
+            q->callback(q->client->ptr, q);
         }
 
         http_query_free(q);
@@ -715,7 +716,7 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
 {
     http_query *q = g_new0(http_query, 1);
 
-    log_assert(device_log_ctx(client->dev), client->query == NULL);
+    log_assert(client->log, client->query == NULL);
     client->query = q;
 
     q->client = client;
@@ -766,12 +767,11 @@ http_query_new_relative(http_client *client,
  * callback, memory, owned by http_query will be invalidated
  */
 void
-http_query_submit (http_query *q, void (*callback)(device *dev, http_query *q))
+http_query_submit (http_query *q, void (*callback)(void *ptr, http_query *q))
 {
     q->callback = callback;
 
-    log_debug(device_log_ctx(q->client->dev), "HTTP %s %s",
-        q->msg->method, http_uri_str(q->uri));
+    log_debug(q->client->log, "HTTP %s %s", q->msg->method, http_uri_str(q->uri));
 
     soup_session_queue_message(http_session, q->msg, http_query_callback, q);
 }
@@ -831,8 +831,7 @@ http_query_transport_error (const http_query *q)
 int
 http_query_status (const http_query *q)
 {
-    log_assert(device_log_ctx(q->client->dev),
-        !SOUP_STATUS_IS_TRANSPORT_ERROR(q->msg->status_code));
+    log_assert(q->client->log, !SOUP_STATUS_IS_TRANSPORT_ERROR(q->msg->status_code));
 
     return q->msg->status_code;
 }
