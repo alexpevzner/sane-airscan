@@ -537,7 +537,7 @@ http_data_queue_purge (http_data_queue *queue);
 struct http_client {
     void       *ptr;       /* Callback's user data */
     log_ctx    *log;       /* Logging context */
-    http_query *query;     /* Current http_query, if any */
+    GPtrArray  *pending;   /* Pending queries */
     void       (*onerror)( /* Callback to be called on transport error */
             void *ptr, error err);
 };
@@ -550,6 +550,7 @@ http_client_new (log_ctx *log, void *ptr)
     http_client *client = g_new0(http_client, 1);
     client->ptr = ptr;
     client->log = log;
+    client->pending = g_ptr_array_new();
     return client;
 }
 
@@ -558,7 +559,8 @@ http_client_new (log_ctx *log, void *ptr)
 void
 http_client_free (http_client *client)
 {
-    log_assert(client->log, client->query == NULL);
+    log_assert(client->log, client->pending->len == 0);
+    g_ptr_array_free(client->pending, TRUE);
     g_free(client);
 }
 
@@ -578,9 +580,8 @@ http_client_onerror (http_client *client,
 void
 http_client_cancel (http_client *client)
 {
-    if (client->query) {
-        http_query_cancel(client->query);
-        client->query = NULL;
+    while (client->pending->len != 0) {
+        http_query_cancel(client->pending->pdata[0]);
     }
 }
 
@@ -660,26 +661,27 @@ http_query_free (http_query *q)
 static void
 http_query_callback (SoupSession *session, SoupMessage *msg, gpointer userdata)
 {
-    http_query *q = userdata;
+    http_query  *q = userdata;
+    http_client *client = q->client;
 
     (void) session;
 
     if (msg->status_code != SOUP_STATUS_CANCELLED) {
         error  err = http_query_transport_error(q);
 
-        log_assert(q->client->log, q->client->query == q);
-        q->client->query = NULL;
+        log_assert(client->log, g_ptr_array_find(client->pending, q, NULL));
+        g_ptr_array_remove(client->pending, q);
 
-        log_debug(q->client->log, "HTTP %s %s: %s", q->msg->method,
+        log_debug(client->log, "HTTP %s %s: %s", q->msg->method,
                 http_uri_str(q->uri),
                 soup_status_get_phrase(msg->status_code));
 
-        trace_http_query_hook(log_ctx_trace(q->client->log), q);
+        trace_http_query_hook(log_ctx_trace(client->log), q);
 
-        if (err != NULL && q->client->onerror != NULL) {
-            q->client->onerror(q->client->ptr, err);
+        if (err != NULL && client->onerror != NULL) {
+            client->onerror(client->ptr, err);
         } else if (q->callback != NULL) {
-            q->callback(q->client->ptr, q);
+            q->callback(client->ptr, q);
         }
 
         http_query_free(q);
@@ -716,8 +718,7 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
 {
     http_query *q = g_new0(http_query, 1);
 
-    log_assert(client->log, client->query == NULL);
-    client->query = q;
+    g_ptr_array_add(client->pending, q);
 
     q->client = client;
     q->uri = uri;
@@ -779,9 +780,14 @@ http_query_submit (http_query *q, void (*callback)(void *ptr, http_query *q))
 /* Cancel unfinished http_query. Callback will not be called and
  * memory owned by the http_query will be released
  */
-void
+static void
 http_query_cancel (http_query *q)
 {
+    http_client *client = q->client;
+
+    log_assert(client->log, g_ptr_array_find(client->pending, q, NULL));
+    g_ptr_array_remove(client->pending, q);
+
     /* Note, if message processing already finished,
      * soup_session_cancel_message() will do literally nothing,
      * and in particular will not update message status,
