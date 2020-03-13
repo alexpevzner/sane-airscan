@@ -20,6 +20,7 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
     SANE_Status status;
 
     log_init(); /* Must be the first thing to do */
+    trace_init();
     log_debug(NULL, "sane_init() called");
 
     conf_load();
@@ -45,9 +46,6 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
     }
     if (status == SANE_STATUS_GOOD) {
         status = wsdd_init();
-    }
-    if (status == SANE_STATUS_GOOD) {
-        status = trace_init();
     }
 
     if (status != SANE_STATUS_GOOD) {
@@ -75,7 +73,6 @@ sane_exit (void)
 
     eloop_thread_stop();
 
-    trace_cleanup();
     wsdd_cleanup();
     zeroconf_cleanup();
     device_management_cleanup();
@@ -87,6 +84,7 @@ sane_exit (void)
     log_debug(NULL, "sane_exit(): OK");
     conf_unload();
 
+    trace_cleanup();
     log_cleanup(); /* Must be the last thing to do */
 }
 

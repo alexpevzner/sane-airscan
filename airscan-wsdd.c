@@ -34,6 +34,7 @@ typedef struct {
 
 /* Static variables
  */
+static log_ctx             *wsdd_log;
 static netif_notifier      *wsdd_netif_notifier;
 static netif_addr          *wsdd_netif_addr_list;
 static int                 wsdd_mcsock_ipv4 = -1;
@@ -218,11 +219,11 @@ static void
 wsdd_message_dispatch (wsdd_message *msg)
 {
     if (msg != NULL) {
-        log_debug(NULL, "WSDD: %s message received:",
+        log_debug(wsdd_log, "%s message received:",
             wsdd_message_action_name(msg));
-        log_debug(NULL, "  endpoint=%s", msg->endpoint);
+        log_debug(wsdd_log, "  endpoint=%s", msg->endpoint);
         if (msg->uri != NULL) {
-            log_debug(NULL, "  uri=%s", msg->uri);
+            log_debug(wsdd_log, "  uri=%s", msg->uri);
         }
     }
     wsdd_message_free(msg);
@@ -249,7 +250,7 @@ wsdd_resolver_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
     }
 
     straddr = ip_straddr_from_sockaddr((struct sockaddr*) &addr);
-    log_debug(NULL, "WSDD: %d bytes received from %s", rc, straddr.text);
+    log_debug(wsdd_log, "%d bytes received from %s", rc, straddr.text);
 
     msg = wsdd_message_parse(wsdd_buf, rc);
     if (msg != NULL) {
@@ -271,7 +272,7 @@ wsdd_resolver_timer_callback (void *data)
         close(resolver->fd);
         resolver->fdpoll = NULL;
         resolver->fd = -1;
-        log_debug(NULL, "WSSD: %s: done discovery", resolver->local.text);
+        log_debug(wsdd_log, "%s: done discovery", resolver->local.text);
     } else {
         wsdd_resolver_send_probe(resolver);
     };
@@ -284,7 +285,7 @@ wsdd_resolver_timer_set (wsdd_resolver *resolver)
 {
     uint32_t t;
 
-    log_assert(NULL, resolver->timer == NULL);
+    log_assert(wsdd_log, resolver->timer == NULL);
 
     if (resolver->total_time + WSDD_RETRANSMIT_MAX >= WSDD_DISCOVERY_TIME) {
         t = WSDD_DISCOVERY_TIME - resolver->total_time;
@@ -308,7 +309,7 @@ wsdd_resolver_send_probe (wsdd_resolver *resolver)
     struct sockaddr *addr;
     socklen_t       addrlen;
 
-    log_debug(NULL, "WSSD: %s: probe sent", resolver->local.text);
+    log_debug(wsdd_log, "%s: probe sent", resolver->local.text);
 
     if (resolver->ipv6) {
         addr = (struct sockaddr*) &wsdd_mcast_ipv6;
@@ -321,7 +322,7 @@ wsdd_resolver_send_probe (wsdd_resolver *resolver)
     rc = sendto(resolver->fd, wsdd_buf, n, 0, addr, addrlen);
 
     if (rc < 0) {
-        log_debug(NULL, "WSDD: send_probe: %s", strerror(errno));
+        log_debug(wsdd_log, "send_probe: %s", strerror(errno));
     }
 
     wsdd_resolver_timer_set(resolver);
@@ -342,7 +343,7 @@ wsdd_resolver_new (const netif_addr *addr)
     resolver->ipv6 = addr->ipv6;
     resolver->fd = socket(af, SOCK_DGRAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
     if (resolver->fd < 0) {
-        log_debug(NULL, "WSDD: socket(%s): %s", af_name, strerror(errno));
+        log_debug(wsdd_log, "socket(%s): %s", af_name, strerror(errno));
         goto FAIL;
     }
 
@@ -352,8 +353,8 @@ wsdd_resolver_new (const netif_addr *addr)
                 &addr->ifindex, sizeof(addr->ifindex));
 
         if (rc < 0) {
-            log_debug(NULL, "WSDD: setsockopt(AF_INET6,IPV6_MULTICAST_IF): %s",
-                    strerror(errno));
+            log_debug(wsdd_log, "setsockopt(AF_INET6,IPV6_MULTICAST_IF): %s",
+                strerror(errno));
             goto FAIL;
         }
 
@@ -365,7 +366,7 @@ wsdd_resolver_new (const netif_addr *addr)
                 &addr->ip.v4, sizeof(&addr->ip.v4));
 
         if (rc < 0) {
-            log_debug(NULL, "WSDD: setsockopt(AF_INET,IP_MULTICAST_IF): %s",
+            log_debug(wsdd_log, "setsockopt(AF_INET,IP_MULTICAST_IF): %s",
                     strerror(errno));
             goto FAIL;
         }
@@ -392,7 +393,7 @@ wsdd_resolver_new (const netif_addr *addr)
     }
 
     if (rc < 0) {
-        log_debug(NULL, "WSDD: bind(%s): %s", resolver->local.text,
+        log_debug(wsdd_log, "bind(%s): %s", resolver->local.text,
                 strerror(errno));
         goto FAIL;
     }
@@ -470,14 +471,14 @@ wsdd_mcsock_open (bool ipv6)
     /* Open a socket */
     fd = socket(af, SOCK_DGRAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0);
     if (fd < 0) {
-        log_debug(NULL, "WSDD: socket(%s): %s", af_name, strerror(errno));
+        log_debug(wsdd_log, "socket(%s): %s", af_name, strerror(errno));
         return fd;
     }
 
     /* Set socket options */
     rc = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
     if (rc < 0) {
-        log_debug(NULL, "WSDD: setsockopt(%s, SO_REUSEADDR): %s",
+        log_debug(wsdd_log, "setsockopt(%s, SO_REUSEADDR): %s",
                 af_name, strerror(errno));
         goto FAIL;
     }
@@ -485,7 +486,7 @@ wsdd_mcsock_open (bool ipv6)
     if (ipv6) {
         rc = setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &yes, sizeof(yes));
         if (rc < 0) {
-            log_debug(NULL, "WSDD: setsockopt(%s, IPV6_V6ONLY): %s",
+            log_debug(wsdd_log, "setsockopt(%s, IPV6_V6ONLY): %s",
                     af_name, strerror(errno));
             goto FAIL;
         }
@@ -510,7 +511,8 @@ wsdd_mcsock_open (bool ipv6)
         rc = bind(fd, (struct sockaddr*) &addr, sizeof(addr));
     }
     if (rc < 0) {
-        log_debug(NULL, "WSDD: bind(%s): %s", straddr.text, strerror(errno));
+        log_debug(wsdd_log,
+                "bind(%s): %s", straddr.text, strerror(errno));
         goto FAIL;
     }
 
@@ -536,7 +538,7 @@ wsdd_netif_dump_addresses (const char *prefix, netif_addr *list)
         if (list->ipv6 && list->linklocal) {
             sprintf(suffix, "%%%d", list->ifindex);
         }
-        log_debug(NULL, "%s%s%s", prefix, list->straddr, suffix);
+        log_debug(wsdd_log, "%s%s%s", prefix, list->straddr, suffix);
         list = list->next;
     }
 }
@@ -560,7 +562,7 @@ wsdd_mcast_update_membership (int fd, netif_addr *addr, bool add)
         rc = setsockopt(fd, IPPROTO_IPV6, opt, &mreq6, sizeof(mreq6));
 
         if (rc < 0) {
-            log_debug(NULL, "WSDD: setsockopt(AF_INET6,%s): %s",
+            log_debug(wsdd_log, "setsockopt(AF_INET6,%s): %s",
                     add ? "IPV6_ADD_MEMBERSHIP" : "IPV6_DROP_MEMBERSHIP",
                     strerror(errno));
         }
@@ -576,7 +578,7 @@ wsdd_mcast_update_membership (int fd, netif_addr *addr, bool add)
         rc = setsockopt(fd, IPPROTO_IP, opt, &mreq4, sizeof(mreq4));
 
         if (rc < 0) {
-            log_debug(NULL, "WSDD: setsockopt(AF_INET,%s): %s",
+            log_debug(wsdd_log, "setsockopt(AF_INET,%s): %s",
                     add ? "IP_ADD_MEMBERSHIP" : "IP_DROP_MEMBERSHIP",
                     strerror(errno));
         }
@@ -591,7 +593,7 @@ wsdd_netif_update_addresses (void) {
     netif_addr *addr;
     netif_diff diff = netif_diff_compute(wsdd_netif_addr_list, addr_list);
 
-    log_debug(NULL, "WSDD: netif addresses update:");
+    log_debug(wsdd_log, "netif addresses update:");
     wsdd_netif_dump_addresses(" + ", diff.added);
     wsdd_netif_dump_addresses(" - ", diff.removed);
 
@@ -628,7 +630,7 @@ wsdd_netif_notifier_callback (void *data)
 {
     (void) data;
 
-    log_debug(NULL, "WSDD: netif event");
+    log_debug(wsdd_log, "netif event");
     wsdd_netif_update_addresses();
 }
 
@@ -671,8 +673,11 @@ wsdd_start_stop_callback (bool start)
 SANE_Status
 wsdd_init (void)
 {
+    /* Initialize logging */
+    wsdd_log = log_ctx_new("WSDD");
+
     if (!conf.discovery) {
-        log_debug(NULL, "WSDD: devices discovery disabled");
+        log_debug(NULL, "devices discovery disabled");
         return SANE_STATUS_GOOD;
     }
 
@@ -734,6 +739,11 @@ wsdd_cleanup (void)
     if (wsdd_mcsock_ipv6 >= 0) {
         close(wsdd_mcsock_ipv6);
         wsdd_mcsock_ipv6 = -1;
+    }
+
+    if (wsdd_log != NULL) {
+        log_ctx_free(wsdd_log);
+        wsdd_log = NULL;
     }
 }
 
