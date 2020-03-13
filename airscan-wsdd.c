@@ -50,14 +50,14 @@ static struct sockaddr_in6 wsdd_mcast_ipv6;
 static const char *wsdd_probe =
     "<?xml version=\"1.0\" ?>\n"
     "<s:Envelope xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\" xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\">\n"
-    "	<s:Header>\n"
-    "		<a:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</a:Action>\n"
-    "		<a:MessageID>%s</a:MessageID>\n"
-    "		<a:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</a:To>\n"
-    "	</s:Header>\n"
-    "	<s:Body>\n"
-    "		<d:Probe/>\n"
-    "	</s:Body>\n"
+    " <s:Header>\n"
+    "  <a:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</a:Action>\n"
+    "  <a:MessageID>%s</a:MessageID>\n"
+    "  <a:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</a:To>\n"
+    " </s:Header>\n"
+    " <s:Body>\n"
+    "  <d:Probe/>\n"
+    " </s:Body>\n"
     "</s:Envelope>\n";
 
 /* XML namespace translation
@@ -219,12 +219,13 @@ static void
 wsdd_message_dispatch (wsdd_message *msg)
 {
     if (msg != NULL) {
-        log_debug(wsdd_log, "%s message received:",
+        log_trace(wsdd_log, "%s message received:",
             wsdd_message_action_name(msg));
-        log_debug(wsdd_log, "  endpoint=%s", msg->endpoint);
+        log_trace(wsdd_log, "  endpoint=%s", msg->endpoint);
         if (msg->uri != NULL) {
-            log_debug(wsdd_log, "  uri=%s", msg->uri);
+            log_trace(wsdd_log, "  uri=%s", msg->uri);
         }
+        log_trace(wsdd_log, "");
     }
     wsdd_message_free(msg);
 }
@@ -250,7 +251,8 @@ wsdd_resolver_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
     }
 
     straddr = ip_straddr_from_sockaddr((struct sockaddr*) &addr);
-    log_debug(wsdd_log, "%d bytes received from %s", rc, straddr.text);
+    log_trace(wsdd_log, "%d bytes received from %s", rc, straddr.text);
+    log_trace_data(wsdd_log, "application/xml", wsdd_buf, rc);
 
     msg = wsdd_message_parse(wsdd_buf, rc);
     if (msg != NULL) {
@@ -308,8 +310,7 @@ wsdd_resolver_send_probe (wsdd_resolver *resolver)
     int             rc;
     struct sockaddr *addr;
     socklen_t       addrlen;
-
-    log_debug(wsdd_log, "%s: probe sent", resolver->local.text);
+    ip_straddr      straddr;
 
     if (resolver->ipv6) {
         addr = (struct sockaddr*) &wsdd_mcast_ipv6;
@@ -318,6 +319,11 @@ wsdd_resolver_send_probe (wsdd_resolver *resolver)
         addr = (struct sockaddr*) &wsdd_mcast_ipv4;
         addrlen = sizeof(wsdd_mcast_ipv4);
     }
+
+    straddr = ip_straddr_from_sockaddr(addr);
+    log_trace(wsdd_log, "probe sent: %s->%s",
+        resolver->local.text, straddr.text);
+    log_trace_data(wsdd_log, "application/xml", wsdd_buf, n);
 
     rc = sendto(resolver->fd, wsdd_buf, n, 0, addr, addrlen);
 

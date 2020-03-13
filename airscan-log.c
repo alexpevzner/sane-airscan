@@ -197,6 +197,21 @@ log_trace (log_ctx *log, const char *fmt, ...)
     va_end(ap);
 }
 
+/* Write a block of data into protocol trace
+ */
+void
+log_trace_data (log_ctx *log, const char *content_type,
+        const void *bytes, size_t size)
+{
+    http_data data = {
+        .content_type = content_type,
+        .bytes        = bytes,
+        .size         = size
+    };
+
+    trace_dump_body(log->trace, &data);
+}
+
 /* Write an error message and terminate a program.
  */
 void

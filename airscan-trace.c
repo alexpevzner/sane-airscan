@@ -246,7 +246,7 @@ trace_dump_text (trace *t, http_data *data, bool xml)
 
 /* Dump message body
  */
-static void
+void
 trace_dump_body (trace *t, http_data *data)
 {
     if (data->size == 0) {

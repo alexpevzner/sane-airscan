@@ -799,6 +799,11 @@ trace_printf (trace *t, const char *fmt, ...);
 void
 trace_error (trace *t, error err);
 
+/* Dump message body
+ */
+void
+trace_dump_body (trace *t, http_data *data);
+
 /******************** SANE_Word/SANE_String arrays ********************/
 /* Initialize array of SANE_Word
  */
@@ -1802,6 +1807,12 @@ log_debug (log_ctx *log, const char *fmt, ...);
  */
 void
 log_trace (log_ctx *log, const char *fmt, ...);
+
+/* Write a block of data into protocol trace
+ */
+void
+log_trace_data (log_ctx *log, const char *content_type,
+        const void *bytes, size_t size);
 
 /* Write an error message and terminate a program.
  */
