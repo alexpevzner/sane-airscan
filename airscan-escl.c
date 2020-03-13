@@ -498,7 +498,7 @@ escl_scan_query (const proto_ctx *ctx)
     case ID_SOURCE_ADF_DUPLEX:  source = "Feeder"; duplex = true; break;
 
     default:
-        log_internal_error(ctx->dev);
+        log_internal_error(ctx->log);
     }
 
     switch (params->colormode) {
@@ -507,7 +507,7 @@ escl_scan_query (const proto_ctx *ctx)
     case ID_COLORMODE_BW1:       colormode = "BlackAndWhite1"; break;
 
     default:
-        log_internal_error(ctx->dev);
+        log_internal_error(ctx->log);
     }
 
     /* Build scan request */
@@ -703,18 +703,18 @@ escl_decode_scanner_status (const proto_ctx *ctx,
 DONE:
     xml_rd_finish(&xml);
 
-    trace_printf(device_trace(ctx->dev), "-----");
+    trace_printf(log_ctx_trace(ctx->log), "-----");
     if (err != NULL) {
-        trace_printf(device_trace(ctx->dev), "Error: %s", ESTRING(err));
+        trace_printf(log_ctx_trace(ctx->log), "Error: %s", ESTRING(err));
         status = SANE_STATUS_IO_ERROR;
     } else {
-        trace_printf(device_trace(ctx->dev), "Device status: %s",
+        trace_printf(log_ctx_trace(ctx->log), "Device status: %s",
             sane_strstatus(device_status));
-        trace_printf(device_trace(ctx->dev), "ADF status: %s",
+        trace_printf(log_ctx_trace(ctx->log), "ADF status: %s",
             sane_strstatus(adf_status));
-        trace_printf(device_trace(ctx->dev), "Job status: %s",
+        trace_printf(log_ctx_trace(ctx->log), "Job status: %s",
             sane_strstatus(status));
-        trace_printf(device_trace(ctx->dev), "");
+        trace_printf(log_ctx_trace(ctx->log), "");
     }
 
     return status;

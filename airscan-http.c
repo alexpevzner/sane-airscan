@@ -535,7 +535,7 @@ http_data_queue_purge (http_data_queue *queue);
 /* Type http_client represents HTTP client instance
  */
 struct http_client {
-    void       *dev;       /* Device that owns the client */
+    device     *dev;       /* Device that owns the client */
     http_query *query;     /* Current http_query, if any */
     void       (*onerror)( /* Callback to be called on transport error */
             device *dev, error err);
@@ -556,7 +556,7 @@ http_client_new (device *dev)
 void
 http_client_free (http_client *client)
 {
-    log_assert(client->dev, client->query == NULL);
+    log_assert(device_log_ctx(client->dev), client->query == NULL);
     g_free(client);
 }
 
@@ -666,10 +666,10 @@ http_query_callback (SoupSession *session, SoupMessage *msg, gpointer userdata)
         device *dev = q->client->dev;
         error  err = http_query_transport_error(q);
 
-        log_assert(q->client->dev, q->client->query == q);
+        log_assert(device_log_ctx(q->client->dev), q->client->query == q);
         q->client->query = NULL;
 
-        log_debug(dev, "HTTP %s %s: %s", q->msg->method,
+        log_debug(device_log_ctx(dev), "HTTP %s %s: %s", q->msg->method,
                 http_uri_str(q->uri),
                 soup_status_get_phrase(msg->status_code));
 
@@ -715,7 +715,7 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
 {
     http_query *q = g_new0(http_query, 1);
 
-    log_assert(client->dev, client->query == NULL);
+    log_assert(device_log_ctx(client->dev), client->query == NULL);
     client->query = q;
 
     q->client = client;
@@ -770,7 +770,7 @@ http_query_submit (http_query *q, void (*callback)(device *dev, http_query *q))
 {
     q->callback = callback;
 
-    log_debug(q->client->dev, "HTTP %s %s",
+    log_debug(device_log_ctx(q->client->dev), "HTTP %s %s",
         q->msg->method, http_uri_str(q->uri));
 
     soup_session_queue_message(http_session, q->msg, http_query_callback, q);
@@ -831,7 +831,7 @@ http_query_transport_error (const http_query *q)
 int
 http_query_status (const http_query *q)
 {
-    log_assert(q->client->dev,
+    log_assert(device_log_ctx(q->client->dev),
         !SOUP_STATUS_IS_TRANSPORT_ERROR(q->msg->status_code));
 
     return q->msg->status_code;

@@ -48,6 +48,10 @@
  */
 typedef struct device device;
 
+/* log_ctx represents logging context
+ */
+typedef struct log_ctx log_ctx;
+
 /******************** Utility macros ********************/
 /* Obtain pointer to outer structure from pointer to
  * its known member
@@ -1330,10 +1334,10 @@ device_list_get (void);
 void
 device_list_free (const SANE_Device **dev_list);
 
-/* Get device name (mostly for debugging
+/* Get device's logging context
  */
-const char*
-device_name (device *dev);
+log_ctx*
+device_log_ctx (device *dev);
 
 /* Get device's trace handle
  */
@@ -1446,7 +1450,7 @@ typedef struct {
  */
 typedef struct {
     /* Common context */
-    device               *dev;      /* Device (for logging only) */
+    log_ctx              *log;      /* Logging context */
     struct proto_handler *proto;    /* Link to proto_handler */
     const devcaps        *devcaps;  /* Device capabilities */
     http_client          *http;     /* HTTP client for sending requests */
@@ -1779,33 +1783,46 @@ log_cleanup (void);
 void
 log_configure (void);
 
-/* Write a debug message. If dev != NULL, message will
- * be written in a context of device.
+/* log_ctx_new creates new logging context
+ */
+log_ctx*
+log_ctx_new (const char *name, trace *trace);
+
+/* log_ctx_free destroys logging context
  */
 void
-log_debug (device *dev, const char *fmt, ...);
+log_ctx_free (log_ctx *log);
+
+/* Get protocol trace associated with logging context
+ */
+trace*
+log_ctx_trace (log_ctx *log);
+
+/* Write a debug message.
+ */
+void
+log_debug (log_ctx *log, const char *fmt, ...);
 
 /* Write an error message and terminate a program.
- * If dev != NULL, message will be written in a context of device.
  */
 void
-log_panic (device *dev, const char *fmt, ...);
+log_panic (log_ctx *log, const char *fmt, ...);
 
 /* Panic if assertion fails
  */
-#define log_assert(dev,expr)                                            \
+#define log_assert(log,expr)                                            \
      do {                                                               \
          if (!(expr)) {                                                 \
-             log_panic(dev,"file %s: line %d (%s): assertion failed: (%s)",\
+             log_panic(log,"file %s: line %d (%s): assertion failed: (%s)",\
                      __FILE__, __LINE__, __PRETTY_FUNCTION__, #expr);   \
          }                                                              \
      } while (0)
 
 /* Panic if this code is reached
  */
-#define log_internal_error(dev)                                         \
+#define log_internal_error(log)                                         \
      do {                                                               \
-         log_panic(dev,"file %s: line %d (%s): internal error",         \
+         log_panic(log,"file %s: line %d (%s): internal error",         \
                  __FILE__, __LINE__, __PRETTY_FUNCTION__);              \
      } while (0)
 

@@ -531,7 +531,7 @@ wsd_scan_query (const proto_ctx *ctx)
     case ID_SOURCE_ADF_DUPLEX:  source = "ADFDuplex"; break;
 
     default:
-        log_internal_error(ctx->dev);
+        log_internal_error(ctx->log);
     }
 
     sides = params->src == ID_SOURCE_ADF_DUPLEX ? sides_duplex : sides_simplex;
@@ -542,7 +542,7 @@ wsd_scan_query (const proto_ctx *ctx)
     case ID_COLORMODE_BW1:       colormode = "BlackAndWhite1"; break;
 
     default:
-        log_internal_error(ctx->dev);
+        log_internal_error(ctx->log);
     }
 
     /* Create scan request */

@@ -128,7 +128,7 @@ sane_open (SANE_String_Const name, SANE_Handle *handle)
         *handle = (SANE_Handle) dev;
     }
 
-    log_debug(dev, "sane_open(\"%s\"): %s", name ? name : "",
+    log_debug(device_log_ctx(dev), "sane_open(\"%s\"): %s", name ? name : "",
             sane_strstatus(status));
 
     return status;
@@ -141,7 +141,7 @@ sane_close (SANE_Handle handle)
 {
     device *dev = (device*) handle;
 
-    log_debug(dev, "sane_close()");
+    log_debug(device_log_ctx(dev), "sane_close()");
 
     eloop_mutex_lock();
     device_close((device*) handle);
@@ -231,14 +231,15 @@ sane_start (SANE_Handle handle)
     SANE_Status status;
     device *dev = (device*) handle;
 
-    log_debug(dev, "sane_start()");
+    log_debug(device_log_ctx(dev), "sane_start()");
 
     eloop_mutex_lock();
     status = device_start(dev);
     eloop_mutex_unlock();
 
     if (status != SANE_STATUS_GOOD) {
-        log_debug(dev, "sane_start(): %s", sane_strstatus(status));
+        log_debug(device_log_ctx(dev),
+            "sane_start(): %s", sane_strstatus(status));
     }
 
     return status;
@@ -257,7 +258,8 @@ sane_read (SANE_Handle handle, SANE_Byte *data, SANE_Int max_len, SANE_Int *len)
     eloop_mutex_unlock();
 
     if (status != SANE_STATUS_GOOD) {
-        log_debug(dev, "sane_read(): %s", sane_strstatus(status));
+        log_debug(device_log_ctx(dev),
+            "sane_read(): %s", sane_strstatus(status));
     }
 
     return status;
@@ -289,7 +291,7 @@ sane_set_io_mode (SANE_Handle handle, SANE_Bool non_blocking)
     eloop_mutex_unlock();
 
     if (status != SANE_STATUS_GOOD) {
-        log_debug(dev, "sane_set_io_mode(%s): %s",
+        log_debug(device_log_ctx(dev), "sane_set_io_mode(%s): %s",
             non_blocking ? "true" : "false", sane_strstatus(status));
     }
 
@@ -309,7 +311,8 @@ sane_get_select_fd (SANE_Handle handle, SANE_Int *fd)
     eloop_mutex_unlock();
 
     if (status != SANE_STATUS_GOOD) {
-        log_debug(dev, "sane_get_select_fd(): %s", sane_strstatus(status));
+        log_debug(device_log_ctx(dev),
+            "sane_get_select_fd(): %s", sane_strstatus(status));
     }
 
     return status;

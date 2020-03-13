@@ -99,12 +99,46 @@ log_fmt_time (char *buf, size_t size)
     snprintf(buf, size, "%2.2d:%2.2d:%2.2d.%3.3d", hour, min, sec, msec);
 }
 
+/* log_ctx represents logging context
+ */
+struct log_ctx {
+    const char *name;  /* Log name */
+    trace      *trace; /* Associated trace */
+};
+
+/* log_ctx_new creates new logging context
+ */
+log_ctx*
+log_ctx_new (const char *name, trace *trace)
+{
+    log_ctx *log = g_new0(log_ctx, 1);
+    log->name = name;
+    log->trace = trace;
+    return log;
+}
+
+/* log_ctx_free destroys logging context
+ */
+void
+log_ctx_free (log_ctx *log)
+{
+    g_free(log);
+}
+
+/* Get protocol trace associated with logging context
+ */
+trace*
+log_ctx_trace (log_ctx *log)
+{
+    return log->trace;
+}
+
 /* Write a log message
  */
 static void
-log_message (device *dev, bool force, const char *fmt, va_list ap)
+log_message (log_ctx *log, bool force, const char *fmt, va_list ap)
 {
-    trace *t = dev ? device_trace(dev) : NULL;
+    trace *t = log ? log->trace : NULL;
     char  msg[4096];
     int   len = 0;
     bool  dont_log = log_configured && !conf.dbg_enabled && !force;
@@ -116,8 +150,8 @@ log_message (device *dev, bool force, const char *fmt, va_list ap)
     }
 
     /* Format a log message */
-    if (dev != NULL) {
-        len += sprintf(msg, "\"%.64s\": ", device_name(dev));
+    if (log != NULL) {
+        len += sprintf(msg, "\"%.64s\": ", log->name);
     }
 
     len += vsnprintf(msg + len, sizeof(msg) - len, fmt, ap);
@@ -140,23 +174,21 @@ log_message (device *dev, bool force, const char *fmt, va_list ap)
     }
 }
 
-/* Write a debug message. If dev != NULL, message will
- * be written in a context of device.
+/* Write a debug message.
  */
 void
-log_debug (device *dev, const char *fmt, ...)
+log_debug (log_ctx *log, const char *fmt, ...)
 {
     va_list      ap;
     va_start(ap, fmt);
-    log_message(dev, false, fmt, ap);
+    log_message(log, false, fmt, ap);
     va_end(ap);
 }
 
 /* Write an error message and terminate a program.
- * If dev != NULL, message will be written in a context of device.
  */
 void
-log_panic (device *dev, const char *fmt, ...)
+log_panic (log_ctx *log, const char *fmt, ...)
 {
     va_list      ap;
 
@@ -168,7 +200,7 @@ log_panic (device *dev, const char *fmt, ...)
     g_string_truncate(log_buffer, 0);
 
     va_start(ap, fmt);
-    log_message(dev, true, fmt, ap);
+    log_message(log, true, fmt, ap);
     va_end(ap);
     abort();
 }

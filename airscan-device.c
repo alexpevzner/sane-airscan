@@ -76,6 +76,8 @@ struct device {
     /* Common part */
     volatile gint        refcnt;               /* Reference counter */
     const char           *name;                /* Device name */
+    trace                *trace;               /* Protocol trace */
+    log_ctx              *log;                 /* Logging context */
     unsigned int         flags;                /* Device flags */
     devopt               opt;                  /* Device options */
     int                  checking_http_status; /* HTTP status before CHECK_STATUS */
@@ -94,7 +96,6 @@ struct device {
     zeroconf_endpoint    *endpoints;        /* Device endpoints */
     zeroconf_endpoint    *endpoint_current; /* Current endpoint to probe */
     eloop_timer          *http_timer;       /* HTTP retry timer */
-    trace                *trace;            /* Protocol trace */
 
     /* Scanning state machinery */
     SANE_Status          job_status;          /* Job completion status */
@@ -178,7 +179,7 @@ device_add (const char *name, zeroconf_endpoint *endpoints,
     /* Don't allow duplicate devices */
     dev = device_find(name);
     if (dev != NULL) {
-        log_debug(dev, "device already exist");
+        log_debug(dev->log, "device already exist");
         return;
     }
 
@@ -187,8 +188,11 @@ device_add (const char *name, zeroconf_endpoint *endpoints,
 
     dev->refcnt = 1;
     dev->name = g_strdup(name);
+    dev->trace = trace_open(name);
+    dev->log = log_ctx_new(name, dev->trace);
+
     dev->flags = DEVICE_LISTED | DEVICE_INIT_WAIT;
-    dev->proto_ctx.dev = dev;
+    dev->proto_ctx.log = dev->log;
     dev->proto_ctx.devcaps = &dev->opt.caps;
 
     if (init_scan) {
@@ -197,7 +201,6 @@ device_add (const char *name, zeroconf_endpoint *endpoints,
     devopt_init(&dev->opt);
 
     dev->proto_ctx.http = http_client_new(dev);
-    dev->trace = trace_open(name);
 
     g_cond_init(&dev->stm_cond);
 
@@ -205,7 +208,7 @@ device_add (const char *name, zeroconf_endpoint *endpoints,
     dev->read_pollable = pollable_new();
     dev->read_queue = http_data_queue_new();
 
-    log_debug(dev, "device created");
+    log_debug(dev->log, "device created");
 
     /* Add to the table */
     g_ptr_array_add(device_table, dev);
@@ -232,11 +235,11 @@ static inline void
 device_unref (device *dev)
 {
     if (g_atomic_int_dec_and_test(&dev->refcnt)) {
-        log_debug(dev, "device destroyed");
+        log_debug(dev->log, "device destroyed");
 
-        log_assert(dev, (dev->flags & DEVICE_LISTED) == 0);
-        log_assert(dev, (dev->flags & DEVICE_HALTED) != 0);
-        log_assert(dev, device_stm_state_get(dev) == DEVICE_STM_CLOSED);
+        log_assert(dev->log, (dev->flags & DEVICE_LISTED) == 0);
+        log_assert(dev->log, (dev->flags & DEVICE_HALTED) != 0);
+        log_assert(dev->log, device_stm_state_get(dev) == DEVICE_STM_CLOSED);
 
         /* Release all memory */
         device_proto_set(dev, ID_PROTO_UNKNOWN);
@@ -255,6 +258,9 @@ device_unref (device *dev)
         http_data_queue_free(dev->read_queue);
         pollable_free(dev->read_pollable);
 
+        log_ctx_free(dev->log);
+        trace_close(dev->trace);
+
         g_free((void*) dev->name);
         g_free(dev);
     }
@@ -271,16 +277,14 @@ static void
 device_del (device *dev)
 {
     /* Remove device from table */
-    log_debug(dev, "removed from device table");
-    log_assert(dev, (dev->flags & DEVICE_LISTED) != 0);
+    log_debug(dev->log, "removed from device table");
+    log_assert(dev->log, (dev->flags & DEVICE_LISTED) != 0);
 
     dev->flags &= ~DEVICE_LISTED;
     g_ptr_array_remove(device_table, dev);
 
     /* Stop all pending I/O activity */
     device_http_cancel(dev);
-    trace_close(dev->trace);
-    dev->trace = NULL;
 
     dev->flags |= DEVICE_HALTED;
     dev->flags &= ~DEVICE_READY;
@@ -372,7 +376,7 @@ static void
 device_proto_set (device *dev, ID_PROTO proto)
 {
     if (dev->proto_ctx.proto != NULL) {
-        log_debug(dev, "closed protocol \"%s\"",
+        log_debug(dev->log, "closed protocol \"%s\"",
             dev->proto_ctx.proto->name);
         dev->proto_ctx.proto->free(dev->proto_ctx.proto);
         dev->proto_ctx.proto = NULL;
@@ -380,8 +384,8 @@ device_proto_set (device *dev, ID_PROTO proto)
 
     if (proto != ID_PROTO_UNKNOWN) {
         dev->proto_ctx.proto = proto_handler_new(proto);
-        log_assert(dev, dev->proto_ctx.proto != NULL);
-        log_debug(dev, "using protocol \"%s\"",
+        log_assert(dev->log, dev->proto_ctx.proto != NULL);
+        log_debug(dev->log, "using protocol \"%s\"",
             dev->proto_ctx.proto->name);
     }
 }
@@ -422,7 +426,7 @@ device_proto_op_name (device *dev, PROTO_OP op)
     case PROTO_OP_FINISH:  return "PROTO_OP_FINISH";
     }
 
-    log_internal_error(dev);
+    log_internal_error(dev->log);
     return NULL;
 }
 
@@ -436,18 +440,18 @@ device_proto_op_submit (device *dev, PROTO_OP op,
     http_query *q;
 
     switch (op) {
-    case PROTO_OP_NONE:    log_internal_error(dev); break;
+    case PROTO_OP_NONE:    log_internal_error(dev->log); break;
     case PROTO_OP_SCAN:    func = dev->proto_ctx.proto->scan_query; break;
     case PROTO_OP_LOAD:    func = dev->proto_ctx.proto->load_query; break;
     case PROTO_OP_CHECK:   func = dev->proto_ctx.proto->status_query; break;
     case PROTO_OP_CANCEL:  func = dev->proto_ctx.proto->cancel_query; break;
     case PROTO_OP_CLEANUP: func = dev->proto_ctx.proto->cleanup_query; break;
-    case PROTO_OP_FINISH:  log_internal_error(dev); break;
+    case PROTO_OP_FINISH:  log_internal_error(dev->log); break;
     }
 
-    log_assert(dev, func != NULL);
+    log_assert(dev->log, func != NULL);
 
-    log_debug(dev, "submitting: %s", device_proto_op_name(dev, op));
+    log_debug(dev->log, "submitting: %s", device_proto_op_name(dev, op));
     dev->proto_op_current = op;
     q = func(&dev->proto_ctx);
     http_query_submit(q, callback);
@@ -475,18 +479,18 @@ device_proto_op_decode (device *dev, PROTO_OP op)
     proto_result (*func) (const proto_ctx *ctx) = NULL;
 
     switch (op) {
-    case PROTO_OP_NONE:    log_internal_error(dev); break;
+    case PROTO_OP_NONE:    log_internal_error(dev->log); break;
     case PROTO_OP_SCAN:    func = dev->proto_ctx.proto->scan_decode; break;
     case PROTO_OP_LOAD:    func = dev->proto_ctx.proto->load_decode; break;
     case PROTO_OP_CHECK:   func = dev->proto_ctx.proto->status_decode; break;
     case PROTO_OP_CANCEL:  func = device_proto_dummy_decode; break;
     case PROTO_OP_CLEANUP: func = device_proto_dummy_decode; break;
-    case PROTO_OP_FINISH:  log_internal_error(dev); break;
+    case PROTO_OP_FINISH:  log_internal_error(dev->log); break;
     }
 
-    log_assert(dev, func != NULL);
+    log_assert(dev->log, func != NULL);
 
-    log_debug(dev, "decoding: %s", device_proto_op_name(dev, op));
+    log_debug(dev->log, "decoding: %s", device_proto_op_name(dev, op));
     return func(&dev->proto_ctx);
 }
 
@@ -507,7 +511,7 @@ device_http_cancel (device *dev)
  */
 static void
 device_http_onerror (device *dev, error err) {
-    log_debug(dev, ESTRING(err));
+    log_debug(dev->log, ESTRING(err));
     device_job_set_status(dev, SANE_STATUS_IO_ERROR);
 
     if (!device_stm_cancel_perform(dev)) {
@@ -535,7 +539,7 @@ device_probe_endpoint (device *dev, zeroconf_endpoint *endpoint)
 
     /* Parse device URI */
     http_uri *uri = http_uri_new(endpoint->uri, true);
-    log_assert(dev, uri != NULL);
+    log_assert(dev->log, uri != NULL);
 
     /* Make sure endpoint URI path ends with '/' character */
     const char *path = http_uri_get_path(uri);
@@ -581,7 +585,7 @@ device_scanner_capabilities_callback (device *dev, http_query *q)
     /* Cleanup and exit */
 DONE:
     if (err != NULL) {
-        log_debug(dev, ESTRING(err));
+        log_debug(dev->log, ESTRING(err));
         trace_error(dev->trace, err);
 
         if (dev->endpoint_current != NULL &&
@@ -643,7 +647,7 @@ static void
 device_stm_state_set (device *dev, DEVICE_STM_STATE state)
 {
     if (dev->stm_state != state) {
-        log_debug(dev, "state=%s", device_stm_state_name(state));
+        log_debug(dev->log, "state=%s", device_stm_state_name(state));
         __atomic_store_n(&dev->stm_state, state, __ATOMIC_SEQ_CST);
         g_cond_broadcast(&dev->stm_cond);
 
@@ -676,7 +680,7 @@ device_stm_cancel_event_callback (void *data)
 {
     device *dev = data;
 
-    log_debug(dev, "cancel requested");
+    log_debug(dev->log, "cancel requested");
     if (!device_stm_cancel_perform(dev)) {
         device_stm_state_set(dev, DEVICE_STM_CANCEL_WAIT);
     }
@@ -715,7 +719,7 @@ device_stm_op_callback (device *dev, http_query *q)
     (void) q;
 
     if (result.err != NULL) {
-        log_debug(dev, "%s", ESTRING(result.err));
+        log_debug(dev->log, "%s", ESTRING(result.err));
     }
 
     /* Save useful result, if any */
@@ -771,7 +775,7 @@ device_stm_op_callback (device *dev, http_query *q)
 
     /* Handle delay */
     if (result.delay != 0) {
-        log_assert(dev, dev->stm_timer == NULL);
+        log_assert(dev->log, dev->stm_timer == NULL);
         dev->stm_timer = eloop_timer_new(result.delay,
             device_stm_timer_callback, dev);
         dev->proto_op_current = result.next;
@@ -962,7 +966,7 @@ device_job_set_status (device *dev, SANE_Status status)
     /* Update status
      */
     if (status != dev->job_status) {
-        log_debug(dev, "JOB status=%s", sane_strstatus(status));
+        log_debug(dev->log, "JOB status=%s", sane_strstatus(status));
         dev->job_status = status;
 
         if (status == SANE_STATUS_CANCELLED) {
@@ -1049,12 +1053,12 @@ device_list_free (const SANE_Device **dev_list)
     }
 }
 
-/* Get device name (mostly for debugging
+/* Get device's logging context
  */
-const char*
-device_name (device *dev)
+log_ctx*
+device_log_ctx (device *dev)
 {
-    return dev->name;
+    return dev->log;
 }
 
 /* Get device's trace handle
@@ -1361,7 +1365,7 @@ device_read_next (device *dev)
 
 DONE:
     if (err != NULL) {
-        log_debug(dev, ESTRING(err));
+        log_debug(dev->log, ESTRING(err));
         trace_error(dev->trace, err);
         http_data_unref(dev->read_image);
         dev->read_image = NULL;
@@ -1401,7 +1405,7 @@ device_read_decode_line (device *dev)
                 dev->read_line_buf);
 
         if (err != NULL) {
-            log_debug(dev, ESTRING(err));
+            log_debug(dev->log, ESTRING(err));
             trace_error(dev->trace, err);
             return SANE_STATUS_IO_ERROR;
         }
@@ -1452,7 +1456,7 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
 
         if (http_data_queue_empty(dev->read_queue)) {
             status = dev->job_status;
-            log_assert(dev, status != SANE_STATUS_GOOD);
+            log_assert(dev->log, status != SANE_STATUS_GOOD);
             goto DONE;
         }
 
