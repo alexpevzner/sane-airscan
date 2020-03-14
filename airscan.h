@@ -199,6 +199,12 @@ typedef struct {
     char       text[64];
 } ip_straddr;
 
+/* Format ip_straddr from IP address (struct in_addr or struct in6_addr)
+ * af must be AF_INET or AF_INET6
+ */
+ip_straddr
+ip_straddr_from_ip (int af, const void *addr);
+
 /* Format ip_straddr from struct sockaddr.
  * Both AF_INET and AF_INET6 are supported
  */

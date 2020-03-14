@@ -11,6 +11,17 @@
 #include <string.h>
 #include <arpa/inet.h>
 
+/* Format ip_straddr from IP address (struct in_addr or struct in6_addr)
+ * af must be AF_INET or AF_INET6
+ */
+ip_straddr
+ip_straddr_from_ip (int af, const void *addr)
+{
+    ip_straddr straddr = {""};
+    inet_ntop(af, addr, straddr.text, sizeof(straddr.text));
+    return straddr;
+}
+
 /* Format struct sockaddr. Both AF_INET and AF_INET6 are supported
  */
 ip_straddr

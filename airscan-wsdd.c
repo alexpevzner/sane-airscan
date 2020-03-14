@@ -24,12 +24,13 @@
 /* wsdd_resolver represents a per-interface WSDD resolver
  */
 typedef struct {
-    int          fd;         /* File descriptor */
-    bool         ipv6;       /* We are on IPv6 */
-    eloop_fdpoll *fdpoll;    /* Socket fdpoll */
-    eloop_timer  *timer;     /* Retransmit timer */
-    uint32_t     total_time; /* Total elapsed time */
-    ip_straddr   local;      /* Local address */
+    int          fd;           /* File descriptor */
+    bool         ipv6;         /* We are on IPv6 */
+    eloop_fdpoll *fdpoll;      /* Socket fdpoll */
+    eloop_timer  *timer;       /* Retransmit timer */
+    uint32_t     total_time;   /* Total elapsed time */
+    ip_straddr   str_ifaddr;   /* Interface address */
+    ip_straddr   str_sockaddr; /* Per-interface socket address */
 } wsdd_resolver;
 
 /* Static variables
@@ -113,8 +114,6 @@ wsdd_message_parse_endpoint (wsdd_message *msg, xml_rd *xml)
         const char *path = xml_rd_node_path(xml) + prefixlen;
         const char *val;
 
-        //log_debug(NULL, ">> %s", path);
-
         if (!strcmp(path, "/d:Types")) {
             val = xml_rd_node_value(xml);
             is_scanner = !!strstr(val, "ScanDeviceType");
@@ -153,7 +152,6 @@ wsdd_message_parse (const char *xml_text, size_t xml_len)
         const char *path = xml_rd_node_path(xml);
         const char *val;
 
-        //log_debug(NULL, "%s", path);
         if (!strcmp(path, "s:Envelope/s:Header/a:Action")) {
             val = xml_rd_node_value(xml);
             if (strstr(val, "Hello")) {
@@ -258,7 +256,6 @@ wsdd_resolver_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
     if (msg != NULL) {
         wsdd_message_dispatch(msg);
     }
-    //write(1, wsdd_buf, rc);
 }
 
 /* Retransmit timer callback
@@ -274,7 +271,7 @@ wsdd_resolver_timer_callback (void *data)
         close(resolver->fd);
         resolver->fdpoll = NULL;
         resolver->fd = -1;
-        log_debug(wsdd_log, "%s: done discovery", resolver->local.text);
+        log_debug(wsdd_log, "%s: done discovery", resolver->str_ifaddr.text);
     } else {
         wsdd_resolver_send_probe(resolver);
     };
@@ -322,7 +319,7 @@ wsdd_resolver_send_probe (wsdd_resolver *resolver)
 
     straddr = ip_straddr_from_sockaddr(addr);
     log_trace(wsdd_log, "probe sent: %s->%s",
-        resolver->local.text, straddr.text);
+        resolver->str_sockaddr.text, straddr.text);
     log_trace_data(wsdd_log, "application/xml", wsdd_buf, n);
 
     rc = sendto(resolver->fd, wsdd_buf, n, 0, addr, addrlen);
@@ -388,18 +385,22 @@ wsdd_resolver_new (const netif_addr *addr)
         a.sin6_family = AF_INET6;
         a.sin6_addr = addr->ip.v6;
         a.sin6_scope_id = addr->ifindex;
-        resolver->local = ip_straddr_from_sockaddr((struct sockaddr*) &a);
+        resolver->str_ifaddr = ip_straddr_from_ip(AF_INET6, &addr->ip);
+        resolver->str_sockaddr = ip_straddr_from_sockaddr((struct sockaddr*) &a);
         rc = bind(resolver->fd, (struct sockaddr*) &a, sizeof(a));
     } else {
         struct sockaddr_in a;
         a.sin_family = AF_INET;
         a.sin_addr = addr->ip.v4;
-        resolver->local = ip_straddr_from_sockaddr((struct sockaddr*) &a);
+        resolver->str_ifaddr = ip_straddr_from_ip(AF_INET, &addr->ip);
+        resolver->str_sockaddr = ip_straddr_from_sockaddr((struct sockaddr*) &a);
         rc = bind(resolver->fd, (struct sockaddr*) &a, sizeof(a));
     }
 
+    log_debug(wsdd_log, "%s: started discovery", resolver->str_ifaddr.text);
+
     if (rc < 0) {
-        log_debug(wsdd_log, "bind(%s): %s", resolver->local.text,
+        log_debug(wsdd_log, "bind(%s): %s", resolver->str_sockaddr.text,
                 strerror(errno));
         goto FAIL;
     }
@@ -455,12 +456,10 @@ wsdd_mcsock_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
         return;
     }
 
-    //log_debug(0, "MULTICAST");
     msg = wsdd_message_parse(wsdd_buf, rc);
     if (msg != NULL) {
         wsdd_message_dispatch(msg);
     }
-    //write(1, wsdd_buf, rc);
 }
 
 /* Open IPv4 or IPv6 multicast socket
