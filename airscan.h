@@ -1334,6 +1334,16 @@ zeroconf_endpoint_list_copy (zeroconf_endpoint *list);
 void
 zeroconf_endpoint_list_free (zeroconf_endpoint *list);
 
+/* Sort list of endpoints
+ */
+zeroconf_endpoint*
+zeroconf_endpoint_list_sort (zeroconf_endpoint *list);
+
+/* Sort list of endpoints and remove duplicates
+ */
+zeroconf_endpoint*
+zeroconf_endpoint_list_sort_dedup (zeroconf_endpoint *list);
+
 /******************** WS-Discovery ********************/
 /* Initialize WS-Discovery
  */

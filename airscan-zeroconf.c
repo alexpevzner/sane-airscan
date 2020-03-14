@@ -353,7 +353,7 @@ zeroconf_endpoint_list_revert (zeroconf_endpoint *list)
 
 /* Sort list of endpoints
  */
-static zeroconf_endpoint*
+zeroconf_endpoint*
 zeroconf_endpoint_list_sort (zeroconf_endpoint *list)
 {
     zeroconf_endpoint *halves[2] = {NULL, NULL};
@@ -406,7 +406,7 @@ zeroconf_endpoint_list_sort (zeroconf_endpoint *list)
 
 /* Sort list of endpoints and remove duplicates
  */
-static zeroconf_endpoint*
+zeroconf_endpoint*
 zeroconf_endpoint_list_sort_dedup (zeroconf_endpoint *list)
 {
     zeroconf_endpoint   *addr, *next;
