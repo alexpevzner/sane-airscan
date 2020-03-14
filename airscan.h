@@ -1324,6 +1324,13 @@ zeroconf_cleanup (void);
 bool
 zeroconf_init_scan (void);
 
+/* Create new zeroconf_endpoint. Newly created endpoint
+ * takes ownership of uri string
+ */
+zeroconf_endpoint*
+zeroconf_endpoint_new (ID_PROTO proto, const char *uri,
+        bool ipv6, bool linklocal);
+
 /* Create a copy of zeroconf_endpoint list
  */
 zeroconf_endpoint*
