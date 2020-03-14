@@ -8,6 +8,7 @@
 
 #include "airscan.h"
 
+#include <ctype.h>
 #include <time.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -157,6 +158,12 @@ log_message (log_ctx *log, bool trace_only, bool force, const char *fmt, va_list
 
     len += vsnprintf(msg + len, sizeof(msg) - len, fmt, ap);
 
+    while (len > 0 && isspace((unsigned char) msg[len-1])) {
+        len --;
+    }
+
+    msg[len] = '\0';
+
     /* Write to log */
     if (!dont_log) {
         g_string_append(log_buffer, msg);
@@ -171,7 +178,11 @@ log_message (log_ctx *log, bool trace_only, bool force, const char *fmt, va_list
     if (t != NULL) {
         char prefix[64];
         log_fmt_time(prefix, sizeof(prefix));
-        trace_printf(t, "%s: %s", prefix, msg);
+        if (len > 0) {
+            trace_printf(t, "%s: %s", prefix, msg);
+        } else {
+            trace_printf(t, "%s:", prefix);
+        }
     }
 }
 
