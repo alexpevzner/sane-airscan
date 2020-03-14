@@ -613,7 +613,7 @@ http_client_onerror (http_client *client,
     client->onerror = callback;
 }
 
-/* Cancel pending http_query, if any
+/* Cancel all pending queries, if any
  */
 void
 http_client_cancel (http_client *client)
@@ -621,6 +621,14 @@ http_client_cancel (http_client *client)
     while (client->pending->len != 0) {
         http_query_cancel(client->pending->pdata[0]);
     }
+}
+
+/* Get count of pending queries
+ */
+int
+http_client_pending_queries (const http_client *client)
+{
+    return client->pending->len;
 }
 
 /******************** HTTP request handling ********************/

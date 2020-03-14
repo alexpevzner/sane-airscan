@@ -606,11 +606,6 @@ http_client_new (log_ctx *log, void *ptr);
 void
 http_client_free (http_client *client);
 
-/* Cancel pending http_query, if any
- */
-void
-http_client_cancel (http_client *client);
-
 /* Set on-error callback. If this callback is not NULL,
  * in a case of transport error it will be called instead
  * of the http_query callback
@@ -618,6 +613,16 @@ http_client_cancel (http_client *client);
 void
 http_client_onerror (http_client *client,
         void (*callback)(void *ptr, error err));
+
+/* Cancel all pending queries, if any
+ */
+void
+http_client_cancel (http_client *client);
+
+/* Get count of pending queries
+ */
+int
+http_client_pending_queries (const http_client *client);
 
 /* Type http_query represents HTTP query (both request and response)
  */
