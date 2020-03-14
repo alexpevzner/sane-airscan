@@ -626,7 +626,7 @@ http_client_cancel (http_client *client)
 /* Get count of pending queries
  */
 int
-http_client_pending_queries (const http_client *client)
+http_client_num_pending (const http_client *client)
 {
     return client->pending->len;
 }
