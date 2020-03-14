@@ -36,7 +36,6 @@ typedef struct {
     uint32_t     total_time;   /* Total elapsed time */
     ip_straddr   str_ifaddr;   /* Interface address */
     ip_straddr   str_sockaddr; /* Per-interface socket address */
-    http_client  *http_client; /* HTTP client */
 } wsdd_resolver;
 
 /* wsdd_xaddr represents device transport address
@@ -51,9 +50,11 @@ struct wsdd_xaddr {
  */
 typedef struct wsdd_host wsdd_host;
 struct wsdd_host {
-    const char *address; /* Device "address" in WS-SD sence, i.e. UUID */
-    wsdd_xaddr *xaddrs;  /* Discovered transport addresses */
-    wsdd_host  *next;    /* Next device in the list */
+    const char        *address;     /* Device "address" in WS-SD sence */
+    wsdd_xaddr        *xaddrs;      /* Discovered transport addresses */
+    zeroconf_endpoint *endpoints;   /* Discovered endpoints */
+    http_client       *http_client; /* HTTP client */
+    wsdd_host         *next;        /* Next device in the list */
 };
 
 /* WSDD_ACTION represents WSDD message action
@@ -117,24 +118,27 @@ static const char *wsdd_probe_template =
 /* WS-DD Get (metadata) template
  */
 static const char *wsdd_get_metadata_template =
-    "<?xml version=\"1.0\" ?>"
-    "<s:Envelope xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\">"
-    " <s:Header>"
-    "  <a:Action>http://schemas.xmlsoap.org/ws/2004/09/transfer/Get</a:Action>"
-    "  <a:MessageID>urn:uuid:%s</a:MessageID>"
-    "  <a:To>%s</a:To>"
-    " </s:Header>"
-    " <s:Body>"
-    " </s:Body>"
-    "</s:Envelope>";
+    "<?xml version=\"1.0\" ?>\n"
+    "<s:Envelope xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\">\n"
+    " <s:Header>\n"
+    "  <a:Action>http://schemas.xmlsoap.org/ws/2004/09/transfer/Get</a:Action>\n"
+    "  <a:MessageID>urn:uuid:%s</a:MessageID>\n"
+    "  <a:To>%s</a:To>\n"
+    " </s:Header>\n"
+    " <s:Body>\n"
+    " </s:Body>\n"
+    "</s:Envelope>\n";
 
 /* XML namespace translation
  */
 static const xml_ns wsdd_ns_rules[] = {
-    {"s", "http*://schemas.xmlsoap.org/soap/envelope"}, /* SOAP 1.1 */
-    {"s", "http*://www.w3.org/2003/05/soap-envelope"},  /* SOAP 1.2 */
-    {"d", "http*://schemas.xmlsoap.org/ws/2005/04/discovery"},
-    {"a", "http*://schemas.xmlsoap.org/ws/2004/08/addressing"},
+    {"s",       "http*://schemas.xmlsoap.org/soap/envelope"}, /* SOAP 1.1 */
+    {"s",       "http*://www.w3.org/2003/05/soap-envelope"},  /* SOAP 1.2 */
+    {"d",       "http*://schemas.xmlsoap.org/ws/2005/04/discovery"},
+    {"a",       "http*://schemas.xmlsoap.org/ws/2004/08/addressing"},
+    {"devprof", "http*://schemas.xmlsoap.org/ws/2006/02/devprof"},
+    {"mex",     "http*://schemas.xmlsoap.org/ws/2004/09/mex"},
+    {"pnpx",    "http*://schemas.microsoft.com/windows/pnpx/2005/10"},
     {NULL, NULL}
 };
 
@@ -204,6 +208,7 @@ wsdd_host_new (const char *address)
 {
     wsdd_host *host = g_new0(wsdd_host, 1);
     host->address = g_strdup(address);
+    host->http_client = http_client_new (wsdd_log, host);
     return host;
 }
 
@@ -212,6 +217,10 @@ wsdd_host_new (const char *address)
 static void
 wsdd_host_free (wsdd_host *host)
 {
+    http_client_cancel(host->http_client);
+    http_client_free(host->http_client);
+
+    zeroconf_endpoint_list_free(host->endpoints);
     g_free((char*) host->address);
     wsdd_xaddr_list_free(host->xaddrs);
     g_free(host);
@@ -284,6 +293,145 @@ wsdd_host_list_purge (void)
         wsdd_host_list = wsdd_host_list->next;
         wsdd_host_free(host);
     }
+}
+
+/* Parse endpoint addresses from the devprof:Hosted section of the device metadata:
+ *   <devprof:Hosted>
+ *     <a:EndpointReference>
+ *       <a:Address>http://192.168.1.102:5358/WSDScanner</a:Address>
+ *     </addressing:EndpointReference>
+ *     <devprof:Types>scan:ScannerServiceType</devprof:Types>
+ *     <devprof:ServiceId>uri:4509a320-00a0-008f-00b6-002507510eca/WSDScanner</devprof:ServiceId>
+ *     <pnpx:CompatibleId>http://schemas.microsoft.com/windows/2006/08/wdp/scan/ScannerServiceType</pnpx:CompatibleId>
+ *     <pnpx:HardwareId>VEN_0103&amp;DEV_069D</pnpx:HardwareId>
+ *   </devprof:Hosted>
+ *
+ * It ignores all endpoints except ScannerServiceType, extracts endpoint
+ * URLs and returns them as slice of strings
+ */
+static void
+wsdd_host_parse_endpoints (wsdd_host *host, xml_rd *xml)
+{
+    unsigned int      level = xml_rd_depth(xml);
+    size_t            prefixlen = strlen(xml_rd_node_path(xml));
+    bool              is_scanner = false;
+    zeroconf_endpoint *endpoints = NULL;
+
+    while (!xml_rd_end(xml)) {
+        const char *path = xml_rd_node_path(xml) + prefixlen;
+        const char *val;
+
+        if (!strcmp(path, "/devprof:Types")) {
+            val = xml_rd_node_value(xml);
+            if (strstr(val, "ScannerServiceType") != NULL) {
+                is_scanner = true;
+            }
+        } else if (!strcmp(path, "/a:EndpointReference/a:Address")) {
+            http_uri          *uri;
+            zeroconf_endpoint *ep;
+
+            val = xml_rd_node_value(xml);
+            uri = http_uri_new(val, true);
+            if (uri != NULL) {
+                /* FIXME
+                 *   - http_uri_fix_ipv6_zone
+                 *   - ep->ipv6
+                 *   - ep->linklocal
+                 */
+                ep = zeroconf_endpoint_new(ID_PROTO_WSD, http_uri_str(uri),
+                    false, false);
+                ep->next = endpoints;
+                endpoints = ep;
+                http_uri_free(uri);
+            }
+        }
+
+        xml_rd_deep_next(xml, level);
+    }
+
+    if (!is_scanner) {
+        zeroconf_endpoint_list_free(endpoints);
+        return;
+    }
+
+    while (endpoints != NULL) {
+        zeroconf_endpoint *ep = endpoints;
+        endpoints = endpoints->next;
+        ep->next = host->endpoints;
+        host->endpoints = ep;
+    }
+}
+
+/* host metadata callback
+ */
+static void
+wsdd_host_get_metadata_callback (void *ptr, http_query *q)
+{
+    error     err;
+    xml_rd    *xml = NULL;
+    http_data *data;
+    wsdd_host *host = ptr;
+
+    (void) ptr;
+
+    /* Check query status */
+    err = http_query_error(q);
+    if (err != NULL) {
+        log_trace(wsdd_log, "metadata query: %s", ESTRING(err));
+        goto DONE;
+    }
+
+    /* Parse XML */
+    data = http_query_get_response_data(q);
+    err = xml_rd_begin(&xml, data->bytes, data->size, wsdd_ns_rules);
+    if (err != NULL) {
+        log_trace(wsdd_log, "metadata query: %s", ESTRING(err));
+        goto DONE;
+    }
+
+    /* Decode XML */
+    while (!xml_rd_end(xml)) {
+        const char *path = xml_rd_node_path(xml);
+
+        if (!strcmp(path, "s:Envelope/s:Body/mex:Metadata/mex:MetadataSection"
+                "/devprof:Relationship/devprof:Hosted")) {
+            wsdd_host_parse_endpoints(host, xml);
+        }
+
+        xml_rd_deep_next(xml, 0);
+    }
+
+    /* Cleanup and exit */
+DONE:
+    xml_rd_finish(&xml);
+    if (http_client_num_pending(host->http_client) == 0) {
+        zeroconf_endpoint *endpoint;
+
+        host->endpoints = zeroconf_endpoint_list_sort_dedup(host->endpoints);
+        log_debug(wsdd_log, "%s: discovered endpoints:", host->address);
+        for (endpoint = host->endpoints; endpoint != NULL;
+            endpoint = endpoint->next) {
+            log_debug(wsdd_log, "  %s", endpoint->uri);
+        }
+    }
+}
+
+
+/* Query host metadata
+ */
+static void
+wsdd_host_get_metadata (wsdd_host *host, wsdd_xaddr *xaddr)
+{
+    uuid       u = uuid_new();
+    http_query *q;
+
+    log_trace(wsdd_log, "queering metadata from %s", http_uri_str(xaddr->uri));
+
+    sprintf(wsdd_buf, wsdd_get_metadata_template, u.text, host->address);
+    q = http_query_new(host->http_client, http_uri_clone(xaddr->uri),
+        "POST", g_strdup(wsdd_buf), "application/soap+xml; charset=utf-8");
+
+    http_query_submit(q, wsdd_host_get_metadata_callback);
 }
 
 /******************** wsdd_message operations ********************/
@@ -417,33 +565,6 @@ wsdd_message_action_name (const wsdd_message *msg)
 }
 
 /******************** wsdd_resolver operations ********************/
-/* host metadata callback
- */
-static void
-wsdd_resolver_get_metadata_callback (void *ptr, http_query *q)
-{
-    (void) ptr;
-    (void) q;
-}
-
-/* Query host metadata
- */
-static void
-wsdd_resolver_get_metadata (wsdd_resolver *resolver, wsdd_host *host,
-        wsdd_xaddr *xaddr)
-{
-    uuid       u = uuid_new();
-    http_query *q;
-
-    log_trace(wsdd_log, "queering metadata from %s", http_uri_str(xaddr->uri));
-
-    sprintf(wsdd_buf, wsdd_get_metadata_template, u.text, host->address);
-    q = http_query_new(resolver->http_client, http_uri_clone(xaddr->uri),
-        "POST", g_strdup(wsdd_buf), "application/soap+xml; charset=utf-8");
-
-    http_query_submit(q, wsdd_resolver_get_metadata_callback);
-}
-
 /* Dispatch received WSDD message
  */
 static void
@@ -479,7 +600,7 @@ wsdd_resolver_message_dispatch (wsdd_resolver *resolver, wsdd_message *msg)
             msg->xaddrs = NULL;
 
             for (xaddr = host->xaddrs; xaddr != NULL; xaddr = xaddr->next) {
-                wsdd_resolver_get_metadata(resolver, host, xaddr);
+                wsdd_host_get_metadata(host, xaddr);
             }
         }
         break;
@@ -650,7 +771,6 @@ wsdd_resolver_new (const netif_addr *addr)
 
     /* Build resolver structure */
     resolver->ifindex = addr->ifindex;
-    resolver->http_client = http_client_new (wsdd_log, NULL);
 
     /* Open a socket */
     resolver->ipv6 = addr->ipv6;
@@ -756,9 +876,6 @@ FAIL:
 static void
 wsdd_resolver_free (wsdd_resolver *resolver)
 {
-    http_client_cancel (resolver->http_client);
-    http_client_free (resolver->http_client);
-
     if (resolver->fdpoll != NULL) {
         eloop_fdpoll_free(resolver->fdpoll);
         close(resolver->fd);
