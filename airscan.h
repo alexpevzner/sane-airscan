@@ -521,6 +521,11 @@ http_uri_get_path (const http_uri *uri);
 void
 http_uri_set_path (http_uri *uri, const char *path);
 
+/* Check if 2 URIs are equal
+ */
+bool
+http_uri_equal (const http_uri *uri1, const http_uri *uri2);
+
 /* HTTP data
  */
 typedef struct {

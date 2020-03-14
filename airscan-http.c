@@ -147,6 +147,14 @@ http_uri_set_path (http_uri *uri, const char *path)
     uri->str = NULL;
 }
 
+/* Check if 2 URIs are equal
+ */
+bool
+http_uri_equal (const http_uri *uri1, const http_uri *uri2)
+{
+    return soup_uri_equal(uri1->parsed, uri2->parsed);
+}
+
 /******************** HTTP multipart ********************/
 /* http_multipart represents a decoded multipart message
  */
