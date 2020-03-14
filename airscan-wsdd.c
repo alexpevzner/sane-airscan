@@ -36,6 +36,7 @@ typedef struct {
     uint32_t     total_time;   /* Total elapsed time */
     ip_straddr   str_ifaddr;   /* Interface address */
     ip_straddr   str_sockaddr; /* Per-interface socket address */
+    http_client  *http_client; /* HTTP client */
 } wsdd_resolver;
 
 /* wsdd_xaddr represents device transport address
@@ -81,6 +82,9 @@ wsdd_message_free(wsdd_message *msg);
 static void
 wsdd_resolver_send_probe (wsdd_resolver *resolver);
 
+static wsdd_resolver*
+wsdd_netif_resolver_by_ifindex (int ifindex);
+
 /* Static variables
  */
 static log_ctx             *wsdd_log;
@@ -95,9 +99,9 @@ static struct sockaddr_in  wsdd_mcast_ipv4;
 static struct sockaddr_in6 wsdd_mcast_ipv6;
 static wsdd_host           *wsdd_host_list;
 
-/* XML templates
+/* WS-DD Probe template
  */
-static const char *wsdd_probe =
+static const char *wsdd_probe_template =
     "<?xml version=\"1.0\" ?>\n"
     "<s:Envelope xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\" xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\">\n"
     " <s:Header>\n"
@@ -109,6 +113,20 @@ static const char *wsdd_probe =
     "  <d:Probe/>\n"
     " </s:Body>\n"
     "</s:Envelope>\n";
+
+/* WS-DD Get (metadata) template
+ */
+static const char *wsdd_get_metadata_template =
+    "<?xml version=\"1.0\" ?>"
+    "<s:Envelope xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\">"
+    " <s:Header>"
+    "  <a:Action>http://schemas.xmlsoap.org/ws/2004/09/transfer/Get</a:Action>"
+    "  <a:MessageID>urn:uuid:%s</a:MessageID>"
+    "  <a:To>%s</a:To>"
+    " </s:Header>"
+    " <s:Body>"
+    " </s:Body>"
+    "</s:Envelope>";
 
 /* XML namespace translation
  */
@@ -268,6 +286,7 @@ wsdd_host_list_purge (void)
     }
 }
 
+/******************** wsdd_message operations ********************/
 /* Parse transport addresses. Universal function
  * for Hello/Bye/ProbeMatch message
  */
@@ -397,17 +416,45 @@ wsdd_message_action_name (const wsdd_message *msg)
     return "UNKNOWN";
 }
 
+/******************** wsdd_resolver operations ********************/
+/* host metadata callback
+ */
+static void
+wsdd_resolver_get_metadata_callback (void *ptr, http_query *q)
+{
+    (void) ptr;
+    (void) q;
+}
+
+/* Query host metadata
+ */
+static void
+wsdd_resolver_get_metadata (wsdd_resolver *resolver, wsdd_host *host,
+        wsdd_xaddr *xaddr)
+{
+    uuid       u = uuid_new();
+    http_query *q;
+
+    log_trace(wsdd_log, "queering metadata from %s", http_uri_str(xaddr->uri));
+
+    sprintf(wsdd_buf, wsdd_get_metadata_template, u.text, host->address);
+    q = http_query_new(resolver->http_client, http_uri_clone(xaddr->uri),
+        "POST", g_strdup(wsdd_buf), "application/soap+xml; charset=utf-8");
+
+    http_query_submit(q, wsdd_resolver_get_metadata_callback);
+}
+
 /* Dispatch received WSDD message
  */
 static void
-wsdd_message_dispatch (int ifindex, wsdd_message *msg)
+wsdd_resolver_message_dispatch (wsdd_resolver *resolver, wsdd_message *msg)
 {
     wsdd_host  *host;
     wsdd_xaddr *xaddr;
 
     /* Fixup ipv6 zones */
     for (xaddr = msg->xaddrs; xaddr != NULL; xaddr = xaddr->next) {
-        http_uri_fix_ipv6_zone(xaddr->uri, ifindex);
+        http_uri_fix_ipv6_zone(xaddr->uri, resolver->ifindex);
     }
 
     /* Write trace messages */
@@ -426,7 +473,14 @@ wsdd_message_dispatch (int ifindex, wsdd_message *msg)
     case WSDD_ACTION_PROBEMATCHES:
         host = wsdd_host_add(msg->address);
         if (host != NULL) {
-            // FIXME
+            wsdd_xaddr *xaddr;
+
+            host->xaddrs = msg->xaddrs;
+            msg->xaddrs = NULL;
+
+            for (xaddr = host->xaddrs; xaddr != NULL; xaddr = xaddr->next) {
+                wsdd_resolver_get_metadata(resolver, host, xaddr);
+            }
         }
         break;
 
@@ -440,6 +494,7 @@ wsdd_message_dispatch (int ifindex, wsdd_message *msg)
 
     wsdd_message_free(msg);
 }
+
 
 /* Resolver read callback
  */
@@ -455,6 +510,7 @@ wsdd_resolver_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
     uint8_t                 aux[8192];
     struct cmsghdr          *cmsg;
     int                     ifindex = 0;
+    wsdd_resolver           *resolver;
     struct msghdr           msghdr = {
         .msg_name = &from,
         .msg_namelen = sizeof(from),
@@ -495,9 +551,16 @@ wsdd_resolver_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
         str_from.text, str_to.text);
     log_trace_data(wsdd_log, "application/xml", wsdd_buf, rc);
 
+    /* Lookup resolver by interface index */
+    resolver = wsdd_netif_resolver_by_ifindex(ifindex);
+    if (resolver == NULL) {
+        return;
+    }
+
+    /* Parse and dispatch the message */
     msg = wsdd_message_parse(wsdd_buf, rc);
     if (msg != NULL) {
-        wsdd_message_dispatch(ifindex, msg);
+        wsdd_resolver_message_dispatch(resolver, msg);
     }
 }
 
@@ -546,7 +609,7 @@ static void
 wsdd_resolver_send_probe (wsdd_resolver *resolver)
 {
     uuid            u = uuid_new();
-    int             n = sprintf(wsdd_buf, wsdd_probe, u.text);
+    int             n = sprintf(wsdd_buf, wsdd_probe_template, u.text);
     int             rc;
     struct sockaddr *addr;
     socklen_t       addrlen;
@@ -585,8 +648,9 @@ wsdd_resolver_new (const netif_addr *addr)
     int           rc;
     static int    no = 0, yes = 1;
 
-    /* Save interface information */
+    /* Build resolver structure */
     resolver->ifindex = addr->ifindex;
+    resolver->http_client = http_client_new (wsdd_log, NULL);
 
     /* Open a socket */
     resolver->ipv6 = addr->ipv6;
@@ -692,6 +756,9 @@ FAIL:
 static void
 wsdd_resolver_free (wsdd_resolver *resolver)
 {
+    http_client_cancel (resolver->http_client);
+    http_client_free (resolver->http_client);
+
     if (resolver->fdpoll != NULL) {
         eloop_fdpoll_free(resolver->fdpoll);
         close(resolver->fd);
@@ -704,6 +771,7 @@ wsdd_resolver_free (wsdd_resolver *resolver)
     g_free(resolver);
 }
 
+/******************** Management of multicast sockets ********************/
 /* Open IPv4 or IPv6 multicast socket
  */
 static int
@@ -788,22 +856,6 @@ FAIL:
     return -1;
 }
 
-/* Dump list of network interfaces addresses
- */
-static void
-wsdd_netif_dump_addresses (const char *prefix, netif_addr *list)
-{
-    char suffix[32] = "";
-
-    while (list != NULL) {
-        if (list->ipv6 && list->linklocal) {
-            sprintf(suffix, "%%%d", list->ifindex);
-        }
-        log_debug(wsdd_log, "%s%s%s", prefix, list->straddr, suffix);
-        list = list->next;
-    }
-}
-
 /* Add or drop multicast group membership, on
  * per-interface-address basis
  */
@@ -844,6 +896,39 @@ wsdd_mcast_update_membership (int fd, netif_addr *addr, bool add)
                     strerror(errno));
         }
     }
+}
+
+/******************** Monitoring of network interfaces ********************/
+/* Dump list of network interfaces addresses
+ */
+static void
+wsdd_netif_dump_addresses (const char *prefix, netif_addr *list)
+{
+    char suffix[32] = "";
+
+    while (list != NULL) {
+        if (list->ipv6 && list->linklocal) {
+            sprintf(suffix, "%%%d", list->ifindex);
+        }
+        log_debug(wsdd_log, "%s%s%s", prefix, list->straddr, suffix);
+        list = list->next;
+    }
+}
+
+/* Lookup wsdd_resolver by interface index
+ */
+static wsdd_resolver*
+wsdd_netif_resolver_by_ifindex (int ifindex)
+{
+    netif_addr *addr;
+
+    for (addr = wsdd_netif_addr_list; addr != NULL; addr = addr->next) {
+        if (addr->ifindex == ifindex) {
+            return addr->data;
+        }
+    }
+
+    return NULL;
 }
 
 /* Update network interfaces addresses
@@ -895,6 +980,7 @@ wsdd_netif_notifier_callback (void *data)
     wsdd_netif_update_addresses();
 }
 
+/******************** Initialization and cleanup ********************/
 /* eloop start/stop callback
  */
 static void
