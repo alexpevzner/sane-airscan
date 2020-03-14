@@ -6,6 +6,8 @@
  * Web Services Dynamic Discovery (WS-Discovery)
  */
 
+#define _GNU_SOURCE
+
 #include "airscan.h"
 
 #include <errno.h>
@@ -14,6 +16,8 @@
 #include <unistd.h>
 
 #include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 
 /* Protocol times, in milliseconds
  */
@@ -25,6 +29,7 @@
  */
 typedef struct {
     int          fd;           /* File descriptor */
+    int          ifindex;      /* Interface index */
     bool         ipv6;         /* We are on IPv6 */
     eloop_fdpoll *fdpoll;      /* Socket fdpoll */
     eloop_timer  *timer;       /* Retransmit timer */
@@ -32,6 +37,49 @@ typedef struct {
     ip_straddr   str_ifaddr;   /* Interface address */
     ip_straddr   str_sockaddr; /* Per-interface socket address */
 } wsdd_resolver;
+
+/* wsdd_xaddr represents device transport address
+ */
+typedef struct wsdd_xaddr wsdd_xaddr;
+struct wsdd_xaddr {
+    http_uri   *uri;  /* Device URI */
+    wsdd_xaddr *next; /* Next address in the list */
+};
+
+/* wsdd_host represents discovery state for particular host
+ */
+typedef struct wsdd_host wsdd_host;
+struct wsdd_host {
+    const char *address; /* Device "address" in WS-SD sence, i.e. UUID */
+    wsdd_xaddr *xaddrs;  /* Discovered transport addresses */
+    wsdd_host  *next;    /* Next device in the list */
+};
+
+/* WSDD_ACTION represents WSDD message action
+ */
+typedef enum {
+    WSDD_ACTION_UNKNOWN,
+    WSDD_ACTION_HELLO,
+    WSDD_ACTION_BYE,
+    WSDD_ACTION_PROBEMATCHES
+} WSDD_ACTION;
+
+/* wsdd_message represents a parsed WSDD message
+ */
+typedef struct {
+    WSDD_ACTION  action;     /* Message action */
+    const char   *address;   /* Endpoint reference */
+    wsdd_xaddr   *xaddrs;    /* Discovered transport addresses */
+    bool         is_scanner; /* Device is scanner */
+} wsdd_message;
+
+/* Forward declarations
+ */
+static void
+wsdd_message_free(wsdd_message *msg);
+
+static void
+wsdd_resolver_send_probe (wsdd_resolver *resolver);
 
 /* Static variables
  */
@@ -45,6 +93,7 @@ static eloop_fdpoll        *wsdd_fdpoll_ipv6;
 static char                wsdd_buf[65536];
 static struct sockaddr_in  wsdd_mcast_ipv4;
 static struct sockaddr_in6 wsdd_mcast_ipv6;
+static wsdd_host           *wsdd_host_list;
 
 /* XML templates
  */
@@ -71,43 +120,162 @@ static const xml_ns wsdd_ns_rules[] = {
     {NULL, NULL}
 };
 
-/* WSDD_ACTION represents WSDD message action
+/******************** wsdd_xaddr operations ********************/
+/* Create new wsdd_xaddr. Newly created wsdd_xaddr takes uri ownership
  */
-typedef enum {
-    WSDD_ACTION_UNKNOWN,
-    WSDD_ACTION_HELLO,
-    WSDD_ACTION_BYE,
-    WSDD_ACTION_PROBEMATCHES
-} WSDD_ACTION;
+static wsdd_xaddr*
+wsdd_xaddr_new (http_uri *uri)
+{
+    wsdd_xaddr *xaddr = g_new0(wsdd_xaddr, 1);
+    xaddr->uri = uri;
+    return xaddr;
+}
 
-/* wsdd_message represents a parsed WSDD message
- */
-typedef struct {
-    WSDD_ACTION  action;    /* Message action */
-    const char   *endpoint; /* Endpoint reference */
-    const char   *uri;      /* Endpoint URI */
-} wsdd_message;
-
-/* Forward declarations
+/* Destroy wsdd_xaddr
  */
 static void
-wsdd_message_free(wsdd_message *msg);
+wsdd_xaddr_free (wsdd_xaddr *xaddr)
+{
+    http_uri_free(xaddr->uri);
+    g_free(xaddr);
+}
 
+/* Add wsdd_xaddr to the list. Returns newly added xaddr.
+ * On success, takes ownership on URI
+ * In a case of duplicates, does nothing and returns NULL
+ */
+static wsdd_xaddr*
+wsdd_xaddr_list_add (wsdd_xaddr **list, http_uri *uri)
+{
+    wsdd_xaddr *xaddr, *last = NULL;
+
+    for (xaddr = *list; xaddr != NULL; xaddr = xaddr->next) {
+        if (http_uri_equal(xaddr->uri, uri)) {
+            return NULL;
+        }
+        last = xaddr;
+    }
+
+    xaddr = wsdd_xaddr_new(uri);
+    if (last != NULL) {
+        last->next = xaddr;
+    } else {
+        *list = xaddr;
+    }
+
+    return xaddr;
+}
+
+/* Free list of wsdd_xaddr
+ */
 static void
-wsdd_resolver_send_probe (wsdd_resolver *resolver);
+wsdd_xaddr_list_free (wsdd_xaddr *list)
+{
+    while (list != NULL) {
+        wsdd_xaddr *xaddr = list;
+        list = list->next;
+        wsdd_xaddr_free(xaddr);
+    }
+}
 
-/* Parse endpoint address.
- * It works for:
- *   * s:Envelope/s:Body/d:ProbeMatches/d:ProbeMatch
- *   * s:Envelope/s:Body/d:Hello
+/******************** wsdd_host operations ********************/
+/* Create new wsdd_host
+ */
+static wsdd_host*
+wsdd_host_new (const char *address)
+{
+    wsdd_host *host = g_new0(wsdd_host, 1);
+    host->address = g_strdup(address);
+    return host;
+}
+
+/* Destroy wsdd_host
+ */
+static void
+wsdd_host_free (wsdd_host *host)
+{
+    g_free((char*) host->address);
+    wsdd_xaddr_list_free(host->xaddrs);
+    g_free(host);
+}
+
+/* Add wsdd_host to the wsdd_host_list.
+ * If host already present, does nothing and returns NULL
+ */
+static wsdd_host*
+wsdd_host_add (const char *address)
+{
+    wsdd_host *host, *last = NULL;
+
+    /* Check for duplicates */
+    for (host = wsdd_host_list; host != NULL; host = host->next) {
+        if (!strcmp(host->address, address)) {
+            return NULL;
+        }
+        last = host;
+    }
+
+    /* Add new host */
+    host = wsdd_host_new(address);
+    if (last != NULL) {
+        last->next = host;
+    } else {
+        wsdd_host_list = host;
+    }
+
+    return host;
+}
+
+/* Delete wsdd_host from the wsdd_host_list
+ */
+static void
+wsdd_host_del (const char *address)
+{
+    wsdd_host *host, *prev = NULL;
+
+    /* Lookup host in the list */
+    for (host = wsdd_host_list; host != NULL; host = host->next) {
+        if (!strcmp(host->address, address)) {
+            break;
+        }
+        prev = host;
+    }
+
+    if (host == NULL) {
+        return;
+    }
+
+    /* Unlink from the list */
+    if (prev != NULL) {
+        prev->next = host->next;
+    } else {
+        wsdd_host_list = host->next;
+    }
+
+    /* And destroy */
+    wsdd_host_free(host);
+}
+
+/* Delete all hosts from the wsdd_host_list
+ */
+static void
+wsdd_host_list_purge (void)
+{
+    while (wsdd_host_list != NULL) {
+        wsdd_host *host = wsdd_host_list;
+        wsdd_host_list = wsdd_host_list->next;
+        wsdd_host_free(host);
+    }
+}
+
+/* Parse transport addresses. Universal function
+ * for Hello/Bye/ProbeMatch message
  */
 static void
 wsdd_message_parse_endpoint (wsdd_message *msg, xml_rd *xml)
 {
     unsigned int level = xml_rd_depth(xml);
-    bool         is_scanner = false;
-    char         *endpoint = NULL;
-    char         *uri = NULL;
+    char         *xaddrs_text = NULL;
     size_t       prefixlen = strlen(xml_rd_node_path(xml));
 
     while (!xml_rd_end(xml)) {
@@ -116,22 +284,39 @@ wsdd_message_parse_endpoint (wsdd_message *msg, xml_rd *xml)
 
         if (!strcmp(path, "/d:Types")) {
             val = xml_rd_node_value(xml);
-            is_scanner = !!strstr(val, "ScanDeviceType");
+            msg->is_scanner = !!strstr(val, "ScanDeviceType");
         } else if (!strcmp(path, "/d:XAddrs")) {
-            g_free(uri);
-            uri = g_strdup(xml_rd_node_value(xml));
+            g_free(xaddrs_text);
+            xaddrs_text = g_strdup(xml_rd_node_value(xml));
         } else if (!strcmp(path, "/a:EndpointReference/a:Address")) {
-            g_free(endpoint);
-            endpoint = g_strdup(xml_rd_node_value(xml));
+            g_free((char*) msg->address);
+            msg->address = g_strdup(xml_rd_node_value(xml));
         }
 
         xml_rd_deep_next(xml, level);
     }
 
-    if (is_scanner && endpoint != NULL && uri != NULL) {
-        msg->endpoint = endpoint;
-        msg->uri = uri;
+    if (xaddrs_text != NULL) {
+        char *tok, *saveptr;
+        static const char *delim = "\t\n\v\f\r \x85\xA0";
+
+        for (tok = strtok_r(xaddrs_text, delim, &saveptr); tok != NULL;
+             tok = strtok_r(NULL, delim, &saveptr)) {
+
+            http_uri   *uri = http_uri_new(tok, true);
+            wsdd_xaddr *xaddr = NULL;
+
+            if (uri != NULL) {
+                xaddr = wsdd_xaddr_list_add(&msg->xaddrs, uri);
+            }
+
+            if (xaddr == NULL) {
+                http_uri_free(uri);
+            }
+        }
     }
+
+    g_free(xaddrs_text);
 }
 
 /* Parse WSDD message
@@ -161,8 +346,9 @@ wsdd_message_parse (const char *xml_text, size_t xml_len)
             } else if (strstr(val, "ProbeMatches")) {
                 msg->action = WSDD_ACTION_PROBEMATCHES;
             }
-        } else if ( !strcmp(path, "s:Envelope/s:Body/d:Hello") ||
-                    !strcmp(path, "s:Envelope/s:Body/d:ProbeMatches/d:ProbeMatch")) {
+        } else if (!strcmp(path, "s:Envelope/s:Body/d:Hello") ||
+                   !strcmp(path, "s:Envelope/s:Body/d:Bye") ||
+                   !strcmp(path, "s:Envelope/s:Body/d:ProbeMatches/d:ProbeMatch")) {
             wsdd_message_parse_endpoint(msg, xml);
         }
         xml_rd_deep_next(xml, 0);
@@ -172,9 +358,9 @@ DONE:
     xml_rd_finish(&xml);
     if (err != NULL ||
         msg->action == WSDD_ACTION_UNKNOWN ||
-        msg->endpoint == NULL ||
-        (msg->action == WSDD_ACTION_HELLO && msg->uri == NULL) ||
-        (msg->action == WSDD_ACTION_PROBEMATCHES && msg->uri == NULL)) {
+        msg->address == NULL ||
+        (msg->action == WSDD_ACTION_HELLO && msg->xaddrs == NULL) ||
+        (msg->action == WSDD_ACTION_PROBEMATCHES && msg->xaddrs == NULL)) {
         wsdd_message_free(msg);
         msg = NULL;
     }
@@ -188,8 +374,8 @@ static void
 wsdd_message_free (wsdd_message *msg)
 {
     if (msg != NULL) {
-        g_free((char*) msg->endpoint);
-        g_free((char*) msg->uri);
+        g_free((char*) msg->address);
+        wsdd_xaddr_list_free(msg->xaddrs);
         g_free(msg);
     }
 }
@@ -214,17 +400,44 @@ wsdd_message_action_name (const wsdd_message *msg)
 /* Dispatch received WSDD message
  */
 static void
-wsdd_message_dispatch (wsdd_message *msg)
+wsdd_message_dispatch (int ifindex, wsdd_message *msg)
 {
-    if (msg != NULL) {
-        log_trace(wsdd_log, "%s message received:",
-            wsdd_message_action_name(msg));
-        log_trace(wsdd_log, "  endpoint=%s", msg->endpoint);
-        if (msg->uri != NULL) {
-            log_trace(wsdd_log, "  uri=%s", msg->uri);
-        }
-        log_trace(wsdd_log, "");
+    wsdd_host  *host;
+    wsdd_xaddr *xaddr;
+
+    /* Fixup ipv6 zones */
+    for (xaddr = msg->xaddrs; xaddr != NULL; xaddr = xaddr->next) {
+        http_uri_fix_ipv6_zone(xaddr->uri, ifindex);
     }
+
+    /* Write trace messages */
+    log_trace(wsdd_log, "%s message received:",
+        wsdd_message_action_name(msg));
+    log_trace(wsdd_log, "  address:    %s", msg->address);
+    log_trace(wsdd_log, "  is_scanner: %s", msg->is_scanner ? "yes" : "no");
+    for (xaddr = msg->xaddrs; xaddr != NULL; xaddr = xaddr->next) {
+        log_trace(wsdd_log, "  xaddr:      %s", http_uri_str(xaddr->uri));
+    }
+    log_trace(wsdd_log, "");
+
+    /* Handle the message */
+    switch (msg->action) {
+    case WSDD_ACTION_HELLO:
+    case WSDD_ACTION_PROBEMATCHES:
+        host = wsdd_host_add(msg->address);
+        if (host != NULL) {
+            // FIXME
+        }
+        break;
+
+    case WSDD_ACTION_BYE:
+        wsdd_host_del(msg->address);
+        break;
+
+    default:
+        break;
+    }
+
     wsdd_message_free(msg);
 }
 
@@ -233,28 +446,58 @@ wsdd_message_dispatch (wsdd_message *msg)
 static void
 wsdd_resolver_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
 {
-    struct sockaddr_storage addr;
-    socklen_t               addrlen = sizeof(addr);
-    ip_straddr              straddr;
+    struct sockaddr_storage from, to;
+    socklen_t               tolen = sizeof(to);
+    ip_straddr              str_from, str_to;
     int                     rc;
     wsdd_message            *msg;
+    struct iovec            vec = {wsdd_buf, sizeof(wsdd_buf)};
+    uint8_t                 aux[8192];
+    struct cmsghdr          *cmsg;
+    int                     ifindex = 0;
+    struct msghdr           msghdr = {
+        .msg_name = &from,
+        .msg_namelen = sizeof(from),
+        .msg_iov = &vec,
+        .msg_iovlen = 1,
+        .msg_control = aux,
+        .msg_controllen = sizeof(aux),
+    };
 
-    (void) data;
     (void) mask;
+    (void) data;
 
-    rc = recvfrom(fd, wsdd_buf, sizeof(wsdd_buf), 0,
-        (struct sockaddr*) &addr, &addrlen);
+    /* Receive a packet */
+    rc = recvmsg(fd, &msghdr, 0);
     if (rc <= 0) {
         return;
     }
 
-    straddr = ip_straddr_from_sockaddr((struct sockaddr*) &addr);
-    log_trace(wsdd_log, "%d bytes received from %s", rc, straddr.text);
+    /* Fetch interface index from auxiliary data */
+    for (cmsg = CMSG_FIRSTHDR(&msghdr); cmsg != NULL;
+         cmsg = CMSG_NXTHDR(&msghdr, cmsg)) {
+        if (cmsg->cmsg_level == IPPROTO_IPV6 &&
+            cmsg->cmsg_type == IPV6_PKTINFO) {
+            struct in6_pktinfo *pkt = (struct in6_pktinfo*) CMSG_DATA(cmsg);
+            ifindex = pkt->ipi6_ifindex;
+        } else if (cmsg->cmsg_level == IPPROTO_IP &&
+            cmsg->cmsg_type == IP_PKTINFO) {
+            struct in_pktinfo *pkt = (struct in_pktinfo*) CMSG_DATA(cmsg);
+            ifindex = pkt->ipi_ifindex;
+        }
+    }
+
+    str_from = ip_straddr_from_sockaddr((struct sockaddr*) &from);
+    getsockname(fd, (struct sockaddr*) &to, &tolen);
+    str_to = ip_straddr_from_sockaddr((struct sockaddr*) &to);
+
+    log_trace(wsdd_log, "%d bytes received: %s->%s", rc,
+        str_from.text, str_to.text);
     log_trace_data(wsdd_log, "application/xml", wsdd_buf, rc);
 
     msg = wsdd_message_parse(wsdd_buf, rc);
     if (msg != NULL) {
-        wsdd_message_dispatch(msg);
+        wsdd_message_dispatch(ifindex, msg);
     }
 }
 
@@ -340,7 +583,10 @@ wsdd_resolver_new (const netif_addr *addr)
     int           af = addr->ipv6 ? AF_INET6 : AF_INET;
     const char    *af_name = addr->ipv6 ? "AF_INET6" : "AF_INET";
     int           rc;
-    static int    no = 0;
+    static int    no = 0, yes = 1;
+
+    /* Save interface information */
+    resolver->ifindex = addr->ifindex;
 
     /* Open a socket */
     resolver->ipv6 = addr->ipv6;
@@ -361,6 +607,15 @@ wsdd_resolver_new (const netif_addr *addr)
             goto FAIL;
         }
 
+        rc = setsockopt(resolver->fd, IPPROTO_IPV6, IPV6_RECVPKTINFO,
+                &yes, sizeof(yes));
+
+        if (rc < 0) {
+            log_debug(wsdd_log, "setsockopt(IPPROTO_IPV6,IPV6_RECVPKTINFO): %s",
+                    strerror(errno));
+            goto FAIL;
+        }
+
         /* Note: error is not a problem here */
         setsockopt(resolver->fd, IPPROTO_IPV6, IPV6_MULTICAST_LOOP,
                 &no, sizeof(no));
@@ -370,6 +625,15 @@ wsdd_resolver_new (const netif_addr *addr)
 
         if (rc < 0) {
             log_debug(wsdd_log, "setsockopt(AF_INET,IP_MULTICAST_IF): %s",
+                    strerror(errno));
+            goto FAIL;
+        }
+
+        rc = setsockopt(resolver->fd, IPPROTO_IP, IP_PKTINFO,
+                &yes, sizeof(yes));
+
+        if (rc < 0) {
+            log_debug(wsdd_log, "setsockopt(AF_INET,IP_PKTINFO): %s",
                     strerror(errno));
             goto FAIL;
         }
@@ -440,28 +704,6 @@ wsdd_resolver_free (wsdd_resolver *resolver)
     g_free(resolver);
 }
 
-/* Read callback for multicast socket
- */
-static void
-wsdd_mcsock_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
-{
-    int          rc;
-    wsdd_message *msg;
-
-    (void) data;
-    (void) mask;
-
-    rc = read(fd, wsdd_buf, sizeof(wsdd_buf));
-    if (rc <= 0) {
-        return;
-    }
-
-    msg = wsdd_message_parse(wsdd_buf, rc);
-    if (msg != NULL) {
-        wsdd_message_dispatch(msg);
-    }
-}
-
 /* Open IPv4 or IPv6 multicast socket
  */
 static int
@@ -492,6 +734,20 @@ wsdd_mcsock_open (bool ipv6)
         rc = setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &yes, sizeof(yes));
         if (rc < 0) {
             log_debug(wsdd_log, "setsockopt(%s, IPV6_V6ONLY): %s",
+                    af_name, strerror(errno));
+            goto FAIL;
+        }
+
+        rc = setsockopt(fd, IPPROTO_IPV6, IPV6_RECVPKTINFO, &yes, sizeof(yes));
+        if (rc < 0) {
+            log_debug(wsdd_log, "setsockopt(%s, IPV6_RECVPKTINFO): %s",
+                    af_name, strerror(errno));
+            goto FAIL;
+        }
+    } else {
+        rc = setsockopt(fd, IPPROTO_IP, IP_PKTINFO, &yes, sizeof(yes));
+        if (rc < 0) {
+            log_debug(wsdd_log, "setsockopt(%s, IP_PKTINFO): %s",
                     af_name, strerror(errno));
             goto FAIL;
         }
@@ -648,13 +904,13 @@ wsdd_start_stop_callback (bool start)
         /* Setup WSDD multicast reception */
         if (wsdd_mcsock_ipv4 >= 0) {
             wsdd_fdpoll_ipv4 = eloop_fdpoll_new(wsdd_mcsock_ipv4,
-                wsdd_mcsock_callback, NULL);
+                wsdd_resolver_read_callback, NULL);
             eloop_fdpoll_set_mask(wsdd_fdpoll_ipv4, ELOOP_FDPOLL_READ);
         }
 
         if (wsdd_mcsock_ipv6 >= 0) {
             wsdd_fdpoll_ipv6 = eloop_fdpoll_new(wsdd_mcsock_ipv6,
-                wsdd_mcsock_callback, NULL);
+                wsdd_resolver_read_callback, NULL);
             eloop_fdpoll_set_mask(wsdd_fdpoll_ipv6, ELOOP_FDPOLL_READ);
         }
 
@@ -670,6 +926,9 @@ wsdd_start_stop_callback (bool start)
             eloop_fdpoll_free(wsdd_fdpoll_ipv6);
             wsdd_fdpoll_ipv6 = NULL;
         }
+
+        /* Cleanup resources */
+        wsdd_host_list_purge();
     }
 }
 
