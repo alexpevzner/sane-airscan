@@ -648,7 +648,6 @@ struct http_query {
     http_client       *client;                  /* Client that owns the query */
     http_uri          *uri;                     /* Query URI */
     SoupMessage       *msg;                     /* Underlying SOUP message */
-    void              *ptr;                     /* Passed to callback */
     void              (*callback) (void *ptr,   /* Completion callback */
                                 http_query *q);
     http_query_cached *cached;                  /* Cached data */
@@ -726,9 +725,9 @@ http_query_callback (SoupSession *session, SoupMessage *msg, gpointer userdata)
         trace_http_query_hook(log_ctx_trace(client->log), q);
 
         if (err != NULL && client->onerror != NULL) {
-            client->onerror(q->ptr, err);
+            client->onerror(client->ptr, err);
         } else if (q->callback != NULL) {
-            q->callback(q->ptr, q);
+            q->callback(client->ptr, q);
         }
 
         http_query_free(q);
@@ -770,7 +769,6 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
     q->client = client;
     q->uri = uri;
     q->msg = soup_message_new_from_uri(method, uri->parsed);
-    q->ptr = client->ptr;
     q->cached = g_new0(http_query_cached, 1);
 
     if (body != NULL) {
@@ -808,15 +806,6 @@ http_query_new_relative(http_client *client,
 {
     http_uri *uri = http_uri_new_relative(base_uri, path, true, false);
     return http_query_new(client, uri, method, body, content_type);
-}
-
-/* Set ptr parameter, passed to callback. If not explicitly
- * set, ptr used for http_client_new() will be used
- */
-void
-http_query_set_ptr (http_query *q, void *ptr)
-{
-    q->ptr = ptr;
 }
 
 /* Submit the query.

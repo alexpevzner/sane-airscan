@@ -648,12 +648,6 @@ http_query_new_relative(http_client *client,
         const http_uri *base_uri, const char *path,
         const char *method, char *body, const char *content_type);
 
-/* Set ptr parameter, passed to callback. If not explicitly
- * set, ptr used for http_client_new() will be used
- */
-void
-http_query_set_ptr (http_query *q, void *ptr);
-
 /* Submit the query.
  *
  * When query is finished, callback will be called. After return from
