@@ -142,7 +142,7 @@ log_message (log_ctx *log, bool trace_only, bool force, const char *fmt, va_list
 {
     trace *t = log ? log->trace : NULL;
     char  msg[4096];
-    int   len = 0;
+    int   len = 0, namelen = 0;
     bool  dont_log = trace_only || (log_configured && !conf.dbg_enabled && !force);
 
     /* If logs suppressed and trace not in use, we have nothing
@@ -154,6 +154,7 @@ log_message (log_ctx *log, bool trace_only, bool force, const char *fmt, va_list
     /* Format a log message */
     if (log != NULL) {
         len += sprintf(msg, "\"%.64s\": ", log->name);
+        namelen = len;
     }
 
     len += vsnprintf(msg + len, sizeof(msg) - len, fmt, ap);
@@ -176,12 +177,12 @@ log_message (log_ctx *log, bool trace_only, bool force, const char *fmt, va_list
 
     /* Write to trace */
     if (t != NULL) {
-        char prefix[64];
-        log_fmt_time(prefix, sizeof(prefix));
-        if (len > 0) {
+        if (len > namelen) {
+            char prefix[64];
+            log_fmt_time(prefix, sizeof(prefix));
             trace_printf(t, "%s: %s", prefix, msg);
         } else {
-            trace_printf(t, "%s:", prefix);
+            trace_printf(t, "");
         }
     }
 }
