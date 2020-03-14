@@ -521,6 +521,11 @@ http_uri_get_path (const http_uri *uri);
 void
 http_uri_set_path (http_uri *uri, const char *path);
 
+/* Fix IPv6 address zone suffix
+ */
+void
+http_uri_fix_ipv6_zone (http_uri *uri, int ifindex);
+
 /* Check if 2 URIs are equal
  */
 bool

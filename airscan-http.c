@@ -10,6 +10,7 @@
 
 #include "airscan.h"
 
+#include <arpa/inet.h>
 #include <libsoup/soup.h>
 
 /******************** Static variables ********************/
@@ -145,6 +146,35 @@ http_uri_set_path (http_uri *uri, const char *path)
     soup_uri_set_path(uri->parsed, path);
     g_free(uri->str);
     uri->str = NULL;
+}
+
+/* Fix IPv6 address zone suffix
+ */
+void
+http_uri_fix_ipv6_zone (http_uri *uri, int ifindex)
+{
+    struct in6_addr addr;
+    char            *host = uri->parsed->host;
+
+    if (!strchr(host, ':')) {
+        return; /* Not IPv6 */
+    }
+
+    if (strchr(host, '%')) {
+        return; /* Already has zone suffix */
+    }
+
+    if (inet_pton(AF_INET6, host, &addr) != 1) {
+        return; /* Can't parse address */
+    }
+
+    if (addr.s6_addr[0] == 0xfe && (addr.s6_addr[1] & 0xc0) == 0x80) {
+        char *s = g_alloca(strlen(host) + 64);
+        sprintf(s, "%s%%%d", host, ifindex);
+        soup_uri_set_host(uri->parsed, s);
+        g_free(uri->str);
+        uri->str = NULL;
+    }
 }
 
 /* Check if 2 URIs are equal
