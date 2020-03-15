@@ -56,7 +56,6 @@ netif_addr_get (void)
         switch (ifp->ifa_addr->sa_family) {
         case AF_INET:
             addr->ip.v4 = ((struct sockaddr_in*) ifp->ifa_addr)->sin_addr;
-            addr->linklocal = ip_is_linklocal(AF_INET, &addr->ip);
             inet_ntop(AF_INET, &addr->ip.v4,
                 addr->straddr, sizeof(addr->straddr));
             break;
@@ -64,7 +63,6 @@ netif_addr_get (void)
         case AF_INET6:
             addr->ipv6 = true;
             addr->ip.v6 = ((struct sockaddr_in6*) ifp->ifa_addr)->sin6_addr;
-            addr->linklocal = ip_is_linklocal(AF_INET6, &addr->ip);
             inet_ntop(AF_INET6, &addr->ip.v6,
                 addr->straddr, sizeof(addr->straddr));
             break;
@@ -122,14 +120,19 @@ netif_addr_free (netif_addr *list)
 static int
 netif_addr_cmp (netif_addr *a1, netif_addr *a2)
 {
+    bool ll1, ll2;
+
     /* Compare interface indices */
     if (a1->ifindex != a2->ifindex) {
         return a1->ifindex - a2->ifindex;
     }
 
     /* Prefer normal addresses, rather that link-local */
-    if (a1->linklocal != a2->linklocal) {
-        return (int) a1->linklocal - (int) a2->linklocal;
+    ll1 = ip_is_linklocal(a1->ipv6 ? AF_INET6 : AF_INET, &a1->ip);
+    ll2 = ip_is_linklocal(a2->ipv6 ? AF_INET6 : AF_INET, &a2->ip);
+
+    if (ll1 != ll2) {
+        return ll1 ? 1 : -1;
     }
 
     /* Be in trend: prefer IPv6 addresses */

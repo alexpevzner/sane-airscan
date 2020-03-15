@@ -242,7 +242,6 @@ struct netif_addr {
     int        ifindex;       /* Interface index */
     netif_name ifname;        /* Interface name, for logging */
     bool       ipv6;          /* This is an IPv6 address */
-    bool       linklocal;     /* This is a link-local address */
     void       *data;         /* Placeholder for user data */
     char       straddr[64];   /* Address string */
     union {

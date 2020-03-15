@@ -1020,7 +1020,7 @@ wsdd_netif_dump_addresses (const char *prefix, netif_addr *list)
     char suffix[32] = "";
 
     while (list != NULL) {
-        if (list->ipv6 && list->linklocal) {
+        if (list->ipv6 && ip_is_linklocal(AF_INET6, &list->ip)) {
             sprintf(suffix, "%%%d", list->ifindex);
         }
         log_debug(wsdd_log, "%s%s%s", prefix, list->straddr, suffix);
