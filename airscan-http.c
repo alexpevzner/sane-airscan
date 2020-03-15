@@ -805,8 +805,15 @@ http_query_callback (SoupSession *session, SoupMessage *msg, gpointer userdata)
 static void
 http_query_set_host (http_query *q)
 {
-    char       *host, *end, *buf;
-    size_t     len;
+    char                  *host, *end, *buf;
+    size_t                len;
+    const struct sockaddr *addr = http_uri_addr(q->uri);
+
+    if (addr != NULL) {
+        ip_straddr s = ip_straddr_from_sockaddr(addr);
+        soup_message_headers_append(q->msg->request_headers, "Host", s.text);
+        return;
+    }
 
     host = strstr(http_uri_str(q->uri), "//") + 2;
     end = strchr(host, '/');
@@ -816,6 +823,7 @@ http_query_set_host (http_query *q)
     memcpy(buf, host, len);
 
     buf[len] = '\0';
+
     soup_message_headers_append(q->msg->request_headers, "Host", buf);
 }
 
