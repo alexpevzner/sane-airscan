@@ -48,6 +48,10 @@
  */
 typedef struct log_ctx log_ctx;
 
+/* Type http_uri represents HTTP URI
+ */
+typedef struct http_uri http_uri;
+
 /******************** Utility macros ********************/
 /* Obtain pointer to outer structure from pointer to
  * its known member
@@ -162,7 +166,7 @@ typedef struct conf_device conf_device;
 struct conf_device {
     const char  *name; /* Device name */
     ID_PROTO    proto; /* Protocol to use */
-    const char  *uri;  /* Device URI, parsed; NULL if device disabled */
+    http_uri    *uri;  /* Device URI, parsed; NULL if device disabled */
     conf_device *next; /* Next device in the list */
 };
 
@@ -479,10 +483,6 @@ error
 eloop_eprintf(const char *fmt, ...);
 
 /******************** HTTP Client ********************/
-/* Type http_uri represents HTTP URI
- */
-typedef struct http_uri http_uri;
-
 /* Create new URI, by parsing URI string
  */
 http_uri*
@@ -1319,7 +1319,7 @@ devopt_get_option (devopt *opt, SANE_Int option, void *value);
 typedef struct zeroconf_endpoint zeroconf_endpoint;
 struct zeroconf_endpoint {
     ID_PROTO          proto;     /* The protocol */
-    const char        *uri;      /* I.e, "http://192.168.1.1:8080/eSCL/" */
+    http_uri          *uri;      /* I.e, "http://192.168.1.1:8080/eSCL/" */
     bool              ipv6;      /* This is an IPv6 address */
     bool              linklocal; /* This is a link-local address */
     zeroconf_endpoint *next;     /* Next address in the list */
@@ -1344,8 +1344,7 @@ zeroconf_init_scan (void);
  * takes ownership of uri string
  */
 zeroconf_endpoint*
-zeroconf_endpoint_new (ID_PROTO proto, const char *uri,
-        bool ipv6, bool linklocal);
+zeroconf_endpoint_new (ID_PROTO proto, http_uri *uri, bool ipv6, bool linklocal);
 
 /* Create a copy of zeroconf_endpoint list
  */

@@ -339,11 +339,9 @@ wsdd_host_parse_endpoints (wsdd_host *host, int ifindex, xml_rd *xml)
                  *   - ep->ipv6
                  *   - ep->linklocal
                  */
-                ep = zeroconf_endpoint_new(ID_PROTO_WSD, http_uri_str(uri),
-                    false, false);
+                ep = zeroconf_endpoint_new(ID_PROTO_WSD, uri, false, false);
                 ep->next = endpoints;
                 endpoints = ep;
-                http_uri_free(uri);
             }
         }
 

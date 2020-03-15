@@ -169,7 +169,8 @@ static void
 device_add (const char *name, zeroconf_endpoint *endpoints,
         bool init_scan, bool statically)
 {
-    device      *dev;
+    device            *dev;
+    zeroconf_endpoint *ep;
 
     /* Issue log message */
     log_debug(NULL, "%s adding: \"%s\"",
@@ -213,6 +214,13 @@ device_add (const char *name, zeroconf_endpoint *endpoints,
 
     /* Initialize device I/O */
     dev->endpoints = zeroconf_endpoint_list_copy(endpoints);
+
+    for (ep = dev->endpoints; ep != NULL; ep = ep->next) {
+        if (ep->proto == ID_PROTO_ESCL) {
+            http_uri_fix_end_slash(ep->uri);
+        }
+    }
+
     device_probe_endpoint(dev, dev->endpoints);
 
     return;
@@ -246,7 +254,6 @@ device_unref (device *dev)
 
         zeroconf_endpoint_list_free(dev->endpoints);
 
-        http_uri_free((http_uri*) dev->proto_ctx.base_uri);
         http_client_free(dev->proto_ctx.http);
         g_free((char*) dev->proto_ctx.location);
 
@@ -521,29 +528,14 @@ device_http_onerror (void *ptr, error err) {
 static void
 device_probe_endpoint (device *dev, zeroconf_endpoint *endpoint)
 {
-    /* Cleanup after previous probe */
+    /* Switch endpoint */
     if (dev->endpoint_current == NULL ||
         dev->endpoint_current->proto != endpoint->proto) {
         device_proto_set(dev, endpoint->proto);
     }
 
     dev->endpoint_current = endpoint;
-    if (dev->proto_ctx.base_uri != NULL) {
-        http_uri_free((http_uri*) dev->proto_ctx.base_uri);
-        dev->proto_ctx.base_uri = NULL;
-    }
-
-    /* Parse device URI */
-    http_uri *uri = http_uri_new(endpoint->uri, true);
-    log_assert(dev->log, uri != NULL);
-
-    /* Make sure endpoint URI path ends with '/' character
-     *
-     * FIXME - should be protocol-specific
-     */
-    http_uri_fix_end_slash(uri);
-
-    dev->proto_ctx.base_uri = uri;
+    dev->proto_ctx.base_uri = endpoint->uri;
 
     /* Fetch device capabilities */
     device_proto_devcaps_submit (dev, device_scanner_capabilities_callback);
@@ -1494,7 +1486,7 @@ DONE:
 /* Add statically configured device
  */
 static void
-device_statically_configured (const char *name, const char *uri, ID_PROTO proto)
+device_statically_configured (const char *name, http_uri *uri, ID_PROTO proto)
 {
     zeroconf_endpoint endpoint;
 

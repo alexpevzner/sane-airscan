@@ -190,14 +190,15 @@ zeroconf_devstate_del_all (bool notify)
  * takes ownership of uri string
  */
 zeroconf_endpoint*
-zeroconf_endpoint_new (ID_PROTO proto, const char *uri,
-        bool ipv6, bool linklocal)
+zeroconf_endpoint_new (ID_PROTO proto, http_uri *uri, bool ipv6, bool linklocal)
 {
     zeroconf_endpoint *endpoint = g_new0(zeroconf_endpoint, 1);
+
     endpoint->proto = proto;
-    endpoint->uri = g_strdup(uri);
+    endpoint->uri = uri;
     endpoint->ipv6 = ipv6;
     endpoint->linklocal = linklocal;
+
     return endpoint;
 }
 
@@ -267,7 +268,8 @@ zeroconf_endpoint_make_escl (const AvahiAddress *addr, uint16_t port, const char
         uri = g_strdup_printf("http://%s:%d/%.*s/", str_addr, port, rs_len, rs);
     }
 
-    return zeroconf_endpoint_new(ID_PROTO_ESCL, uri, ipv6, linklocal);
+    return zeroconf_endpoint_new(ID_PROTO_ESCL, http_uri_new(uri, true),
+            ipv6, linklocal);
 }
 
 /* Clone a single zeroconf_endpoint
@@ -278,7 +280,7 @@ zeroconf_endpoint_copy_single (const zeroconf_endpoint *endpoint)
     zeroconf_endpoint *endpoint2 = g_new0(zeroconf_endpoint, 1);
 
     *endpoint2 = *endpoint;
-    endpoint2->uri = g_strdup(endpoint->uri);
+    endpoint2->uri = http_uri_clone(endpoint->uri);
     endpoint2->next = NULL;
 
     return endpoint2;
@@ -290,7 +292,7 @@ zeroconf_endpoint_copy_single (const zeroconf_endpoint *endpoint)
 static void
 zeroconf_endpoint_free_single (zeroconf_endpoint *endpoint)
 {
-    g_free((char*) endpoint->uri);
+    http_uri_free(endpoint->uri);
     g_free(endpoint);
 }
 
@@ -343,7 +345,7 @@ zeroconf_endpoint_cmp (zeroconf_endpoint *e1, zeroconf_endpoint *e2)
     }
 
     /* Otherwise, sort lexicographically */
-    return strcmp(e1->uri, e2->uri);
+    return strcmp(http_uri_str(e1->uri), http_uri_str(e2->uri));
 }
 
 /* Revert zeroconf_endpoint list

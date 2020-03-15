@@ -625,12 +625,12 @@ conf_device_list_free (void)
 /* Prepend device conf.devices list
  */
 static void
-conf_device_list_prepend (const char *name, const char *uri, ID_PROTO proto)
+conf_device_list_prepend (const char *name, http_uri *uri, ID_PROTO proto)
 {
     conf_device *dev = g_new0(conf_device, 1);
     dev->name = g_strdup(name);
     dev->proto = proto;
-    dev->uri = uri ? g_strdup(uri) : NULL;
+    dev->uri = uri;
     dev->next = conf.devices;
     conf.devices = dev;
 }
@@ -702,10 +702,10 @@ conf_decode_device (const inifile_record *rec) {
     }
 
     if (uri != NULL && proto != ID_PROTO_UNKNOWN) {
-        conf_device_list_prepend(rec->variable, http_uri_str(uri), proto);
+        conf_device_list_prepend(rec->variable, uri, proto);
+    } else {
+        http_uri_free(uri);
     }
-
-    http_uri_free(uri);
 }
 
 /* Load configuration from opened inifile
