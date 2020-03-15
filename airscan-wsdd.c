@@ -333,15 +333,8 @@ wsdd_host_parse_endpoints (wsdd_host *host, int ifindex, xml_rd *xml)
             val = xml_rd_node_value(xml);
             uri = http_uri_new(val, true);
             if (uri != NULL) {
-                const struct sockaddr *addr = http_uri_addr(uri);
-
                 http_uri_fix_ipv6_zone(uri, ifindex);
-                ep = zeroconf_endpoint_new(ID_PROTO_WSD, uri, false, false);
-                if (addr) {
-                    ep->ipv6 = addr->sa_family == AF_INET6;
-                    ep->linklocal = ip_sockaddr_is_linklocal(addr);
-                }
-
+                ep = zeroconf_endpoint_new(ID_PROTO_WSD, uri);
                 ep->next = endpoints;
                 endpoints = ep;
             }

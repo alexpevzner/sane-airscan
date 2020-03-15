@@ -190,14 +190,12 @@ zeroconf_devstate_del_all (bool notify)
  * takes ownership of uri string
  */
 zeroconf_endpoint*
-zeroconf_endpoint_new (ID_PROTO proto, http_uri *uri, bool ipv6, bool linklocal)
+zeroconf_endpoint_new (ID_PROTO proto, http_uri *uri)
 {
     zeroconf_endpoint *endpoint = g_new0(zeroconf_endpoint, 1);
 
     endpoint->proto = proto;
     endpoint->uri = uri;
-    endpoint->ipv6 = ipv6;
-    endpoint->linklocal = linklocal;
 
     return endpoint;
 }
@@ -210,25 +208,20 @@ zeroconf_endpoint_make_escl (const AvahiAddress *addr, uint16_t port, const char
 {
     char     str_addr[128];
     int      rs_len;
-    bool     linklocal = false, ipv6 = false;
     char     *u;
     http_uri *uri;
 
     if (addr->proto == AVAHI_PROTO_INET) {
-        linklocal = ip_is_linklocal(AF_INET, addr->data.data);
         avahi_address_snprint(str_addr, sizeof(str_addr), addr);
     } else {
         size_t      len;
-
-        ipv6 = true;
-        linklocal = ip_is_linklocal(AF_INET6, addr->data.data);
 
         str_addr[0] = '[';
         avahi_address_snprint(str_addr + 1, sizeof(str_addr) - 2, addr);
         len = strlen(str_addr);
 
         /* Connect to link-local address requires explicit scope */
-        if (linklocal) {
+        if (ip_is_linklocal(AF_INET6, addr->data.data)) {
             /* Percent character in the IPv6 address literal
              * needs to be properly escaped, so it becomes %25
              * See RFC6874 for details
@@ -268,7 +261,7 @@ zeroconf_endpoint_make_escl (const AvahiAddress *addr, uint16_t port, const char
     log_assert(NULL, uri != NULL);
     g_free(u);
 
-    return zeroconf_endpoint_new(ID_PROTO_ESCL, uri, ipv6, linklocal);
+    return zeroconf_endpoint_new(ID_PROTO_ESCL, uri);
 }
 
 /* Clone a single zeroconf_endpoint
@@ -333,14 +326,22 @@ zeroconf_endpoint_list_free (zeroconf_endpoint *list)
 static int
 zeroconf_endpoint_cmp (zeroconf_endpoint *e1, zeroconf_endpoint *e2)
 {
-    /* Prefer normal addresses, rather that link-local */
-    if (e1->linklocal != e2->linklocal) {
-        return (int) e1->linklocal - (int) e2->linklocal;
-    }
+    const struct sockaddr *a1 = http_uri_addr(e1->uri);
+    const struct sockaddr *a2 = http_uri_addr(e2->uri);
 
-    /* Be in trend: prefer IPv6 addresses */
-    if (e1->ipv6 != e2->ipv6) {
-        return (int) e2->ipv6 - (int) e1->ipv6;
+    if (a1 != NULL && a2 != NULL) {
+        bool ll1 = ip_sockaddr_is_linklocal(a1);
+        bool ll2 = ip_sockaddr_is_linklocal(a2);
+
+        /* Prefer normal addresses, rather that link-local */
+        if (ll1 != ll2) {
+            return ll1 ? 1 : -1;
+        }
+
+        /* Be in trend: prefer IPv6 addresses */
+        if (a1->sa_family != a2->sa_family) {
+            return a1->sa_family == AF_INET6 ? -1 : 1;
+        }
     }
 
     /* Otherwise, sort lexicographically */

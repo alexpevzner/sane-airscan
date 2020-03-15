@@ -1336,8 +1336,6 @@ typedef struct zeroconf_endpoint zeroconf_endpoint;
 struct zeroconf_endpoint {
     ID_PROTO          proto;     /* The protocol */
     http_uri          *uri;      /* I.e, "http://192.168.1.1:8080/eSCL/" */
-    bool              ipv6;      /* This is an IPv6 address */
-    bool              linklocal; /* This is a link-local address */
     zeroconf_endpoint *next;     /* Next address in the list */
 };
 
@@ -1360,7 +1358,7 @@ zeroconf_init_scan (void);
  * takes ownership of uri string
  */
 zeroconf_endpoint*
-zeroconf_endpoint_new (ID_PROTO proto, http_uri *uri, bool ipv6, bool linklocal);
+zeroconf_endpoint_new (ID_PROTO proto, http_uri *uri);
 
 /* Create a copy of zeroconf_endpoint list
  */
