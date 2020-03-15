@@ -52,5 +52,21 @@ ip_straddr_from_sockaddr(const struct sockaddr *addr)
     return straddr;
 }
 
+/* Check if address is link-local
+ * af must be AF_INET or AF_INET6
+ */
+bool
+ip_is_linklocal (int af, const void *addr)
+{
+    if (af == AF_INET) {
+        /* 169.254.0.0/16 */
+        const uint32_t *a = addr;
+        return (ntohl(*a) & 0xffff0000) == 0xa9fe0000;
+    } else {
+        const uint8_t *a = addr;
+        return a[0] == 0xfe && (a[1] & 0xc0) == 0x80;
+    }
+}
+
 /* vim:ts=8:sw=4:et
  */

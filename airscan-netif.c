@@ -56,9 +56,7 @@ netif_addr_get (void)
         switch (ifp->ifa_addr->sa_family) {
         case AF_INET:
             addr->ip.v4 = ((struct sockaddr_in*) ifp->ifa_addr)->sin_addr;
-            if ((ntohl(addr->ip.v4.s_addr) & 0xffff0000) == 0xa9fe0000) {
-                addr->linklocal = true;
-            }
+            addr->linklocal = ip_is_linklocal(AF_INET, &addr->ip);
             inet_ntop(AF_INET, &addr->ip.v4,
                 addr->straddr, sizeof(addr->straddr));
             break;
@@ -66,9 +64,7 @@ netif_addr_get (void)
         case AF_INET6:
             addr->ipv6 = true;
             addr->ip.v6 = ((struct sockaddr_in6*) ifp->ifa_addr)->sin6_addr;
-            addr->linklocal =
-                    addr->ip.v6.s6_addr[0] == 0xfe &&
-                    (addr->ip.v6.s6_addr[1] & 0xc0) == 0x80;
+            addr->linklocal = ip_is_linklocal(AF_INET6, &addr->ip);
             inet_ntop(AF_INET6, &addr->ip.v6,
                 addr->straddr, sizeof(addr->straddr));
             break;

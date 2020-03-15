@@ -215,18 +215,13 @@ zeroconf_endpoint_make_escl (const AvahiAddress *addr, uint16_t port, const char
     http_uri *uri;
 
     if (addr->proto == AVAHI_PROTO_INET) {
-        /* 169.254.0.0/16 */
-        if ((ntohl(addr->data.ipv4.address) & 0xffff0000) == 0xa9fe0000) {
-            linklocal = true;
-        }
-
+        linklocal = ip_is_linklocal(AF_INET, addr->data.data);
         avahi_address_snprint(str_addr, sizeof(str_addr), addr);
     } else {
         size_t      len;
 
         ipv6 = true;
-        linklocal = addr->data.ipv6.address[0] == 0xfe &&
-                    (addr->data.ipv6.address[1] & 0xc0) == 0x80;
+        linklocal = ip_is_linklocal(AF_INET6, addr->data.data);
 
         str_addr[0] = '[';
         avahi_address_snprint(str_addr + 1, sizeof(str_addr) - 2, addr);

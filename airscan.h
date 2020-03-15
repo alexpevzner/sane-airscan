@@ -215,6 +215,12 @@ ip_straddr_from_ip (int af, const void *addr);
 ip_straddr
 ip_straddr_from_sockaddr(const struct sockaddr *addr);
 
+/* Check if address is link-local
+ * af must be AF_INET or AF_INET6
+ */
+bool
+ip_is_linklocal (int af, const void *addr);
+
 /******************** Network interfaces addresses ********************/
 /* Network interface name, wrapped into structure, so
  * it can be passed by value
