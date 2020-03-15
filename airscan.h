@@ -221,6 +221,11 @@ ip_straddr_from_sockaddr(const struct sockaddr *addr);
 bool
 ip_is_linklocal (int af, const void *addr);
 
+/* Check if sockaddr is link-local
+ */
+bool
+ip_sockaddr_is_linklocal (const struct sockaddr *addr);
+
 /******************** Network interfaces addresses ********************/
 /* Network interface name, wrapped into structure, so
  * it can be passed by value

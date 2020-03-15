@@ -68,5 +68,24 @@ ip_is_linklocal (int af, const void *addr)
     }
 }
 
+/* Check if sockaddr is link-local
+ */
+bool
+ip_sockaddr_is_linklocal (const struct sockaddr *addr)
+{
+    struct sockaddr_in  *addr_in = (struct sockaddr_in*) addr;
+    struct sockaddr_in6 *addr_in6 = (struct sockaddr_in6*) addr;
+
+    switch (addr->sa_family) {
+    case AF_INET:
+        return ip_is_linklocal(AF_INET, &addr_in->sin_addr);
+
+    case AF_INET6:
+        return ip_is_linklocal(AF_INET6, &addr_in6->sin6_addr);
+    }
+
+    return false;
+}
+
 /* vim:ts=8:sw=4:et
  */
