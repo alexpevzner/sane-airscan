@@ -208,10 +208,11 @@ static zeroconf_endpoint*
 zeroconf_endpoint_make_escl (const AvahiAddress *addr, uint16_t port, const char *rs,
         AvahiIfIndex interface)
 {
-    char       str_addr[128];
-    int        rs_len;
-    bool       linklocal = false, ipv6 = false;
-    const char *uri;
+    char     str_addr[128];
+    int      rs_len;
+    bool     linklocal = false, ipv6 = false;
+    char     *u;
+    http_uri *uri;
 
     if (addr->proto == AVAHI_PROTO_INET) {
         /* 169.254.0.0/16 */
@@ -260,16 +261,19 @@ zeroconf_endpoint_make_escl (const AvahiAddress *addr, uint16_t port, const char
     /* Make eSCL URL */
     if (rs == NULL) {
         /* Assume /eSCL by default */
-        uri = g_strdup_printf("http://%s:%d/eSCL/", str_addr, port);
+        u = g_strdup_printf("http://%s:%d/eSCL/", str_addr, port);
     } else if (rs_len == 0) {
         /* Empty rs, avoid double '/' */
-        uri = g_strdup_printf("http://%s:%d/", str_addr, port);
+        u = g_strdup_printf("http://%s:%d/", str_addr, port);
     } else {
-        uri = g_strdup_printf("http://%s:%d/%.*s/", str_addr, port, rs_len, rs);
+        u = g_strdup_printf("http://%s:%d/%.*s/", str_addr, port, rs_len, rs);
     }
 
-    return zeroconf_endpoint_new(ID_PROTO_ESCL, http_uri_new(uri, true),
-            ipv6, linklocal);
+    uri = http_uri_new(u, true);
+    log_assert(NULL, uri != NULL);
+    g_free(u);
+
+    return zeroconf_endpoint_new(ID_PROTO_ESCL, uri, ipv6, linklocal);
 }
 
 /* Clone a single zeroconf_endpoint
