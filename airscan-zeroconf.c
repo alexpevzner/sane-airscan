@@ -511,7 +511,7 @@ zeroconf_avahi_resolver_callback (AvahiServiceResolver *r,
 
             for (endpoint = devstate->endpoints; endpoint != NULL;
                     endpoint = endpoint->next, i ++) {
-                log_debug(NULL, "  %d: %s", i, endpoint->uri);
+                log_debug(NULL, "  %d: %s", i, http_uri_str(endpoint->uri));
             }
         }
 

@@ -411,7 +411,7 @@ DONE:
         log_debug(wsdd_log, "%s: discovered endpoints:", host->address);
         for (endpoint = host->endpoints; endpoint != NULL;
             endpoint = endpoint->next) {
-            log_debug(wsdd_log, "  %s", endpoint->uri);
+            log_debug(wsdd_log, "  %s", http_uri_str(endpoint->uri));
         }
     }
 }
