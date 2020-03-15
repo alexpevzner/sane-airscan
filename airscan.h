@@ -632,7 +632,6 @@ typedef struct http_query http_query;
  *
  * Newly created http_query takes ownership on uri and body (if not NULL).
  * The method and content_type assumed to be constant strings.
- *
  */
 http_query*
 http_query_new (http_client *client, http_uri *uri, const char *method,
@@ -655,6 +654,18 @@ http_query_new_relative(http_client *client,
  */
 void
 http_query_submit (http_query *q, void (*callback)(void *ptr, http_query *q));
+
+/* Set uintptr_t parameter, associated with query.
+ * Completion callback may later use http_query_get_uintptr()
+ * to fetch this value
+ */
+void
+http_query_set_uintptr (http_query *q, uintptr_t u);
+
+/* Get uintptr_t parameter, previously set by http_query_set_uintptr()
+ */
+uintptr_t
+http_query_get_uintptr (http_query *q);
 
 /* Get query error, if any
  *

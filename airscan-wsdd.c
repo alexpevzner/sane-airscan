@@ -310,7 +310,7 @@ wsdd_host_list_purge (void)
  * URLs and returns them as slice of strings
  */
 static void
-wsdd_host_parse_endpoints (wsdd_host *host, xml_rd *xml)
+wsdd_host_parse_endpoints (wsdd_host *host, int ifindex, xml_rd *xml)
 {
     unsigned int      level = xml_rd_depth(xml);
     size_t            prefixlen = strlen(xml_rd_node_path(xml));
@@ -333,8 +333,9 @@ wsdd_host_parse_endpoints (wsdd_host *host, xml_rd *xml)
             val = xml_rd_node_value(xml);
             uri = http_uri_new(val, true);
             if (uri != NULL) {
+                http_uri_fix_ipv6_zone(uri, ifindex);
+
                 /* FIXME
-                 *   - http_uri_fix_ipv6_zone
                  *   - ep->ipv6
                  *   - ep->linklocal
                  */
@@ -371,6 +372,7 @@ wsdd_host_get_metadata_callback (void *ptr, http_query *q)
     xml_rd    *xml = NULL;
     http_data *data;
     wsdd_host *host = ptr;
+    int       ifindex = (int) http_query_get_uintptr(q);
 
     (void) ptr;
 
@@ -395,7 +397,7 @@ wsdd_host_get_metadata_callback (void *ptr, http_query *q)
 
         if (!strcmp(path, "s:Envelope/s:Body/mex:Metadata/mex:MetadataSection"
                 "/devprof:Relationship/devprof:Hosted")) {
-            wsdd_host_parse_endpoints(host, xml);
+            wsdd_host_parse_endpoints(host, ifindex, xml);
         }
 
         xml_rd_deep_next(xml, 0);
@@ -420,7 +422,7 @@ DONE:
 /* Query host metadata
  */
 static void
-wsdd_host_get_metadata (wsdd_host *host, wsdd_xaddr *xaddr)
+wsdd_host_get_metadata (wsdd_host *host, int ifindex, wsdd_xaddr *xaddr)
 {
     uuid       u = uuid_new();
     http_query *q;
@@ -431,6 +433,7 @@ wsdd_host_get_metadata (wsdd_host *host, wsdd_xaddr *xaddr)
     q = http_query_new(host->http_client, http_uri_clone(xaddr->uri),
         "POST", g_strdup(wsdd_buf), "application/soap+xml; charset=utf-8");
 
+    http_query_set_uintptr(q, ifindex);
     http_query_submit(q, wsdd_host_get_metadata_callback);
 }
 
@@ -600,7 +603,7 @@ wsdd_resolver_message_dispatch (wsdd_resolver *resolver, wsdd_message *msg)
             msg->xaddrs = NULL;
 
             for (xaddr = host->xaddrs; xaddr != NULL; xaddr = xaddr->next) {
-                wsdd_host_get_metadata(host, xaddr);
+                wsdd_host_get_metadata(host, resolver->ifindex, xaddr);
             }
         }
         break;

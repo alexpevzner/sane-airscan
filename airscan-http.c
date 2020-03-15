@@ -648,6 +648,7 @@ struct http_query {
     http_client       *client;                  /* Client that owns the query */
     http_uri          *uri;                     /* Query URI */
     SoupMessage       *msg;                     /* Underlying SOUP message */
+    uintptr_t         uintptr;                  /* User-defined parameter */
     void              (*callback) (void *ptr,   /* Completion callback */
                                 http_query *q);
     http_query_cached *cached;                  /* Cached data */
@@ -846,6 +847,24 @@ http_query_cancel (http_query *q)
     g_object_unref(q->msg);
 
     http_query_free(q);
+}
+
+/* Set uintptr_t parameter, associated with query.
+ * Completion callback may later use http_query_get_uintptr()
+ * to fetch this value
+ */
+void
+http_query_set_uintptr (http_query *q, uintptr_t u)
+{
+    q->uintptr = u;
+}
+
+/* Get uintptr_t parameter, previously set by http_query_set_uintptr()
+ */
+uintptr_t
+http_query_get_uintptr (http_query *q)
+{
+    return q->uintptr;
 }
 
 /* Get query error, if any
