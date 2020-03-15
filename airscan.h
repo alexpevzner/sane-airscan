@@ -511,6 +511,11 @@ http_uri_free (http_uri *uri);
 const char*
 http_uri_str (http_uri *uri);
 
+/* Get URI's host address. If Host address is not literal, returns NULL
+ */
+const struct sockaddr*
+http_uri_addr (http_uri *uri);
+
 /* Get URI path
  */
 const char*

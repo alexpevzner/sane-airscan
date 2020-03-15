@@ -37,7 +37,12 @@ http_query_cancel (http_query *q);
  */
 struct http_uri {
     SoupURI *parsed; /* Parsed URI */
-    char    *str;    /* URI string */
+    char    *str;    /* URI string, computed on demand and cached here */
+    union {          /* Host address, computed on demand and cached here */
+        struct sockaddr     sockaddr;
+        struct sockaddr_in  in;
+        struct sockaddr_in6 in6;
+    } addr;
 };
 
 /* Create new URI, by parsing URI string
@@ -62,6 +67,7 @@ http_uri_new (const char *str, bool strip_fragment)
             soup_uri_set_fragment(parsed, NULL);
         }
         uri->parsed = parsed;
+        uri->addr.sockaddr.sa_family = AF_UNSPEC;
     }
 
     return uri;
@@ -128,6 +134,49 @@ http_uri_str (http_uri *uri)
     }
 
     return uri->str;
+}
+
+/* Get URI's host address. If Host address is not literal, returns NULL
+ */
+const struct sockaddr*
+http_uri_addr (http_uri *uri)
+{
+    char    *host = uri->parsed->host;
+    int     af;
+    int     rc;
+
+    /* Check cached address */
+    if (uri->addr.sockaddr.sa_family != AF_UNSPEC) {
+        return &uri->addr.sockaddr;
+    }
+
+    /* Try to parse */
+    if (strchr(host, ':') != NULL) {
+        /* Strip zone suffix */
+        char *s = strchr(host, '%');
+        if (s != NULL) {
+            size_t sz = s - host;
+            host = g_alloca(sz + 1);
+            memcpy(host, uri->parsed->host, sz);
+            host[sz] = '\0';
+        }
+
+        /* Parse address */
+        af = AF_INET6;
+        rc = inet_pton(AF_INET6, host, &uri->addr.in6.sin6_addr);
+        uri->addr.in6.sin6_port = htons(uri->parsed->port);
+    } else {
+        af = AF_INET;
+        rc = inet_pton(AF_INET, host, &uri->addr.in.sin_addr);
+        uri->addr.in.sin_port = htons(uri->parsed->port);
+    }
+
+    if (rc == 1) {
+        uri->addr.sockaddr.sa_family = af;
+        return &uri->addr.sockaddr;
+    }
+
+    return NULL;
 }
 
 /* Get URI path
