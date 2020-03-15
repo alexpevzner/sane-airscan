@@ -537,16 +537,11 @@ device_probe_endpoint (device *dev, zeroconf_endpoint *endpoint)
     http_uri *uri = http_uri_new(endpoint->uri, true);
     log_assert(dev->log, uri != NULL);
 
-    /* Make sure endpoint URI path ends with '/' character */
-    const char *path = http_uri_get_path(uri);
-    if (!g_str_has_suffix(path, "/")) {
-        size_t len = strlen(path);
-        char *path2 = g_alloca(len + 2);
-        memcpy(path2, path, len);
-        path2[len] = '/';
-        path2[len+1] = '\0';
-        http_uri_set_path(uri, path2);
-    }
+    /* Make sure endpoint URI path ends with '/' character
+     *
+     * FIXME - should be protocol-specific
+     */
+    http_uri_fix_end_slash(uri);
 
     dev->proto_ctx.base_uri = uri;
 

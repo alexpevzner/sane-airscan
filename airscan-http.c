@@ -177,6 +177,22 @@ http_uri_fix_ipv6_zone (http_uri *uri, int ifindex)
     }
 }
 
+/* Make sure URI's path ends with the slash character
+ */
+void
+http_uri_fix_end_slash (http_uri *uri)
+{
+    const char *path = http_uri_get_path(uri);
+    if (!g_str_has_suffix(path, "/")) {
+        size_t len = strlen(path);
+        char *path2 = g_alloca(len + 2);
+        memcpy(path2, path, len);
+        path2[len] = '/';
+        path2[len+1] = '\0';
+        http_uri_set_path(uri, path2);
+    }
+}
+
 /* Check if 2 URIs are equal
  */
 bool

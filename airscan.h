@@ -526,6 +526,11 @@ http_uri_set_path (http_uri *uri, const char *path);
 void
 http_uri_fix_ipv6_zone (http_uri *uri, int ifindex);
 
+/* Make sure URI's path ends with the slash character
+ */
+void
+http_uri_fix_end_slash (http_uri *uri);
+
 /* Check if 2 URIs are equal
  */
 bool
