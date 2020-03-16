@@ -11,70 +11,55 @@
 #include <stdlib.h>
 #include <string.h>
 
-/******************** Constants *********************/
-/* Max time to wait until device table is ready, in seconds
- */
-#define DEVICE_TABLE_READY_TIMEOUT              5
-
-/* If HTTP 503 reply is received, how many retry attempts
- * to perform before giving up
- */
-#define DEVICE_HTTP_RETRY_ATTEMPTS              10
-
-/* And pause between retries, in seconds
- */
-#define DEVICE_HTTP_RETRY_PAUSE                 1
-
 /******************** Device management ********************/
 /* Device flags
  */
 enum {
-    DEVICE_LISTED           = (1 << 0), /* Device listed in device_table */
-    DEVICE_READY            = (1 << 1), /* Device is ready */
-    DEVICE_HALTED           = (1 << 2), /* Device is halted */
-    DEVICE_INIT_WAIT        = (1 << 3), /* Device was found during initial
-                                           scan and not ready yet */
-    DEVICE_SCANNING         = (1 << 5), /* We are between sane_start() and
+    DEVICE_SCANNING         = (1 << 0), /* We are between sane_start() and
                                            final sane_read() */
-    DEVICE_READING          = (1 << 6), /* sane_read() can be called */
-
-    DEVICE_ALL_FLAGS        = 0xffffffff
+    DEVICE_READING          = (1 << 1)  /* sane_read() can be called */
 };
 
 /* Device state diagram
  *
- *  ----->CLOSED
- *  |       |
- *  |       V
- *  |  -->IDLE
- *  |  |    |
- *  |  |    V
- *  |  |  SCANNING -> CANCEL_REQ -> CANCEL_WAIT ---
- *  |  |    |                           |         |
- *  |  |    V                           V         |
- *  |  |  CLEANUP                   CANCELLING    |
- *  |  |    |                           |         |
- *  |  |    V                           |         |
- *  |  ---DONE<------------------------------------
- *  |       |
- *  --------
+ *       OPENED
+ *          |
+ *          V
+ *       PROBING->FAILED-------------------------------
+ *          |                                         |
+ *          V                                         |
+ *     -->IDLE                                        |
+ *     |    |                                         |
+ *     |    V                                         |
+ *     |  SCANNING -> CANCEL_REQ -> CANCEL_WAIT ---   |
+ *     |    |                           |         |   |
+ *     |    V                           V         |   |
+ *     |  CLEANUP                   CANCELLING    |   |
+ *     |    |                           |         |   |
+ *     |    V                           V         V   |
+ *     ---DONE<------------------------------------   |
+ *          |                                         |
+ *          V                                         |
+ *       CLOSED<---------------------------------------
  */
 typedef enum {
-    DEVICE_STM_CLOSED,
+    DEVICE_STM_OPENED,
+    DEVICE_STM_PROBING,
+    DEVICE_STM_FAILED,
     DEVICE_STM_IDLE,
     DEVICE_STM_SCANNING,
     DEVICE_STM_CANCEL_REQ,
     DEVICE_STM_CANCEL_WAIT,
     DEVICE_STM_CANCELLING,
     DEVICE_STM_CLEANUP,
-    DEVICE_STM_DONE
+    DEVICE_STM_DONE,
+    DEVICE_STM_CLOSED
 } DEVICE_STM_STATE;
 
 /* Device descriptor
  */
 struct device {
     /* Common part */
-    volatile gint        refcnt;               /* Reference counter */
     const char           *name;                /* Device name */
     log_ctx              *log;                 /* Logging context */
     unsigned int         flags;                /* Device flags */
@@ -122,7 +107,6 @@ struct device {
 /* Static variables
  */
 static GPtrArray *device_table;
-static GCond device_table_cond;
 
 /* Forward declarations
  */
@@ -160,43 +144,33 @@ static void
 device_stm_op_callback (void *ptr, http_query *q);
 
 static void
+device_stm_cancel_event_callback (void *data);
+
+static void
 device_management_start_stop (bool start);
 
 /******************** Device table management ********************/
-/* Add device to the table
+/* Create a device.
+ *
+ * May fail. At this case, NULL will be returned and status will be set
  */
-static void
-device_add (const char *name, zeroconf_endpoint *endpoints,
-        bool init_scan, bool statically)
+static device*
+device_new (const char *name, zeroconf_endpoint *endpoints)
 {
     device            *dev;
     zeroconf_endpoint *ep;
 
-    /* Issue log message */
-    log_debug(NULL, "%s adding: \"%s\"",
-            statically ? "statically" : "dynamically", name);
-
-    /* Don't allow duplicate devices */
-    dev = device_find(name);
-    if (dev != NULL) {
-        log_debug(dev->log, "device already exist");
-        return;
-    }
-
     /* Create device */
     dev = g_new0(device, 1);
 
-    dev->refcnt = 1;
     dev->name = g_strdup(name);
-    dev->log = log_ctx_new(name);
+    dev->log = log_ctx_new(dev->name);
 
-    dev->flags = DEVICE_LISTED | DEVICE_INIT_WAIT;
+    log_debug(dev->log, "device created");
+
     dev->proto_ctx.log = dev->log;
     dev->proto_ctx.devcaps = &dev->opt.caps;
 
-    if (init_scan) {
-        dev->flags |= DEVICE_INIT_WAIT;
-    }
     devopt_init(&dev->opt);
 
     dev->proto_ctx.http = http_client_new(dev->log, dev);
@@ -207,13 +181,8 @@ device_add (const char *name, zeroconf_endpoint *endpoints,
     dev->read_pollable = pollable_new();
     dev->read_queue = http_data_queue_new();
 
-    log_debug(dev->log, "device created");
-
-    /* Add to the table */
-    g_ptr_array_add(device_table, dev);
-
     /* Initialize device I/O */
-    dev->endpoints = zeroconf_endpoint_list_copy(endpoints);
+    dev->endpoints = endpoints;
 
     for (ep = dev->endpoints; ep != NULL; ep = ep->next) {
         if (ep->proto == ID_PROTO_ESCL) {
@@ -221,79 +190,78 @@ device_add (const char *name, zeroconf_endpoint *endpoints,
         }
     }
 
-    device_probe_endpoint(dev, dev->endpoints);
+    /* Add to the table */
+    g_ptr_array_add(device_table, dev);
 
-    return;
-}
-
-/* Ref the device
- */
-static inline device*
-device_ref (device *dev)
-{
-    g_atomic_int_inc(&dev->refcnt);
     return dev;
 }
 
-/* Unref the device
- */
-static inline void
-device_unref (device *dev)
-{
-    if (g_atomic_int_dec_and_test(&dev->refcnt)) {
-        log_debug(dev->log, "device destroyed");
-
-        log_assert(dev->log, (dev->flags & DEVICE_LISTED) == 0);
-        log_assert(dev->log, (dev->flags & DEVICE_HALTED) != 0);
-        log_assert(dev->log, device_stm_state_get(dev) == DEVICE_STM_CLOSED);
-
-        /* Release all memory */
-        device_proto_set(dev, ID_PROTO_UNKNOWN);
-
-        devopt_cleanup(&dev->opt);
-
-        zeroconf_endpoint_list_free(dev->endpoints);
-
-        http_client_free(dev->proto_ctx.http);
-        g_free((char*) dev->proto_ctx.location);
-
-        g_cond_clear(&dev->stm_cond);
-
-        image_decoder_free(dev->read_decoder_jpeg);
-        http_data_queue_free(dev->read_queue);
-        pollable_free(dev->read_pollable);
-
-        log_ctx_free(dev->log);
-        g_free((void*) dev->name);
-        g_free(dev);
-    }
-}
-
-/* Del device from the table. It implicitly halts all
- * pending I/O activity
- *
- * Note, reference to the device may still exist (device
- * may be opened), so memory can be freed later, when
- * device is not used anymore
+/* Destroy a device
  */
 static void
-device_del (device *dev)
+device_free (device *dev)
 {
     /* Remove device from table */
     log_debug(dev->log, "removed from device table");
-    log_assert(dev->log, (dev->flags & DEVICE_LISTED) != 0);
-
-    dev->flags &= ~DEVICE_LISTED;
     g_ptr_array_remove(device_table, dev);
 
     /* Stop all pending I/O activity */
     device_http_cancel(dev);
 
-    dev->flags |= DEVICE_HALTED;
-    dev->flags &= ~DEVICE_READY;
+    if (dev->stm_cancel_event != NULL) {
+        eloop_event_free(dev->stm_cancel_event);
+    }
 
-    /* Unref the device */
-    device_unref(dev);
+    /* Release all memory */
+    device_proto_set(dev, ID_PROTO_UNKNOWN);
+
+    devopt_cleanup(&dev->opt);
+
+    zeroconf_endpoint_list_free(dev->endpoints);
+
+    http_client_free(dev->proto_ctx.http);
+    g_free((char*) dev->proto_ctx.location);
+
+    g_cond_clear(&dev->stm_cond);
+
+    image_decoder_free(dev->read_decoder_jpeg);
+    http_data_queue_free(dev->read_queue);
+    pollable_free(dev->read_pollable);
+
+    log_debug(dev->log, "device destroyed");
+    log_ctx_free(dev->log);
+    g_free((void*) dev->name);
+    g_free(dev);
+}
+
+/* Start probing. Called via eloop_call
+ */
+static gboolean
+device_start_probing (gpointer data)
+{
+    device      *dev = data;
+
+    device_probe_endpoint(dev, dev->endpoints);
+
+    return FALSE;
+}
+
+/* Start device I/O. Called via eloop_call
+ * device_start_do
+ */
+static SANE_Status
+device_io_start (device *dev)
+{
+    dev->stm_cancel_event = eloop_event_new(device_stm_cancel_event_callback, dev);
+    if (dev->stm_cancel_event == NULL) {
+        device_close(dev);
+        return SANE_STATUS_NO_MEM;
+    }
+
+    device_stm_state_set(dev, DEVICE_STM_PROBING);
+    eloop_call(device_start_probing, dev);
+
+    return SANE_STATUS_GOOD;
 }
 
 /* Find device in a table
@@ -313,63 +281,14 @@ device_find (const char *name)
     return NULL;
 }
 
-/* Collect devices matching the flags. Return count of
- * collected devices. If caller is only interested in
- * the count, it is safe to call with out == NULL
- *
- * It's a caller responsibility to provide big enough
- * output buffer (use device_table_size() to make a guess)
- *
- * Caller must own glib_main_loop lock
- */
-static unsigned int
-device_table_collect (unsigned int flags, device *out[])
-{
-    unsigned int x, y = 0;
-
-    for (x = 0; x < device_table->len; x ++) {
-        device *dev = g_ptr_array_index(device_table, x);
-        if ((dev->flags & flags) != 0) {
-            if (out != NULL) {
-                out[y] = dev;
-            }
-            y ++;
-        }
-    }
-
-    return y;
-}
-
-/* Get current device_table size
- */
-static unsigned int
-device_table_size (void)
-{
-    log_assert(NULL, device_table);
-    return device_table->len;
-}
-
 /* Purge device_table
  */
 static void
 device_table_purge (void)
 {
-    size_t  sz = device_table_size(), i;
-    device  **devices = g_newa(device*, sz);
-
-    sz = device_table_collect(DEVICE_ALL_FLAGS, devices);
-    for (i = 0; i < sz; i ++) {
-        device_del(devices[i]);
+    while (device_table->len > 0) {
+        device_free(g_ptr_array_index(device_table, 0));
     }
-}
-
-/* Check if device table is ready, i.e., there is no DEVICE_INIT_WAIT
- * devices
- */
-static bool
-device_table_ready (void)
-{
-    return device_table_collect(DEVICE_INIT_WAIT, NULL) == 0;
 }
 
 /******************** Underlying protocol operations ********************/
@@ -575,16 +494,12 @@ DONE:
             dev->endpoint_current->next != NULL) {
             device_probe_endpoint(dev, dev->endpoint_current->next);
         } else {
-            device_del(dev);
+            device_stm_state_set(dev, DEVICE_STM_FAILED);
         }
     } else {
-        dev->flags |= DEVICE_READY;
-        dev->flags &= ~DEVICE_INIT_WAIT;
-
+        device_stm_state_set(dev, DEVICE_STM_IDLE);
         http_client_onerror(dev->proto_ctx.http, device_http_onerror);
     }
-
-    g_cond_broadcast(&device_table_cond);
 }
 
 /******************** Scan state machinery ********************/
@@ -594,7 +509,9 @@ static const char*
 device_stm_state_name (DEVICE_STM_STATE state)
 {
     switch (state) {
-    case DEVICE_STM_CLOSED:      return "DEVICE_STM_CLOSED";
+    case DEVICE_STM_OPENED:      return "DEVICE_STM_OPENED";
+    case DEVICE_STM_PROBING:     return "DEVICE_STM_PROBING";
+    case DEVICE_STM_FAILED:      return "DEVICE_STM_FAILED";
     case DEVICE_STM_IDLE:        return "DEVICE_STM_IDLE";
     case DEVICE_STM_SCANNING:    return "DEVICE_STM_SCANNING";
     case DEVICE_STM_CANCEL_REQ:  return "DEVICE_STM_CANCEL_REQ";
@@ -602,6 +519,7 @@ device_stm_state_name (DEVICE_STM_STATE state)
     case DEVICE_STM_CANCELLING:  return "DEVICE_STM_CANCELLING";
     case DEVICE_STM_CLEANUP:     return "DEVICE_STM_CLEANUP";
     case DEVICE_STM_DONE:        return "DEVICE_STM_DONE";
+    case DEVICE_STM_CLOSED:      return "DEVICE_STM_CLOSED";
     }
 
     return NULL;
@@ -953,83 +871,6 @@ device_job_set_status (device *dev, SANE_Status status)
 }
 
 /******************** API helpers ********************/
-/* Wait until list of devices is ready
- */
-static void
-device_list_sync (void)
-{
-    gint64 timeout = g_get_monotonic_time() +
-            DEVICE_TABLE_READY_TIMEOUT * G_TIME_SPAN_SECOND;
-
-    while ((!device_table_ready() || zeroconf_init_scan()) &&
-            g_get_monotonic_time() < timeout) {
-        eloop_cond_wait_until(&device_table_cond, timeout);
-    }
-}
-
-/* Compare SANE_Device*, for qsort
- */
-static int
-device_list_qsort_cmp (const void *p1, const void *p2)
-{
-    return strcmp(((SANE_Device*) p1)->name, ((SANE_Device*) p2)->name);
-}
-
-/* Get list of devices, in SANE format
- */
-const SANE_Device**
-device_list_get (void)
-{
-    /* Wait until device table is ready */
-    device_list_sync();
-
-    /* Build a list */
-    device            **devices = g_newa(device*, device_table_size());
-    unsigned int      count = device_table_collect(DEVICE_READY, devices);
-    unsigned int      i;
-    const SANE_Device **dev_list = g_new0(const SANE_Device*, count + 1);
-
-    for (i = 0; i < count; i ++) {
-        SANE_Device *info = g_new0(SANE_Device, 1);
-        dev_list[i] = info;
-
-        info->name = g_strdup(devices[i]->name);
-        info->vendor = g_strdup(devices[i]->opt.caps.vendor);
-        if (conf.model_is_netname) {
-            info->model = g_strdup(devices[i]->name);
-        } else {
-            info->model = g_strdup(devices[i]->opt.caps.model);
-        }
-        info->type = g_strdup_printf("%s network scanner",
-            devices[i]->proto_ctx.proto->name);
-    }
-
-    qsort(dev_list, count, sizeof(*dev_list), device_list_qsort_cmp);
-
-    return dev_list;
-}
-
-/* Free list of devices, returned by device_list_get()
- */
-void
-device_list_free (const SANE_Device **dev_list)
-{
-    if (dev_list != NULL) {
-        unsigned int       i;
-        const SANE_Device *info;
-
-        for (i = 0; (info = dev_list[i]) != NULL; i ++) {
-            g_free((void*) info->name);
-            g_free((void*) info->vendor);
-            g_free((void*) info->model);
-            g_free((void*) info->type);
-            g_free((void*) info);
-        }
-
-        g_free(dev_list);
-    }
-}
-
 /* Get device's logging context
  */
 log_ctx*
@@ -1040,45 +881,54 @@ device_log_ctx (device *dev)
 
 /* Open a device
  */
-SANE_Status
-device_open (const char *name, device **out)
+device*
+device_open (const char *name, SANE_Status *status)
 {
-    device *dev = NULL;
+    device            *dev = NULL;
+    zeroconf_endpoint *endpoints;
 
-    *out = NULL;
+    *status = SANE_STATUS_GOOD;
 
-    /* Find a device */
-    device_list_sync();
-
-    if (name && *name) {
-        dev = device_find(name);
-    } else {
-        device          **devices = g_newa(device*, device_table_size());
-        unsigned int    count = device_table_collect(DEVICE_READY, devices);
-        if (count > 0) {
-            dev = devices[0];
-        }
+    /* Validate arguments */
+    if (name == NULL || *name == '\0') {
+        *status = SANE_STATUS_INVAL;
+        return NULL;
     }
 
-    if (dev == NULL || (dev->flags & DEVICE_READY) == 0) {
-        return SANE_STATUS_INVAL;
+    /* Already opened? */
+    dev = device_find(name);
+    if (dev) {
+        *status = SANE_STATUS_DEVICE_BUSY;
+        return NULL;
     }
 
-    /* Check device state */
-    if (device_stm_state_get(dev) != DEVICE_STM_CLOSED) {
-        return SANE_STATUS_DEVICE_BUSY;
+    /* Obtain device endpoints */
+    endpoints = zeroconf_device_lookup(name);
+    if (endpoints == NULL) {
+        *status = SANE_STATUS_INVAL;
+        return NULL;
     }
 
-    /* Proceed with open */
-    dev->stm_cancel_event = eloop_event_new(device_stm_cancel_event_callback, dev);
-    if (dev->stm_cancel_event == NULL) {
-        return SANE_STATUS_NO_MEM;
+    /* Create a device */
+    dev = device_new(name, endpoints);
+    *status = device_io_start(dev);
+    if (*status != SANE_STATUS_GOOD) {
+        device_free(dev);
+        dev = NULL;
     }
 
-    device_stm_state_set(dev, DEVICE_STM_IDLE);
-    *out = device_ref(dev);
+    /* Wait until device is initialized */
+    while (device_stm_state_get(dev) == DEVICE_STM_PROBING) {
+        eloop_cond_wait(&dev->stm_cond);
+    }
 
-    return SANE_STATUS_GOOD;
+    if (device_stm_state_get(dev) == DEVICE_STM_FAILED) {
+        device_free(dev);
+        dev = NULL;
+        *status = SANE_STATUS_IO_ERROR;
+    }
+
+    return dev;
 }
 
 /* Close the device
@@ -1086,18 +936,14 @@ device_open (const char *name, device **out)
 void
 device_close (device *dev)
 {
-    if (device_stm_state_get(dev) != DEVICE_STM_CLOSED) {
-        /* Cancel job in progress, if any */
-        if (device_stm_state_working(dev)) {
-            device_stm_cancel_wait(dev);
-        }
-
-        /* Close the device */
-        eloop_event_free(dev->stm_cancel_event);
-        dev->stm_cancel_event = NULL;
-        device_stm_state_set(dev, DEVICE_STM_CLOSED);
-        device_unref(dev);
+    /* Cancel job in progress, if any */
+    if (device_stm_state_working(dev)) {
+        device_stm_cancel_wait(dev);
     }
+
+    /* Close the device */
+    device_stm_state_set(dev, DEVICE_STM_CLOSED);
+    device_free(dev);
 }
 
 /* Get option descriptor
@@ -1482,57 +1328,13 @@ DONE:
     return status;
 }
 
-/******************** Device discovery events ********************/
-/* Add statically configured device
- */
-static void
-device_statically_configured (const char *name, http_uri *uri, ID_PROTO proto)
-{
-    zeroconf_endpoint endpoint;
-
-    memset(&endpoint, 0, sizeof(endpoint));
-    endpoint.proto = proto;
-    endpoint.uri = uri;
-    device_add(name, &endpoint, true, true);
-}
-
-/* Device found notification -- called by ZeroConf
- */
-void
-device_event_found (const char *name, bool init_scan,
-        zeroconf_endpoint *endpoints)
-{
-    device_add(name, endpoints, init_scan, false);
-}
-
-/* Device removed notification -- called by ZeroConf
- */
-void
-device_event_removed (const char *name)
-{
-    device *dev = device_find(name);
-    if (dev) {
-        device_del(dev);
-    }
-}
-
-/* Device initial scan finished notification -- called by ZeroConf
- */
-void
-device_event_init_scan_finished (void)
-{
-    g_cond_broadcast(&device_table_cond);
-}
-
 /******************** Initialization/cleanup ********************/
 /* Initialize device management
  */
 SANE_Status
 device_management_init (void)
 {
-    g_cond_init(&device_table_cond);
     device_table = g_ptr_array_new();
-
     eloop_add_start_stop_callback(device_management_start_stop);
 
     return SANE_STATUS_GOOD;
@@ -1545,33 +1347,9 @@ device_management_cleanup (void)
 {
     if (device_table != NULL) {
         log_assert(NULL, device_table->len == 0);
-        g_cond_clear(&device_table_cond);
         g_ptr_array_unref(device_table);
         device_table = NULL;
     }
-}
-
-/* Start/stop devices management. Called from the airscan thread
- */
-static void
-device_management_start (void)
-{
-    conf_device *dev_conf;
-
-    for (dev_conf = conf.devices; dev_conf != NULL; dev_conf = dev_conf->next) {
-        if (dev_conf->uri != NULL) {
-            device_statically_configured(dev_conf->name,
-                dev_conf->uri, dev_conf->proto);
-        }
-    }
-}
-
-/* Stop device management. Called from the airscan thread
- */
-static void
-device_management_stop (void)
-{
-    device_table_purge();
 }
 
 /* Start/stop device management
@@ -1579,10 +1357,8 @@ device_management_stop (void)
 static void
 device_management_start_stop (bool start)
 {
-    if (start) {
-        device_management_start();
-    } else {
-        device_management_stop();
+    if (!start) {
+        device_table_purge();
     }
 }
 

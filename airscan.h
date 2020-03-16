@@ -1348,6 +1348,24 @@ zeroconf_init (void);
 void
 zeroconf_cleanup (void);
 
+/* Get list of devices, in SANE format
+ */
+const SANE_Device**
+zeroconf_device_list_get (void);
+
+/* Free list of devices, returned by zeroconf_device_list_get()
+ */
+void
+zeroconf_device_list_free (const SANE_Device **dev_list);
+
+/* Lookup device by name.
+ *
+ * Caller becomes owner of returned list of endpoints, and responsible
+ * to free the list.
+ */
+zeroconf_endpoint*
+zeroconf_device_lookup (const char *name);
+
 /* Check if initial scan still in progress
  */
 bool
@@ -1391,24 +1409,14 @@ void
 wsdd_cleanup (void);
 
 /******************** Device Management ********************/
-/* Get list of devices, in SANE format
- */
-const SANE_Device**
-device_list_get (void);
-
-/* Free list of devices, returned by device_list_get()
- */
-void
-device_list_free (const SANE_Device **dev_list);
-
 /* Type device represents a scanner devise
  */
 typedef struct device device;
 
 /* Open a device
  */
-SANE_Status
-device_open (const char *name, device **out);
+device*
+device_open (const char *name, SANE_Status *status);
 
 /* Close the device
  */
@@ -1462,22 +1470,6 @@ device_get_select_fd (device *dev, SANE_Int *fd);
  */
 SANE_Status
 device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len);
-
-/* Device found notification -- called by ZeroConf
- */
-void
-device_event_found (const char *name, bool init_scan,
-        zeroconf_endpoint *endpoints);
-
-/* Device removed notification -- called by ZeroConf
- */
-void
-device_event_removed (const char *name);
-
-/* Device initial scan finished notification -- called by ZeroConf
- */
-void
-device_event_init_scan_finished (void);
 
 /* Initialize device management
  */

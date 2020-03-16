@@ -19,13 +19,18 @@
 /******************** Constants *********************/
 /* Service type to look for
  */
-#define AIRSCAN_ZEROCONF_SERVICE_TYPE           "_uscan._tcp"
+#define ZEROCONF_SERVICE_TYPE                   "_uscan._tcp"
 
 /* If failed, AVAHI client will be automatically
  * restarted after the following timeout expires,
  * in seconds
  */
-#define AIRSCAN_AVAHI_CLIENT_RESTART_TIMEOUT    1
+#define ZEROCONF_AVAHI_CLIENT_RESTART_TIMEOUT   1
+
+/* Max time to wait until device table is ready, in seconds
+ */
+#define ZEROCONF_READY_TIMEOUT                  5
+
 
 /******************** Local Types *********************/
 /* Device state
@@ -34,11 +39,11 @@ typedef struct zeroconf_devstate zeroconf_devstate;
 struct zeroconf_devstate {
     const char        *name;       /* Device name */
     const char        *model;      /* Model name */
+    ID_PROTO          proto;       /* Protocol in use */
     GPtrArray         *resolvers;  /* Pending resolvers */
     zeroconf_endpoint *endpoints;  /* Discovered endpoints */
     zeroconf_devstate *next;       /* Next devstate in the list */
-    bool              reported;    /* Device reported to device manager */
-    bool              init_scan;   /* Device found during initial scan */
+    bool              ready;       /* Done discovery for this device */
 };
 
 /* Static variables
@@ -49,7 +54,8 @@ static const AvahiPoll *zeroconf_avahi_poll;
 static AvahiTimeout *zeroconf_avahi_restart_timer;
 static AvahiClient *zeroconf_avahi_client;
 static AvahiServiceBrowser *zeroconf_avahi_browser;
-static bool zeroconf_avahi_browser_init_scan;
+static bool zeroconf_ready;
+static GCond zeroconf_ready_cond;
 
 static void
 zeroconf_avahi_client_start (void);
@@ -91,9 +97,9 @@ zeroconf_devstate_new (const char *name)
 {
     zeroconf_devstate *devstate = g_new0(zeroconf_devstate, 1);
     devstate->name = g_strdup(name);
+    devstate->proto = ID_PROTO_ESCL; /* FIXME */
     devstate->resolvers = g_ptr_array_new_with_free_func(
         zeroconf_avahi_service_resolver_free_adapter);
-    devstate->init_scan = zeroconf_avahi_browser_init_scan;
     return devstate;
 }
 
@@ -109,10 +115,10 @@ zeroconf_devstate_free (zeroconf_devstate *devstate)
     g_free(devstate);
 }
 
-/* Add new zeroconf_devstate
+/* Get zeroconf_devstate: find existing or add a new one
  */
 static zeroconf_devstate*
-zeroconf_devstate_add (const char *name)
+zeroconf_devstate_get (const char *name, bool add)
 {
     zeroconf_devstate *devstate = zeroconf_devstate_list, *prev = NULL;
 
@@ -124,6 +130,10 @@ zeroconf_devstate_add (const char *name)
 
         prev = devstate;
         devstate = devstate->next;
+    }
+
+    if (!add) {
+        return NULL;
     }
 
     /* Add new device state */
@@ -160,10 +170,6 @@ zeroconf_devstate_del (const char *name)
     }
 
     /* Delete a device state */
-    if (devstate->reported) {
-        device_event_removed(name);
-    }
-
     if (prev != NULL) {
         prev->next = devstate->next;
     } else {
@@ -173,16 +179,13 @@ zeroconf_devstate_del (const char *name)
     zeroconf_devstate_free(devstate);
 }
 
-/* Delete all zeroconf_devstate and optionally notify a device manager
+/* Delete all zeroconf_devstate
  */
 static void
-zeroconf_devstate_del_all (bool notify)
+zeroconf_devstate_del_all (void)
 {
     while (zeroconf_devstate_list != NULL) {
         zeroconf_devstate       *next = zeroconf_devstate_list->next;
-        if (notify && zeroconf_devstate_list->reported) {
-            device_event_removed(zeroconf_devstate_list->name);
-        }
         zeroconf_devstate_free(zeroconf_devstate_list);
         zeroconf_devstate_list = next;
     }
@@ -526,9 +529,7 @@ zeroconf_avahi_resolver_callback (AvahiServiceResolver *r,
             }
         }
 
-        devstate->reported = true;
-        device_event_found(devstate->name, devstate->init_scan,
-                devstate->endpoints);
+        devstate->ready = true;
     }
 }
 
@@ -582,7 +583,7 @@ zeroconf_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
         }
 
         /* Add a device (or lookup for already added) */
-        devstate = zeroconf_devstate_add(name);
+        devstate = zeroconf_devstate_get(name, true);
 
         /* Initiate resolver */
         AvahiServiceResolver *r;
@@ -615,8 +616,8 @@ zeroconf_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
     case AVAHI_BROWSER_ALL_FOR_NOW:
         log_debug(NULL, "MDNS: initial scan finished");
 
-        zeroconf_avahi_browser_init_scan = false;
-        device_event_init_scan_finished();
+        zeroconf_ready = true;
+        g_cond_broadcast(&zeroconf_ready_cond);
         break;
     }
 }
@@ -630,7 +631,7 @@ zeroconf_avahi_browser_start (AvahiClient *client)
 
     zeroconf_avahi_browser = avahi_service_browser_new(client,
             AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC,
-            AIRSCAN_ZEROCONF_SERVICE_TYPE, NULL,
+            ZEROCONF_SERVICE_TYPE, NULL,
             0, zeroconf_avahi_browser_callback, client);
 }
 
@@ -640,7 +641,7 @@ static void
 zeroconf_avahi_browser_stop (void)
 {
     if (zeroconf_avahi_browser != NULL) {
-        zeroconf_devstate_del_all(true);
+        zeroconf_devstate_del_all();
         avahi_service_browser_free(zeroconf_avahi_browser);
         zeroconf_avahi_browser = NULL;
     }
@@ -721,13 +722,8 @@ zeroconf_avahi_client_restart_defer (void)
     zeroconf_avahi_client_stop();
 
     gettimeofday(&tv, NULL);
-    tv.tv_sec += AIRSCAN_AVAHI_CLIENT_RESTART_TIMEOUT;
+    tv.tv_sec += ZEROCONF_AVAHI_CLIENT_RESTART_TIMEOUT;
     zeroconf_avahi_poll->timeout_update(zeroconf_avahi_restart_timer, &tv);
-
-    if (zeroconf_avahi_browser_init_scan) {
-        zeroconf_avahi_browser_init_scan = false;
-        device_event_init_scan_finished();
-    }
 }
 
 /* Initialize ZeroConf
@@ -737,6 +733,7 @@ zeroconf_init (void)
 {
     if (!conf.discovery) {
         log_debug(NULL, "MDNS: devices discovery disabled");
+        zeroconf_ready = true;
         return SANE_STATUS_GOOD;
     }
 
@@ -760,7 +757,7 @@ zeroconf_init (void)
         return SANE_STATUS_NO_MEM;
     }
 
-    zeroconf_avahi_browser_init_scan = true;
+    g_cond_init(&zeroconf_ready_cond);
 
     return SANE_STATUS_GOOD;
 }
@@ -773,7 +770,7 @@ zeroconf_cleanup (void)
     if (zeroconf_avahi_glib_poll != NULL) {
         zeroconf_avahi_browser_stop();
         zeroconf_avahi_client_stop();
-        zeroconf_devstate_del_all(false);
+        zeroconf_devstate_del_all();
 
         if (zeroconf_avahi_restart_timer != NULL) {
             zeroconf_avahi_poll->timeout_free(zeroconf_avahi_restart_timer);
@@ -783,28 +780,139 @@ zeroconf_cleanup (void)
         avahi_glib_poll_free(zeroconf_avahi_glib_poll);
         zeroconf_avahi_poll = NULL;
         zeroconf_avahi_glib_poll = NULL;
-        zeroconf_avahi_browser_init_scan = false;
+        zeroconf_ready = false;
+        g_cond_clear(&zeroconf_ready_cond);
     }
 }
 
-/* Check if initial scan still in progress
+/* Compare SANE_Device*, for qsort
  */
-bool
-zeroconf_init_scan (void)
+static int
+zeroconf_device_list_qsort_cmp (const void *p1, const void *p2)
 {
-    if (zeroconf_avahi_browser_init_scan) {
-        return true;
+    return strcmp(((SANE_Device*) p1)->name, ((SANE_Device*) p2)->name);
+}
+
+/* Get list of devices, in SANE format
+ */
+const SANE_Device**
+zeroconf_device_list_get (void)
+{
+    gint64            timeout;
+    size_t            dev_count;
+    conf_device       *dev_conf;
+    const SANE_Device **dev_list;
+    zeroconf_devstate *devstate;
+
+    /* Wait until device table is ready */
+    timeout = g_get_monotonic_time() +
+        ZEROCONF_READY_TIMEOUT * G_TIME_SPAN_SECOND;
+    while (!zeroconf_ready) {
+        eloop_cond_wait_until(&zeroconf_ready_cond, timeout);
     }
 
-    zeroconf_devstate *devstate;
+    /* Compute table size */
+    dev_count = 0;
+
+    for (dev_conf = conf.devices; dev_conf != NULL; dev_conf = dev_conf->next) {
+        dev_count ++;
+    }
+
     for (devstate = zeroconf_devstate_list; devstate != NULL;
             devstate = devstate->next) {
-        if (devstate->init_scan && !devstate->reported) {
-            return true;
+        if (devstate->ready) {
+            dev_count ++;
         }
     }
 
-    return false;
+    /* Build list of devices */
+    dev_list = g_new0(const SANE_Device*, dev_count + 1);
+    dev_count = 0;
+
+    for (dev_conf = conf.devices; dev_conf != NULL; dev_conf = dev_conf->next) {
+        SANE_Device *info = g_new0(SANE_Device, 1);
+        const char  *proto = id_proto_name(dev_conf->proto);
+
+        dev_list[dev_count ++] = info;
+
+        info->name = g_strdup(dev_conf->name);
+        info->vendor = g_strdup(proto);
+        info->model = g_strdup(dev_conf->name); // FIXME
+        info->type = g_strdup_printf("%s network scanner", proto);
+    }
+
+    for (devstate = zeroconf_devstate_list; devstate != NULL;
+            devstate = devstate->next) {
+        if (devstate->ready) {
+            SANE_Device *info = g_new0(SANE_Device, 1);
+            const char  *proto = id_proto_name(devstate->proto);
+
+            dev_list[dev_count ++] = info;
+
+            info->name = g_strdup(devstate->name);
+            info->vendor = g_strdup(proto);
+            if (conf.model_is_netname) {
+                info->model = g_strdup(devstate->name);
+            } else {
+                info->model = g_strdup(devstate->model);
+            }
+            info->type = g_strdup_printf("%s network scanner", proto);
+        }
+    }
+
+    qsort(dev_list, dev_count, sizeof(*dev_list),
+        zeroconf_device_list_qsort_cmp);
+
+    return dev_list;
+}
+
+/* Free list of devices, returned by zeroconf_device_list_get()
+ */
+void
+zeroconf_device_list_free (const SANE_Device **dev_list)
+{
+    if (dev_list != NULL) {
+        unsigned int       i;
+        const SANE_Device *info;
+
+        for (i = 0; (info = dev_list[i]) != NULL; i ++) {
+            g_free((void*) info->name);
+            g_free((void*) info->vendor);
+            g_free((void*) info->model);
+            g_free((void*) info->type);
+            g_free((void*) info);
+        }
+
+        g_free(dev_list);
+    }
+}
+
+
+/* Lookup device by name.
+ *
+ * Caller becomes owner of returned list of endpoints, and responsible
+ * to free the list.
+ */
+zeroconf_endpoint*
+zeroconf_device_lookup (const char *name)
+{
+    conf_device       *dev_conf;
+    zeroconf_devstate *devstate;
+
+    /* Try static first */
+    dev_conf = zeroconf_find_static_configuration(name);
+    if (dev_conf != NULL) {
+        return zeroconf_endpoint_new(dev_conf->proto,
+            http_uri_clone(dev_conf->uri));
+    }
+
+    /* Lookup a dynamic table */
+    devstate = zeroconf_devstate_get(name, false);
+    if (devstate != NULL && devstate->ready) {
+        return zeroconf_endpoint_list_copy(devstate->endpoints);
+    }
+
+    return NULL;
 }
 
 /* vim:ts=8:sw=4:et

@@ -78,7 +78,7 @@ sane_exit (void)
     device_management_cleanup();
     http_cleanup();
     eloop_cleanup();
-    device_list_free(sane_device_list);
+    zeroconf_device_list_free(sane_device_list);
     sane_device_list = NULL;
 
     log_debug(NULL, "sane_exit(): OK");
@@ -100,8 +100,8 @@ sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
     } else {
         eloop_mutex_lock();
 
-        device_list_free(sane_device_list);
-        sane_device_list = device_list_get();
+        zeroconf_device_list_free(sane_device_list);
+        sane_device_list = zeroconf_device_list_get();
         *device_list = sane_device_list;
 
         eloop_mutex_unlock();
@@ -115,12 +115,26 @@ sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
 SANE_Status
 sane_open (SANE_String_Const name, SANE_Handle *handle)
 {
-    SANE_Status status;
-    device *dev;
+    SANE_Status         status;
+    device              *dev;
+    const SANE_Device   **dev_list = NULL;
 
     eloop_mutex_lock();
-    status = device_open(name, &dev);
+
+    /* If name is not set, open the first device
+     */
+    if (name == NULL || *name == '\0') {
+        dev_list = zeroconf_device_list_get();
+        if (dev_list[0] != NULL) {
+            name = dev_list[0]->name;
+        }
+    }
+
+    dev = device_open(name, &status);
+
     eloop_mutex_unlock();
+
+    zeroconf_device_list_free(dev_list);
 
     if (dev != NULL) {
         *handle = (SANE_Handle) dev;
