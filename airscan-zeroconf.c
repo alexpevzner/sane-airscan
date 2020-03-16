@@ -33,6 +33,7 @@
 typedef struct zeroconf_devstate zeroconf_devstate;
 struct zeroconf_devstate {
     const char        *name;       /* Device name */
+    const char        *model;      /* Model name */
     GPtrArray         *resolvers;  /* Pending resolvers */
     zeroconf_endpoint *endpoints;  /* Discovered endpoints */
     zeroconf_devstate *next;       /* Next devstate in the list */
@@ -102,6 +103,7 @@ static void
 zeroconf_devstate_free (zeroconf_devstate *devstate)
 {
     g_free((char*) devstate->name);
+    g_free((char*) devstate->model);
     g_ptr_array_free(devstate->resolvers, TRUE);
     zeroconf_endpoint_list_free(devstate->endpoints);
     g_free(devstate);
@@ -483,6 +485,13 @@ zeroconf_avahi_resolver_callback (AvahiServiceResolver *r,
             rs_text = (char*) (rs->text + 3);
         }
 
+        if (devstate->model == NULL) {
+            AvahiStringList *ty = avahi_string_list_find(txt, "ty");
+            if (ty != NULL && ty->size > 3) {
+                devstate->model = g_strdup((char*) (ty->text + 3));
+            }
+        }
+
         endpoint = zeroconf_endpoint_make_escl(addr, port, rs_text, interface);
         zeroconf_endpoint_list_prepend(&devstate->endpoints, endpoint);
         break;
@@ -499,11 +508,17 @@ zeroconf_avahi_resolver_callback (AvahiServiceResolver *r,
         devstate->endpoints = zeroconf_endpoint_list_sort_dedup(
                 devstate->endpoints);
 
+        if (devstate->model == NULL) {
+            /* Very unlikely, just paranoia */
+            devstate->model = g_strdup(name);
+        }
+
         if (conf.dbg_enabled) {
             zeroconf_endpoint *endpoint;
             int               i = 1;
 
-            log_debug(NULL, "MDNS: \"%s\" endpoints resolved:", name);
+            log_debug(NULL, "MDNS: \"%s\" model: \"%s\"", name, devstate->model);
+            log_debug(NULL, "MDNS: \"%s\" endpoints:", name);
 
             for (endpoint = devstate->endpoints; endpoint != NULL;
                     endpoint = endpoint->next, i ++) {
