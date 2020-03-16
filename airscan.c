@@ -134,14 +134,14 @@ sane_open (SANE_String_Const name, SANE_Handle *handle)
 
     eloop_mutex_unlock();
 
-    zeroconf_device_list_free(dev_list);
-
     if (dev != NULL) {
         *handle = (SANE_Handle) dev;
     }
 
     log_debug(device_log_ctx(dev), "sane_open(\"%s\"): %s", name ? name : "",
             sane_strstatus(status));
+
+    zeroconf_device_list_free(dev_list);
 
     return status;
 }
