@@ -420,7 +420,7 @@ wsdd_host_get_metadata (wsdd_host *host, int ifindex, wsdd_xaddr *xaddr)
     uuid       u = uuid_new();
     http_query *q;
 
-    log_trace(wsdd_log, "queering metadata from %s", http_uri_str(xaddr->uri));
+    log_trace(wsdd_log, "querying metadata from %s", http_uri_str(xaddr->uri));
 
     sprintf(wsdd_buf, wsdd_get_metadata_template, u.text, host->address);
     q = http_query_new(host->http_client, http_uri_clone(xaddr->uri),
