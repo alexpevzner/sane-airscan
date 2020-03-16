@@ -799,7 +799,7 @@ const SANE_Device**
 zeroconf_device_list_get (void)
 {
     gint64            timeout;
-    size_t            dev_count;
+    size_t            dev_count, dev_count_static = 0;
     conf_device       *dev_conf;
     const SANE_Device **dev_list;
     zeroconf_devstate *devstate;
@@ -841,6 +841,8 @@ zeroconf_device_list_get (void)
         info->type = g_strdup_printf("%s network scanner", proto);
     }
 
+    dev_count_static = dev_count;
+
     for (devstate = zeroconf_devstate_list; devstate != NULL;
             devstate = devstate->next) {
         if (devstate->ready) {
@@ -860,8 +862,8 @@ zeroconf_device_list_get (void)
         }
     }
 
-    qsort(dev_list, dev_count, sizeof(*dev_list),
-        zeroconf_device_list_qsort_cmp);
+    qsort(dev_list + dev_count_static, dev_count - dev_count_static,
+        sizeof(*dev_list), zeroconf_device_list_qsort_cmp);
 
     return dev_list;
 }
