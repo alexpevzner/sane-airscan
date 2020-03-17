@@ -17,9 +17,9 @@
 #include <string.h>
 
 /******************** Constants *********************/
-/* Service type to look for
+/* Service types we are interested in
  */
-#define ZEROCONF_SERVICE_TYPE                   "_uscan._tcp"
+#define ZEROCONF_SERVICE_USCAN                  "_uscan._tcp"
 
 /* If failed, AVAHI client will be automatically
  * restarted after the following timeout expires,
@@ -631,7 +631,7 @@ zeroconf_avahi_browser_start (AvahiClient *client)
 
     zeroconf_avahi_browser = avahi_service_browser_new(client,
             AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC,
-            ZEROCONF_SERVICE_TYPE, NULL,
+            ZEROCONF_SERVICE_USCAN, NULL,
             0, zeroconf_avahi_browser_callback, client);
 }
 
