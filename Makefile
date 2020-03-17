@@ -60,11 +60,11 @@ $(OBJDIR)%.o: %.c Makefile airscan.h
 	mkdir -p $(OBJDIR)
 	$(CC) -c -o $@ $< $(CPPFLAGS) $(airscan_CFLAGS)
 
-.PHONY: all clean install tags
+.PHONY: all clean install
 
 all:	tags $(BACKEND) test
 
-tags:
+tags: $(SRC) airscan.h test.c
 	-ctags -R .
 
 $(BACKEND): $(OBJ) Makefile airscan.sym
