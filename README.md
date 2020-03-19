@@ -39,7 +39,7 @@ were actually tested.
 
 Sane-airscan was tested and found to work with the following scanners:
 * Canon D570
-* Canon ImageCLASS MF743cdw
+* Canon ImageCLASS MF743cdw <sup>[1](#noteMF743cdw)</sup>
 * Canon TR4529 (PIXMA TR4500 Series)
 * Canon TS 6151
 * EPSON WF-7710
@@ -56,6 +56,8 @@ Sane-airscan was tested and found to work with the following scanners:
 * HP OfficeJet Pro 8730
 * Kyocera ECOSYS M2040dn
 * TODO
+
+<a name="noteMF743cdw">1</a>: this device requires manual activation of AirPrint scanning on its web console.
 
 If you have success with a scanner not included into this list,
 please let me know.
