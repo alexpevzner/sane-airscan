@@ -39,6 +39,7 @@ were actually tested.
 
 Sane-airscan was tested and found to work with the following scanners:
 * Canon D570
+* Canon ImageCLASS MF743cdw
 * Canon TR4529 (PIXMA TR4500 Series)
 * Canon TS 6151
 * EPSON WF-7710
