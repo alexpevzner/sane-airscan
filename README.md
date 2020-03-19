@@ -34,10 +34,10 @@ image received from scanner
 
 ### Compatibility
 
-Any **eSCL** capable scanner expected to work, but only few of them
-were actually tested.
+Any **eSCL** capable scanner expected to work. Here is a list of devices
+that were actually tested. If you have success with a scanner not included
+into this list, please let me know.
 
-Sane-airscan was tested and found to work with the following scanners:
 * Canon D570
 * Canon ImageCLASS MF743cdw <sup>[1](#noteMF743cdw)</sup>
 * Canon TR4529 (PIXMA TR4500 Series)
@@ -57,10 +57,8 @@ Sane-airscan was tested and found to work with the following scanners:
 * Kyocera ECOSYS M2040dn
 * TODO
 
+---
 <a name="noteMF743cdw">1</a>: this device requires manual activation of AirPrint scanning on its web console.
-
-If you have success with a scanner not included into this list,
-please let me know.
 
 ### Installation from pre-build binaries
 
