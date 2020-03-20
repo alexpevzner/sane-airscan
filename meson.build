@@ -34,6 +34,11 @@ shared_library(
     dependency('libsoup-2.4'),
     dependency('libxml-2.0'),
   ],
+  link_args : [
+    '-Wl,-z,nodelete',
+    '-Wl,--version-script=' + join_paths(meson.current_source_dir(), 'airscan.sym')
+  ],
+  link_depends : [ 'airscan.sym' ],
   install : true,
   install_dir : 'lib/sane'
 )
