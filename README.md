@@ -58,7 +58,8 @@ into this list, please let me know.
 * TODO
 
 ---
-<a name="noteMF743cdw">1</a>: this device requires manual activation of AirPrint scanning on its web console.
+<a name="noteMF743cdw">1</a>: this device requires manual activation of AirPrint scanning on its web console:
+Home->Menu->Preferences->Network->TCP/IP Settings->Network Link Scan Settings->On.
 
 ### Installation from pre-build binaries
 
