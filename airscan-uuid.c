@@ -22,7 +22,7 @@ uuid_new (void)
 
     getrandom(rnd, sizeof(rnd), 0);
 
-    // ede05377-460e-4b4a-a5c0-423f9e02e8fa
+    // urn:uuid:ede05377-460e-4b4a-a5c0-423f9e02e8fa
     sprintf(u.text,
         "urn:uuid:"
         "%.2x%.2x%.2x%.2x-%.2x%.2x-%.2x%.2x-%.2x%.2x-%.2x%.2x%.2x%.2x%.2x%.2x",
