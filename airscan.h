@@ -1329,7 +1329,7 @@ SANE_Status
 devopt_get_option (devopt *opt, SANE_Int option, void *value);
 
 /******************** ZeroConf (device discovery) ********************/
-/* ZeroConf resolved address information
+/* zeroconf_endpoint represents a device endpoint
  */
 typedef struct zeroconf_endpoint zeroconf_endpoint;
 struct zeroconf_endpoint {
