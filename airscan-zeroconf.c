@@ -43,6 +43,7 @@ struct zeroconf_devstate {
     GPtrArray         *resolvers;  /* Pending resolvers */
     zeroconf_endpoint *endpoints;  /* Discovered endpoints */
     zeroconf_devstate *next;       /* Next devstate in the list */
+    bool              initscan;    /* Device discovered during initial scan */
     bool              ready;       /* Done discovery for this device */
 };
 
@@ -54,8 +55,9 @@ static const AvahiPoll *zeroconf_avahi_poll;
 static AvahiTimeout *zeroconf_avahi_restart_timer;
 static AvahiClient *zeroconf_avahi_client;
 static AvahiServiceBrowser *zeroconf_avahi_browser;
-static bool zeroconf_ready;
-static GCond zeroconf_ready_cond;
+static bool zeroconf_initscan;
+static int zeroconf_initscan_count;
+static GCond zeroconf_initscan_cond;
 
 static void
 zeroconf_avahi_client_start (void);
@@ -82,6 +84,40 @@ zeroconf_pevent (const char *name, AvahiProtocol protocol, const char *action)
             action, name, protocol == AVAHI_PROTO_INET ? "ipv4" : "ipv6");
 }
 
+/* Increment count of initial scan tasks
+ */
+static void
+zeroconf_initscan_inc (void)
+{
+    zeroconf_initscan_count ++;
+}
+
+/* Decrement count if initial scan tasks
+ */
+static void
+zeroconf_initscan_dec (void)
+{
+    log_assert(NULL, zeroconf_initscan_count > 0);
+    zeroconf_initscan_count --;
+    if (zeroconf_initscan_count == 0) {
+        g_cond_broadcast(&zeroconf_initscan_cond);
+    }
+}
+
+/* Wait intil initial scan is done
+ */
+static void
+zeroconf_initscan_wait (void)
+{
+    gint64            timeout;
+
+    timeout = g_get_monotonic_time() +
+        ZEROCONF_READY_TIMEOUT * G_TIME_SPAN_SECOND;
+    while (zeroconf_initscan_count != 0) {
+        eloop_cond_wait_until(&zeroconf_initscan_cond, timeout);
+    }
+}
+
 /* avahi_service_resolver_free adapter for GDestroyNotify
  */
 static void
@@ -100,6 +136,7 @@ zeroconf_devstate_new (const char *name)
     devstate->proto = ID_PROTO_ESCL; /* FIXME */
     devstate->resolvers = g_ptr_array_new_with_free_func(
         zeroconf_avahi_service_resolver_free_adapter);
+    devstate->initscan = zeroconf_initscan;
     return devstate;
 }
 
@@ -110,6 +147,9 @@ zeroconf_devstate_free (zeroconf_devstate *devstate)
 {
     g_free((char*) devstate->name);
     g_free((char*) devstate->model);
+    if (devstate->initscan || !devstate->ready) {
+        zeroconf_initscan_dec();
+    }
     g_ptr_array_free(devstate->resolvers, TRUE);
     zeroconf_endpoint_list_free(devstate->endpoints);
     g_free(devstate);
@@ -138,6 +178,9 @@ zeroconf_devstate_get (const char *name, bool add)
 
     /* Add new device state */
     devstate = zeroconf_devstate_new(name);
+    if (devstate->initscan) {
+        zeroconf_initscan_inc();
+    }
 
     if (prev != NULL) {
         prev->next = devstate;
@@ -506,7 +549,6 @@ zeroconf_avahi_resolver_callback (AvahiServiceResolver *r,
 
     /* Cleanup */
     g_ptr_array_remove(devstate->resolvers, r);
-
     if (devstate->resolvers->len == 0 && devstate->endpoints != NULL) {
         devstate->endpoints = zeroconf_endpoint_list_sort_dedup(
                 devstate->endpoints);
@@ -530,6 +572,9 @@ zeroconf_avahi_resolver_callback (AvahiServiceResolver *r,
         }
 
         devstate->ready = true;
+        if (devstate->initscan) {
+            zeroconf_initscan_dec();
+        }
     }
 }
 
@@ -616,8 +661,10 @@ zeroconf_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
     case AVAHI_BROWSER_ALL_FOR_NOW:
         log_debug(NULL, "MDNS: initial scan finished");
 
-        zeroconf_ready = true;
-        g_cond_broadcast(&zeroconf_ready_cond);
+        if (zeroconf_initscan) {
+            zeroconf_initscan = false;
+            zeroconf_initscan_dec();
+        }
         break;
     }
 }
@@ -733,7 +780,6 @@ zeroconf_init (void)
 {
     if (!conf.discovery) {
         log_debug(NULL, "MDNS: devices discovery disabled");
-        zeroconf_ready = true;
         return SANE_STATUS_GOOD;
     }
 
@@ -757,7 +803,9 @@ zeroconf_init (void)
         return SANE_STATUS_NO_MEM;
     }
 
-    g_cond_init(&zeroconf_ready_cond);
+    g_cond_init(&zeroconf_initscan_cond);
+    zeroconf_initscan = true;
+    zeroconf_initscan_count = 1;
 
     return SANE_STATUS_GOOD;
 }
@@ -780,8 +828,7 @@ zeroconf_cleanup (void)
         avahi_glib_poll_free(zeroconf_avahi_glib_poll);
         zeroconf_avahi_poll = NULL;
         zeroconf_avahi_glib_poll = NULL;
-        zeroconf_ready = false;
-        g_cond_clear(&zeroconf_ready_cond);
+        g_cond_clear(&zeroconf_initscan_cond);
     }
 }
 
@@ -798,18 +845,13 @@ zeroconf_device_list_qsort_cmp (const void *p1, const void *p2)
 const SANE_Device**
 zeroconf_device_list_get (void)
 {
-    gint64            timeout;
     size_t            dev_count, dev_count_static = 0;
     conf_device       *dev_conf;
     const SANE_Device **dev_list;
     zeroconf_devstate *devstate;
 
     /* Wait until device table is ready */
-    timeout = g_get_monotonic_time() +
-        ZEROCONF_READY_TIMEOUT * G_TIME_SPAN_SECOND;
-    while (!zeroconf_ready) {
-        eloop_cond_wait_until(&zeroconf_ready_cond, timeout);
-    }
+    zeroconf_initscan_wait();
 
     /* Compute table size */
     dev_count = 0;
