@@ -16,7 +16,7 @@ devcaps_source*
 devcaps_source_new (void)
 {
     devcaps_source *src = g_new0(devcaps_source, 1);
-    sane_word_array_init(&src->resolutions);
+    src->resolutions = sane_word_array_new();
     return src;
 }
 
@@ -26,7 +26,7 @@ void
 devcaps_source_free (devcaps_source *src)
 {
     if (src != NULL) {
-        sane_word_array_cleanup(&src->resolutions);
+        sane_word_array_free(src->resolutions);
         g_free(src);
     }
 }
@@ -41,11 +41,12 @@ devcaps_source_clone (const devcaps_source *src)
 
     *src2 = *src;
 
-    sane_word_array_init(&src2->resolutions);
+    src2->resolutions = sane_word_array_new();
 
-    len = sane_word_array_len((SANE_Word**) &src->resolutions);
+    len = sane_word_array_len(src->resolutions);
     for (i = 1; i <= len; i ++) {
-        sane_word_array_append(&src2->resolutions, src->resolutions[i]);
+        SANE_Word res = src->resolutions[i];
+        src2->resolutions = sane_word_array_append(src2->resolutions, res);
     }
 
     return src2;
@@ -96,9 +97,10 @@ devcaps_source_merge (const devcaps_source *s1, const devcaps_source *s2)
 
     /* Merge resolutions */
     if ((src->flags & DEVCAPS_SOURCE_RES_DISCRETE) != 0) {
-        sane_word_array_intersect_sorted(&src->resolutions,
-            s1->resolutions, s2->resolutions);
-        if (sane_word_array_len(&src->resolutions) == 0) {
+        sane_word_array_free(src->resolutions);
+        src->resolutions = sane_word_array_intersect_sorted(
+                s1->resolutions, s2->resolutions);
+        if (sane_word_array_len(src->resolutions) == 0) {
             src->flags &= ~DEVCAPS_SOURCE_RES_DISCRETE;
         }
     }
@@ -205,7 +207,7 @@ devcaps_dump (log_ctx *log, devcaps *caps)
 
         if (src->flags & DEVCAPS_SOURCE_RES_DISCRETE) {
             g_string_truncate(buf, 0);
-            for (i = 0; i < (int) sane_word_array_len(&src->resolutions); i ++) {
+            for (i = 0; i < (int) sane_word_array_len(src->resolutions); i ++) {
                 if (i != 0) {
                     g_string_append_c(buf, ' ');
                 }

@@ -177,7 +177,7 @@ wsd_devcaps_parse_res (SANE_Word **res, xml_rd *xml)
     error       err = xml_rd_node_value_uint(xml, &val);
 
     if (err == NULL) {
-        sane_word_array_append(res, val);
+        *res = sane_word_array_append(*res, val);
     }
 
     return err;
@@ -192,11 +192,9 @@ wsd_devcaps_parse_source (devcaps *caps, xml_rd *xml, ID_SOURCE src_id)
     unsigned int   level = xml_rd_depth(xml);
     size_t         prefixlen = strlen(xml_rd_node_path(xml));
     devcaps_source *src = devcaps_source_new();
-    SANE_Word      *x_res, *y_res;
+    SANE_Word      *x_res = sane_word_array_new();
+    SANE_Word      *y_res = sane_word_array_new();
     SANE_Word      min_wid = -1, max_wid = -1, min_hei = -1, max_hei = -1;
-
-    sane_word_array_init(&x_res);
-    sane_word_array_init(&y_res);
 
     while (!xml_rd_end(xml)) {
         const char *path = xml_rd_node_path(xml) + prefixlen;
@@ -240,12 +238,12 @@ wsd_devcaps_parse_source (devcaps *caps, xml_rd *xml, ID_SOURCE src_id)
 
     /* Merge x/y resolutions */
     if (err == NULL) {
-        sane_word_array_sort(&x_res);
-        sane_word_array_sort(&y_res);
+        sane_word_array_sort(x_res);
+        sane_word_array_sort(y_res);
 
-        sane_word_array_intersect_sorted(&src->resolutions, x_res, y_res);
-
-        if (sane_word_array_len(&src->resolutions) > 0) {
+        sane_word_array_free(src->resolutions);
+        src->resolutions = sane_word_array_intersect_sorted(x_res, y_res);
+        if (sane_word_array_len(src->resolutions) > 0) {
             src->flags |= DEVCAPS_SOURCE_RES_DISCRETE;
         } else {
             err = ERROR("no resolutions defined");
@@ -331,8 +329,8 @@ wsd_devcaps_parse_source (devcaps *caps, xml_rd *xml, ID_SOURCE src_id)
     }
 
     /* Cleanup and exit */
-    sane_word_array_cleanup(&x_res);
-    sane_word_array_cleanup(&y_res);
+    sane_word_array_free(x_res);
+    sane_word_array_free(y_res);
 
     return err;
 }

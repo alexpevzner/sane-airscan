@@ -857,15 +857,15 @@ void
 trace_dump_body (trace *t, http_data *data);
 
 /******************** SANE_Word/SANE_String arrays ********************/
-/* Initialize array of SANE_Word
+/* Create array of SANE_Word
  */
-void
-sane_word_array_init (SANE_Word **a);
+SANE_Word*
+sane_word_array_new (void);
 
-/* Cleanup array of SANE_Word
+/* Free array of SANE_Word
  */
 void
-sane_word_array_cleanup (SANE_Word **a);
+sane_word_array_free (SANE_Word *a);
 
 /* Reset array of SANE_Word
  */
@@ -875,54 +875,52 @@ sane_word_array_reset (SANE_Word **a);
 /* Get length of the SANE_Word array
  */
 size_t
-sane_word_array_len (SANE_Word **a);
+sane_word_array_len (const SANE_Word *a);
 
-/* Append word to array
+/* Append word to array. Returns new array (old becomes invalid)
  */
-void
-sane_word_array_append (SANE_Word **a, SANE_Word w);
+SANE_Word*
+sane_word_array_append (SANE_Word *a, SANE_Word w);
 
 /* Sort array of SANE_Word in increasing order
  */
 void
-sane_word_array_sort (SANE_Word **a);
+sane_word_array_sort (SANE_Word *a);
 
-/* Intersect two sorted arrays. Result is appended
- * to the 'out' argument (it must be initialized)
+/* Intersect two sorted arrays.
+ */
+SANE_Word*
+sane_word_array_intersect_sorted ( const SANE_Word *a1, const SANE_Word *a2);
+
+/* Create initialize array of SANE_String
+ */
+SANE_String*
+sane_string_array_new (void);
+
+/* Free array of SANE_String
  */
 void
-sane_word_array_intersect_sorted (SANE_Word **out,
-        SANE_Word *a1, SANE_Word *a2);
-
-/* Initialize array of SANE_String
- */
-void
-sane_string_array_init (SANE_String **a);
+sane_string_array_free (SANE_String *a);
 
 /* Reset array of SANE_String
  */
 void
-sane_string_array_reset (SANE_String **a);
-
-/* Cleanup array of SANE_String
- */
-void
-sane_string_array_cleanup (SANE_String **a);
+sane_string_array_reset (SANE_String *a);
 
 /* Get length of the SANE_Word array
  */
 size_t
-sane_string_array_len (SANE_String **a);
+sane_string_array_len (const SANE_String *a);
 
-/* Append string to array
+/* Append string to array Returns new array (old becomes invalid)
  */
-void
-sane_string_array_append(SANE_String **a, SANE_String s);
+SANE_String*
+sane_string_array_append(SANE_String *a, SANE_String s);
 
 /* Compute max string length in array of strings
  */
 size_t
-sane_string_array_max_strlen(SANE_String **a);
+sane_string_array_max_strlen(const SANE_String *a);
 
 /******************** XML utilities ********************/
 /* xml_ns defines XML namespace.

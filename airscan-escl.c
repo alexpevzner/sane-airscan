@@ -142,15 +142,15 @@ escl_devcaps_source_parse_discrete_resolutions (xml_rd *xml,
             xml_rd_leave(xml);
 
             if (x && y && x == y) {
-                sane_word_array_append(&src->resolutions, x);
+                src->resolutions = sane_word_array_append(src->resolutions, x);
             }
         }
     }
     xml_rd_leave(xml);
 
-    if (sane_word_array_len((&src->resolutions)) > 0) {
+    if (sane_word_array_len(src->resolutions) > 0) {
         src->flags |= DEVCAPS_SOURCE_RES_DISCRETE;
-        sane_word_array_sort(&src->resolutions);
+        sane_word_array_sort(src->resolutions);
     }
 
     return err;

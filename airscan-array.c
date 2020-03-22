@@ -15,21 +15,20 @@
  */
 #define ARRAY_INITIAL_CAPACITY  4
 
-/* Initialize array of SANE_Word
+/* Create array of SANE_Word
  */
-void
-sane_word_array_init (SANE_Word **a)
+SANE_Word*
+sane_word_array_new (void)
 {
-    *a = g_new0(SANE_Word, ARRAY_INITIAL_CAPACITY);
+    return g_new0(SANE_Word, ARRAY_INITIAL_CAPACITY);
 }
 
-/* Cleanup array of SANE_Word
+/* Free array of SANE_Word
  */
 void
-sane_word_array_cleanup (SANE_Word **a)
+sane_word_array_free (SANE_Word *a)
 {
-    g_free(*a);
-    *a = NULL;
+    g_free(a);
 }
 
 /* Reset array of SANE_Word
@@ -43,25 +42,27 @@ sane_word_array_reset (SANE_Word **a)
 /* Get length of the SANE_Word array
  */
 size_t
-sane_word_array_len (SANE_Word **a)
+sane_word_array_len (const SANE_Word *a)
 {
-    return (size_t) (*a)[0];
+    return (size_t) a[0];
 }
 
-/* Append word to array
+/* Append word to array. Returns new array (old becomes invalid)
  */
-void
-sane_word_array_append(SANE_Word **a, SANE_Word w)
+SANE_Word*
+sane_word_array_append (SANE_Word *a, SANE_Word w)
 {
     size_t sz = sane_word_array_len(a) + 1;
 
     /* If sz reached the power-of-2, reallocate the array, doubling its size */
     if (sz >= ARRAY_INITIAL_CAPACITY && (sz & (sz - 1)) == 0) {
-        *a = g_renew(SANE_Word, (*a), sz + sz);
+        a = g_renew(SANE_Word, a, sz + sz);
     }
 
-    (*a)[sz] = w;
-    (*a)[0] ++;
+    a[sz] = w;
+    a[0] = sz;
+
+    return a;
 }
 
 /* Compare function for sane_word_array_sort
@@ -75,24 +76,23 @@ sane_word_array_sort_cmp(const void *p1, const void *p2)
 /* Sort array of SANE_Word in increasing order
  */
 void
-sane_word_array_sort(SANE_Word **a)
+sane_word_array_sort(SANE_Word *a)
 {
-    SANE_Word len = (*a)[0];
+    SANE_Word len = a[0];
 
     if (len) {
-        qsort((*a) + 1, len, sizeof(SANE_Word), sane_word_array_sort_cmp);
+        qsort(a + 1, len, sizeof(SANE_Word), sane_word_array_sort_cmp);
     }
 }
 
-/* Intersect two sorted arrays. Result is appended
- * to the 'out' argument (it must be initialized)
+/* Intersect two sorted arrays.
  */
-void
-sane_word_array_intersect_sorted (SANE_Word **out,
-        SANE_Word *a1, SANE_Word *a2)
+SANE_Word*
+sane_word_array_intersect_sorted (const SANE_Word *a1, const SANE_Word *a2)
 {
-    SANE_Word *end1 = a1 + sane_word_array_len(&a1) + 1;
-    SANE_Word *end2 = a2 + sane_word_array_len(&a2) + 1;
+    const SANE_Word *end1 = a1 + sane_word_array_len(a1) + 1;
+    const SANE_Word *end2 = a2 + sane_word_array_len(a2) + 1;
+    SANE_Word       *out = sane_word_array_new();
 
     a1 ++;
     a2 ++;
@@ -103,82 +103,85 @@ sane_word_array_intersect_sorted (SANE_Word **out,
         } else if (*a1 > *a2) {
             a2 ++;
         } else {
-            sane_word_array_append(out, *a1);
+            out = sane_word_array_append(out, *a1);
             a1 ++;
             a2 ++;
         }
     }
+
+    return out;
 }
 
-/* Initialize array of SANE_String
+/* Create initialize array of SANE_String
+ */
+SANE_String*
+sane_string_array_new (void)
+{
+    return g_new0(SANE_String, ARRAY_INITIAL_CAPACITY);
+}
+
+/* Free array of SANE_String
  */
 void
-sane_string_array_init (SANE_String **a)
+sane_string_array_free (SANE_String *a)
 {
-    *a = g_new0(SANE_String, ARRAY_INITIAL_CAPACITY);
+    g_free(a);
 }
 
 /* Reset array of SANE_String
  */
 void
-sane_string_array_reset (SANE_String **a)
+sane_string_array_reset (SANE_String *a)
 {
-    (*a)[0] = NULL;
-}
-
-/* Cleanup array of SANE_String
- */
-void
-sane_string_array_cleanup (SANE_String **a)
-{
-    g_free(*a);
-    *a = NULL;
+    a[0] = NULL;
 }
 
 /* Get length of the SANE_Word array
  */
 size_t
-sane_string_array_len (SANE_String **a)
+sane_string_array_len (const SANE_String *a)
 {
     size_t sz;
 
-    for (sz = 0; (*a)[sz]; sz ++)
+    for (sz = 0; a[sz] != NULL; sz ++)
         ;
 
     return sz;
 }
 
-/* Append string to array
+/* Append string to array Returns new array (old becomes invalid)
  */
-void
-sane_string_array_append(SANE_String **a, SANE_String s)
+SANE_String*
+sane_string_array_append(SANE_String *a, SANE_String s)
 {
     size_t sz = sane_string_array_len(a) + 1;
 
     /* If sz reached the power-of-2, reallocate the array, doubling its size */
     if (sz >= ARRAY_INITIAL_CAPACITY && (sz & (sz - 1)) == 0) {
-        *a = g_renew(SANE_String, (*a), sz + sz);
+        a = g_renew(SANE_String, a, sz + sz);
     }
 
     /* Append string */
-    (*a)[sz - 1] = s;
-    (*a)[sz] = NULL;
+    a[sz - 1] = s;
+    a[sz] = NULL;
+
+    return a;
 }
 
 /* Compute max string length in array of strings
  */
 size_t
-sane_string_array_max_strlen(SANE_String **a)
+sane_string_array_max_strlen(const SANE_String *a)
 {
     size_t max_len = 0;
-    SANE_String *s = *a;
 
-    for (; *s != NULL; s ++) {
-        size_t len = strlen(*s);
+    for (; *a != NULL; a ++) {
+        size_t len = strlen(*a);
         if (len > max_len) {
             max_len = len;
         }
     }
+
     return max_len;
 }
 
