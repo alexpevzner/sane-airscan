@@ -59,6 +59,8 @@ static bool zeroconf_initscan;
 static int zeroconf_initscan_count;
 static GCond zeroconf_initscan_cond;
 
+/* Forward declarations
+ */
 static void
 zeroconf_avahi_client_start (void);
 
