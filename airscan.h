@@ -810,6 +810,14 @@ typedef struct {
 uuid
 uuid_new (void);
 
+/* Compare two UUID strings. This function ignores all "decorations",
+ * line urn:uuid: prefix and so on, and takes only hexadecimal numbers
+ * into considerations, so it can be used to compare UUIDs represented
+ * in different formats.
+ */
+bool
+uuid_equal (const char *s1, const char *s2);
+
 /******************** Protocol trace ********************/
 /* Type trace represents an opaque handle of trace
  * file
