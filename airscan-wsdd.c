@@ -51,6 +51,7 @@ struct wsdd_xaddr {
 typedef struct wsdd_host wsdd_host;
 struct wsdd_host {
     const char        *address;     /* Device "address" in WS-SD sence */
+    const char        *model;       /* Model name */
     wsdd_xaddr        *xaddrs;      /* Discovered transport addresses */
     zeroconf_endpoint *endpoints;   /* Discovered endpoints */
     http_client       *http_client; /* HTTP client */
@@ -223,6 +224,7 @@ wsdd_host_free (wsdd_host *host)
 
     zeroconf_endpoint_list_free(host->endpoints);
     g_free((char*) host->address);
+    g_free((char*) host->model);
     wsdd_xaddr_list_free(host->xaddrs);
     g_free(host);
 }
@@ -367,6 +369,7 @@ wsdd_host_get_metadata_callback (void *ptr, http_query *q)
     http_data *data;
     wsdd_host *host = ptr;
     int       ifindex = (int) http_query_get_uintptr(q);
+    char      *model = NULL, *manufacturer = NULL;
 
     (void) ptr;
 
@@ -397,19 +400,47 @@ wsdd_host_get_metadata_callback (void *ptr, http_query *q)
         if (!strcmp(path, "s:Envelope/s:Body/mex:Metadata/mex:MetadataSection"
                 "/devprof:Relationship/devprof:Hosted")) {
             wsdd_host_parse_endpoints(host, ifindex, xml);
+        } else if (!strcmp(path, "s:Envelope/s:Body/mex:Metadata/mex:MetadataSection"
+                "/devprof:ThisModel/devprof:Manufacturer")) {
+            if (manufacturer == NULL) {
+                manufacturer = g_strdup(xml_rd_node_value(xml));
+            }
+        } else if (!strcmp(path, "s:Envelope/s:Body/mex:Metadata/mex:MetadataSection"
+                "/devprof:ThisModel/devprof:ModelName")) {
+            if (model == NULL) {
+                model = g_strdup(xml_rd_node_value(xml));
+            }
         }
 
         xml_rd_deep_next(xml, 0);
     }
 
+    if (host->model == NULL) {
+        if (model != NULL && manufacturer != NULL) {
+            host->model = g_strdup_printf("%s %s", manufacturer, model);
+        } else if (model != NULL) {
+            host->model = model;
+            model = NULL;
+        } else if (manufacturer != NULL) {
+            host->model = manufacturer;
+            manufacturer = NULL;
+        } else {
+            host->model = g_strdup(host->address);
+        }
+    }
+
     /* Cleanup and exit */
 DONE:
     xml_rd_finish(&xml);
+    g_free(model);
+    g_free(manufacturer);
+
     if (http_client_num_pending(host->http_client) == 0) {
         zeroconf_endpoint *endpoint;
 
         host->endpoints = zeroconf_endpoint_list_sort_dedup(host->endpoints);
-        log_debug(wsdd_log, "%s: discovered endpoints:", host->address);
+        log_debug(wsdd_log, "\"%s\": address: %s", host->model, host->address);
+        log_debug(wsdd_log, "\"%s\": discovered endpoints:", host->model);
         for (endpoint = host->endpoints; endpoint != NULL;
             endpoint = endpoint->next) {
             log_debug(wsdd_log, "  %s", http_uri_str(endpoint->uri));
