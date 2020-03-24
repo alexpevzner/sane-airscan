@@ -41,6 +41,8 @@ into this list, please let me know.
 * Canon D570
 * Canon ImageCLASS MF743cdw <sup>[1](#noteMF743cdw)</sup>
 * Canon TR4529 (PIXMA TR4500 Series)
+* Canon TS 3100
+* Canon TS 3300
 * Canon TS 6151
 * EPSON WF-7710
 * EPSON XP-7100 Series
