@@ -547,6 +547,7 @@ wsd_scan_query (const proto_ctx *ctx)
     xml_wr_enter(xml, "s:Header");
     xml_wr_add_text(xml, "a:MessageID", u.text);
     xml_wr_add_text(xml, "a:To", WSD_ADDR_ANONYMOUS);
+    xml_wr_add_text(xml, "a:ReplyTo", WSD_ADDR_ANONYMOUS);
     xml_wr_add_text(xml, "a:Action", WSD_ACTION_CREATE_SCAN_JOB);
     xml_wr_leave(xml); // s:Header
 
