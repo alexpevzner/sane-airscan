@@ -10,6 +10,8 @@
 
 #include <sys/random.h>
 
+#pragma GCC diagnostic ignored "-Wunused-result"
+
 /* Find greatest common divisor of two positive integers
  */
 SANE_Word
