@@ -120,15 +120,16 @@ static const char *wsdd_probe_template =
  */
 static const char *wsdd_get_metadata_template =
     "<?xml version=\"1.0\" ?>\n"
-    "<s:Envelope xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:mex=\"http://schemas.xmlsoap.org/ws/2004/09/mex\" xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\">\n"
+    "<s:Envelope xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\">\n"
     " <s:Header>\n"
     "  <a:Action>http://schemas.xmlsoap.org/ws/2004/09/transfer/Get</a:Action>\n"
     "  <a:MessageID>%s</a:MessageID>\n"
     "  <a:To>%s</a:To>\n"
+    "  <a:ReplyTo>\n"
+    "    <a:Address>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:Address>\n"
+    "  </a:ReplyTo>\n"
     " </s:Header>\n"
-    " <s:Body>\n"
-    "  <mex:Get/>\n"
-    " </s:Body>\n"
+    " <s:Body/>\n"
     "</s:Envelope>\n";
 
 /* XML namespace translation
