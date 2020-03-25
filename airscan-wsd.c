@@ -49,6 +49,8 @@ static const xml_ns wsd_ns_wr[] = {
  */
 typedef struct {
     proto_handler proto; /* Base class */
+    bool          exif;  /* "exif" format supported */
+    bool          jfif;  /* "jfif" format supported */
 } proto_handler_wsd;
 
 /* Free ESCL protocol handler
@@ -125,7 +127,8 @@ wsd_devcaps_parse_description (devcaps *caps, xml_rd *xml)
 /* Parse supported formats
  */
 static error
-wsd_devcaps_parse_formats (devcaps *caps, xml_rd *xml, unsigned int *flags)
+wsd_devcaps_parse_formats (proto_handler_wsd *wsd,
+        devcaps *caps, xml_rd *xml, unsigned int *flags)
 {
     error        err = NULL;
     unsigned int level = xml_rd_depth(xml);
@@ -141,6 +144,10 @@ wsd_devcaps_parse_formats (devcaps *caps, xml_rd *xml, unsigned int *flags)
 
             if (!strcmp(v, "jfif")) {
                 *flags |= DEVCAPS_SOURCE_FMT_JPEG;
+                wsd->jfif = true;
+            } else if (!strcmp(v, "exif")) {
+                *flags |= DEVCAPS_SOURCE_FMT_JPEG;
+                wsd->exif = true;
             } else if (!strcmp(v, "pdf-a")) {
                 *flags |= DEVCAPS_SOURCE_FMT_PDF;
             } else if (!strcmp(v, "png")) {
@@ -149,6 +156,10 @@ wsd_devcaps_parse_formats (devcaps *caps, xml_rd *xml, unsigned int *flags)
         }
 
         xml_rd_deep_next(xml, level);
+    }
+
+    if (((*flags) & DEVCAPS_SOURCE_FMT_SUPPORTED) == 0) {
+        err = ERROR("no supported image formats");
     }
 
     return err;
@@ -339,7 +350,8 @@ wsd_devcaps_parse_source (devcaps *caps, xml_rd *xml, ID_SOURCE src_id)
 /* Parse scanner configuration
  */
 static error
-wsd_devcaps_parse_configuration (devcaps *caps, xml_rd *xml)
+wsd_devcaps_parse_configuration (proto_handler_wsd *wsd,
+        devcaps *caps, xml_rd *xml)
 {
     error        err = NULL;
     unsigned int level = xml_rd_depth(xml);
@@ -353,7 +365,7 @@ wsd_devcaps_parse_configuration (devcaps *caps, xml_rd *xml)
         const char *path = xml_rd_node_path(xml) + prefixlen;
 
         if (!strcmp(path, "/scan:DeviceSettings/scan:FormatsSupported")) {
-            err = wsd_devcaps_parse_formats(caps, xml, &formats);
+            err = wsd_devcaps_parse_formats(wsd, caps, xml, &formats);
         } else if (!strcmp(path, "/scan:Platen")) {
             err = wsd_devcaps_parse_source(caps, xml, ID_SOURCE_PLATEN);
         } else if (!strcmp(path, "/scan:ADF/scan:ADFFront")) {
@@ -435,8 +447,9 @@ wsd_devcaps_parse_configuration (devcaps *caps, xml_rd *xml)
 
 /* Parse device capabilities
  */
-error
-wsd_devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
+static error
+wsd_devcaps_parse (proto_handler_wsd *wsd,
+        devcaps *caps, const char *xml_text, size_t xml_len)
 {
     error  err = NULL;
     xml_rd *xml;
@@ -461,7 +474,7 @@ wsd_devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
                 "/scan:GetScannerElementsResponse/scan:ScannerElements/"
                 "scan:ElementData/scan:ScannerConfiguration")) {
             found_configuration = true;
-            err = wsd_devcaps_parse_configuration(caps, xml);
+            err = wsd_devcaps_parse_configuration(wsd, caps, xml);
         }
 
         if (err != NULL) {
@@ -493,13 +506,14 @@ DONE:
 static error
 wsd_devcaps_decode (const proto_ctx *ctx, devcaps *caps)
 {
-    http_data *data = http_query_get_response_data(ctx->query);
-    error     err;
+    proto_handler_wsd *wsd = (proto_handler_wsd*) ctx->proto;
+    http_data         *data = http_query_get_response_data(ctx->query);
+    error             err;
 
     caps->units = 1000;
     caps->protocol = ctx->proto->name;
 
-    err = wsd_devcaps_parse(caps, data->bytes, data->size);
+    err = wsd_devcaps_parse(wsd, caps, data->bytes, data->size);
     if (err == NULL) {
         caps->vendor = caps->vendor ? caps->vendor : g_strdup("AirScan");
         caps->model = caps->model? caps->model : g_strdup("Unknown");
@@ -513,6 +527,7 @@ wsd_devcaps_decode (const proto_ctx *ctx, devcaps *caps)
 static http_query*
 wsd_scan_query (const proto_ctx *ctx)
 {
+    proto_handler_wsd       *wsd = (proto_handler_wsd*) ctx->proto;
     const proto_scan_params *params = &ctx->params;
     xml_wr                  *xml = xml_wr_begin("s:Envelope", wsd_ns_wr);
     uuid                    u = uuid_new();
@@ -562,7 +577,16 @@ wsd_scan_query (const proto_ctx *ctx)
     xml_wr_leave(xml); // scan:JobDescription
 
     xml_wr_enter(xml, "scan:DocumentParameters");
-    xml_wr_add_text(xml, "scan:Format", "jfif"); // FIXME
+
+    // FIXME -- JPEG hardcoded for now
+    if (wsd->jfif) {
+        xml_wr_add_text(xml, "scan:Format", "jfif"); // FIXME
+    } else if (wsd->exif) {
+        xml_wr_add_text(xml, "scan:Format", "exif"); // FIXME
+    } else {
+        log_internal_error(ctx->log);
+    }
+
     xml_wr_add_text(xml, "scan:ImagesToTransfer", "0");
 
     xml_wr_enter(xml, "scan:InputSize");
