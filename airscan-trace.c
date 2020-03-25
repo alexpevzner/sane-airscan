@@ -249,8 +249,12 @@ trace_dump_text (trace *t, http_data *data, bool xml)
 void
 trace_dump_body (trace *t, http_data *data)
 {
+    if (t == NULL) {
+        return;
+    }
+
     if (data->size == 0) {
-        goto DONE;
+        return;
     }
 
     if (g_str_has_prefix(data->content_type, "text/") ||
@@ -264,9 +268,6 @@ trace_dump_body (trace *t, http_data *data)
     }
 
     putc('\n', t->log);
-
-DONE:
-    ;
 }
 
 /* This hook is called on every http_query completion
