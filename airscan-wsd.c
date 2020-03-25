@@ -27,10 +27,11 @@
 /* XML namespace translation for XML reader
  */
 static const xml_ns wsd_ns_rd[] = {
-    {"s", "http*://schemas.xmlsoap.org/soap/envelope"}, /* SOAP 1.1 */
-    {"s", "http*://www.w3.org/2003/05/soap-envelope"},  /* SOAP 1.2 */
-    {"d", "http*://schemas.xmlsoap.org/ws/2005/04/discovery"},
-    {"a", "http*://schemas.xmlsoap.org/ws/2004/08/addressing"},
+    {"s",    "http*://schemas.xmlsoap.org/soap/envelope"}, /* SOAP 1.1 */
+    {"s",    "http*://www.w3.org/2003/05/soap-envelope"},  /* SOAP 1.2 */
+    {"d",    "http*://schemas.xmlsoap.org/ws/2005/04/discovery"},
+    {"a",    "http*://schemas.xmlsoap.org/ws/2004/08/addressing"},
+    {"scan", "http*://schemas.microsoft.com/windows/2006/08/wdp/scan"},
     {NULL, NULL}
 };
 
