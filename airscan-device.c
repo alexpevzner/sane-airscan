@@ -79,7 +79,6 @@ struct device {
     /* I/O handling (AVAHI and HTTP) */
     zeroconf_endpoint    *endpoints;        /* Device endpoints */
     zeroconf_endpoint    *endpoint_current; /* Current endpoint to probe */
-    eloop_timer          *http_timer;       /* HTTP retry timer */
 
     /* Scanning state machinery */
     SANE_Status          job_status;          /* Job completion status */
@@ -210,6 +209,10 @@ device_free (device *dev)
 
     if (dev->stm_cancel_event != NULL) {
         eloop_event_free(dev->stm_cancel_event);
+    }
+
+    if (dev->stm_timer != NULL) {
+        eloop_timer_cancel(dev->stm_timer);
     }
 
     /* Release all memory */
@@ -421,9 +424,9 @@ static void
 device_http_cancel (device *dev)
 {
     http_client_cancel(dev->proto_ctx.http);
-    if (dev->http_timer != NULL) {
-        eloop_timer_cancel(dev->http_timer);
-        dev->http_timer = NULL;
+    if (dev->stm_timer != NULL) {
+        eloop_timer_cancel(dev->stm_timer);
+        dev->stm_timer = NULL;
     }
 }
 
@@ -607,6 +610,7 @@ static void
 device_stm_timer_callback (void *data)
 {
     device *dev = data;
+    dev->stm_timer = NULL;
     device_proto_op_submit(dev, dev->proto_op_current, device_stm_op_callback);
 }
 
