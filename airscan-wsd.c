@@ -767,7 +767,7 @@ wsd_load_decode (const proto_ctx *ctx)
         return result;
     }
 
-    result.next = PROTO_OP_FINISH;
+    result.next = PROTO_OP_LOAD;
     result.data.image = http_data_ref(data);
 
     return result;
