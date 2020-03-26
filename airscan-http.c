@@ -784,9 +784,16 @@ http_query_callback (SoupSession *session, SoupMessage *msg, gpointer userdata)
         log_assert(client->log, g_ptr_array_find(client->pending, q, NULL));
         g_ptr_array_remove(client->pending, q);
 
-        log_debug(client->log, "HTTP %s %s: %s", q->msg->method,
-                http_uri_str(q->uri),
-                soup_status_get_phrase(msg->status_code));
+        if (err != NULL) {
+            log_debug(client->log, "HTTP %s %s: %s", q->msg->method,
+                    http_uri_str(q->uri),
+                    soup_status_get_phrase(msg->status_code));
+        } else {
+            log_debug(client->log, "HTTP %s %s: %d %s", q->msg->method,
+                    http_uri_str(q->uri),
+                    msg->status_code,
+                    soup_status_get_phrase(msg->status_code));
+        }
 
         trace_http_query_hook(log_ctx_trace(client->log), q);
 
