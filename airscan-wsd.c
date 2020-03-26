@@ -754,6 +754,7 @@ wsd_load_decode (const proto_ctx *ctx)
     /* Check HTTP status */
     err = http_query_error(ctx->query);
     if (err != NULL) {
+        err = eloop_eprintf("HTTP: %s", ESTRING(err));
         result.next = PROTO_OP_FINISH;
         result.err = err;
         return result;
