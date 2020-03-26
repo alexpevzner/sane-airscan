@@ -747,7 +747,7 @@ wsd_load_query (const proto_ctx *ctx)
 static proto_result
 wsd_load_decode (const proto_ctx *ctx)
 {
-    proto_result result;
+    proto_result result = {0};
     http_data    *data;
     error        err;
 
