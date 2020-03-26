@@ -666,6 +666,7 @@ zeroconf_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
         break;
 
     case AVAHI_BROWSER_FAILURE:
+        zeroconf_pevent(name, protocol, "browser failure");
         zeroconf_avahi_client_restart_defer();
         break;
 
@@ -694,6 +695,11 @@ zeroconf_avahi_browser_start (AvahiClient *client)
             AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC,
             ZEROCONF_SERVICE_USCAN, NULL,
             0, zeroconf_avahi_browser_callback, client);
+
+    if (zeroconf_avahi_browser == NULL) {
+        log_debug(NULL, "MDNS: avahi_service_browser_new: %s",
+                avahi_strerror(avahi_client_errno(zeroconf_avahi_client)));
+    }
 }
 
 /* Stop service browser
