@@ -44,6 +44,7 @@ into this list, please let me know.
 * Canon TS 3100
 * Canon TS 3300
 * Canon TS 6151
+* Canon TS 6250
 * EPSON WF-7710
 * EPSON XP-7100 Series
 * HP Color Laserjet MFP m178-m181
