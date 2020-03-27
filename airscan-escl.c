@@ -616,8 +616,13 @@ escl_load_decode (const proto_ctx *ctx)
     /* Check HTTP status */
     err = http_query_error(ctx->query);
     if (err != NULL) {
-        result.next = PROTO_OP_CHECK;
-        result.err = eloop_eprintf("HTTP: %s", ESTRING(err));
+        if (ctx->params.src == ID_SOURCE_PLATEN && ctx->images_received > 0) {
+            result.next = PROTO_OP_CLEANUP;
+        } else {
+            result.next = PROTO_OP_CHECK;
+            result.err = eloop_eprintf("HTTP: %s", ESTRING(err));
+        }
+
         return result;
     }
 

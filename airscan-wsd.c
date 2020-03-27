@@ -817,7 +817,12 @@ wsd_load_decode (const proto_ctx *ctx)
         return result;
     }
 
-    result.next = PROTO_OP_LOAD;
+    if (ctx->params.src == ID_SOURCE_PLATEN) {
+        result.next = PROTO_OP_FINISH;
+    } else {
+        result.next = PROTO_OP_LOAD;
+    }
+
     result.data.image = http_data_ref(data);
 
     return result;

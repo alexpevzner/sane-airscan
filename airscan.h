@@ -1529,13 +1529,14 @@ typedef struct {
  */
 typedef struct {
     /* Common context */
-    log_ctx              *log;      /* Logging context */
-    struct proto_handler *proto;    /* Link to proto_handler */
-    const devcaps        *devcaps;  /* Device capabilities */
-    http_client          *http;     /* HTTP client for sending requests */
-    const http_uri       *base_uri; /* HTTP base URI for protocol */
-    proto_scan_params    params;    /* Scan parameters */
-    const char           *location; /* Image location */
+    log_ctx              *log;            /* Logging context */
+    struct proto_handler *proto;          /* Link to proto_handler */
+    const devcaps        *devcaps;        /* Device capabilities */
+    http_client          *http;           /* HTTP client for sending requests */
+    const http_uri       *base_uri;       /* HTTP base URI for protocol */
+    proto_scan_params    params;          /* Scan parameters */
+    const char           *location;       /* Image location */
+    unsigned int         images_received; /* Total count of received images */
 
     /* Extra context for xxx_decode callbacks */
     const http_query     *query;    /* Passed to xxx_decode callbacks */

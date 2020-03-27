@@ -82,7 +82,6 @@ struct device {
 
     /* Scanning state machinery */
     SANE_Status          job_status;          /* Job completion status */
-    unsigned int         job_images_received; /* Total count of received images */
     SANE_Word            job_skip_x;          /* How much pixels to skip, */
     SANE_Word            job_skip_y;          /*    from left and top */
 
@@ -645,7 +644,7 @@ device_stm_op_callback (void *ptr, http_query *q)
     } else if (dev->proto_op_current == PROTO_OP_LOAD) {
         if (result.data.image != NULL) {
             http_data_queue_push(dev->read_queue, result.data.image);
-            dev->job_images_received ++;
+            dev->proto_ctx.images_received ++;
             pollable_signal(dev->read_pollable);
 
             dev->proto_ctx.failed_attempt = 0;
@@ -658,7 +657,7 @@ device_stm_op_callback (void *ptr, http_query *q)
 
     /* Check for FINISH */
     if (result.next == PROTO_OP_FINISH) {
-        if (dev->job_images_received == 0) {
+        if (dev->proto_ctx.images_received == 0) {
             /* If no images received, and no error status
              * yet set, use SANE_STATUS_IO_ERROR as default
              * error code
@@ -1010,7 +1009,7 @@ device_start_new_job (device *dev)
     g_free((char*) dev->proto_ctx.location);
     dev->proto_ctx.location = NULL;
     dev->proto_ctx.failed_attempt = 0;
-    dev->job_images_received = 0;
+    dev->proto_ctx.images_received = 0;
 
     eloop_call(device_start_do, dev);
 
