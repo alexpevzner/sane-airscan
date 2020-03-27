@@ -892,6 +892,7 @@ device_open (const char *name, SANE_Status *status)
 
     /* Validate arguments */
     if (name == NULL || *name == '\0') {
+        log_debug(dev->log, "device_open: invalid name");
         *status = SANE_STATUS_INVAL;
         return NULL;
     }
@@ -906,6 +907,7 @@ device_open (const char *name, SANE_Status *status)
     /* Obtain device endpoints */
     endpoints = zeroconf_device_lookup(name);
     if (endpoints == NULL) {
+        log_debug(dev->log, "device_open: device not found");
         *status = SANE_STATUS_INVAL;
         return NULL;
     }
@@ -973,6 +975,7 @@ SANE_Status
 device_set_option (device *dev, SANE_Int option, void *value, SANE_Word *info)
 {
     if ((dev->flags & DEVICE_SCANNING) != 0) {
+        log_debug(dev->log, "device_set_option: already scanning");
         return SANE_STATUS_INVAL;
     }
 
@@ -1028,11 +1031,13 @@ device_start (device *dev)
 {
     /* Already scanning? */
     if ((dev->flags & DEVICE_SCANNING) != 0) {
+        log_debug(dev->log, "device_start: already scanning");
         return SANE_STATUS_INVAL;
     }
 
     /* Don's start if window is not valid */
     if (dev->opt.params.lines == 0 || dev->opt.params.pixels_per_line == 0) {
+        log_debug(dev->log, "device_start: invalid scan window");
         return SANE_STATUS_INVAL;
     }
 
@@ -1069,6 +1074,7 @@ device_start (device *dev)
 
     device_stm_state_set(dev, DEVICE_STM_IDLE);
     if (dev->job_status != SANE_STATUS_GOOD) {
+        dev->flags &= ~DEVICE_SCANNING;
         return dev->job_status;
     }
 
@@ -1090,6 +1096,7 @@ SANE_Status
 device_set_io_mode (device *dev, SANE_Bool non_blocking)
 {
     if ((dev->flags & DEVICE_SCANNING) == 0) {
+        log_debug(dev->log, "device_set_io_mode: not scanning");
         return SANE_STATUS_INVAL;
     }
 
@@ -1103,6 +1110,7 @@ SANE_Status
 device_get_select_fd (device *dev, SANE_Int *fd)
 {
     if ((dev->flags & DEVICE_SCANNING) == 0) {
+        log_debug(dev->log, "device_get_select_fd: not scanning");
         return SANE_STATUS_INVAL;
     }
 
@@ -1266,11 +1274,13 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
 
     /* Check device state */
     if ((dev->flags & DEVICE_READING) == 0) {
+        log_debug(dev->log, "device_read: not scanning");
         return SANE_STATUS_INVAL;
     }
 
     /* Validate arguments */
     if (len_out == NULL) {
+        log_debug(dev->log, "device_read: zero output buffer");
         return SANE_STATUS_INVAL;
     }
 
