@@ -128,7 +128,7 @@ wsd_devcaps_parse_description (devcaps *caps, xml_rd *xml)
  */
 static error
 wsd_devcaps_parse_formats (proto_handler_wsd *wsd,
-        devcaps *caps, xml_rd *xml, unsigned int *flags)
+        devcaps *caps, xml_rd *xml, unsigned int *formats)
 {
     error        err = NULL;
     unsigned int level = xml_rd_depth(xml);
@@ -143,22 +143,20 @@ wsd_devcaps_parse_formats (proto_handler_wsd *wsd,
             const char *v = xml_rd_node_value(xml);
 
             if (!strcmp(v, "jfif")) {
-                *flags |= DEVCAPS_SOURCE_FMT_JPEG;
+                *formats |= 1 << ID_FORMAT_JPEG;
                 wsd->jfif = true;
             } else if (!strcmp(v, "exif")) {
-                *flags |= DEVCAPS_SOURCE_FMT_JPEG;
+                *formats |= 1 << ID_FORMAT_JPEG;
                 wsd->exif = true;
             } else if (!strcmp(v, "pdf-a")) {
-                *flags |= DEVCAPS_SOURCE_FMT_PDF;
-            } else if (!strcmp(v, "png")) {
-                *flags |= DEVCAPS_SOURCE_FMT_PNG;
+                *formats |= 1 << ID_FORMAT_PDF;
             }
         }
 
         xml_rd_deep_next(xml, level);
     }
 
-    if (((*flags) & DEVCAPS_SOURCE_FMT_SUPPORTED) == 0) {
+    if (((*formats) & DEVCAPS_FORMATS_SUPPORTED) == 0) {
         err = ERROR("no supported image formats");
     }
 
@@ -263,7 +261,7 @@ wsd_devcaps_parse_source (devcaps *caps, xml_rd *xml, ID_SOURCE src_id)
     }
 
     /* Check things */
-    src->colormodes &= OPT_COLORMODES_SUPPORTED;
+    src->colormodes &= DEVCAPS_COLORMODES_SUPPORTED;
     if (err == NULL && src->colormodes == 0) {
         err = ERROR("no color modes defined");
     }
@@ -392,7 +390,7 @@ wsd_devcaps_parse_configuration (proto_handler_wsd *wsd,
         devcaps_source *src = caps->src[i];
 
         if (src != NULL) {
-            src->flags |= formats;
+            src->formats = formats;
             src->win_x_range_mm.min = src->win_y_range_mm.min = 0;
             src->win_x_range_mm.max = math_px2mm_res(src->max_wid_px, 1000);
             src->win_y_range_mm.max = math_px2mm_res(src->max_hei_px, 1000);

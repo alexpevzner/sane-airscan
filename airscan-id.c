@@ -136,5 +136,33 @@ id_colormode_by_sane_name (const char *name)
     return id_by_name(name, strcmp, id_colormode_sane_name_table);
 }
 
+/******************** ID_FORMAT ********************/
+/* id_format_mime_name_table represents ID_FORMAT to
+ * MIME name mapping
+ */
+static id_name_table id_format_mime_name_table[] = {
+    {ID_FORMAT_JPEG, "image/jpeg"},
+    {ID_FORMAT_TIFF, "image/tiff"},
+    {ID_FORMAT_PDF,  "application/pdf"},
+    {-1, NULL}
+};
+
+/* id_format_mime_name returns MIME name for the image format
+ */
+const char*
+id_format_mime_name (ID_FORMAT id)
+{
+    return id_name(id, id_format_mime_name_table);
+}
+
+/* id_format_by_mime_name returns ID_FORMAT by its MIME name
+ * For unknown name returns ID_FORMAT_UNKNOWN
+ */
+ID_FORMAT
+id_format_by_mime_name (const char *name)
+{
+    return id_by_name(name, strcasecmp, id_format_mime_name_table);
+}
+
 /* vim:ts=8:sw=4:et
  */

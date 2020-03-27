@@ -149,11 +149,33 @@ typedef enum {
 const char*
 id_colormode_sane_name (ID_COLORMODE id);
 
-/* id_colormode_by_sane_name returns ID_COLORMODE nu its SANE name
+/* id_colormode_by_sane_name returns ID_COLORMODE by its SANE name
  * For unknown name returns ID_COLORMODE_UNKNOWN
  */
 ID_COLORMODE
 id_colormode_by_sane_name (const char *name);
+
+/* ID_FORMAT represents image format
+ */
+typedef enum {
+    ID_FORMAT_UNKNOWN = -1,
+    ID_FORMAT_JPEG,
+    ID_FORMAT_TIFF,
+    ID_FORMAT_PDF,
+
+    NUM_ID_FORMAT
+} ID_FORMAT;
+
+/* id_format_mime_name returns MIME name for the image format
+ */
+const char*
+id_format_mime_name (ID_FORMAT id);
+
+/* id_format_by_mime_name returns ID_FORMAT by its MIME name
+ * For unknown name returns ID_FORMAT_UNKNOWN
+ */
+ID_FORMAT
+id_format_by_mime_name (const char *name);
 
 /******************** Configuration file loader ********************/
 /* Device URI for manually disabled device
@@ -1159,15 +1181,6 @@ enum {
     NUM_OPTIONS
 };
 
-/* Supported color modes
- *
- * Note, currently the only image format we support is JPEG
- * With JPEG, ID_COLORMODE_BW1 cannot be supported
- */
-#define OPT_COLORMODES_SUPPORTED        \
-    ((1 << ID_COLORMODE_COLOR) |       \
-     (1 << ID_COLORMODE_GRAYSCALE))
-
 /* String constants for certain SANE options values
  * (missed from sane/sameopt.h)
  */
@@ -1199,19 +1212,6 @@ enum {
         DEVCAPS_SOURCE_RES_DISCRETE |
         DEVCAPS_SOURCE_RES_RANGE,
 
-    /* Supported document formats */
-    DEVCAPS_SOURCE_FMT_JPEG = (1 << 9),  /* JPEG image */
-    DEVCAPS_SOURCE_FMT_PNG  = (1 << 10), /* PNG image */
-    DEVCAPS_SOURCE_FMT_PDF  = (1 << 11), /* PDF image */
-
-    DEVCAPS_SOURCE_FMT_ALL =
-        DEVCAPS_SOURCE_FMT_JPEG |
-        DEVCAPS_SOURCE_FMT_PNG |
-        DEVCAPS_SOURCE_FMT_PDF,
-
-    DEVCAPS_SOURCE_FMT_SUPPORTED =
-        DEVCAPS_SOURCE_FMT_JPEG,
-
     /* Miscellaneous flags */
     DEVCAPS_SOURCE_HAS_SIZE = (1 << 12), /* max_width, max_height and
                                             derivatives are valid */
@@ -1221,11 +1221,26 @@ enum {
     DEVCAPS_SOURCE_SCAN_DOCFMT_EXT = (1 << 14), /* scan:DocumentFormatExt */
 };
 
+/* Supported image formats
+ */
+#define DEVCAPS_FORMATS_SUPPORTED       \
+    ((1 << ID_FORMAT_JPEG))
+
+/* Supported color modes
+ *
+ * Note, currently the only image format we support is JPEG
+ * With JPEG, ID_COLORMODE_BW1 cannot be supported
+ */
+#define DEVCAPS_COLORMODES_SUPPORTED    \
+    ((1 << ID_COLORMODE_COLOR) |        \
+     (1 << ID_COLORMODE_GRAYSCALE))
+
 /* Source Capabilities (each device may contain multiple sources)
  */
 typedef struct {
     unsigned int flags;                  /* Source flags */
     unsigned int colormodes;             /* Set of 1 << ID_COLORMODE */
+    unsigned int formats;                /* Set of 1 << ID_FORMAT */
     SANE_Word    min_wid_px, max_wid_px; /* Min/max width, in pixels */
     SANE_Word    min_hei_px, max_hei_px; /* Min/max height, in pixels */
     SANE_Word    *resolutions;           /* Discrete resolutions, in DPI */

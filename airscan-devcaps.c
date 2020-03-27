@@ -64,13 +64,16 @@ devcaps_source_merge (const devcaps_source *s1, const devcaps_source *s2)
 
     /* Merge flags */
     src->flags = s1->flags & s2->flags;
-    if ((src->flags & DEVCAPS_SOURCE_FMT_ALL) == 0) {
+
+    /* Merge formats */
+    src->formats = s1->formats & s2->formats;
+    if ((src->formats & DEVCAPS_FORMATS_SUPPORTED) == 0) {
         goto FAIL;
     }
 
     /* Merge colormodes */
     src->colormodes = s1->colormodes & s2->colormodes;
-    if (src->colormodes == 0) {
+    if ((src->colormodes & DEVCAPS_COLORMODES_SUPPORTED) == 0) {
         goto FAIL;
     }
 

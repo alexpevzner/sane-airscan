@@ -75,7 +75,7 @@ escl_devcaps_source_parse_color_modes (xml_rd *xml, devcaps_source *src)
     }
     xml_rd_leave(xml);
 
-    src->colormodes &= OPT_COLORMODES_SUPPORTED;
+    src->colormodes &= DEVCAPS_COLORMODES_SUPPORTED;
     if (src->colormodes == 0) {
         return ERROR("no color modes detected");
     }
@@ -102,12 +102,10 @@ escl_devcaps_source_parse_document_formats (xml_rd *xml, devcaps_source *src)
 
         if (flags != 0) {
             const char *v = xml_rd_node_value(xml);
-            if (!strcasecmp(v, "image/jpeg")) {
-                src->flags |= flags | DEVCAPS_SOURCE_FMT_JPEG;
-            } else if (!strcasecmp(v, "image/png")) {
-                src->flags |= flags | DEVCAPS_SOURCE_FMT_PNG;
-            } else if (!strcasecmp(v, "application/pdf")) {
-                src->flags |= flags | DEVCAPS_SOURCE_FMT_PDF;
+            ID_FORMAT  fmt = id_format_by_mime_name(v);
+
+            if (fmt != ID_FORMAT_UNKNOWN) {
+                src->formats |= 1 << fmt;
             }
         }
     }
