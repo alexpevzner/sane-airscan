@@ -522,6 +522,64 @@ wsd_devcaps_decode (const proto_ctx *ctx, devcaps *caps)
     return err;
 }
 
+/* Decode fault response
+ */
+static proto_result
+wsd_fault_decode (const proto_ctx *ctx)
+{
+    proto_result result = {0};
+    http_data    *data = http_query_get_response_data(ctx->query);
+    xml_rd       *xml;
+
+    /* Initialize result */
+    result.next = PROTO_OP_CHECK;
+    result.status = SANE_STATUS_IO_ERROR;
+
+    /* Parse XML */
+    result.err = xml_rd_begin(&xml, data->bytes, data->size, wsd_ns_rd);
+    if (result.err != NULL) {
+        return result;
+    }
+
+    /* Decode XML */
+    while (!xml_rd_end(xml)) {
+        const char *path = xml_rd_node_path(xml);
+
+        if (!strcmp(path, "s:Envelope/s:Body/s:Fault/s:Code/s:Subcode/s:Value")) {
+            const char *fault = xml_rd_node_value(xml);
+            const char *s;
+
+            /* Skip namespace prefix */
+            s = strchr(fault, ':');
+            if (s != NULL) {
+                fault = s + 1;
+            }
+
+            /* Decode the status */
+            log_debug(ctx->log, "fault code: %s", fault);
+
+            if (!strcmp(fault, "ServerErrorNotAcceptingJobs")) {
+                result.status = SANE_STATUS_DEVICE_BUSY;
+            } else if (!strcmp(fault, "ClientErrorNoImagesAvailable")) {
+                switch (ctx->params.src) {
+                    case ID_SOURCE_ADF_SIMPLEX:
+                    case ID_SOURCE_ADF_DUPLEX:
+                        result.status = SANE_STATUS_NO_DOCS;
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+
+        xml_rd_deep_next(xml, 0);
+    }
+
+    xml_rd_finish(&xml);
+
+    return result;
+}
+
 /* Initiate scanning
  */
 static http_query*
@@ -644,14 +702,12 @@ wsd_scan_decode (const proto_ctx *ctx)
 
     result.next = PROTO_OP_FINISH;
 
-    /* Decode CreateScanJobResponse */
-    err = http_query_error(ctx->query);
-    if (err != NULL) {
-        err = eloop_eprintf("HTTP: %s", ESTRING(err));
-        result.next = PROTO_OP_CHECK;
-        goto DONE;
+    /* Decode error, if any */
+    if (http_query_error(ctx->query) != NULL) {
+        return wsd_fault_decode(ctx);
     }
 
+    /* Decode CreateScanJobResponse */
     data = http_query_get_response_data(ctx->query);
     err = xml_rd_begin(&xml, data->bytes, data->size, wsd_ns_rd);
     if (err != NULL) {
@@ -749,15 +805,10 @@ wsd_load_decode (const proto_ctx *ctx)
 {
     proto_result result = {0};
     http_data    *data;
-    error        err;
 
     /* Check HTTP status */
-    err = http_query_error(ctx->query);
-    if (err != NULL) {
-        err = eloop_eprintf("HTTP: %s", ESTRING(err));
-        result.next = PROTO_OP_FINISH;
-        result.err = err;
-        return result;
+    if (http_query_error(ctx->query) != NULL) {
+        return wsd_fault_decode(ctx);
     }
 
     /* We expect multipart message with attached image */

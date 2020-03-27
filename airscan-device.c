@@ -374,7 +374,7 @@ device_proto_op_submit (device *dev, PROTO_OP op, void (*callback) (void*, http_
 
     log_assert(dev->log, func != NULL);
 
-    log_debug(dev->log, "submitting: %s", device_proto_op_name(dev, op));
+    log_debug(dev->log, "%s: submitting", device_proto_op_name(dev, op));
     dev->proto_op_current = op;
     q = func(&dev->proto_ctx);
     http_query_submit(q, callback);
@@ -400,6 +400,7 @@ static proto_result
 device_proto_op_decode (device *dev, PROTO_OP op)
 {
     proto_result (*func) (const proto_ctx *ctx) = NULL;
+    proto_result result;
 
     switch (op) {
     case PROTO_OP_NONE:    log_internal_error(dev->log); break;
@@ -413,8 +414,14 @@ device_proto_op_decode (device *dev, PROTO_OP op)
 
     log_assert(dev->log, func != NULL);
 
-    log_debug(dev->log, "decoding: %s", device_proto_op_name(dev, op));
-    return func(&dev->proto_ctx);
+    log_debug(dev->log, "%s: decoding", device_proto_op_name(dev, op));
+    result = func(&dev->proto_ctx);
+    log_debug(dev->log, "%s: decoded: status=\"%s\" next=%s delay=%d",
+        device_proto_op_name(dev, op),
+        sane_strstatus(result.status),
+        device_proto_op_name(dev, result.next),
+        result.delay);
+    return result;
 }
 
 /******************** HTTP operations ********************/
@@ -847,15 +854,7 @@ device_job_set_status (device *dev, SANE_Status status)
         break;
 
     default:
-        /* Ignore the error if we have received at least
-         * one image. User will get the error upon attempt
-         * to request a next image
-         */
-        if (dev->job_images_received > 0) {
-            return;
-        }
-
-        /* If error already the pending, leave it as is
+        /* If error already is pending, leave it as is
          */
         if (dev->job_status != SANE_STATUS_GOOD) {
             return;
@@ -1003,6 +1002,27 @@ device_start_do (gpointer data)
     return FALSE;
 }
 
+/* Start new scanning job
+ */
+static SANE_Status
+device_start_new_job (device *dev)
+{
+    dev->job_status = SANE_STATUS_GOOD;
+    g_free((char*) dev->proto_ctx.location);
+    dev->proto_ctx.location = NULL;
+    dev->proto_ctx.failed_attempt = 0;
+    dev->job_images_received = 0;
+
+    eloop_call(device_start_do, dev);
+
+    while (device_stm_state_get(dev) == DEVICE_STM_IDLE) {
+        eloop_cond_wait(&dev->stm_cond);
+    }
+
+    dev->flags |= DEVICE_READING;
+    return SANE_STATUS_GOOD;
+}
+
 /* Start scanning operation
  */
 SANE_Status
@@ -1023,7 +1043,12 @@ device_start (device *dev)
     pollable_reset(dev->read_pollable);
     dev->read_non_blocking = SANE_FALSE;
 
-    /* Previous job may be still running. Synchronize with it
+    /* Scanner idle? Start new job */
+    if (device_stm_state_get(dev) == DEVICE_STM_IDLE) {
+        return device_start_new_job(dev);
+    }
+
+    /* Previous job still running. Synchronize with it
      */
     while (device_stm_state_working(dev)
         && http_data_queue_len(dev->read_queue) == 0) {
@@ -1038,22 +1063,19 @@ device_start (device *dev)
         return SANE_STATUS_GOOD;
     }
 
-    /* Start new scan job */
+    /* Seems that previous job has finished.
+     * If it failed, return its status now. Otherwise, start
+     * new job
+     */
+    log_assert (dev->log, device_stm_state_get(dev) == DEVICE_STM_DONE);
+
     device_stm_state_set(dev, DEVICE_STM_IDLE);
-    dev->job_status = SANE_STATUS_GOOD;
-    g_free((char*) dev->proto_ctx.location);
-    dev->proto_ctx.location = NULL;
-    dev->proto_ctx.failed_attempt = 0;
-    dev->job_images_received = 0;
-
-    eloop_call(device_start_do, dev);
-
-    while (device_stm_state_get(dev) == DEVICE_STM_IDLE) {
-        eloop_cond_wait(&dev->stm_cond);
+    if (dev->job_status != SANE_STATUS_GOOD) {
+        return dev->job_status;
     }
 
-    dev->flags |= DEVICE_READING;
-    return SANE_STATUS_GOOD;
+    /* Start new scan job */
+    return device_start_new_job(dev);
 }
 
 /* Cancel scanning operation
@@ -1325,7 +1347,7 @@ DONE:
     dev->read_line_buf = NULL;
 
     if (device_stm_state_get(dev) == DEVICE_STM_DONE &&
-        http_data_queue_len(dev->read_queue) == 0) {
+        (status != SANE_STATUS_EOF || dev->job_status == SANE_STATUS_GOOD)) {
         device_stm_state_set(dev, DEVICE_STM_IDLE);
     }
 
