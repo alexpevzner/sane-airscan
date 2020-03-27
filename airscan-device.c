@@ -137,7 +137,7 @@ static void
 device_stm_state_set (device *dev, DEVICE_STM_STATE state);
 
 static bool
-device_stm_cancel_perform (device *dev);
+device_stm_cancel_perform (device *dev, SANE_Status status);
 
 static void
 device_stm_op_callback (void *ptr, http_query *q);
@@ -444,9 +444,8 @@ device_http_onerror (void *ptr, error err) {
     device *dev = ptr;
 
     log_debug(dev->log, ESTRING(err));
-    device_job_set_status(dev, SANE_STATUS_IO_ERROR);
 
-    if (!device_stm_cancel_perform(dev)) {
+    if (!device_stm_cancel_perform(dev, SANE_STATUS_IO_ERROR)) {
         device_stm_state_set(dev, DEVICE_STM_DONE);
     }
 }
@@ -571,13 +570,13 @@ device_stm_state_set (device *dev, DEVICE_STM_STATE state)
 /* Perform cancel, if possible
  */
 static bool
-device_stm_cancel_perform (device *dev)
+device_stm_cancel_perform (device *dev, SANE_Status status)
 {
+    device_job_set_status(dev, status);
     if (dev->proto_ctx.location != NULL) {
         device_http_cancel(dev);
         device_stm_state_set(dev, DEVICE_STM_CANCELLING);
         device_proto_op_submit(dev, PROTO_OP_CANCEL, device_stm_op_callback);
-        device_job_set_status(dev, SANE_STATUS_CANCELLED);
         return true;
     }
 
@@ -592,7 +591,7 @@ device_stm_cancel_event_callback (void *data)
     device *dev = data;
 
     log_debug(dev->log, "cancel requested");
-    if (!device_stm_cancel_perform(dev)) {
+    if (!device_stm_cancel_perform(dev, SANE_STATUS_CANCELLED)) {
         device_stm_state_set(dev, DEVICE_STM_CANCEL_WAIT);
     }
 }
@@ -673,7 +672,7 @@ device_stm_op_callback (void *ptr, http_query *q)
 
     /* Handle delayed cancellation */
     if (device_stm_state_get(dev) == DEVICE_STM_CANCEL_WAIT) {
-        if (!device_stm_cancel_perform(dev)) {
+        if (!device_stm_cancel_perform(dev, SANE_STATUS_CANCELLED)) {
             device_stm_state_set(dev, DEVICE_STM_DONE);
         }
         return;
