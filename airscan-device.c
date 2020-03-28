@@ -1067,13 +1067,15 @@ device_start (device *dev)
     }
 
     /* Seems that previous job has finished.
-     * If it failed, return its status now. Otherwise, start
-     * new job
+     *
+     * If it failed by itself (but not cancelled), return its status now.
+     * Otherwise, start new job
      */
     log_assert (dev->log, device_stm_state_get(dev) == DEVICE_STM_DONE);
 
     device_stm_state_set(dev, DEVICE_STM_IDLE);
-    if (dev->job_status != SANE_STATUS_GOOD) {
+    if (dev->job_status != SANE_STATUS_GOOD &&
+        dev->job_status != SANE_STATUS_CANCELLED) {
         dev->flags &= ~DEVICE_SCANNING;
         return dev->job_status;
     }
