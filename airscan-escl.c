@@ -694,13 +694,15 @@ escl_decode_scanner_status (const proto_ctx *ctx,
     }
 
     /* Decode Job status */
-    if (device_status != SANE_STATUS_GOOD &&
-        device_status != SANE_STATUS_UNSUPPORTED) {
-        status = device_status;
-    } else if (ctx->params.src == ID_SOURCE_PLATEN) {
+    if (ctx->params.src != ID_SOURCE_PLATEN &&
+        adf_status != SANE_STATUS_GOOD &&
+        adf_status != SANE_STATUS_UNSUPPORTED) {
+        status = adf_status;
+    } else if ( device_status != SANE_STATUS_GOOD &&
+                device_status != SANE_STATUS_UNSUPPORTED) {
         status = device_status;
     } else {
-        status = adf_status;
+        status = SANE_STATUS_IO_ERROR;
     }
 
 DONE:
@@ -709,7 +711,6 @@ DONE:
     trace_printf(log_ctx_trace(ctx->log), "-----");
     if (err != NULL) {
         trace_printf(log_ctx_trace(ctx->log), "Error: %s", ESTRING(err));
-        status = SANE_STATUS_IO_ERROR;
     } else {
         trace_printf(log_ctx_trace(ctx->log), "Device status: %s",
             sane_strstatus(device_status));
