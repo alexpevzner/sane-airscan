@@ -28,16 +28,15 @@
 /* TIFF image decoder
  */
 typedef struct {
-    image_decoder                 decoder;   /* Base class */
-    TIFF*                         tif;       /* libtiff decoder */
-    int                           num_lines; /* Num of lines left to read */
+    image_decoder                 decoder;      /* Base class */
+    TIFF*                         tif;          /* libtiff decoder */
+    int                           num_lines;    /* Num of lines left to read */
     int                           current_line; /* Current of lines */
-    unsigned char                *mem_file; /* Position of the beginning
-                                               of the tiff file. */
-    toff_t                         offset_file; /* Moving the start position 
-                                                  of the tiff file. */
-    tsize_t                        size_file; /* Size of the tiff file. */
-    
+    unsigned char                *mem_file;     /* Position of the beginning
+                                                   of the tiff file. */
+    toff_t                        offset_file;  /* Moving the start position
+                                                   of the tiff file. */
+    tsize_t                       size_file;    /* Size of the tiff file. */
 } image_decoder_tiff;
 
 static void
@@ -49,7 +48,7 @@ airscan_dummy_unmap_proc (thandle_t fd, tdata_t base, toff_t size)
 }
 
 static int
-airscan_dummy_map_proc (thandle_t fd, tdata_t* pbase, toff_t* psize) 
+airscan_dummy_map_proc (thandle_t fd, tdata_t* pbase, toff_t* psize)
 {
     (void)fd;
     (void)pbase;
@@ -58,7 +57,7 @@ airscan_dummy_map_proc (thandle_t fd, tdata_t* pbase, toff_t* psize)
     return (0);
 }
 
-static tsize_t 
+static tsize_t
 airscan_read_proc(thandle_t handle, tdata_t data, tsize_t n)
 {
     tsize_t n_remaining, n_copy;
@@ -75,10 +74,10 @@ airscan_read_proc(thandle_t handle, tdata_t data, tsize_t n)
         n_remaining = 0;
     else
         n_remaining = tiff->size_file - tiff->offset_file;
-    
+
     if(n_copy > n_remaining)
         n_copy = n_remaining;
-    
+
     /* EOF, return immediately */
     if(n_copy <= 0)
         return (0);
@@ -211,7 +210,7 @@ image_decoder_tiff_reset (image_decoder *decoder)
 static int
 image_decoder_tiff_get_bytes_per_pixel (image_decoder *decoder)
 {
-	int componment = 0;
+    int componment = 0;
     image_decoder_tiff *tiff = (image_decoder_tiff*) decoder;
     TIFFGetField(tiff->tif, TIFFTAG_SAMPLESPERPIXEL, &componment);
     return componment;
@@ -222,12 +221,12 @@ image_decoder_tiff_get_bytes_per_pixel (image_decoder *decoder)
 static void
 image_decoder_tiff_get_params (image_decoder *decoder, SANE_Parameters *params)
 {
-	int w, h, componment;
+    int w, h, componment;
     image_decoder_tiff *tiff = (image_decoder_tiff*) decoder;
     TIFFGetField(tiff->tif, TIFFTAG_IMAGEWIDTH, &w);
     TIFFGetField(tiff->tif, TIFFTAG_IMAGELENGTH, &h);
     TIFFGetField(tiff->tif, TIFFTAG_SAMPLESPERPIXEL, &componment);
-    
+
     params->last_frame = SANE_TRUE;
     params->pixels_per_line = w;
     params->lines = h;
