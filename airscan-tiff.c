@@ -46,7 +46,6 @@ airscan_dummy_unmap_proc (thandle_t fd, tdata_t base, toff_t size)
     (void)fd;
     (void)base;
     (void)size;
-    printf("airscan_write_proc: This function is not useful. Defined out of necessity..\n");
 }
 
 static int
@@ -56,7 +55,6 @@ airscan_dummy_map_proc (thandle_t fd, tdata_t* pbase, toff_t* psize)
     (void)pbase;
     (void)psize;
 
-    printf("airscan_write_proc: This function is not useful. Defined out of necessity..\n");
     return (0);
 }
 
@@ -69,10 +67,7 @@ airscan_read_proc(thandle_t handle, tdata_t data, tsize_t n)
 
     /* Pointer to the memory file */
     tiff = (image_decoder_tiff*)(handle);
-    if(!tiff || !tiff->mem_file) {
-        fprintf(stderr, "airscan_read_proc: !tiff || !tiff->mem_file!\n");
-        return 0;
-    }
+    log_assert(NULL, tiff != NULL && tiff->mem_file != NULL);
 
     /* find the actual number of bytes to read (copy) */
     n_copy = n;
@@ -100,8 +95,7 @@ airscan_write_proc(thandle_t handle, tdata_t data, tsize_t n)
     (void)handle;
     (void)data;
     (void)n;
-    
-    printf("airscan_write_proc: This function is not useful. Defined out of necessity..\n");
+
     return (-1);
 }
 
@@ -113,10 +107,7 @@ airscan_seek_proc (thandle_t handle, toff_t ofs, int whence)
 
     /* Pointer to the memory file */
     tiff = (image_decoder_tiff*)(handle);
-    if(!tiff || !tiff->mem_file) {
-        fprintf(stderr, "airscan_seek_proc: !tiff || !tiff->mem_file!\n");
-        return (-1);
-    }
+    log_assert(NULL, tiff != NULL && tiff->mem_file != NULL);
 
     /* find the location we plan to seek to */
     switch (whence) {
@@ -128,9 +119,7 @@ airscan_seek_proc (thandle_t handle, toff_t ofs, int whence)
             break;
         default:
             /* Not supported */
-            fprintf(stderr, 
-                "airscan_seek_proc: "
-                "Unsupported TIFF SEEK type.\n");
+            log_internal_error(NULL);
             return (-1);
     }
 
@@ -146,16 +135,13 @@ airscan_close_proc (thandle_t handle)
 
     /* Pointer to the memory file */
     tiff = (image_decoder_tiff*)(handle);
-    if(!tiff || !tiff->mem_file) {
-        fprintf(stderr,"airscan_close_proc: !tiff || !tiff->mem_file!\n");
-        return (0);
-    }
-    
+    log_assert(NULL, tiff != NULL && tiff->mem_file != NULL);
+
     /* Close the memory file */
     tiff->mem_file    = NULL;
     tiff->offset_file = 0;
     tiff->size_file   = 0;
-    
+
     return (0);
 }
 
@@ -166,10 +152,7 @@ airscan_size_proc (thandle_t handle)
 
     /* Pointer to the memory file */
     tiff = (image_decoder_tiff*)(handle);
-    if(!tiff || !tiff->mem_file) {
-        fprintf(stderr,"airscan_size_proc: !tiff || !tiff->mem_file!\n");
-        return (0);
-    }
+    log_assert(NULL, tiff != NULL && tiff->mem_file != NULL);
 
     /* return size */
     return (toff_t)(tiff->size_file);
