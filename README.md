@@ -123,6 +123,19 @@ cd sane-airscan
 make
 make install
 ```
+### Contribution
+
+If you want to contribute to this project, consider using the following
+branch:
+
+https://github.com/alexpevzner/sane-airscan-wsd
+
+All new features should go there. Here I can accept only bug fixing
+and packaging changes.
+
+Changes from the sane-airscan-wsd branch will be periodically merged into
+the sane-airscan. Next merge expected to happen before middle of April 2020.
+
 ### Code Quality
 I greatly appreciate a good static code analysis tools, as they help to maintain
 a high code quality.
