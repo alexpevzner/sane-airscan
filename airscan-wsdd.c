@@ -50,7 +50,8 @@ struct wsdd_xaddr {
  */
 typedef struct wsdd_host wsdd_host;
 struct wsdd_host {
-    const char        *address;     /* Device "address" in WS-SD sence */
+    const char        *address;     /* Device "address" in WS-SD sense */
+    uuid              uuid;         /* Device UUID */
     const char        *model;       /* Model name */
     wsdd_xaddr        *xaddrs;      /* Discovered transport addresses */
     zeroconf_endpoint *endpoints;   /* Discovered endpoints */
@@ -211,6 +212,10 @@ wsdd_host_new (const char *address)
 {
     wsdd_host *host = g_new0(wsdd_host, 1);
     host->address = g_strdup(address);
+    host->uuid = uuid_parse(address);
+    if (!uuid_valid(host->uuid)) {
+        host->uuid = uuid_hash(address);
+    }
     host->http_client = http_client_new (wsdd_log, host);
     return host;
 }
@@ -441,6 +446,7 @@ DONE:
 
         host->endpoints = zeroconf_endpoint_list_sort_dedup(host->endpoints);
         log_debug(wsdd_log, "\"%s\": address: %s", host->model, host->address);
+        log_debug(wsdd_log, "\"%s\": uuid: %s", host->model, host->uuid.text);
         log_debug(wsdd_log, "\"%s\": discovered endpoints:", host->model);
         for (endpoint = host->endpoints; endpoint != NULL;
             endpoint = endpoint->next) {

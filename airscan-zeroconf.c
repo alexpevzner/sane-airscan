@@ -39,7 +39,7 @@ typedef struct zeroconf_devstate zeroconf_devstate;
 struct zeroconf_devstate {
     const char        *name;       /* Device name */
     const char        *model;      /* Model name */
-    const char        *uuid;       /* Device UUID */
+    uuid              uuid;        /* Device UUID */
     ID_PROTO          proto;       /* Protocol in use */
     GPtrArray         *resolvers;  /* Pending resolvers */
     zeroconf_endpoint *endpoints;  /* Discovered endpoints */
@@ -150,7 +150,6 @@ zeroconf_devstate_free (zeroconf_devstate *devstate)
 {
     g_free((char*) devstate->name);
     g_free((char*) devstate->model);
-    g_free((char*) devstate->uuid);
 
     if (devstate->initscan && !devstate->ready) {
         zeroconf_initscan_dec();
@@ -544,10 +543,10 @@ zeroconf_avahi_resolver_callback (AvahiServiceResolver *r,
             }
         }
 
-        if (devstate->uuid == NULL) {
+        if (!uuid_valid(devstate->uuid)) {
             AvahiStringList *uuid = avahi_string_list_find(txt, "uuid");
             if (uuid != NULL && uuid->size > 5) {
-                devstate->uuid = g_strdup((char*) (uuid->text + 5));
+                devstate->uuid = uuid_parse((const char*) uuid->text + 5);
             }
         }
 
@@ -571,12 +570,17 @@ zeroconf_avahi_resolver_callback (AvahiServiceResolver *r,
             devstate->model = g_strdup(name);
         }
 
+        if (!uuid_valid(devstate->uuid)) {
+            /* Paranoia too */
+            devstate->uuid = uuid_hash(devstate->name);
+        }
+
         if (conf.dbg_enabled) {
             zeroconf_endpoint *endpoint;
             int               i = 1;
 
             log_debug(NULL, "MDNS: \"%s\" model: \"%s\"", name, devstate->model);
-            log_debug(NULL, "MDNS: \"%s\" uuid: %s", name, devstate->uuid);
+            log_debug(NULL, "MDNS: \"%s\" uuid: %s", name, devstate->uuid.text);
             log_debug(NULL, "MDNS: \"%s\" endpoints:", name);
 
             for (endpoint = devstate->endpoints; endpoint != NULL;
