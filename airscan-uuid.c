@@ -10,29 +10,104 @@
 
 #include <ctype.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/random.h>
 
 #pragma GCC diagnostic ignored "-Wunused-result"
 
-/* Generate new random UUID. Generated UUID has a following form:
+/* Invalid uuid
+ */
+static uuid uuid_invalid;
+
+/* Format UUID from 16-byte binary representation into
+ * the following form:
  *    urn:uuid:ede05377-460e-4b4a-a5c0-423f9e02e8fa
  */
-uuid
-uuid_new (void)
+static uuid
+uuid_format (uint8_t in[16])
 {
-    unsigned char rnd[16];
-    uuid          u;
+    uuid u;
 
-    getrandom(rnd, sizeof(rnd), 0);
-
-    // urn:uuid:ede05377-460e-4b4a-a5c0-423f9e02e8fa
     sprintf(u.text,
         "urn:uuid:"
         "%.2x%.2x%.2x%.2x-%.2x%.2x-%.2x%.2x-%.2x%.2x-%.2x%.2x%.2x%.2x%.2x%.2x",
-        rnd[0], rnd[1], rnd[2], rnd[3], rnd[4], rnd[5], rnd[6], rnd[7],
-        rnd[8], rnd[9], rnd[10], rnd[11], rnd[12], rnd[13], rnd[14], rnd[15]);
+        in[0], in[1], in[2], in[3], in[4], in[5], in[6], in[7],
+        in[8], in[9], in[10], in[11], in[12], in[13], in[14], in[15]);
 
     return u;
+}
+
+/* Generate random UUID. Generated UUID has a following form:
+ *    urn:uuid:ede05377-460e-4b4a-a5c0-423f9e02e8fa
+ */
+uuid
+uuid_rand (void)
+{
+    uint8_t rnd[16];
+
+    getrandom(rnd, sizeof(rnd), 0);
+    return uuid_format(rnd);
+}
+
+/* Parse UUID. This function ignores all "decorations", like
+ * urn:uuid: prefix and so on, and takes only hexadecimal digits
+ * into considerations
+ *
+ * Check the returned uuid with uuid_valid() for possible parse errors
+ */
+uuid
+uuid_parse (const char *in)
+{
+    uint8_t       buf[16];
+    unsigned int  cnt = 0;
+    unsigned char c;
+
+    while ((c = *in ++) != '\0') {
+        if (isxdigit(c)) {
+            unsigned int v;
+
+            if (cnt == 32) {
+                return uuid_invalid;
+            }
+
+            if (isdigit(c)) {
+                v = c - '0';
+            } else if (isupper(c)) {
+                v = c - 'A' + 10;
+            } else {
+                v = c - 'a' + 10;
+            }
+
+            if ((cnt & 1) == 0) {
+                buf[cnt / 2] = v << 4;
+            } else {
+                buf[cnt / 2] |= v;
+            }
+        }
+    }
+
+    if (cnt != 32) {
+        return uuid_invalid;
+    }
+
+    return uuid_format(buf);
+}
+
+/* Generate uuid by cryptographically cacheing input string
+ */
+uuid
+uuid_hash (const char *s)
+{
+    GChecksum *checksum = g_checksum_new(G_CHECKSUM_SHA256);
+    uint8_t   buf[32];
+    gsize     len = sizeof(buf);
+
+    log_assert(NULL, checksum != NULL);
+    g_checksum_update(checksum, (const void*) s, strlen(s));
+    g_checksum_get_digest(checksum, buf, &len);
+    g_checksum_free(checksum);
+
+    return uuid_format(buf);
 }
 
 /* Compare two UUID strings. This function ignores all "decorations",

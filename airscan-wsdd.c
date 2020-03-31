@@ -455,7 +455,7 @@ DONE:
 static void
 wsdd_host_get_metadata (wsdd_host *host, int ifindex, wsdd_xaddr *xaddr)
 {
-    uuid       u = uuid_new();
+    uuid       u = uuid_rand();
     http_query *q;
 
     log_trace(wsdd_log, "querying metadata from %s", http_uri_str(xaddr->uri));
@@ -763,7 +763,7 @@ wsdd_resolver_timer_set (wsdd_resolver *resolver)
 static void
 wsdd_resolver_send_probe (wsdd_resolver *resolver)
 {
-    uuid            u = uuid_new();
+    uuid            u = uuid_rand();
     int             n = sprintf(wsdd_buf, wsdd_probe_template, u.text);
     int             rc;
     struct sockaddr *addr;

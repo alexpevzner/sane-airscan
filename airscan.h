@@ -826,11 +826,33 @@ typedef struct {
     char text[sizeof("urn:uuid:ede05377-460e-4b4a-a5c0-423f9e02e8fa")];
 } uuid;
 
-/* Generate new random UUID. Generated UUID has a following form:
+/* Check if uuid is valid
+ */
+static inline bool
+uuid_valid (uuid u)
+{
+    return u.text[0] != '\0';
+}
+
+/* Generate random UUID. Generated UUID has a following form:
  *    urn:uuid:ede05377-460e-4b4a-a5c0-423f9e02e8fa
  */
 uuid
-uuid_new (void);
+uuid_rand (void);
+
+/* Parse UUID. This function ignores all "decorations", like
+ * urn:uuid: prefix and so on, and takes only hexadecimal digits
+ * into considerations
+ *
+ * Check the returned uuid with uuid_valid() for possible parse errors
+ */
+uuid
+uuid_parse (const char *in);
+
+/* Generate uuid by cryptographically cacheing input string
+ */
+uuid
+uuid_hash (const char *s);
 
 /* Compare two UUID strings. This function ignores all "decorations",
  * line urn:uuid: prefix and so on, and takes only hexadecimal numbers

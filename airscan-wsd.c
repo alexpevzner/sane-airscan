@@ -75,7 +75,7 @@ wsd_http_post (const proto_ctx *ctx, char *body)
 static void
 wsd_make_request_header (xml_wr *xml, const char *action)
 {
-    uuid   u = uuid_new();
+    uuid   u = uuid_rand();
 
     xml_wr_enter(xml, "s:Header");
     xml_wr_add_text(xml, "a:MessageID", u.text);
