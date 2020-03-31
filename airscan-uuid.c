@@ -62,6 +62,14 @@ uuid_parse (const char *in)
     unsigned int  cnt = 0;
     unsigned char c;
 
+    if (!strncasecmp(in, "urn:", 4)) {
+        in += 4;
+    }
+
+    if (!strncasecmp(in, "uuid:", 5)) {
+        in += 5;
+    }
+
     while ((c = *in ++) != '\0') {
         if (isxdigit(c)) {
             unsigned int v;
@@ -83,6 +91,8 @@ uuid_parse (const char *in)
             } else {
                 buf[cnt / 2] |= v;
             }
+
+            cnt ++;
         }
     }
 
