@@ -60,7 +60,7 @@ typedef enum {
  */
 struct device {
     /* Common part */
-    const char           *name;                /* Device name */
+    zeroconf_devinfo     *devinfo;             /* Device info */
     log_ctx              *log;                 /* Logging context */
     unsigned int         flags;                /* Device flags */
     devopt               opt;                  /* Device options */
@@ -77,7 +77,6 @@ struct device {
     PROTO_OP             proto_op_current; /* Current operation */
 
     /* I/O handling (AVAHI and HTTP) */
-    zeroconf_endpoint    *endpoints;        /* Device endpoints */
     zeroconf_endpoint    *endpoint_current; /* Current endpoint to probe */
 
     /* Scanning state machinery */
@@ -109,7 +108,7 @@ static GPtrArray *device_table;
 /* Forward declarations
  */
 static device*
-device_find (const char *name);
+device_find_by_ident (const char *ident);
 
 static void
 device_http_cancel (device *dev);
@@ -153,7 +152,7 @@ device_management_start_stop (bool start);
  * May fail. At this case, NULL will be returned and status will be set
  */
 static device*
-device_new (const char *name, zeroconf_endpoint *endpoints)
+device_new (zeroconf_devinfo *devinfo)
 {
     device            *dev;
     zeroconf_endpoint *ep;
@@ -161,8 +160,8 @@ device_new (const char *name, zeroconf_endpoint *endpoints)
     /* Create device */
     dev = g_new0(device, 1);
 
-    dev->name = g_strdup(name);
-    dev->log = log_ctx_new(dev->name);
+    dev->devinfo = devinfo;
+    dev->log = log_ctx_new(dev->devinfo->name);
 
     log_debug(dev->log, "device created");
 
@@ -180,9 +179,7 @@ device_new (const char *name, zeroconf_endpoint *endpoints)
     dev->read_queue = http_data_queue_new();
 
     /* Initialize device I/O */
-    dev->endpoints = endpoints;
-
-    for (ep = dev->endpoints; ep != NULL; ep = ep->next) {
+    for (ep = dev->devinfo->endpoints; ep != NULL; ep = ep->next) {
         if (ep->proto == ID_PROTO_ESCL) {
             http_uri_fix_end_slash(ep->uri);
         }
@@ -219,8 +216,6 @@ device_free (device *dev)
 
     devopt_cleanup(&dev->opt);
 
-    zeroconf_endpoint_list_free(dev->endpoints);
-
     http_client_free(dev->proto_ctx.http);
     g_free((char*) dev->proto_ctx.location);
 
@@ -232,7 +227,7 @@ device_free (device *dev)
 
     log_debug(dev->log, "device destroyed");
     log_ctx_free(dev->log);
-    g_free((void*) dev->name);
+    zeroconf_devinfo_free(dev->devinfo);
     g_free(dev);
 }
 
@@ -243,7 +238,7 @@ device_start_probing (gpointer data)
 {
     device      *dev = data;
 
-    device_probe_endpoint(dev, dev->endpoints);
+    device_probe_endpoint(dev, dev->devinfo->endpoints);
 
     return FALSE;
 }
@@ -266,16 +261,16 @@ device_io_start (device *dev)
     return SANE_STATUS_GOOD;
 }
 
-/* Find device in a table
+/* Find device by ident
  */
 static device*
-device_find (const char *name)
+device_find_by_ident (const char *ident)
 {
     unsigned int i;
 
     for (i = 0; i < device_table->len; i ++) {
         device *dev = g_ptr_array_index(device_table, i);
-        if (!strcmp(dev->name, name)) {
+        if (!strcmp(dev->devinfo->uuid.text, ident)) {
             return dev;
         }
     }
@@ -883,37 +878,37 @@ device_log_ctx (device *dev)
 /* Open a device
  */
 device*
-device_open (const char *name, SANE_Status *status)
+device_open (const char *ident, SANE_Status *status)
 {
-    device            *dev = NULL;
-    zeroconf_endpoint *endpoints;
+    device           *dev = NULL;
+    zeroconf_devinfo *devinfo;
 
     *status = SANE_STATUS_GOOD;
 
     /* Validate arguments */
-    if (name == NULL || *name == '\0') {
+    if (ident == NULL || *ident == '\0') {
         log_debug(dev->log, "device_open: invalid name");
         *status = SANE_STATUS_INVAL;
         return NULL;
     }
 
     /* Already opened? */
-    dev = device_find(name);
+    dev = device_find_by_ident(ident);
     if (dev) {
         *status = SANE_STATUS_DEVICE_BUSY;
         return NULL;
     }
 
     /* Obtain device endpoints */
-    endpoints = zeroconf_device_lookup(name);
-    if (endpoints == NULL) {
-        log_debug(dev->log, "device_open: device not found");
+    devinfo = zeroconf_devinfo_lookup(ident);
+    if (devinfo == NULL) {
+        log_debug(NULL, "device_open(%s): device not found", ident);
         *status = SANE_STATUS_INVAL;
         return NULL;
     }
 
     /* Create a device */
-    dev = device_new(name, endpoints);
+    dev = device_new(devinfo);
     *status = device_io_start(dev);
     if (*status != SANE_STATUS_GOOD) {
         device_free(dev);

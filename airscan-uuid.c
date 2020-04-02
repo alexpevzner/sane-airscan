@@ -3,7 +3,7 @@
  * Copyright (C) 2019 and up by Alexander Pevzner (pzz@apevzner.com)
  * See LICENSE for license terms and conditions
  *
- * UUID generator
+ * UUID utilities
  */
 
 #include "airscan.h"
@@ -118,33 +118,6 @@ uuid_hash (const char *s)
     g_checksum_free(checksum);
 
     return uuid_format(buf);
-}
-
-/* Compare two UUID strings. This function ignores all "decorations",
- * line urn:uuid: prefix and so on, and takes only hexadecimal numbers
- * into considerations, so it can be used to compare UUIDs represented
- * in different formats.
- */
-bool
-uuid_equal (const char *s1, const char *s2)
-{
-    unsigned char c1, c2;
-
-    do {
-        while ((c1 = *s1) != '\0' && !isxdigit(c1)) {
-            s1 ++;
-        }
-
-        while ((c2 = *s2) != '\0' && !isxdigit(c2)) {
-            s2 ++;
-        }
-
-        if (toupper(c1) != toupper(c2)) {
-            return false;
-        }
-    } while (c1 != '\0');
-
-    return true;
 }
 
 /* vim:ts=8:sw=4:et

@@ -15,8 +15,9 @@
 #include <sane/saneopts.h>
 
 #include <math.h>
-#include <stdio.h>
 #include <stdbool.h>
+#include <stdio.h>
+#include <string.h>
 
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -59,6 +60,165 @@ typedef struct http_uri http_uri;
 #define OUTER_STRUCT(member_p,struct_t,field)                            \
     ((struct_t*)((char*)(member_p) - ((ptrdiff_t) &(((struct_t*) 0)->field))))
 
+
+/******************** Circular Linked Lists ********************/
+/* ll_node represents a linked data node.
+ * Data nodes are embedded into the corresponding data structures:
+ *   struct data {
+ *       ll_node chain; // Linked list chain
+ *       ...
+ *   };
+ *
+ * Use OUTER_STRUCT() macro to obtain pointer to containing
+ * structure from the pointer to the list node
+ */
+typedef struct ll_node ll_node;
+struct ll_node {
+    ll_node *ll_prev, *ll_next;
+};
+
+/* ll_head represents a linked list head node
+ * ll_head must be initialized before use with ll_init() function
+ */
+typedef struct {
+    ll_node node;
+} ll_head;
+
+/* Initialize list head
+ */
+static inline void
+ll_init (ll_head *head)
+{
+    head->node.ll_next = head->node.ll_prev = &head->node;
+}
+
+/* Check if list is empty
+ */
+static inline bool
+ll_empty (const ll_head *head)
+{
+    return head->node.ll_next == &head->node;
+}
+
+/* Push node to the end of the list, represented
+ * by its head node
+ */
+static inline void
+ll_push_end (ll_head *head, ll_node *node)
+{
+    node->ll_prev = head->node.ll_prev;
+    node->ll_next = &head->node;
+    head->node.ll_prev->ll_next = node;
+    head->node.ll_prev = node;
+}
+
+/* Push node to the beginning of the list, represented
+ * by its head node
+ */
+static inline void
+ll_push_beg (ll_head *head, ll_node *node)
+{
+    node->ll_next = head->node.ll_next;
+    node->ll_prev = &head->node;
+    head->node.ll_next->ll_prev = node;
+    head->node.ll_next = node;
+}
+
+/* Delete node from the list
+ */
+static inline void
+ll_del (ll_node *node)
+{
+    node->ll_prev->ll_next = node->ll_next;
+    node->ll_next->ll_prev = node->ll_prev;
+
+    /* Make double-delete safe */
+    node->ll_next = node->ll_prev = node;
+}
+
+/* Pop node from the beginning of the list.
+ * Returns NULL if list is empty
+ */
+static inline ll_node*
+ll_pop_beg (ll_head *head)
+{
+    ll_node *node;
+
+    if (ll_empty(head)) {
+        return NULL;
+    }
+
+    node = head->node.ll_next;
+    ll_del(node);
+
+    return node;
+}
+
+/* Pop node from the end of the list.
+ * Returns NULL if list is empty
+ */
+static inline ll_node*
+ll_pop_end (ll_head *head)
+{
+    ll_node *node;
+
+    if (ll_empty(head)) {
+        return NULL;
+    }
+
+    node = head->node.ll_prev;
+    ll_del(node);
+
+    return node;
+}
+
+/* Get next (from the beginning to the end) node of
+ * the list. Returns NULL, if end of list is reached
+ */
+static inline ll_node*
+ll_next (ll_head *head, ll_node *node)
+{
+    node = node->ll_next;
+    return node == &head->node ? NULL : node;
+}
+
+/* Get previous (from the beginning to the end) node of
+ * the list. Returns NULL, if end of list is reached
+ */
+static inline ll_node*
+ll_prev (ll_head *head, ll_node *node)
+{
+    node = node->ll_prev;
+    return node == &head->node ? NULL : node;
+}
+
+/* Get first node of the list.
+ * Returns NULL if list is empty
+ */
+static inline ll_node*
+ll_first (ll_head *head)
+{
+    return ll_next(head, &head->node);
+}
+
+/* Get last node of the list.
+ * Returns NULL if list is empty
+ */
+static inline ll_node*
+ll_last (ll_head *head)
+{
+    return ll_prev(head, &head->node);
+}
+
+/* Helper macro for list iteration.
+ * Usage:
+ *   for (LL_FOR_EACH(node, list)) {
+ *     // do something with the node
+ *   }
+ */
+#define LL_FOR_EACH(node,list)                          \
+    node = ll_first(list); node != NULL; node = ll_next(list, node)
+
 /******************** Error handling ********************/
 /* Type error represents an error. Its value either NULL,
  * which indicates "no error" condition, or some opaque
@@ -94,7 +254,9 @@ ESTRING (error err)
 typedef enum {
     ID_PROTO_UNKNOWN = -1,
     ID_PROTO_ESCL,
-    ID_PROTO_WSD
+    ID_PROTO_WSD,
+
+    NUM_ID_PROTO
 } ID_PROTO;
 
 /* id_proto_name returns protocol name
@@ -177,6 +339,52 @@ id_format_mime_name (ID_FORMAT id);
 ID_FORMAT
 id_format_by_mime_name (const char *name);
 
+/******************** UUID utilities ********************/
+/* Type uuid represents a random UUID string.
+ *
+ * It is wrapped into struct, so it can be returned
+ * by value, without need to mess with memory allocation
+ */
+typedef struct {
+    char text[sizeof("urn:uuid:ede05377-460e-4b4a-a5c0-423f9e02e8fa")];
+} uuid;
+
+/* Check if uuid is valid
+ */
+static inline bool
+uuid_valid (uuid u)
+{
+    return u.text[0] != '\0';
+}
+
+/* Generate random UUID. Generated UUID has a following form:
+ *    urn:uuid:ede05377-460e-4b4a-a5c0-423f9e02e8fa
+ */
+uuid
+uuid_rand (void);
+
+/* Parse UUID. This function ignores all "decorations", like
+ * urn:uuid: prefix and so on, and takes only hexadecimal digits
+ * into considerations
+ *
+ * Check the returned uuid with uuid_valid() for possible parse errors
+ */
+uuid
+uuid_parse (const char *in);
+
+/* Generate uuid by cryptographically cacheing input string
+ */
+uuid
+uuid_hash (const char *s);
+
+/* Compare two uuids
+ */
+static inline bool
+uuid_equal (uuid u1, uuid u2)
+{
+    return !strcmp(u1.text, u2.text);
+}
+
 /******************** Configuration file loader ********************/
 /* Device URI for manually disabled device
  */
@@ -187,6 +395,7 @@ id_format_by_mime_name (const char *name);
 typedef struct conf_device conf_device;
 struct conf_device {
     const char  *name; /* Device name */
+    uuid        uuid;  /* uuid_hash(name) */
     ID_PROTO    proto; /* Protocol to use */
     http_uri    *uri;  /* Device URI, parsed; NULL if device disabled */
     conf_device *next; /* Next device in the list */
@@ -816,52 +1025,6 @@ http_init (void);
 void
 http_cleanup (void);
 
-/******************** UUID generator ********************/
-/* Type uuid represents a random UUID string.
- *
- * It is wrapped into struct, so it can be returned
- * by value, without need to mess with memory allocation
- */
-typedef struct {
-    char text[sizeof("urn:uuid:ede05377-460e-4b4a-a5c0-423f9e02e8fa")];
-} uuid;
-
-/* Check if uuid is valid
- */
-static inline bool
-uuid_valid (uuid u)
-{
-    return u.text[0] != '\0';
-}
-
-/* Generate random UUID. Generated UUID has a following form:
- *    urn:uuid:ede05377-460e-4b4a-a5c0-423f9e02e8fa
- */
-uuid
-uuid_rand (void);
-
-/* Parse UUID. This function ignores all "decorations", like
- * urn:uuid: prefix and so on, and takes only hexadecimal digits
- * into considerations
- *
- * Check the returned uuid with uuid_valid() for possible parse errors
- */
-uuid
-uuid_parse (const char *in);
-
-/* Generate uuid by cryptographically cacheing input string
- */
-uuid
-uuid_hash (const char *s);
-
-/* Compare two UUID strings. This function ignores all "decorations",
- * line urn:uuid: prefix and so on, and takes only hexadecimal numbers
- * into considerations, so it can be used to compare UUIDs represented
- * in different formats.
- */
-bool
-uuid_equal (const char *s1, const char *s2);
-
 /******************** Protocol trace ********************/
 /* Type trace represents an opaque handle of trace
  * file
@@ -1378,8 +1541,16 @@ typedef struct zeroconf_endpoint zeroconf_endpoint;
 struct zeroconf_endpoint {
     ID_PROTO          proto;     /* The protocol */
     http_uri          *uri;      /* I.e, "http://192.168.1.1:8080/eSCL/" */
-    zeroconf_endpoint *next;     /* Next address in the list */
+    zeroconf_endpoint *next;     /* Next endpoint in the list */
 };
+
+/* zeroconf_devinfo represents a device information
+ */
+typedef struct {
+    uuid              uuid;       /* Device UUID */
+    const char        *name;      /* Device name */
+    zeroconf_endpoint *endpoints; /* Device endpoints */
+} zeroconf_devinfo;
 
 /* Initialize ZeroConf
  */
@@ -1401,13 +1572,21 @@ zeroconf_device_list_get (void);
 void
 zeroconf_device_list_free (const SANE_Device **dev_list);
 
-/* Lookup device by name.
+/* Lookup device by ident (ident is reported as SANE_Device::name)
+ * by zeroconf_device_list_get())
  *
- * Caller becomes owner of returned list of endpoints, and responsible
- * to free the list.
+ * Caller becomes owner of resources (name and list of endpoints),
+ * referred by the returned zeroconf_devinfo
+ *
+ * Caller must free these resources, using zeroconf_devinfo_free()
  */
-zeroconf_endpoint*
-zeroconf_device_lookup (const char *name);
+zeroconf_devinfo*
+zeroconf_devinfo_lookup (const char *ident);
+
+/* Free zeroconf_devinfo, returned by zeroconf_devinfo_lookup()
+ */
+void
+zeroconf_devinfo_free (zeroconf_devinfo *devinfo);
 
 /* Check if initial scan still in progress
  */
@@ -1439,6 +1618,31 @@ zeroconf_endpoint_list_sort (zeroconf_endpoint *list);
  */
 zeroconf_endpoint*
 zeroconf_endpoint_list_sort_dedup (zeroconf_endpoint *list);
+
+/* Compute sum of two zeroconf_endpoint lists.
+ * Old list is consumed and the new list is
+ * returned. New list contains entries from
+ * the both list, without duplicates
+ *
+ * Both input lists assumed to be sorted and de-duplicated
+ * Returned list is also sorted and de-duplicated
+ */
+zeroconf_endpoint*
+zeroconf_endpoint_list_merge (zeroconf_endpoint *list,
+    const zeroconf_endpoint *addendum);
+
+
+/* Subtract two zeroconf_endpoint lists.
+ * Old list is consumed and the new list is returned.
+ * New list contains only entries, found in input
+ * list and not found in subtrahend
+ *
+ * Both input lists assumed to be sorted and de-duplicated
+ * Returned list is also sorted and de-duplicated
+ */
+zeroconf_endpoint*
+zeroconf_endpoint_list_sub (zeroconf_endpoint *list,
+    const zeroconf_endpoint *subtrahend);
 
 /******************** WS-Discovery ********************/
 /* Initialize WS-Discovery
