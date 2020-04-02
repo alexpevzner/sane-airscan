@@ -536,7 +536,7 @@ zeroconf_endpoint_free_single (zeroconf_endpoint *endpoint)
 /* Create a copy of zeroconf_endpoint list
  */
 zeroconf_endpoint*
-zeroconf_endpoint_list_copy (zeroconf_endpoint *list)
+zeroconf_endpoint_list_copy (const zeroconf_endpoint *list)
 {
     zeroconf_endpoint *newlist = NULL, *last = NULL, *endpoint;
 
@@ -706,7 +706,8 @@ zeroconf_endpoint_list_merge (zeroconf_endpoint *list,
     while (list != NULL || addendum != NULL) {
         zeroconf_endpoint *next;
 
-        if (list == NULL || zeroconf_endpoint_cmp(list, addendum) > 0) {
+        if (list == NULL ||
+            (addendum != NULL && zeroconf_endpoint_cmp(list, addendum) > 0)) {
             next = zeroconf_endpoint_copy_single(addendum);
             addendum = addendum->next;
         } else {

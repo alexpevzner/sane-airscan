@@ -1602,7 +1602,7 @@ zeroconf_endpoint_new (ID_PROTO proto, http_uri *uri);
 /* Create a copy of zeroconf_endpoint list
  */
 zeroconf_endpoint*
-zeroconf_endpoint_list_copy (zeroconf_endpoint *list);
+zeroconf_endpoint_list_copy (const zeroconf_endpoint *list);
 
 /* Free zeroconf_endpoint list
  */
