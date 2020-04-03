@@ -21,6 +21,7 @@
 /* Service types we are interested in
  */
 #define ZEROCONF_SERVICE_USCAN                  "_uscan._tcp"
+#define ZEROCONF_SERVICE_USCANS                 "_uscans._tcp"
 
 /* If failed, AVAHI client will be automatically
  * restarted after the following timeout expires,
@@ -58,7 +59,6 @@ typedef struct {
     zeroconf_endpoint *endpoints;  /* Discovered endpoints */
     ll_node           node_list;   /* In zeroconf_mdns_state_list */
     bool              initscan;    /* Device discovered during initial scan */
-    bool              ready;       /* Done discovery for this device */
 } zeroconf_mdns_state;
 
 /* Static variables
@@ -69,13 +69,18 @@ static AvahiGLibPoll *zeroconf_avahi_glib_poll;
 static const AvahiPoll *zeroconf_avahi_poll;
 static AvahiTimeout *zeroconf_avahi_restart_timer;
 static AvahiClient *zeroconf_avahi_client;
-static AvahiServiceBrowser *zeroconf_avahi_browser;
+static bool zeroconf_avahi_browser_running;
+static AvahiServiceBrowser *zeroconf_avahi_browser_uscan;
+static AvahiServiceBrowser *zeroconf_avahi_browser_uscans;
 static bool zeroconf_initscan;
 static int zeroconf_initscan_count;
 static GCond zeroconf_initscan_cond;
 
 /* Forward declarations
  */
+static void
+zeroconf_avahi_browser_stop (void);
+
 static void
 zeroconf_avahi_client_start (void);
 
@@ -357,7 +362,7 @@ zeroconf_mdns_state_free (zeroconf_mdns_state *mdns_state)
     g_free((char*) mdns_state->name);
     g_free((char*) mdns_state->model);
 
-    if (mdns_state->initscan && !mdns_state->ready) {
+    if (mdns_state->initscan && mdns_state->resolvers->len != 0) {
         zeroconf_initscan_dec();
     }
 
@@ -448,13 +453,20 @@ zeroconf_endpoint_new (ID_PROTO proto, http_uri *uri)
 /* Make zeroconf_endpoint for eSCL
  */
 static zeroconf_endpoint*
-zeroconf_endpoint_make_escl (const AvahiAddress *addr, uint16_t port, const char *rs,
-        AvahiIfIndex interface)
+zeroconf_endpoint_make_escl (const char *type, const AvahiAddress *addr,
+        uint16_t port, const char *rs, AvahiIfIndex interface)
 {
-    char     str_addr[128];
-    int      rs_len;
-    char     *u;
-    http_uri *uri;
+    char       str_addr[128];
+    int        rs_len;
+    char       *u;
+    http_uri   *uri;
+    const char *scheme;
+
+    if (!strcasecmp(type, ZEROCONF_SERVICE_USCAN)) {
+        scheme = "http";
+    } else {
+        scheme = "https";
+    }
 
     if (addr->proto == AVAHI_PROTO_INET) {
         avahi_address_snprint(str_addr, sizeof(str_addr), addr);
@@ -494,12 +506,13 @@ zeroconf_endpoint_make_escl (const AvahiAddress *addr, uint16_t port, const char
     /* Make eSCL URL */
     if (rs == NULL) {
         /* Assume /eSCL by default */
-        u = g_strdup_printf("http://%s:%d/eSCL/", str_addr, port);
+        u = g_strdup_printf("%s://%s:%d/eSCL/", scheme, str_addr, port);
     } else if (rs_len == 0) {
         /* Empty rs, avoid double '/' */
-        u = g_strdup_printf("http://%s:%d/", str_addr, port);
+        u = g_strdup_printf("%s://%s:%d/", scheme, str_addr, port);
     } else {
-        u = g_strdup_printf("http://%s:%d/%.*s/", str_addr, port, rs_len, rs);
+        u = g_strdup_printf("%s://%s:%d/%.*s/", scheme, str_addr, port,
+                rs_len, rs);
     }
 
     uri = http_uri_new(u, true);
@@ -859,7 +872,9 @@ zeroconf_avahi_resolver_callback (AvahiServiceResolver *r,
             }
         }
 
-        endpoint = zeroconf_endpoint_make_escl(addr, port, rs_text, interface);
+        endpoint = zeroconf_endpoint_make_escl(type, addr, port,
+            rs_text, interface);
+
         zeroconf_endpoint_list_prepend(&mdns_state->endpoints, endpoint);
         break;
 
@@ -904,7 +919,6 @@ zeroconf_avahi_resolver_callback (AvahiServiceResolver *r,
         }
     }
 
-    mdns_state->ready = true;
     if (mdns_state->initscan) {
         zeroconf_initscan_dec();
     }
@@ -1029,22 +1043,54 @@ zeroconf_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
     }
 }
 
+/* Start browser for specified service type
+ */
+static AvahiServiceBrowser*
+zeroconf_avahi_browser_start_for_type (const char *type)
+{
+    AvahiServiceBrowser *browser;
+
+    browser = avahi_service_browser_new(zeroconf_avahi_client,
+            AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC, type, NULL,
+            0, zeroconf_avahi_browser_callback, zeroconf_avahi_client);
+
+    if (browser == NULL) {
+        log_debug(NULL, "MDNS: avahi_service_browser_new(%s): %s",
+            type, avahi_strerror(avahi_client_errno(zeroconf_avahi_client)));
+    }
+
+    return browser;
+}
+
 /* Start/restart service browser
  */
-static void
-zeroconf_avahi_browser_start (AvahiClient *client)
+static bool
+zeroconf_avahi_browser_start (void)
 {
-    log_assert(NULL, zeroconf_avahi_browser == NULL);
+    log_assert(NULL, !zeroconf_avahi_browser_running);
+    log_assert(NULL, zeroconf_avahi_browser_uscan == NULL);
+    log_assert(NULL, zeroconf_avahi_browser_uscans == NULL);
 
-    zeroconf_avahi_browser = avahi_service_browser_new(client,
-            AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC,
-            ZEROCONF_SERVICE_USCAN, NULL,
-            0, zeroconf_avahi_browser_callback, client);
+    zeroconf_avahi_browser_uscan = zeroconf_avahi_browser_start_for_type(
+        ZEROCONF_SERVICE_USCAN);
 
-    if (zeroconf_avahi_browser == NULL) {
-        log_debug(NULL, "MDNS: avahi_service_browser_new: %s",
-                avahi_strerror(avahi_client_errno(zeroconf_avahi_client)));
+    if (zeroconf_avahi_browser_uscan == NULL) {
+        goto FAIL;
     }
+
+    zeroconf_avahi_browser_uscans = zeroconf_avahi_browser_start_for_type(
+        ZEROCONF_SERVICE_USCANS);
+
+    if (zeroconf_avahi_browser_uscans == NULL) {
+        goto FAIL;
+    }
+
+    zeroconf_avahi_browser_running = true;
+    return true;
+
+FAIL:
+    zeroconf_avahi_browser_stop();
+    return false;
 }
 
 /* Stop service browser
@@ -1052,11 +1098,18 @@ zeroconf_avahi_browser_start (AvahiClient *client)
 static void
 zeroconf_avahi_browser_stop (void)
 {
-    if (zeroconf_avahi_browser != NULL) {
-        zeroconf_mdns_state_del_all();
-        avahi_service_browser_free(zeroconf_avahi_browser);
-        zeroconf_avahi_browser = NULL;
+    if (zeroconf_avahi_browser_uscan != NULL) {
+        avahi_service_browser_free(zeroconf_avahi_browser_uscan);
+        zeroconf_avahi_browser_uscan = NULL;
     }
+
+    if (zeroconf_avahi_browser_uscans != NULL) {
+        avahi_service_browser_free(zeroconf_avahi_browser_uscans);
+        zeroconf_avahi_browser_uscans = NULL;
+    }
+
+    zeroconf_mdns_state_del_all();
+    zeroconf_avahi_browser_running = false;
 }
 
 /* AVAHI client callback
@@ -1065,6 +1118,7 @@ static void
 zeroconf_avahi_client_callback (AvahiClient *client, AvahiClientState state,
         void *userdata)
 {
+    (void) client;
     (void) userdata;
 
     log_debug(NULL, "MDNS: %s", zeroconf_avahi_client_state_name(state));
@@ -1073,9 +1127,14 @@ zeroconf_avahi_client_callback (AvahiClient *client, AvahiClientState state,
     case AVAHI_CLIENT_S_REGISTERING:
     case AVAHI_CLIENT_S_RUNNING:
     case AVAHI_CLIENT_S_COLLISION:
-        if (zeroconf_avahi_browser == NULL) {
-            zeroconf_avahi_browser_start(client);
-            if (zeroconf_avahi_browser == NULL) {
+        /* Note, first callback may come before avahi_client_new()
+         * return, so zeroconf_avahi_client may be still unset.
+         * Fix it here
+         */
+        zeroconf_avahi_client = client;
+
+        if (!zeroconf_avahi_browser_running) {
+            if (!zeroconf_avahi_browser_start()) {
                 zeroconf_avahi_client_restart_defer();
             }
         }
