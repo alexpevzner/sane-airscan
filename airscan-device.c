@@ -155,7 +155,6 @@ static device*
 device_new (zeroconf_devinfo *devinfo)
 {
     device            *dev;
-    zeroconf_endpoint *ep;
 
     /* Create device */
     dev = g_new0(device, 1);
@@ -177,13 +176,6 @@ device_new (zeroconf_devinfo *devinfo)
     dev->read_decoder_jpeg = image_decoder_jpeg_new();
     dev->read_pollable = pollable_new();
     dev->read_queue = http_data_queue_new();
-
-    /* Initialize device I/O */
-    for (ep = dev->devinfo->endpoints; ep != NULL; ep = ep->next) {
-        if (ep->proto == ID_PROTO_ESCL) {
-            http_uri_fix_end_slash(ep->uri);
-        }
-    }
 
     /* Add to the table */
     g_ptr_array_add(device_table, dev);

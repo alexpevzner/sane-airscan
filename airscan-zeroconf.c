@@ -1391,11 +1391,16 @@ zeroconf_devinfo_lookup (const char *ident)
 
     /* Build a zeroconf_devinfo */
     devinfo = g_new0(zeroconf_devinfo, 1);
-    if (dev_conf) {
+    if (dev_conf != NULL) {
+        http_uri *uri = http_uri_clone(dev_conf->uri);
+
+        if (dev_conf->proto == ID_PROTO_ESCL) {
+            http_uri_fix_end_slash(uri);
+        }
+
         devinfo->uuid = dev_conf->uuid;
         devinfo->name = g_strdup(dev_conf->name);
-        devinfo->endpoints = zeroconf_endpoint_new(dev_conf->proto,
-            http_uri_clone(dev_conf->uri));
+        devinfo->endpoints = zeroconf_endpoint_new(dev_conf->proto, uri);
     } else {
         devinfo->uuid = device->uuid;
         devinfo->name = g_strdup(device->name);
