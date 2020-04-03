@@ -703,17 +703,22 @@ zeroconf_endpoint_list_merge (zeroconf_endpoint *list,
 {
     zeroconf_endpoint *newlist = NULL, *last = NULL;
 
-    while (list != NULL || addendum != NULL) {
+    while (list != NULL && addendum != NULL) {
         zeroconf_endpoint *next;
+        int               cmp;
 
-        if (list == NULL ||
-            (addendum != NULL && zeroconf_endpoint_cmp(list, addendum) > 0)) {
+        cmp = zeroconf_endpoint_cmp(list, addendum);
+        if (cmp > 0) {
             next = zeroconf_endpoint_copy_single(addendum);
             addendum = addendum->next;
         } else {
             next = list;
             list = list->next;
             next->next = NULL;
+
+            if (cmp == 0) {
+                addendum = addendum->next;
+            }
         }
 
         if (last != NULL) {
@@ -723,6 +728,17 @@ zeroconf_endpoint_list_merge (zeroconf_endpoint *list,
         }
 
         last = next;
+    }
+
+    if (addendum != NULL) {
+        log_assert(NULL, list == NULL);
+        list = zeroconf_endpoint_list_copy(addendum);
+    }
+
+    if (last != NULL) {
+        last->next = list;
+    } else {
+        newlist = list;
     }
 
     return newlist;
@@ -742,33 +758,37 @@ zeroconf_endpoint_list_sub (zeroconf_endpoint *list,
 {
     zeroconf_endpoint *newlist = NULL, *last = NULL;
 
-    while (list != NULL) {
-        zeroconf_endpoint *next;
+    while (list != NULL && subtrahend != NULL) {
+        zeroconf_endpoint *tmp;
         int               cmp;
 
-        if (subtrahend == NULL ||
-            (cmp = zeroconf_endpoint_cmp(list, subtrahend)) < 0) {
-            next = list;
+        cmp = zeroconf_endpoint_cmp(list, subtrahend);
+        if (cmp < 0) {
+            tmp = list;
             list = list->next;
-
-            next->next = NULL;
+            tmp->next = NULL;
 
             if (last != NULL) {
-                last->next = next;
+                last->next = tmp;
             } else {
-                newlist = next;
+                newlist = tmp;
             }
 
-            last = next;
-        } else if (cmp > 0) {
-            subtrahend = subtrahend->next;
+            last = tmp;
         } else {
             subtrahend = subtrahend->next;
-
-            next = list;
-            list = list->next;
-            zeroconf_endpoint_free_single(next);
+            if (cmp == 0) {
+                tmp = list;
+                list = list->next;
+                zeroconf_endpoint_free_single(tmp);
+            }
         }
+    }
+
+    if (last != NULL) {
+        last->next = list;
+    } else {
+        newlist = list;
     }
 
     return newlist;
