@@ -631,7 +631,7 @@ zeroconf_endpoint_list_sort (zeroconf_endpoint *list)
     zeroconf_endpoint *halves[2] = {NULL, NULL};
     int               half = 0;
 
-    if (list->next == NULL) {
+    if (list == NULL || list->next == NULL) {
         return list;
     }
 

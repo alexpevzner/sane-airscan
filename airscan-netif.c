@@ -169,7 +169,7 @@ netif_addr_list_sort (netif_addr *list)
     netif_addr *halves[2] = {NULL, NULL};
     int               half = 0;
 
-    if (list->next == NULL) {
+    if (list == NULL || list->next == NULL) {
         return list;
     }
 
