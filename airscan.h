@@ -1544,6 +1544,63 @@ struct zeroconf_endpoint {
     zeroconf_endpoint *next;     /* Next endpoint in the list */
 };
 
+/* ZEROCONF_METHOD represents a method how device was discovered
+ * The same device may be discovered using multiple methods
+ */
+typedef enum {
+    ZEROCONF_IPP_PRINTER,     /* _ipp._tcp with "Scan=T" */
+    ZEROCONF_IPP_PRINTER_TLS, /* _ipps._tcp with "Scan=T" */
+    ZEROCONF_ESCL,            /* _uscan._tcp */
+    ZEROCONF_ESCL_TLS,        /* _uscans._tcp */
+    ZEROCONF_WSD,             /* WS-Discovery */
+
+    NUM_ZEROCONF_METHOD
+} ZEROCONF_METHOD;
+
+/* zeroconf_finding represents a single device discovery finding.
+ * Multiple findings can point to the same device, and even
+ * endpoints may duplicate between findings (say, if the same
+ * device found using multiple network interfaces or using various
+ * discovery methods)
+ *
+ * zeroconf_finding are bound to method and interface index
+ */
+typedef struct {
+    ZEROCONF_METHOD   method;     /* Discovery method */
+    const char        *name;      /* Device name */
+    const char        *model;     /* Model name */
+    uuid              uuid;       /* Device UUID */
+    int               ifindex;    /* Network interface index */
+    zeroconf_endpoint *endpoints; /* List of endpoints */
+    ll_node           list_node;  /* Should not be used by discovery providers*/
+} zeroconf_finding;
+
+/* Publish the zeroconf_finding.
+ *
+ * Memory, referred by the finding, remains owned by
+ * caller, and caller is responsible to keep this
+ * memory valid until zeroconf_finding_withdraw()
+ * is called
+ *
+ * The 'endpoinds' field may be NULL. This mechanism is
+ * used by WS-Discovery to notify zeroconf that scanning
+ * for particular UUID has been finished, though without
+ * success.
+ */
+void
+zeroconf_finding_publish (zeroconf_finding *finding);
+
+/* Withdraw the finding
+ */
+void
+zeroconf_finding_withdraw (zeroconf_finding *finding);
+
+/* Notify zeroconf subsystem that initial scan
+ * for the method is done
+ */
+void
+zeroconf_finding_done (ZEROCONF_METHOD method);
+
 /* zeroconf_devinfo represents a device information
  */
 typedef struct {
@@ -1619,30 +1676,16 @@ zeroconf_endpoint_list_sort (zeroconf_endpoint *list);
 zeroconf_endpoint*
 zeroconf_endpoint_list_sort_dedup (zeroconf_endpoint *list);
 
-/* Compute sum of two zeroconf_endpoint lists.
- * Old list is consumed and the new list is
- * returned. New list contains entries from
- * the both list, without duplicates
- *
- * Both input lists assumed to be sorted and de-duplicated
- * Returned list is also sorted and de-duplicated
+/******************** MDNS Discovery ********************/
+/* Initialize MDNS
  */
-zeroconf_endpoint*
-zeroconf_endpoint_list_merge (zeroconf_endpoint *list,
-    const zeroconf_endpoint *addendum);
+SANE_Status
+mdns_init (void);
 
-
-/* Subtract two zeroconf_endpoint lists.
- * Old list is consumed and the new list is returned.
- * New list contains only entries, found in input
- * list and not found in subtrahend
- *
- * Both input lists assumed to be sorted and de-duplicated
- * Returned list is also sorted and de-duplicated
+/* Cleanup MDNS
  */
-zeroconf_endpoint*
-zeroconf_endpoint_list_sub (zeroconf_endpoint *list,
-    const zeroconf_endpoint *subtrahend);
+void
+mdns_cleanup (void);
 
 /******************** WS-Discovery ********************/
 /* Initialize WS-Discovery

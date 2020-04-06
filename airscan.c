@@ -45,6 +45,9 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
         status = zeroconf_init();
     }
     if (status == SANE_STATUS_GOOD) {
+        status = mdns_init();
+    }
+    if (status == SANE_STATUS_GOOD) {
         status = wsdd_init();
     }
 
@@ -73,6 +76,7 @@ sane_exit (void)
 
     eloop_thread_stop();
 
+    mdns_cleanup();
     wsdd_cleanup();
     zeroconf_cleanup();
     device_management_cleanup();
