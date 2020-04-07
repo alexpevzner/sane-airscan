@@ -765,7 +765,9 @@ zeroconf_init (void)
 {
     ll_init(&zeroconf_device_list);
 
-    zeroconf_initscan_bits = (1 << ZEROCONF_ESCL) |
+    zeroconf_initscan_bits = (1 << ZEROCONF_IPP_PRINTER) |
+                             (1 << ZEROCONF_IPP_PRINTER_TLS) |
+                             (1 << ZEROCONF_ESCL) |
                              (1 << ZEROCONF_ESCL_TLS);
 
     return SANE_STATUS_GOOD;
