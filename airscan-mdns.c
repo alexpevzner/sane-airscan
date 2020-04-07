@@ -18,13 +18,6 @@
 #include <stdarg.h>
 
 /******************** Constants *********************/
-/* Service types we are interested in
- */
-#define MDNS_SERVICE_IPP        "_ipp._tcp"
-#define MDNS_SERVICE_IPPS       "_ipps._tcp"
-#define MDNS_SERVICE_USCAN      "_uscan._tcp"
-#define MDNS_SERVICE_USCANS     "_uscans._tcp"
-
 /* If failed, AVAHI client will be automatically
  * restarted after the following timeout expires,
  * in seconds
@@ -297,7 +290,7 @@ mdns_finding_del_all (void)
 /* Make zeroconf_endpoint for eSCL
  */
 static zeroconf_endpoint*
-mdns_make_escl_endpoint (const char *type, const AvahiAddress *addr,
+mdns_make_escl_endpoint (ZEROCONF_METHOD method, const AvahiAddress *addr,
         uint16_t port, const char *rs, AvahiIfIndex interface)
 {
     char       str_addr[128];
@@ -306,7 +299,7 @@ mdns_make_escl_endpoint (const char *type, const AvahiAddress *addr,
     http_uri   *uri;
     const char *scheme;
 
-    if (!strcasecmp(type, MDNS_SERVICE_USCAN)) {
+    if (method == ZEROCONF_ESCL) {
         scheme = "http";
     } else {
         scheme = "https";
@@ -424,7 +417,7 @@ mdns_avahi_resolver_callback (AvahiServiceResolver *r,
                 rs_text = (char*) (rs->text + 3);
             }
 
-            endpoint = mdns_make_escl_endpoint(type, addr, port,
+            endpoint = mdns_make_escl_endpoint(method, addr, port,
                 rs_text, interface);
 
             endpoint->next = mdns->finding.endpoints;
@@ -569,30 +562,20 @@ mdns_avahi_browser_start_for_type (ZEROCONF_METHOD method, const char *type)
 static bool
 mdns_avahi_browser_start (void)
 {
-    bool ok;
+    static struct { ZEROCONF_METHOD method; const char *type; } svc[] = {
+        { ZEROCONF_IPP_PRINTER,     "_ipp._tcp" },
+        { ZEROCONF_IPP_PRINTER_TLS, "_ipps._tcp" },
+        { ZEROCONF_ESCL,            "_uscan._tcp" },
+        { ZEROCONF_ESCL_TLS,        "_uscans._tcp" },
+    };
+
+    unsigned int i;
+    bool         ok = true;
 
     log_assert(NULL, !mdns_avahi_browser_running);
 
-    ok = mdns_avahi_browser_start_for_type(ZEROCONF_IPP_PRINTER,
-            MDNS_SERVICE_IPP);
-
-    if (ok) {
-        ok = mdns_avahi_browser_start_for_type(ZEROCONF_IPP_PRINTER_TLS,
-                MDNS_SERVICE_IPPS);
-    }
-
-    if (ok) {
-        ok = mdns_avahi_browser_start_for_type(ZEROCONF_ESCL,
-                MDNS_SERVICE_USCAN);
-    }
-
-    if (ok) {
-        ok = mdns_avahi_browser_start_for_type(ZEROCONF_ESCL_TLS,
-                MDNS_SERVICE_USCANS);
-    }
-
-    if (!ok) {
-        mdns_avahi_browser_stop();
+    for (i = 0; ok && i < sizeof(svc)/sizeof(svc[0]); i ++) {
+        ok = mdns_avahi_browser_start_for_type(svc[i].method, svc[i].type);
     }
 
     return ok;
