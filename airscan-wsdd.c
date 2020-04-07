@@ -38,26 +38,24 @@ typedef struct {
     ip_straddr   str_sockaddr; /* Per-interface socket address */
 } wsdd_resolver;
 
-/* wsdd_xaddr represents device transport address
- */
-typedef struct wsdd_xaddr wsdd_xaddr;
-struct wsdd_xaddr {
-    http_uri   *uri;  /* Device URI */
-    wsdd_xaddr *next; /* Next address in the list */
-};
-
 /* wsdd_host represents discovery state for particular host
  */
-typedef struct wsdd_host wsdd_host;
-struct wsdd_host {
+typedef struct {
     const char        *address;     /* Device "address" in WS-SD sense */
     uuid              uuid;         /* Device UUID */
     const char        *model;       /* Model name */
-    wsdd_xaddr        *xaddrs;      /* Discovered transport addresses */
+    ll_head           xaddrs;       /* List of wsdd_xaddr */
     zeroconf_endpoint *endpoints;   /* Discovered endpoints */
     http_client       *http_client; /* HTTP client */
-    wsdd_host         *next;        /* Next device in the list */
-};
+    ll_node           list_node;    /* In wsdd_host_list */
+} wsdd_host;
+
+/* wsdd_xaddr represents device transport address
+ */
+typedef struct {
+    http_uri   *uri;      /* Device URI */
+    ll_node    list_node; /* In wsdd_host::xaddrs */
+} wsdd_xaddr;
 
 /* WSDD_ACTION represents WSDD message action
  */
@@ -73,7 +71,7 @@ typedef enum {
 typedef struct {
     WSDD_ACTION  action;     /* Message action */
     const char   *address;   /* Endpoint reference */
-    wsdd_xaddr   *xaddrs;    /* Discovered transport addresses */
+    ll_head      xaddrs;     /* List of wsdd_xaddr */
     bool         is_scanner; /* Device is scanner */
 } wsdd_message;
 
@@ -100,7 +98,7 @@ static eloop_fdpoll        *wsdd_fdpoll_ipv6;
 static char                wsdd_buf[65536];
 static struct sockaddr_in  wsdd_mcast_ipv4;
 static struct sockaddr_in6 wsdd_mcast_ipv6;
-static wsdd_host           *wsdd_host_list;
+static ll_head             wsdd_host_list;
 
 /* WS-DD Probe template
  */
@@ -166,40 +164,39 @@ wsdd_xaddr_free (wsdd_xaddr *xaddr)
     g_free(xaddr);
 }
 
-/* Add wsdd_xaddr to the list. Returns newly added xaddr.
- * On success, takes ownership on URI
- * In a case of duplicates, does nothing and returns NULL
- */
-static wsdd_xaddr*
-wsdd_xaddr_list_add (wsdd_xaddr **list, http_uri *uri)
-{
-    wsdd_xaddr *xaddr, *last = NULL;
-
-    for (xaddr = *list; xaddr != NULL; xaddr = xaddr->next) {
-        if (http_uri_equal(xaddr->uri, uri)) {
-            return NULL;
-        }
-        last = xaddr;
-    }
-
-    xaddr = wsdd_xaddr_new(uri);
-    if (last != NULL) {
-        last->next = xaddr;
-    } else {
-        *list = xaddr;
-    }
-
-    return xaddr;
-}
-
-/* Free list of wsdd_xaddr
+/* Add wsdd_xaddr to the list.
+ * Takes ownership on URI.
  */
 static void
-wsdd_xaddr_list_free (wsdd_xaddr *list)
+wsdd_xaddr_list_add (ll_head *list, http_uri *uri)
 {
-    while (list != NULL) {
-        wsdd_xaddr *xaddr = list;
-        list = list->next;
+    wsdd_xaddr *xaddr;
+    ll_node    *node;
+
+    /* Check for duplicates */
+    for (LL_FOR_EACH(node, list)) {
+        xaddr = OUTER_STRUCT(node, wsdd_xaddr, list_node);
+        if (http_uri_equal(xaddr->uri, uri)) {
+            http_uri_free(uri);
+            return;
+        }
+    }
+
+    /* Add new xaddr */
+    xaddr = wsdd_xaddr_new(uri);
+    ll_push_end(list, &xaddr->list_node);
+}
+
+/* Purge list of wsdd_xaddr
+ */
+static void
+wsdd_xaddr_list_purge (ll_head *list)
+{
+    ll_node    *node;
+
+    while ((node = ll_first(list)) != NULL) {
+        wsdd_xaddr *xaddr = OUTER_STRUCT(node, wsdd_xaddr, list_node);
+        ll_del(&xaddr->list_node);
         wsdd_xaddr_free(xaddr);
     }
 }
@@ -216,6 +213,7 @@ wsdd_host_new (const char *address)
     if (!uuid_valid(host->uuid)) {
         host->uuid = uuid_hash(address);
     }
+    ll_init(&host->xaddrs);
     host->http_client = http_client_new (wsdd_log, host);
     return host;
 }
@@ -231,7 +229,7 @@ wsdd_host_free (wsdd_host *host)
     zeroconf_endpoint_list_free(host->endpoints);
     g_free((char*) host->address);
     g_free((char*) host->model);
-    wsdd_xaddr_list_free(host->xaddrs);
+    wsdd_xaddr_list_purge(&host->xaddrs);
     g_free(host);
 }
 
@@ -241,23 +239,20 @@ wsdd_host_free (wsdd_host *host)
 static wsdd_host*
 wsdd_host_add (const char *address)
 {
-    wsdd_host *host, *last = NULL;
+    ll_node   *node;
+    wsdd_host *host;
 
     /* Check for duplicates */
-    for (host = wsdd_host_list; host != NULL; host = host->next) {
+    for (LL_FOR_EACH(node, &wsdd_host_list)) {
+        host = OUTER_STRUCT(node, wsdd_host, list_node);
         if (!strcmp(host->address, address)) {
             return NULL;
         }
-        last = host;
     }
 
     /* Add new host */
     host = wsdd_host_new(address);
-    if (last != NULL) {
-        last->next = host;
-    } else {
-        wsdd_host_list = host;
-    }
+    ll_push_end(&wsdd_host_list, &host->list_node);
 
     return host;
 }
@@ -267,29 +262,17 @@ wsdd_host_add (const char *address)
 static void
 wsdd_host_del (const char *address)
 {
-    wsdd_host *host, *prev = NULL;
+    ll_node   *node;
 
     /* Lookup host in the list */
-    for (host = wsdd_host_list; host != NULL; host = host->next) {
+    for (LL_FOR_EACH(node, &wsdd_host_list)) {
+        wsdd_host *host = OUTER_STRUCT(node, wsdd_host, list_node);
         if (!strcmp(host->address, address)) {
-            break;
+            ll_del(&host->list_node);
+            wsdd_host_free(host);
+            return;
         }
-        prev = host;
     }
-
-    if (host == NULL) {
-        return;
-    }
-
-    /* Unlink from the list */
-    if (prev != NULL) {
-        prev->next = host->next;
-    } else {
-        wsdd_host_list = host->next;
-    }
-
-    /* And destroy */
-    wsdd_host_free(host);
 }
 
 /* Delete all hosts from the wsdd_host_list
@@ -297,9 +280,11 @@ wsdd_host_del (const char *address)
 static void
 wsdd_host_list_purge (void)
 {
-    while (wsdd_host_list != NULL) {
-        wsdd_host *host = wsdd_host_list;
-        wsdd_host_list = wsdd_host_list->next;
+    ll_node   *node;
+
+    while ((node = ll_first(&wsdd_host_list)) != NULL) {
+        wsdd_host *host = OUTER_STRUCT(node, wsdd_host, list_node);
+        ll_del(&host->list_node);
         wsdd_host_free(host);
     }
 }
@@ -511,14 +496,9 @@ wsdd_message_parse_endpoint (wsdd_message *msg, xml_rd *xml)
              tok = strtok_r(NULL, delim, &saveptr)) {
 
             http_uri   *uri = http_uri_new(tok, true);
-            wsdd_xaddr *xaddr = NULL;
 
             if (uri != NULL) {
-                xaddr = wsdd_xaddr_list_add(&msg->xaddrs, uri);
-            }
-
-            if (xaddr == NULL) {
-                http_uri_free(uri);
+                wsdd_xaddr_list_add(&msg->xaddrs, uri);
             }
         }
     }
@@ -534,6 +514,8 @@ wsdd_message_parse (const char *xml_text, size_t xml_len)
     wsdd_message *msg = g_new0(wsdd_message, 1);
     xml_rd       *xml;
     error        err;
+
+    ll_init(&msg->xaddrs);
 
     err = xml_rd_begin(&xml, xml_text, xml_len, wsdd_ns_rules);
     if (err != NULL) {
@@ -566,8 +548,8 @@ DONE:
     if (err != NULL ||
         msg->action == WSDD_ACTION_UNKNOWN ||
         msg->address == NULL ||
-        (msg->action == WSDD_ACTION_HELLO && msg->xaddrs == NULL) ||
-        (msg->action == WSDD_ACTION_PROBEMATCHES && msg->xaddrs == NULL)) {
+        (msg->action == WSDD_ACTION_HELLO && ll_empty(&msg->xaddrs)) ||
+        (msg->action == WSDD_ACTION_PROBEMATCHES && ll_empty(&msg->xaddrs))) {
         wsdd_message_free(msg);
         msg = NULL;
     }
@@ -582,7 +564,7 @@ wsdd_message_free (wsdd_message *msg)
 {
     if (msg != NULL) {
         g_free((char*) msg->address);
-        wsdd_xaddr_list_free(msg->xaddrs);
+        wsdd_xaddr_list_purge(&msg->xaddrs);
         g_free(msg);
     }
 }
@@ -612,9 +594,11 @@ wsdd_resolver_message_dispatch (wsdd_resolver *resolver, wsdd_message *msg)
 {
     wsdd_host  *host;
     wsdd_xaddr *xaddr;
+    ll_node    *node;
 
     /* Fixup ipv6 zones */
-    for (xaddr = msg->xaddrs; xaddr != NULL; xaddr = xaddr->next) {
+    for (LL_FOR_EACH(node, &msg->xaddrs)) {
+        xaddr = OUTER_STRUCT(node, wsdd_xaddr, list_node);
         http_uri_fix_ipv6_zone(xaddr->uri, resolver->ifindex);
     }
 
@@ -623,7 +607,8 @@ wsdd_resolver_message_dispatch (wsdd_resolver *resolver, wsdd_message *msg)
         wsdd_message_action_name(msg));
     log_trace(wsdd_log, "  address:    %s", msg->address);
     log_trace(wsdd_log, "  is_scanner: %s", msg->is_scanner ? "yes" : "no");
-    for (xaddr = msg->xaddrs; xaddr != NULL; xaddr = xaddr->next) {
+    for (LL_FOR_EACH(node, &msg->xaddrs)) {
+        xaddr = OUTER_STRUCT(node, wsdd_xaddr, list_node);
         log_trace(wsdd_log, "  xaddr:      %s", http_uri_str(xaddr->uri));
     }
     log_trace(wsdd_log, "");
@@ -636,10 +621,9 @@ wsdd_resolver_message_dispatch (wsdd_resolver *resolver, wsdd_message *msg)
         if (host != NULL) {
             wsdd_xaddr *xaddr;
 
-            host->xaddrs = msg->xaddrs;
-            msg->xaddrs = NULL;
-
-            for (xaddr = host->xaddrs; xaddr != NULL; xaddr = xaddr->next) {
+            ll_cat(&host->xaddrs, &msg->xaddrs);
+            for (LL_FOR_EACH(node, &host->xaddrs)) {
+                xaddr = OUTER_STRUCT(node, wsdd_xaddr, list_node);
                 wsdd_host_get_metadata(host, resolver->ifindex, xaddr);
             }
         }
@@ -1187,6 +1171,9 @@ wsdd_init (void)
         log_debug(NULL, "devices discovery disabled");
         return SANE_STATUS_GOOD;
     }
+
+    /* Initialize wsdd_host_list */
+    ll_init(&wsdd_host_list);
 
     /* Create IPv4/IPv6 multicast addresses */
     wsdd_mcast_ipv4.sin_family = AF_INET;
