@@ -210,6 +210,25 @@ ll_last (ll_head *head)
     return ll_prev(head, &head->node);
 }
 
+/* Concatenate lists:
+ *   list1 += list2
+ *   list2 = empty
+ */
+static inline void
+ll_cat (ll_head *list1, ll_head *list2)
+{
+    if (ll_empty(list2)) {
+        return;
+    }
+
+    list2->node.ll_prev->ll_next = &list1->node;
+    list2->node.ll_next->ll_prev = list1->node.ll_prev;
+    list1->node.ll_prev->ll_next = list2->node.ll_next;
+    list1->node.ll_prev = list2->node.ll_prev;
+
+    ll_init(list2);
+}
+
 /* Helper macro for list iteration.
  * Usage:
  *   for (LL_FOR_EACH(node, list)) {
