@@ -1802,7 +1802,7 @@ typedef struct {
     struct proto_handler *proto;          /* Link to proto_handler */
     const devcaps        *devcaps;        /* Device capabilities */
     http_client          *http;           /* HTTP client for sending requests */
-    const http_uri       *base_uri;       /* HTTP base URI for protocol */
+    http_uri             *base_uri;       /* HTTP base URI for protocol */
     proto_scan_params    params;          /* Scan parameters */
     const char           *location;       /* Image location */
     unsigned int         images_received; /* Total count of received images */

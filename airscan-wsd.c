@@ -73,13 +73,14 @@ wsd_http_post (const proto_ctx *ctx, char *body)
 /* Make SOAP header for outgoing request
  */
 static void
-wsd_make_request_header (xml_wr *xml, const char *action)
+wsd_make_request_header (const proto_ctx *ctx, xml_wr *xml, const char *action)
 {
     uuid   u = uuid_rand();
 
     xml_wr_enter(xml, "s:Header");
     xml_wr_add_text(xml, "a:MessageID", u.text);
-    xml_wr_add_text(xml, "a:To", WSD_ADDR_ANONYMOUS);
+    //xml_wr_add_text(xml, "a:To", WSD_ADDR_ANONYMOUS);
+    xml_wr_add_text(xml, "a:To", http_uri_str(ctx->base_uri));
     xml_wr_enter(xml, "a:ReplyTo");
     xml_wr_add_text(xml, "a:Address", WSD_ADDR_ANONYMOUS);
     xml_wr_leave(xml);
@@ -94,7 +95,7 @@ wsd_devcaps_query (const proto_ctx *ctx)
 {
     xml_wr *xml = xml_wr_begin("s:Envelope", wsd_ns_wr);
 
-    wsd_make_request_header(xml, WSD_ACTION_GET_SCANNER_ELEMENTS);
+    wsd_make_request_header(ctx, xml, WSD_ACTION_GET_SCANNER_ELEMENTS);
 
     xml_wr_enter(xml, "s:Body");
     xml_wr_enter(xml, "scan:GetScannerElementsRequest");
@@ -626,7 +627,7 @@ wsd_scan_query (const proto_ctx *ctx)
     }
 
     /* Create scan request */
-    wsd_make_request_header(xml, WSD_ACTION_CREATE_SCAN_JOB);
+    wsd_make_request_header(ctx, xml, WSD_ACTION_CREATE_SCAN_JOB);
 
     xml_wr_enter(xml, "s:Body");
     xml_wr_enter(xml, "scan:CreateScanJobRequest");
@@ -777,7 +778,7 @@ wsd_load_query (const proto_ctx *ctx)
     *job_token ++ = '\0';
 
     /* Build RetrieveImageRequest */
-    wsd_make_request_header(xml, WSD_ACTION_RETRIEVE_IMAGE);
+    wsd_make_request_header(ctx, xml, WSD_ACTION_RETRIEVE_IMAGE);
 
     xml_wr_enter(xml, "s:Body");
     xml_wr_enter(xml, "scan:RetrieveImageRequest");
@@ -834,7 +835,7 @@ wsd_status_query (const proto_ctx *ctx)
 {
     xml_wr *xml = xml_wr_begin("s:Envelope", wsd_ns_wr);
 
-    wsd_make_request_header(xml, WSD_ACTION_GET_SCANNER_ELEMENTS);
+    wsd_make_request_header(ctx, xml, WSD_ACTION_GET_SCANNER_ELEMENTS);
 
     xml_wr_enter(xml, "s:Body");
     xml_wr_enter(xml, "scan:GetScannerElementsRequest");
@@ -875,7 +876,7 @@ wsd_cancel_query (const proto_ctx *ctx)
     *job_token ++ = '\0';
 
     /* Build CancelJob Request */
-    wsd_make_request_header(xml, WSD_ACTION_CANCEL_JOB);
+    wsd_make_request_header(ctx, xml, WSD_ACTION_CANCEL_JOB);
 
     xml_wr_enter(xml, "s:Body");
     xml_wr_enter(xml, "scan:CancelJobRequest");
