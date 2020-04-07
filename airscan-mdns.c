@@ -20,6 +20,8 @@
 /******************** Constants *********************/
 /* Service types we are interested in
  */
+#define MDNS_SERVICE_IPP        "_ipp._tcp"
+#define MDNS_SERVICE_IPPS       "_ipps._tcp"
 #define MDNS_SERVICE_USCAN      "_uscan._tcp"
 #define MDNS_SERVICE_USCANS     "_uscans._tcp"
 
@@ -41,6 +43,7 @@ typedef struct {
     zeroconf_finding  finding;     /* Base class */
     GPtrArray         *resolvers;  /* Array of pending *AvahiServiceResolver */
     ll_node           node_list;   /* In mdns_finding_list */
+    bool              publish;     /* Should we publish this finding */
     bool              initscan;    /* Device discovered during initial scan */
 } mdns_finding;
 
@@ -52,8 +55,7 @@ static const AvahiPoll *mdns_avahi_poll;
 static AvahiTimeout *mdns_avahi_restart_timer;
 static AvahiClient *mdns_avahi_client;
 static bool mdns_avahi_browser_running;
-static AvahiServiceBrowser *mdns_avahi_browser_uscan;
-static AvahiServiceBrowser *mdns_avahi_browser_uscans;
+static AvahiServiceBrowser *mdns_avahi_browser[NUM_ZEROCONF_METHOD];
 static bool mdns_initscan[NUM_ZEROCONF_METHOD];
 static int mdns_initscan_count[NUM_ZEROCONF_METHOD];
 
@@ -271,6 +273,9 @@ mdns_finding_get (ZEROCONF_METHOD method, int ifindex, const char *name)
 static void
 mdns_finding_del (mdns_finding *mdns)
 {
+    if (mdns->publish) {
+        zeroconf_finding_withdraw(&mdns->finding);
+    }
     ll_del(&mdns->node_list);
     mdns_finding_free(mdns);
 }
@@ -282,10 +287,10 @@ mdns_finding_del_all (void)
 {
     ll_node *node;
 
-    while ((node = ll_pop_beg(&mdns_finding_list)) != NULL) {
+    while ((node = ll_first(&mdns_finding_list)) != NULL) {
         mdns_finding *mdns;
         mdns = OUTER_STRUCT(node, mdns_finding, node_list);
-        mdns_finding_free(mdns);
+        mdns_finding_del(mdns);
     }
 }
 
@@ -371,10 +376,8 @@ mdns_avahi_resolver_callback (AvahiServiceResolver *r,
         uint16_t port, AvahiStringList *txt, AvahiLookupResultFlags flags,
         void *userdata)
 {
-    mdns_finding *mdns = userdata;
-    zeroconf_endpoint   *endpoint;
-    AvahiStringList     *rs;
-    const char          *rs_text = NULL;
+    mdns_finding      *mdns = userdata;
+    ZEROCONF_METHOD   method = mdns->finding.method;
 
     (void) domain;
     (void) host_name;
@@ -397,11 +400,6 @@ mdns_avahi_resolver_callback (AvahiServiceResolver *r,
     /* Handle event */
     switch (event) {
     case AVAHI_RESOLVER_FOUND:
-        rs = avahi_string_list_find(txt, "rs");
-        if (rs != NULL && rs->size > 3) {
-            rs_text = (char*) (rs->text + 3);
-        }
-
         if (mdns->finding.model == NULL) {
             AvahiStringList *ty = avahi_string_list_find(txt, "ty");
             if (ty != NULL && ty->size > 3) {
@@ -416,11 +414,32 @@ mdns_avahi_resolver_callback (AvahiServiceResolver *r,
             }
         }
 
-        endpoint = mdns_make_escl_endpoint(type, addr, port,
-            rs_text, interface);
+        if (method == ZEROCONF_ESCL || method == ZEROCONF_ESCL_TLS) {
+            AvahiStringList   *rs;
+            const char        *rs_text = NULL;
+            zeroconf_endpoint *endpoint;
 
-        endpoint->next = mdns->finding.endpoints;
-        mdns->finding.endpoints = endpoint;
+            rs = avahi_string_list_find(txt, "rs");
+            if (rs != NULL && rs->size > 3) {
+                rs_text = (char*) (rs->text + 3);
+            }
+
+            endpoint = mdns_make_escl_endpoint(type, addr, port,
+                rs_text, interface);
+
+            endpoint->next = mdns->finding.endpoints;
+            mdns->finding.endpoints = endpoint;
+            mdns->publish = true;
+        } else {
+            AvahiStringList *scan;
+            const char      *val;
+
+            scan = avahi_string_list_find(txt, "scan");
+            if (scan != NULL && scan->size > 5) {
+                val = (char*) (scan->text + 5);
+                mdns->publish = !strcasecmp(val, "t");
+            }
+        }
         break;
 
     case AVAHI_RESOLVER_FAILURE:
@@ -455,7 +474,9 @@ mdns_avahi_resolver_callback (AvahiServiceResolver *r,
         mdns_initscan_count_dec(mdns->finding.method);
     }
 
-    zeroconf_finding_publish(&mdns->finding);
+    if (mdns->publish) {
+        zeroconf_finding_publish(&mdns->finding);
+    }
 }
 
 /* AVAHI browser callback
@@ -504,7 +525,6 @@ mdns_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
     case AVAHI_BROWSER_REMOVE:
         mdns = mdns_finding_find(method, interface, name);
         if (mdns != NULL) {
-            zeroconf_finding_withdraw(&mdns->finding);
             mdns_finding_del(mdns);
         }
         break;
@@ -527,21 +547,21 @@ mdns_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
 
 /* Start browser for specified service type
  */
-static AvahiServiceBrowser*
-mdns_avahi_browser_start_for_type (const char *type, ZEROCONF_METHOD method)
+static bool
+mdns_avahi_browser_start_for_type (ZEROCONF_METHOD method, const char *type)
 {
-    AvahiServiceBrowser *browser;
+    log_assert(NULL, mdns_avahi_browser[method] == NULL);
 
-    browser = avahi_service_browser_new(mdns_avahi_client,
+    mdns_avahi_browser[method] = avahi_service_browser_new(mdns_avahi_client,
             AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC, type, NULL,
             0, mdns_avahi_browser_callback, (void*) method);
 
-    if (browser == NULL) {
+    if (mdns_avahi_browser[method] == NULL) {
         log_debug(NULL, "MDNS: avahi_service_browser_new(%s): %s",
             type, avahi_strerror(avahi_client_errno(mdns_avahi_client)));
     }
 
-    return browser;
+    return mdns_avahi_browser[method] != NULL;
 }
 
 /* Start/restart service browser
@@ -549,30 +569,33 @@ mdns_avahi_browser_start_for_type (const char *type, ZEROCONF_METHOD method)
 static bool
 mdns_avahi_browser_start (void)
 {
+    bool ok;
+
     log_assert(NULL, !mdns_avahi_browser_running);
-    log_assert(NULL, mdns_avahi_browser_uscan == NULL);
-    log_assert(NULL, mdns_avahi_browser_uscans == NULL);
 
-    mdns_avahi_browser_uscan = mdns_avahi_browser_start_for_type(
-        MDNS_SERVICE_USCAN, ZEROCONF_ESCL);
+    ok = mdns_avahi_browser_start_for_type(ZEROCONF_IPP_PRINTER,
+            MDNS_SERVICE_IPP);
 
-    if (mdns_avahi_browser_uscan == NULL) {
-        goto FAIL;
+    if (ok) {
+        ok = mdns_avahi_browser_start_for_type(ZEROCONF_IPP_PRINTER_TLS,
+                MDNS_SERVICE_IPPS);
     }
 
-    mdns_avahi_browser_uscans = mdns_avahi_browser_start_for_type(
-        MDNS_SERVICE_USCANS, ZEROCONF_ESCL_TLS);
-
-    if (mdns_avahi_browser_uscans == NULL) {
-        goto FAIL;
+    if (ok) {
+        ok = mdns_avahi_browser_start_for_type(ZEROCONF_ESCL,
+                MDNS_SERVICE_USCAN);
     }
 
-    mdns_avahi_browser_running = true;
-    return true;
+    if (ok) {
+        ok = mdns_avahi_browser_start_for_type(ZEROCONF_ESCL_TLS,
+                MDNS_SERVICE_USCANS);
+    }
 
-FAIL:
-    mdns_avahi_browser_stop();
-    return false;
+    if (!ok) {
+        mdns_avahi_browser_stop();
+    }
+
+    return ok;
 }
 
 /* Stop service browser
@@ -580,14 +603,13 @@ FAIL:
 static void
 mdns_avahi_browser_stop (void)
 {
-    if (mdns_avahi_browser_uscan != NULL) {
-        avahi_service_browser_free(mdns_avahi_browser_uscan);
-        mdns_avahi_browser_uscan = NULL;
-    }
+    int i;
 
-    if (mdns_avahi_browser_uscans != NULL) {
-        avahi_service_browser_free(mdns_avahi_browser_uscans);
-        mdns_avahi_browser_uscans = NULL;
+    for (i = 0; i < NUM_ZEROCONF_METHOD; i ++) {
+        if (mdns_avahi_browser[i] != NULL) {
+            avahi_service_browser_free(mdns_avahi_browser[i]);
+            mdns_avahi_browser[i] = NULL;
+        }
     }
 
     mdns_finding_del_all();
@@ -692,6 +714,8 @@ mdns_init (void)
 
     if (!conf.discovery) {
         log_debug(NULL, "MDNS: devices discovery disabled");
+        zeroconf_finding_done(ZEROCONF_IPP_PRINTER);
+        zeroconf_finding_done(ZEROCONF_IPP_PRINTER_TLS);
         zeroconf_finding_done(ZEROCONF_ESCL);
         zeroconf_finding_done(ZEROCONF_ESCL_TLS);
         return SANE_STATUS_GOOD;

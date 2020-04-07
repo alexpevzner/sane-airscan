@@ -585,8 +585,8 @@ zeroconf_initscan_wait (void)
     timeout = g_get_monotonic_time() +
         ZEROCONF_READY_TIMEOUT * G_TIME_SPAN_SECOND;
 
-    while (zeroconf_initscan_bits != 0) {
-        eloop_cond_wait_until(&zeroconf_initscan_cond, timeout);
+    while (zeroconf_initscan_bits != 0 &&
+           eloop_cond_wait_until(&zeroconf_initscan_cond, timeout)) {
     }
 }
 
