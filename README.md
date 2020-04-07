@@ -53,6 +53,7 @@ into this list, please let me know.
 * HP ENVY 4500
 * HP ENVY 5540
 * HP LaserJet Pro M28w
+* HP LaserJet Pro MFP M428dw
 * HP Officejet 4630
 * HP Officejet Pro 6970
 * HP OfficeJet Pro 6978
