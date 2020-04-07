@@ -299,7 +299,7 @@ mdns_make_escl_endpoint (ZEROCONF_METHOD method, const AvahiAddress *addr,
     http_uri   *uri;
     const char *scheme;
 
-    if (method == ZEROCONF_ESCL) {
+    if (method == ZEROCONF_USCAN_TCP) {
         scheme = "http";
     } else {
         scheme = "https";
@@ -407,7 +407,7 @@ mdns_avahi_resolver_callback (AvahiServiceResolver *r,
             }
         }
 
-        if (method == ZEROCONF_ESCL || method == ZEROCONF_ESCL_TLS) {
+        if (method == ZEROCONF_USCAN_TCP || method == ZEROCONF_USCANS_TCP) {
             AvahiStringList   *rs;
             const char        *rs_text = NULL;
             zeroconf_endpoint *endpoint;
@@ -563,10 +563,10 @@ static bool
 mdns_avahi_browser_start (void)
 {
     static struct { ZEROCONF_METHOD method; const char *type; } svc[] = {
-        { ZEROCONF_IPP_PRINTER,     "_ipp._tcp" },
-        { ZEROCONF_IPP_PRINTER_TLS, "_ipps._tcp" },
-        { ZEROCONF_ESCL,            "_uscan._tcp" },
-        { ZEROCONF_ESCL_TLS,        "_uscans._tcp" },
+        { ZEROCONF_IPP_TCP,    "_ipp._tcp" },
+        { ZEROCONF_IPPS_TCP,   "_ipps._tcp" },
+        { ZEROCONF_USCAN_TCP,  "_uscan._tcp" },
+        { ZEROCONF_USCANS_TCP, "_uscans._tcp" },
     };
 
     unsigned int i;
@@ -697,10 +697,10 @@ mdns_init (void)
 
     if (!conf.discovery) {
         log_debug(NULL, "MDNS: devices discovery disabled");
-        zeroconf_finding_done(ZEROCONF_IPP_PRINTER);
-        zeroconf_finding_done(ZEROCONF_IPP_PRINTER_TLS);
-        zeroconf_finding_done(ZEROCONF_ESCL);
-        zeroconf_finding_done(ZEROCONF_ESCL_TLS);
+        zeroconf_finding_done(ZEROCONF_IPP_TCP);
+        zeroconf_finding_done(ZEROCONF_IPPS_TCP);
+        zeroconf_finding_done(ZEROCONF_USCAN_TCP);
+        zeroconf_finding_done(ZEROCONF_USCANS_TCP);
         return SANE_STATUS_GOOD;
     }
 

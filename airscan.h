@@ -1548,11 +1548,18 @@ struct zeroconf_endpoint {
  * The same device may be discovered using multiple methods
  */
 typedef enum {
-    ZEROCONF_IPP_PRINTER,     /* _ipp._tcp with "Scan=T" */
-    ZEROCONF_IPP_PRINTER_TLS, /* _ipps._tcp with "Scan=T" */
-    ZEROCONF_ESCL,            /* _uscan._tcp */
-    ZEROCONF_ESCL_TLS,        /* _uscans._tcp */
-    ZEROCONF_WSD,             /* WS-Discovery */
+    /* The following findings serve as indirect signs of
+     * scanner presence in the network
+     */
+    ZEROCONF_IPP_TCP,     /* _ipp._tcp with "Scan=T" */
+    ZEROCONF_IPPS_TCP,    /* _ipps._tcp with "Scan=T" */
+
+    /* The following findings are expected to bring actual
+     * scanner endpoints
+     */
+    ZEROCONF_USCAN_TCP,   /* _uscan._tcp */
+    ZEROCONF_USCANS_TCP,  /* _uscans._tcp */
+    ZEROCONF_WSD,         /* WS-Discovery */
 
     NUM_ZEROCONF_METHOD
 } ZEROCONF_METHOD;

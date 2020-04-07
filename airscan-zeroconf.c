@@ -56,12 +56,12 @@ static ID_PROTO
 zeroconf_method_to_proto (ZEROCONF_METHOD method)
 {
     switch (method) {
-    case ZEROCONF_IPP_PRINTER:
-    case ZEROCONF_IPP_PRINTER_TLS:
+    case ZEROCONF_IPP_TCP:
+    case ZEROCONF_IPPS_TCP:
         return ID_PROTO_UNKNOWN;
 
-    case ZEROCONF_ESCL:
-    case ZEROCONF_ESCL_TLS:
+    case ZEROCONF_USCAN_TCP:
+    case ZEROCONF_USCANS_TCP:
         return ID_PROTO_ESCL;
 
     case ZEROCONF_WSD:
@@ -80,11 +80,11 @@ static const char*
 zeroconf_method_name (ZEROCONF_METHOD method)
 {
     switch (method) {
-    case ZEROCONF_IPP_PRINTER:     return "ZEROCONF_IPP_PRINTER";
-    case ZEROCONF_IPP_PRINTER_TLS: return "ZEROCONF_IPP_PRINTER_TLS";
-    case ZEROCONF_ESCL:            return "ZEROCONF_ESCL";
-    case ZEROCONF_ESCL_TLS:        return "ZEROCONF_ESCL_TLS";
-    case ZEROCONF_WSD:             return "ZEROCONF_WSD";
+    case ZEROCONF_IPP_TCP:    return "ZEROCONF_IPP_TCP";
+    case ZEROCONF_IPPS_TCP:   return "ZEROCONF_IPPS_TCP";
+    case ZEROCONF_USCAN_TCP:  return "ZEROCONF_USCAN_TCP";
+    case ZEROCONF_USCANS_TCP: return "ZEROCONF_USCANS_TCP";
+    case ZEROCONF_WSD:        return "ZEROCONF_WSD";
 
     case NUM_ZEROCONF_METHOD:
         break;
@@ -203,12 +203,12 @@ zeroconf_device_name_model_source (zeroconf_device *device)
         finding = OUTER_STRUCT(node, zeroconf_finding, list_node);
 
         switch (finding->method) {
-            case ZEROCONF_ESCL:
-            case ZEROCONF_ESCL_TLS:
+            case ZEROCONF_USCAN_TCP:
+            case ZEROCONF_USCANS_TCP:
                 return finding;
 
-            case ZEROCONF_IPP_PRINTER:
-            case ZEROCONF_IPP_PRINTER_TLS:
+            case ZEROCONF_IPP_TCP:
+            case ZEROCONF_IPPS_TCP:
                 if (ipp_printer == NULL) {
                     ipp_printer = finding;
                 }
@@ -765,10 +765,10 @@ zeroconf_init (void)
 {
     ll_init(&zeroconf_device_list);
 
-    zeroconf_initscan_bits = (1 << ZEROCONF_IPP_PRINTER) |
-                             (1 << ZEROCONF_IPP_PRINTER_TLS) |
-                             (1 << ZEROCONF_ESCL) |
-                             (1 << ZEROCONF_ESCL_TLS);
+    zeroconf_initscan_bits = (1 << ZEROCONF_IPP_TCP) |
+                             (1 << ZEROCONF_IPPS_TCP) |
+                             (1 << ZEROCONF_USCAN_TCP) |
+                             (1 << ZEROCONF_USCANS_TCP);
 
     return SANE_STATUS_GOOD;
 }
