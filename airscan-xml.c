@@ -436,11 +436,11 @@ xml_wr_begin (const char *root, const xml_ns *ns)
 /* Format indentation space
  */
 static void
-xml_wr_format_indent (GString *buf, unsigned int indent)
+xml_wr_format_indent (GString *buf, unsigned int level)
 {
         unsigned int i;
 
-        for (i = 0; i < indent; i ++) {
+        for (i = 0; i < level; i ++) {
             g_string_append_c(buf, ' ');
             g_string_append_c(buf, ' ');
         }
@@ -469,12 +469,14 @@ xml_wr_format_value (GString *buf, const char *value)
  */
 static void
 xml_wr_format_node (xml_wr *xml, GString *buf,
-        xml_wr_node *node, unsigned int indent)
+        xml_wr_node *node, unsigned int level, bool compact)
 {
-        xml_wr_format_indent(buf, indent);
+        if (!compact) {
+            xml_wr_format_indent(buf, level);
+        }
 
         g_string_append_printf(buf, "<%s", node->name);
-        if (indent == 0) {
+        if (level == 0) {
             /* Root node defines namespaces */
             int i;
             for (i = 0; xml->ns[i].uri != NULL; i ++) {
@@ -494,21 +496,30 @@ xml_wr_format_node (xml_wr *xml, GString *buf,
         if (node->children) {
             xml_wr_node *node2;
 
-            g_string_append_c(buf, '\n');
-            for (node2 = node->children; node2 != NULL; node2 = node2->next) {
-                xml_wr_format_node(xml, buf, node2, indent + 1);
+            if (!compact) {
+                g_string_append_c(buf, '\n');
             }
 
-            xml_wr_format_indent(buf, indent);
+            for (node2 = node->children; node2 != NULL; node2 = node2->next) {
+                xml_wr_format_node(xml, buf, node2, level + 1, compact);
+            }
+
+            if (!compact) {
+                xml_wr_format_indent(buf, level);
+            }
+
             g_string_append_printf(buf, "</%s>", node->name);
-            if (indent != 0) {
+            if (!compact && level != 0) {
                 g_string_append_c(buf, '\n');
             }
         } else {
             if (node->value != NULL) {
                 xml_wr_format_value(buf, node->value);
             }
-            g_string_append_printf(buf,"</%s>\n", node->name);
+            g_string_append_printf(buf,"</%s>", node->name);
+            if (!compact) {
+                g_string_append_c(buf, '\n');
+            }
         }
 }
 
@@ -529,23 +540,43 @@ xml_wr_revert_children (xml_wr_node *node)
     node->children = prev;
 }
 
+/* xml_wr_finish(), internal version
+ */
+static char*
+xml_wr_finish_internal (xml_wr *xml, bool compact)
+{
+    GString    *buf;
+
+    buf = g_string_new("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+    if (!compact) {
+        g_string_append_c(buf, '\n');
+    }
+
+    xml_wr_revert_children(xml->root);
+    xml_wr_format_node(xml, buf, xml->root, 0, compact);
+
+    xml_wr_node_free_recursive(xml->root);
+    g_free(xml);
+
+    return g_string_free(buf, false);
+}
+
 /* Finish writing, generate document string.
  * Caller must g_free() this string after use
  */
 char*
 xml_wr_finish (xml_wr *xml)
 {
-    GString    *buf;
+    return xml_wr_finish_internal(xml, false);
+}
 
-    buf = g_string_new("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-
-    xml_wr_revert_children(xml->root);
-    xml_wr_format_node(xml, buf, xml->root, 0);
-
-    xml_wr_node_free_recursive(xml->root);
-    g_free(xml);
-
-    return g_string_free(buf, false);
+/* Like xml_wr_finish, but returns compact representation
+ * of XML (without indentation and new lines)
+ */
+char*
+xml_wr_finish_compact (xml_wr *xml)
+{
+    return xml_wr_finish_internal(xml, true);
 }
 
 /* Add XML writer node to the current node's children

@@ -1308,6 +1308,12 @@ xml_wr_begin (const char *root, const xml_ns *ns);
 char*
 xml_wr_finish (xml_wr *xml);
 
+/* Like xml_wr_finish, but returns compact representation
+ * of XML (without indentation and new lines)
+ */
+char*
+xml_wr_finish_compact (xml_wr *xml);
+
 /* Add node with textual value
  */
 void
