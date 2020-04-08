@@ -538,7 +538,7 @@ escl_scan_query (const proto_ctx *ctx)
     }
 
     /* Send request to device */
-    return escl_http_query(ctx, "ScanJobs", "POST", xml_wr_finish(xml));
+    return escl_http_query(ctx, "ScanJobs", "POST", xml_wr_finish_compact(xml));
 }
 
 /* Decode result of scan request
