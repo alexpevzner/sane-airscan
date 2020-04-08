@@ -347,10 +347,51 @@ DONE:
     return err;
 }
 
+/* Parse compression factor parameters
+ */
+static error
+escl_devcaps_compression_parse (xml_rd *xml, devcaps *caps)
+{
+    error err;
+
+    for (; !xml_rd_end(xml); xml_rd_next(xml)) {
+        if (xml_rd_node_name_match(xml, "scan:Min")) {
+            err = xml_rd_node_value_uint(xml, &caps->compression_range.min);
+        } else if (xml_rd_node_name_match(xml, "scan:Max")) {
+            err = xml_rd_node_value_uint(xml, &caps->compression_range.max);
+        } else if (xml_rd_node_name_match(xml, "scan:Step")) {
+            err = xml_rd_node_value_uint(xml, &caps->compression_range.quant);
+        } else if (xml_rd_node_name_match(xml, "scan:Normal")) {
+            err = xml_rd_node_value_uint(xml, &caps->compression_norm);
+        }
+
+        if (err != NULL) {
+            return err;
+        }
+    }
+
+    /* Validate obtained parameters.
+     *
+     * Note, errors are silently ignored starting from this point
+     */
+    if (caps->compression_range.min > caps->compression_range.max) {
+        return NULL;
+    }
+
+    if (caps->compression_norm < caps->compression_range.min ||
+        caps->compression_norm > caps->compression_range.max) {
+        return NULL;
+    }
+
+    caps->compression_ok = true;
+
+    return NULL;
+}
+
 /* Parse device capabilities. devcaps structure must be initialized
  * before calling this function.
  */
-error
+static error
 escl_devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
 {
     error  err = NULL;
@@ -396,6 +437,10 @@ escl_devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
                 }
                 xml_rd_next(xml);
             }
+            xml_rd_leave(xml);
+        } else if (xml_rd_node_name_match(xml, "scan:CompressionFactorSupport")) {
+            xml_rd_enter(xml);
+            err = escl_devcaps_compression_parse(xml, caps);
             xml_rd_leave(xml);
         }
 
@@ -527,6 +572,10 @@ escl_scan_query (const proto_ctx *ctx)
 
     //xml_wr_add_text(xml, "scan:InputSource", source);
     xml_wr_add_text(xml, "pwg:InputSource", source);
+    if (ctx->devcaps->compression_ok) {
+        xml_wr_add_uint(xml, "scan:CompressionFactor",
+            ctx->devcaps->compression_norm);
+    }
     xml_wr_add_text(xml, "scan:ColorMode", colormode);
     xml_wr_add_text(xml, "pwg:DocumentFormat", mime);
     if ((src->flags & DEVCAPS_SOURCE_SCAN_DOCFMT_EXT) != 0) {

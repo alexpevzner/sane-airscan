@@ -1493,6 +1493,11 @@ typedef struct {
     const char     *protocol;            /* Protocol name */
     SANE_Word      units;                /* Size units, pixels per inch */
 
+    /* Image compression */
+    bool           compression_ok;       /* Compression params are supported */
+    SANE_Range     compression_range;    /* Compression range */
+    SANE_Word      compression_norm;     /* Normal compression */
+
     /* Sources */
     devcaps_source *src[NUM_ID_SOURCE];  /* Missed sources are NULL */
 } devcaps;
