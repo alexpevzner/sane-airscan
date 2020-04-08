@@ -106,6 +106,7 @@ escl_devcaps_source_parse_document_formats (xml_rd *xml, devcaps_source *src)
 
             if (fmt != ID_FORMAT_UNKNOWN) {
                 src->formats |= 1 << fmt;
+                src->flags |= flags;
             }
         }
     }
