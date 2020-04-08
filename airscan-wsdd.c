@@ -38,23 +38,22 @@ typedef struct {
     ip_straddr   str_sockaddr; /* Per-interface socket address */
 } wsdd_resolver;
 
-/* wsdd_host represents discovery state for particular host
+/* wsdd_finding represents zeroconf_finding for WSD
+ * device discovery
  */
 typedef struct {
+    zeroconf_finding  finding;      /* Base class */
     const char        *address;     /* Device "address" in WS-SD sense */
-    uuid              uuid;         /* Device UUID */
-    const char        *model;       /* Model name */
     ll_head           xaddrs;       /* List of wsdd_xaddr */
-    zeroconf_endpoint *endpoints;   /* Discovered endpoints */
     http_client       *http_client; /* HTTP client */
-    ll_node           list_node;    /* In wsdd_host_list */
-} wsdd_host;
+    ll_node           list_node;    /* In wsdd_finding_list */
+} wsdd_finding;
 
 /* wsdd_xaddr represents device transport address
  */
 typedef struct {
     http_uri   *uri;      /* Device URI */
-    ll_node    list_node; /* In wsdd_host::xaddrs */
+    ll_node    list_node; /* In wsdd_finding::xaddrs */
 } wsdd_xaddr;
 
 /* WSDD_ACTION represents WSDD message action
@@ -98,7 +97,7 @@ static eloop_fdpoll        *wsdd_fdpoll_ipv6;
 static char                wsdd_buf[65536];
 static struct sockaddr_in  wsdd_mcast_ipv4;
 static struct sockaddr_in6 wsdd_mcast_ipv6;
-static ll_head             wsdd_host_list;
+static ll_head             wsdd_finding_list;
 
 /* WS-DD Probe template
  */
@@ -201,95 +200,101 @@ wsdd_xaddr_list_purge (ll_head *list)
     }
 }
 
-/******************** wsdd_host operations ********************/
-/* Create new wsdd_host
+/******************** wsdd_finding operations ********************/
+/* Create new wsdd_finding
  */
-static wsdd_host*
-wsdd_host_new (const char *address)
+static wsdd_finding*
+wsdd_finding_new (int ifindex, const char *address)
 {
-    wsdd_host *host = g_new0(wsdd_host, 1);
-    host->address = g_strdup(address);
-    host->uuid = uuid_parse(address);
-    if (!uuid_valid(host->uuid)) {
-        host->uuid = uuid_hash(address);
+    wsdd_finding *wsdd = g_new0(wsdd_finding, 1);
+
+    wsdd->address = g_strdup(address);
+    wsdd->finding.uuid = uuid_parse(address);
+    if (!uuid_valid(wsdd->finding.uuid)) {
+        wsdd->finding.uuid = uuid_hash(address);
     }
-    ll_init(&host->xaddrs);
-    host->http_client = http_client_new (wsdd_log, host);
-    return host;
+    wsdd->finding.ifindex = ifindex;
+    ll_init(&wsdd->xaddrs);
+    wsdd->http_client = http_client_new (wsdd_log, wsdd);
+
+    return wsdd;
 }
 
-/* Destroy wsdd_host
+/* Destroy wsdd_finding
  */
 static void
-wsdd_host_free (wsdd_host *host)
+wsdd_finding_free (wsdd_finding *wsdd)
 {
-    http_client_cancel(host->http_client);
-    http_client_free(host->http_client);
+    http_client_cancel(wsdd->http_client);
+    http_client_free(wsdd->http_client);
 
-    zeroconf_endpoint_list_free(host->endpoints);
-    g_free((char*) host->address);
-    g_free((char*) host->model);
-    wsdd_xaddr_list_purge(&host->xaddrs);
-    g_free(host);
+    zeroconf_endpoint_list_free(wsdd->finding.endpoints);
+    g_free((char*) wsdd->address);
+    wsdd_xaddr_list_purge(&wsdd->xaddrs);
+    g_free((char*) wsdd->finding.model);
+    g_free((char*) wsdd->finding.name);
+    g_free(wsdd);
 }
 
-/* Add wsdd_host to the wsdd_host_list.
- * If host already present, does nothing and returns NULL
+/* Add wsdd_finding to the wsdd_finding_list.
+ * If finding already present, does nothing and returns NULL
  */
-static wsdd_host*
-wsdd_host_add (const char *address)
+static wsdd_finding*
+wsdd_finding_add (int ifindex, const char *address)
 {
-    ll_node   *node;
-    wsdd_host *host;
+    ll_node      *node;
+    wsdd_finding *wsdd;
 
     /* Check for duplicates */
-    for (LL_FOR_EACH(node, &wsdd_host_list)) {
-        host = OUTER_STRUCT(node, wsdd_host, list_node);
-        if (!strcmp(host->address, address)) {
+    for (LL_FOR_EACH(node, &wsdd_finding_list)) {
+        wsdd = OUTER_STRUCT(node, wsdd_finding, list_node);
+        if (wsdd->finding.ifindex == ifindex &&
+            !strcmp(wsdd->address, address)) {
             return NULL;
         }
     }
 
-    /* Add new host */
-    host = wsdd_host_new(address);
-    ll_push_end(&wsdd_host_list, &host->list_node);
+    /* Add new finding */
+    wsdd = wsdd_finding_new(ifindex, address);
+    ll_push_end(&wsdd_finding_list, &wsdd->list_node);
 
-    return host;
+    return wsdd;
 }
 
-/* Delete wsdd_host from the wsdd_host_list
+/* Delete wsdd_finding from the wsdd_finding_list
  */
 static void
-wsdd_host_del (const char *address)
+wsdd_finding_del (const char *address)
 {
     ll_node   *node;
 
-    /* Lookup host in the list */
-    for (LL_FOR_EACH(node, &wsdd_host_list)) {
-        wsdd_host *host = OUTER_STRUCT(node, wsdd_host, list_node);
-        if (!strcmp(host->address, address)) {
-            ll_del(&host->list_node);
-            wsdd_host_free(host);
+    /* Lookup finding in the list */
+    for (LL_FOR_EACH(node, &wsdd_finding_list)) {
+        wsdd_finding *wsdd = OUTER_STRUCT(node, wsdd_finding, list_node);
+        if (!strcmp(wsdd->address, address)) {
+            ll_del(&wsdd->list_node);
+            wsdd_finding_free(wsdd);
             return;
         }
     }
 }
 
-/* Delete all hosts from the wsdd_host_list
+/* Delete all findings from the wsdd_finding_list
  */
 static void
-wsdd_host_list_purge (void)
+wsdd_finding_list_purge (void)
 {
     ll_node   *node;
 
-    while ((node = ll_first(&wsdd_host_list)) != NULL) {
-        wsdd_host *host = OUTER_STRUCT(node, wsdd_host, list_node);
-        ll_del(&host->list_node);
-        wsdd_host_free(host);
+    while ((node = ll_first(&wsdd_finding_list)) != NULL) {
+        wsdd_finding *wsdd = OUTER_STRUCT(node, wsdd_finding, list_node);
+        ll_del(&wsdd->list_node);
+        wsdd_finding_free(wsdd);
     }
 }
 
-/* Parse endpoint addresses from the devprof:Hosted section of the device metadata:
+/* Parse endpoint addresses from the devprof:Hosted section of the
+ * device metadata:
  *   <devprof:Hosted>
  *     <a:EndpointReference>
  *       <a:Address>http://192.168.1.102:5358/WSDScanner</a:Address>
@@ -304,7 +309,7 @@ wsdd_host_list_purge (void)
  * URLs and returns them as slice of strings
  */
 static void
-wsdd_host_parse_endpoints (wsdd_host *host, int ifindex, xml_rd *xml)
+wsdd_finding_parse_endpoints (wsdd_finding *wsdd, xml_rd *xml)
 {
     unsigned int      level = xml_rd_depth(xml);
     size_t            prefixlen = strlen(xml_rd_node_path(xml));
@@ -327,7 +332,7 @@ wsdd_host_parse_endpoints (wsdd_host *host, int ifindex, xml_rd *xml)
             val = xml_rd_node_value(xml);
             uri = http_uri_new(val, true);
             if (uri != NULL) {
-                http_uri_fix_ipv6_zone(uri, ifindex);
+                http_uri_fix_ipv6_zone(uri, wsdd->finding.ifindex);
                 ep = zeroconf_endpoint_new(ID_PROTO_WSD, uri);
                 ep->next = endpoints;
                 endpoints = ep;
@@ -345,22 +350,21 @@ wsdd_host_parse_endpoints (wsdd_host *host, int ifindex, xml_rd *xml)
     while (endpoints != NULL) {
         zeroconf_endpoint *ep = endpoints;
         endpoints = endpoints->next;
-        ep->next = host->endpoints;
-        host->endpoints = ep;
+        ep->next = wsdd->finding.endpoints;
+        wsdd->finding.endpoints = ep;
     }
 }
 
-/* host metadata callback
+/* Get metadata callback
  */
 static void
-wsdd_host_get_metadata_callback (void *ptr, http_query *q)
+wsdd_finding_get_metadata_callback (void *ptr, http_query *q)
 {
-    error     err;
-    xml_rd    *xml = NULL;
-    http_data *data;
-    wsdd_host *host = ptr;
-    int       ifindex = (int) http_query_get_uintptr(q);
-    char      *model = NULL, *manufacturer = NULL;
+    error        err;
+    xml_rd       *xml = NULL;
+    http_data    *data;
+    wsdd_finding *wsdd = ptr;
+    char         *model = NULL, *manufacturer = NULL;
 
     (void) ptr;
 
@@ -390,7 +394,7 @@ wsdd_host_get_metadata_callback (void *ptr, http_query *q)
 
         if (!strcmp(path, "s:Envelope/s:Body/mex:Metadata/mex:MetadataSection"
                 "/devprof:Relationship/devprof:Hosted")) {
-            wsdd_host_parse_endpoints(host, ifindex, xml);
+            wsdd_finding_parse_endpoints(wsdd, xml);
         } else if (!strcmp(path, "s:Envelope/s:Body/mex:Metadata/mex:MetadataSection"
                 "/devprof:ThisModel/devprof:Manufacturer")) {
             if (manufacturer == NULL) {
@@ -406,18 +410,19 @@ wsdd_host_get_metadata_callback (void *ptr, http_query *q)
         xml_rd_deep_next(xml, 0);
     }
 
-    if (host->model == NULL) {
+    if (wsdd->finding.model == NULL) {
         if (model != NULL && manufacturer != NULL) {
-            host->model = g_strdup_printf("%s %s", manufacturer, model);
+            wsdd->finding.model = g_strdup_printf("%s %s", manufacturer, model);
         } else if (model != NULL) {
-            host->model = model;
+            wsdd->finding.model = model;
             model = NULL;
         } else if (manufacturer != NULL) {
-            host->model = manufacturer;
+            wsdd->finding.model = manufacturer;
             manufacturer = NULL;
         } else {
-            host->model = g_strdup(host->address);
+            wsdd->finding.model = g_strdup(wsdd->address);
         }
+        wsdd->finding.name = g_strdup(wsdd->finding.model);
     }
 
     /* Cleanup and exit */
@@ -426,14 +431,20 @@ DONE:
     g_free(model);
     g_free(manufacturer);
 
-    if (http_client_num_pending(host->http_client) == 0) {
+    if (http_client_num_pending(wsdd->http_client) == 0) {
         zeroconf_endpoint *endpoint;
 
-        host->endpoints = zeroconf_endpoint_list_sort_dedup(host->endpoints);
-        log_debug(wsdd_log, "\"%s\": address: %s", host->model, host->address);
-        log_debug(wsdd_log, "\"%s\": uuid: %s", host->model, host->uuid.text);
-        log_debug(wsdd_log, "\"%s\": discovered endpoints:", host->model);
-        for (endpoint = host->endpoints; endpoint != NULL;
+        wsdd->finding.endpoints = zeroconf_endpoint_list_sort_dedup(
+                wsdd->finding.endpoints);
+
+        log_debug(wsdd_log, "\"%s\": address: %s",
+                wsdd->finding.model, wsdd->address);
+        log_debug(wsdd_log, "\"%s\": uuid: %s",
+                wsdd->finding.model, wsdd->finding.uuid.text);
+        log_debug(wsdd_log, "\"%s\": discovered endpoints:",
+                wsdd->finding.model);
+
+        for (endpoint = wsdd->finding.endpoints; endpoint != NULL;
             endpoint = endpoint->next) {
             log_debug(wsdd_log, "  %s", http_uri_str(endpoint->uri));
         }
@@ -441,22 +452,22 @@ DONE:
 }
 
 
-/* Query host metadata
+/* Query device metadata
  */
 static void
-wsdd_host_get_metadata (wsdd_host *host, int ifindex, wsdd_xaddr *xaddr)
+wsdd_finding_get_metadata (wsdd_finding *wsdd, int ifindex, wsdd_xaddr *xaddr)
 {
     uuid       u = uuid_rand();
     http_query *q;
 
     log_trace(wsdd_log, "querying metadata from %s", http_uri_str(xaddr->uri));
 
-    sprintf(wsdd_buf, wsdd_get_metadata_template, u.text, host->address);
-    q = http_query_new(host->http_client, http_uri_clone(xaddr->uri),
+    sprintf(wsdd_buf, wsdd_get_metadata_template, u.text, wsdd->address);
+    q = http_query_new(wsdd->http_client, http_uri_clone(xaddr->uri),
         "POST", g_strdup(wsdd_buf), "application/soap+xml; charset=utf-8");
 
     http_query_set_uintptr(q, ifindex);
-    http_query_submit(q, wsdd_host_get_metadata_callback);
+    http_query_submit(q, wsdd_finding_get_metadata_callback);
 }
 
 /******************** wsdd_message operations ********************/
@@ -592,9 +603,9 @@ wsdd_message_action_name (const wsdd_message *msg)
 static void
 wsdd_resolver_message_dispatch (wsdd_resolver *resolver, wsdd_message *msg)
 {
-    wsdd_host  *host;
-    wsdd_xaddr *xaddr;
-    ll_node    *node;
+    wsdd_finding *wsdd;
+    wsdd_xaddr   *xaddr;
+    ll_node      *node;
 
     /* Fixup ipv6 zones */
     for (LL_FOR_EACH(node, &msg->xaddrs)) {
@@ -617,20 +628,20 @@ wsdd_resolver_message_dispatch (wsdd_resolver *resolver, wsdd_message *msg)
     switch (msg->action) {
     case WSDD_ACTION_HELLO:
     case WSDD_ACTION_PROBEMATCHES:
-        host = wsdd_host_add(msg->address);
-        if (host != NULL) {
+        wsdd = wsdd_finding_add(resolver->ifindex, msg->address);
+        if (wsdd != NULL) {
             wsdd_xaddr *xaddr;
 
-            ll_cat(&host->xaddrs, &msg->xaddrs);
-            for (LL_FOR_EACH(node, &host->xaddrs)) {
+            ll_cat(&wsdd->xaddrs, &msg->xaddrs);
+            for (LL_FOR_EACH(node, &wsdd->xaddrs)) {
                 xaddr = OUTER_STRUCT(node, wsdd_xaddr, list_node);
-                wsdd_host_get_metadata(host, resolver->ifindex, xaddr);
+                wsdd_finding_get_metadata(wsdd, resolver->ifindex, xaddr);
             }
         }
         break;
 
     case WSDD_ACTION_BYE:
-        wsdd_host_del(msg->address);
+        wsdd_finding_del(msg->address);
         break;
 
     default:
@@ -1155,7 +1166,7 @@ wsdd_start_stop_callback (bool start)
         }
 
         /* Cleanup resources */
-        wsdd_host_list_purge();
+        wsdd_finding_list_purge();
     }
 }
 
@@ -1172,8 +1183,8 @@ wsdd_init (void)
         return SANE_STATUS_GOOD;
     }
 
-    /* Initialize wsdd_host_list */
-    ll_init(&wsdd_host_list);
+    /* Initialize wsdd_finding_list */
+    ll_init(&wsdd_finding_list);
 
     /* Create IPv4/IPv6 multicast addresses */
     wsdd_mcast_ipv4.sin_family = AF_INET;
