@@ -29,14 +29,21 @@
  */
 #define ZEROCONF_READY_TIMEOUT                  5
 
+/* Initial size of zeroconf_device::ifaces
+ */
+#define ZEROCONF_DEVICE_IFACES_INITIAL_LEN      4
+
 /******************** Local Types *********************/
 /* zeroconf_device represents a single device
  */
 typedef struct {
-    uuid         uuid;      /* Device UUID */
-    unsigned int protocols; /* Supported protocols, (set of 1 << ID_PROTO) */
-    ll_node      node_list; /* In zeroconf_device_list */
-    ll_head      findings;  /* zeroconf_finding, by method */
+    uuid         uuid;       /* Device UUID */
+    unsigned int protocols;  /* Supported protocols, (set of 1 << ID_PROTO) */
+    ll_node      node_list;  /* In zeroconf_device_list */
+    ll_head      findings;   /* zeroconf_finding, by method */
+    int          *ifaces;    /* Set of interfaces the device is visible from */
+    size_t       ifaces_len; /* Length of ifaces array */
+    size_t       ifaces_cap; /* Capacity of ifaces array */
 } zeroconf_device;
 
 /* Static variables
@@ -104,6 +111,9 @@ zeroconf_device_add (uuid uuid)
     device->uuid = uuid;
     ll_init(&device->findings);
 
+    device->ifaces_cap = ZEROCONF_DEVICE_IFACES_INITIAL_LEN;
+    device->ifaces = g_malloc(device->ifaces_cap * sizeof(*device->ifaces));
+
     ll_push_end(&zeroconf_device_list, &device->node_list);
     return device;
 }
@@ -113,6 +123,7 @@ zeroconf_device_add (uuid uuid)
 static void
 zeroconf_device_del (zeroconf_device *device)
 {
+    g_free(device->ifaces);
     ll_del(&device->node_list);
     g_free(device);
 }
@@ -135,6 +146,38 @@ zeroconf_device_find (uuid uuid)
     return NULL;
 }
 
+/* Check if device is visible from the particular network interface
+ */
+static bool
+zeroconf_device_ifaces_lookup (zeroconf_device *device, int ifindex)
+{
+    size_t i;
+
+    for (i = 0; i < device->ifaces_len; i ++ ) {
+        if (ifindex == device->ifaces[i]) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/* Add interface to the set of interfaces device is seen from
+ */
+static void
+zeroconf_device_ifaces_add (zeroconf_device *device, int ifindex)
+{
+    if (!zeroconf_device_ifaces_lookup(device, ifindex)) {
+        if (device->ifaces_len == device->ifaces_cap) {
+            device->ifaces_cap *= 2;
+            device->ifaces = g_realloc(device->ifaces,
+                device->ifaces_cap * sizeof(*device->ifaces));
+        }
+
+        device->ifaces[device->ifaces_len ++] = ifindex;
+    }
+}
+
 /* Add zeroconf_finding to zeroconf_device
  */
 static void
@@ -142,6 +185,7 @@ zeroconf_device_add_finding (zeroconf_device *device,
     zeroconf_finding *finding)
 {
     ll_push_end(&device->findings, &finding->list_node);
+    zeroconf_device_ifaces_add(device, finding->ifindex);
     if (finding->endpoints != NULL) {
         ID_PROTO proto = zeroconf_method_to_proto(finding->method);
         if (proto != ID_PROTO_UNKNOWN) {
@@ -157,7 +201,6 @@ zeroconf_device_del_finding (zeroconf_device *device,
     zeroconf_finding *finding)
 {
     ll_node *node;
-    ID_PROTO proto = zeroconf_method_to_proto(finding->method);
 
     ll_del(&finding->list_node);
     if (ll_empty(&device->findings)) {
@@ -165,28 +208,21 @@ zeroconf_device_del_finding (zeroconf_device *device,
         return;
     }
 
-    if (proto == ID_PROTO_UNKNOWN) {
-        /* We are not interested on it protocol
-         */
-        return;
-    }
+    /* Rebuild interfaces and protocols */
+    device->protocols = 0;
+    device->ifaces_len = 0;
 
     for (LL_FOR_EACH(node, &device->findings)) {
-        zeroconf_finding *finding2;
-        ID_PROTO         proto2;
+        ID_PROTO         proto;
 
-        finding2 = OUTER_STRUCT(node, zeroconf_finding, list_node);
-        proto2 = zeroconf_method_to_proto(finding2->method);
+        finding = OUTER_STRUCT(node, zeroconf_finding, list_node);
+        proto = zeroconf_method_to_proto(finding->method);
 
-        if (finding2->endpoints != NULL && proto2 == proto) {
-            /* We still have this protocol from another finding
-             */
-            return;
+        zeroconf_device_ifaces_add(device, finding->ifindex );
+        if (proto != ID_PROTO_UNKNOWN) {
+            device->protocols |= 1 << proto;
         }
     }
-
-    /* Protocol is not longer available */
-    device->protocols &= ~(1 << proto);
 }
 
 /* Get most authoritative zeroconf_finding, that provides
