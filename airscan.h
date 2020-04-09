@@ -973,6 +973,12 @@ http_query_uri (const http_query *q);
 const char*
 http_query_method (const http_query *q);
 
+/* Set request header
+ */
+void
+http_query_set_request_header (http_query *q, const char *name,
+        const char *value);
+
 /* Get request header
  */
 const char*

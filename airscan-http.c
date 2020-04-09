@@ -818,7 +818,7 @@ http_query_set_host (http_query *q)
 
     if (addr != NULL) {
         ip_straddr s = ip_straddr_from_sockaddr(addr);
-        soup_message_headers_append(q->msg->request_headers, "Host", s.text);
+        soup_message_headers_replace(q->msg->request_headers, "Host", s.text);
         return;
     }
 
@@ -831,7 +831,7 @@ http_query_set_host (http_query *q)
 
     buf[len] = '\0';
 
-    soup_message_headers_append(q->msg->request_headers, "Host", buf);
+    soup_message_headers_replace(q->msg->request_headers, "Host", buf);
 }
 
 /* Create new http_query
@@ -870,7 +870,7 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
      * Looks like Kyocera firmware bug. Force connection to close
      * as a workaround
      */
-    soup_message_headers_append(q->msg->request_headers, "Connection", "close");
+    soup_message_headers_replace(q->msg->request_headers, "Connection", "close");
 
     return q;
 }
@@ -1009,6 +1009,15 @@ const char*
 http_query_method (const http_query *q)
 {
     return q->msg->method;
+}
+
+/* Set request header
+ */
+void
+http_query_set_request_header (http_query *q, const char *name,
+        const char *value)
+{
+    soup_message_headers_replace(q->msg->request_headers, name, value);
 }
 
 /* Get request header
