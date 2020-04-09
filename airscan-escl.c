@@ -534,6 +534,7 @@ escl_scan_query (const proto_ctx *ctx)
     const char              *mime = "image/jpeg";
     const devcaps_source    *src = ctx->devcaps->src[params->src];
     bool                    duplex = false;
+    http_query              *query;
 
     /* Prepare parameters */
     switch (params->src) {
@@ -588,7 +589,23 @@ escl_scan_query (const proto_ctx *ctx)
     }
 
     /* Send request to device */
-    return escl_http_query(ctx, "ScanJobs", "POST", xml_wr_finish_compact(xml));
+    query = escl_http_query(ctx, "ScanJobs", "POST",
+        xml_wr_finish_compact(xml));
+
+    /* It's a dirty hack
+     *
+     * HP LaserJet MFP M630 doesn't allow eSCL scan, unless
+     * Host is set to "localhost". It is probably bad and
+     * naive attempt to enforce some access security.
+     *
+     * So here we forcibly set Host to "localhost". I hope
+     * it will not cause problems with other devices. BTW,
+     * vuescan does the same, and I believe they have tested
+     * many devices.
+     */
+    http_query_set_request_header(query, "Host", "localhost");
+
+    return query;
 }
 
 /* Decode result of scan request
