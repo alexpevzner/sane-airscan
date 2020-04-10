@@ -360,7 +360,8 @@ device_proto_op_submit (device *dev, PROTO_OP op, void (*callback) (void*, http_
 
     log_assert(dev->log, func != NULL);
 
-    log_debug(dev->log, "%s: submitting", device_proto_op_name(dev, op));
+    log_debug(dev->log, "%s: submitting: attempt=%d",
+        device_proto_op_name(dev, op), dev->proto_ctx.failed_attempt);
     dev->proto_op_current = op;
     q = func(&dev->proto_ctx);
     http_query_submit(q, callback);
@@ -407,6 +408,18 @@ device_proto_op_decode (device *dev, PROTO_OP op)
         sane_strstatus(result.status),
         device_proto_op_name(dev, result.next),
         result.delay);
+
+    if (result.next == PROTO_OP_CHECK) {
+        int http_status = http_query_status(dev->proto_ctx.query);
+
+        dev->proto_ctx.failed_op = op;
+        dev->proto_ctx.failed_http_status = http_status;
+    }
+
+    if (op == PROTO_OP_CHECK) {
+        dev->proto_ctx.failed_attempt ++;
+    }
+
     return result;
 }
 
@@ -998,6 +1011,7 @@ device_start_new_job (device *dev)
     dev->job_status = SANE_STATUS_GOOD;
     g_free((char*) dev->proto_ctx.location);
     dev->proto_ctx.location = NULL;
+    dev->proto_ctx.failed_op = PROTO_OP_NONE;
     dev->proto_ctx.failed_attempt = 0;
     dev->proto_ctx.images_received = 0;
 

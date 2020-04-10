@@ -811,12 +811,11 @@ escl_status_decode (const proto_ctx *ctx)
     }
 
     /* Now it's time to make a decision */
-    if (ctx->failed_op == PROTO_OP_LOAD &&
-        ctx->failed_http_status == HTTP_STATUS_SERVICE_UNAVAILABLE &&
+    if (ctx->failed_http_status == HTTP_STATUS_SERVICE_UNAVAILABLE &&
         ctx->failed_attempt < ESCL_LOAD_RETRY_ATTEMPTS) {
 
-        /* Note, some devices may return HTTP_STATUS_SERVICE_UNAVAILABLE
-         * on attempt to load page immediately after job is created
+        /* Note, some devices may return HTTP 503 error core, meaning
+         * that it makes sense to come back after small delat
          *
          * So if status doesn't cleanly indicate any error, lets retry
          * several times
@@ -835,7 +834,11 @@ escl_status_decode (const proto_ctx *ctx)
     }
 
     if (status == SANE_STATUS_GOOD || status == SANE_STATUS_UNSUPPORTED) {
-        status = SANE_STATUS_IO_ERROR;
+        if (ctx->failed_http_status == HTTP_STATUS_SERVICE_UNAVAILABLE) {
+            status = SANE_STATUS_DEVICE_BUSY;
+        } else {
+            status = SANE_STATUS_IO_ERROR;
+        }
     }
 
     /* Fill the result */
