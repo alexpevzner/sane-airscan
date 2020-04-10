@@ -1587,8 +1587,7 @@ typedef enum {
     /* The following findings serve as indirect signs of
      * scanner presence in the network
      */
-    ZEROCONF_IPP_TCP,     /* _ipp._tcp with "Scan=T" */
-    ZEROCONF_IPPS_TCP,    /* _ipps._tcp with "Scan=T" */
+    ZEROCONF_MDNS_HINT,   /* Hint finding from MDNS world */
 
     /* The following findings are expected to bring actual
      * scanner endpoints

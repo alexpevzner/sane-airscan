@@ -63,8 +63,7 @@ static ID_PROTO
 zeroconf_method_to_proto (ZEROCONF_METHOD method)
 {
     switch (method) {
-    case ZEROCONF_IPP_TCP:
-    case ZEROCONF_IPPS_TCP:
+    case ZEROCONF_MDNS_HINT:
         return ID_PROTO_UNKNOWN;
 
     case ZEROCONF_USCAN_TCP:
@@ -87,8 +86,7 @@ static const char*
 zeroconf_method_name (ZEROCONF_METHOD method)
 {
     switch (method) {
-    case ZEROCONF_IPP_TCP:    return "ZEROCONF_IPP_TCP";
-    case ZEROCONF_IPPS_TCP:   return "ZEROCONF_IPPS_TCP";
+    case ZEROCONF_MDNS_HINT:  return "ZEROCONF_MDNS_HINT";
     case ZEROCONF_USCAN_TCP:  return "ZEROCONF_USCAN_TCP";
     case ZEROCONF_USCANS_TCP: return "ZEROCONF_USCANS_TCP";
     case ZEROCONF_WSD:        return "ZEROCONF_WSD";
@@ -231,8 +229,8 @@ zeroconf_device_del_finding (zeroconf_device *device,
 static const zeroconf_finding*
 zeroconf_device_name_model_source (zeroconf_device *device)
 {
-    ll_node *node;
-    zeroconf_finding *ipp_printer = NULL, *wsd = NULL;
+    ll_node          *node;
+    zeroconf_finding *hint = NULL, *wsd = NULL;
 
     for (LL_FOR_EACH(node, &device->findings)) {
         zeroconf_finding *finding;
@@ -243,10 +241,9 @@ zeroconf_device_name_model_source (zeroconf_device *device)
             case ZEROCONF_USCANS_TCP:
                 return finding;
 
-            case ZEROCONF_IPP_TCP:
-            case ZEROCONF_IPPS_TCP:
-                if (ipp_printer == NULL) {
-                    ipp_printer = finding;
+            case ZEROCONF_MDNS_HINT:
+                if (hint == NULL) {
+                    hint = finding;
                 }
                 break;
 
@@ -261,7 +258,7 @@ zeroconf_device_name_model_source (zeroconf_device *device)
         }
     }
 
-    return ipp_printer ? ipp_printer : wsd;
+    return hint ? hint : wsd;
 }
 
 /* Get device endpoints.
@@ -801,8 +798,7 @@ zeroconf_init (void)
 {
     ll_init(&zeroconf_device_list);
 
-    zeroconf_initscan_bits = (1 << ZEROCONF_IPP_TCP) |
-                             (1 << ZEROCONF_IPPS_TCP) |
+    zeroconf_initscan_bits = (1 << ZEROCONF_MDNS_HINT) |
                              (1 << ZEROCONF_USCAN_TCP) |
                              (1 << ZEROCONF_USCANS_TCP);
 

@@ -28,6 +28,21 @@
  */
 #define MDNS_READY_TIMEOUT                      5
 
+/* MDNS_SERVICE represents numerical identifiers for
+ * DNS-SD service types we are interested in
+ */
+typedef enum {
+    MDNS_SERVICE_UNKNOWN = -1,
+
+    MDNS_SERVICE_IPP_TCP,     /* _ipp._tcp */
+    MDNS_SERVICE_IPPS_TCP,    /* _ipps._tcp */
+    MDNS_SERVICE_USCAN_TCP,   /* _uscan._tcp */
+    MDNS_SERVICE_USCANS_TCP,  /* _uscans._tcp */
+    MDNS_SERVICE_SCANNER_TCP, /* _scanner._tcp */
+
+    NUM_MDNS_SERVICE
+} MDNS_SERVICE;
+
 /******************** Local Types *********************/
 /* mdns_finding represents zeroconf_finding for MDNS
  * device discovery
@@ -48,8 +63,8 @@ static const AvahiPoll *mdns_avahi_poll;
 static AvahiTimeout *mdns_avahi_restart_timer;
 static AvahiClient *mdns_avahi_client;
 static bool mdns_avahi_browser_running;
-static AvahiServiceBrowser *mdns_avahi_browser[NUM_ZEROCONF_METHOD];
-static bool mdns_initscan[NUM_ZEROCONF_METHOD];
+static AvahiServiceBrowser *mdns_avahi_browser[NUM_MDNS_SERVICE];
+static bool mdns_initscan[NUM_MDNS_SERVICE];
 static int mdns_initscan_count[NUM_ZEROCONF_METHOD];
 
 /* Forward declarations
@@ -95,6 +110,55 @@ mdns_perror (const char *name, AvahiProtocol protocol, const char *action)
             avahi_strerror(avahi_client_errno(mdns_avahi_client)));
 }
 
+/* Get MDNS_SERVICE name
+ */
+static const char*
+mdns_service_name (MDNS_SERVICE service)
+{
+    switch (service) {
+    case MDNS_SERVICE_IPP_TCP:     return "_ipp._tcp";
+    case MDNS_SERVICE_IPPS_TCP:    return "_ipps._tcp";
+    case MDNS_SERVICE_USCAN_TCP:   return "_uscan._tcp";
+    case MDNS_SERVICE_USCANS_TCP:  return "_uscans._tcp";
+    case MDNS_SERVICE_SCANNER_TCP: return "_scanner._tcp";
+
+    case MDNS_SERVICE_UNKNOWN:
+    case NUM_MDNS_SERVICE:
+        break;
+    }
+
+    log_internal_error(NULL);
+    return NULL;
+}
+
+/* Get MDNS_SERVICE by name
+ */
+static MDNS_SERVICE
+mdns_service_by_name (const char *name)
+{
+    int i;
+
+    for (i = 0; i < NUM_MDNS_SERVICE; i ++) {
+        if (!strcasecmp(name, mdns_service_name(i))) {
+            return i;
+        }
+    }
+
+    return MDNS_SERVICE_UNKNOWN;
+}
+
+/* Map MDNS_SERVICE to ZEROCONF_METHOD
+ */
+static ZEROCONF_METHOD
+mdns_service_to_method (MDNS_SERVICE service)
+{
+    switch (service) {
+        case MDNS_SERVICE_USCANS_TCP:  return ZEROCONF_USCAN_TCP;
+        case MDNS_SERVICE_SCANNER_TCP: return ZEROCONF_USCANS_TCP;
+
+        default:                       return ZEROCONF_MDNS_HINT;
+    }
+}
 
 /* Get AvahiResolverEvent name, for debugging
  */
@@ -173,18 +237,11 @@ mdns_initscan_count_dec (ZEROCONF_METHOD method)
     }
 }
 
-/* avahi_service_resolver_free adapter for GDestroyNotify
- */
-static void
-mdns_avahi_service_resolver_free_adapter(gpointer p)
-{
-    avahi_service_resolver_free(p);
-}
-
 /* Create new mdns_finding structure
  */
 static mdns_finding*
-mdns_finding_new (ZEROCONF_METHOD method, int ifindex, const char *name)
+mdns_finding_new (ZEROCONF_METHOD method, int ifindex, const char *name,
+        bool initscan)
 {
     mdns_finding *mdns = g_new0(mdns_finding, 1);
 
@@ -192,10 +249,9 @@ mdns_finding_new (ZEROCONF_METHOD method, int ifindex, const char *name)
     mdns->finding.ifindex = ifindex;
     mdns->finding.name = g_strdup(name);
 
-    mdns->resolvers = g_ptr_array_new_with_free_func(
-        mdns_avahi_service_resolver_free_adapter);
+    mdns->resolvers = g_ptr_array_new();
 
-    mdns->initscan = mdns_initscan[method];
+    mdns->initscan = initscan;
     if (mdns->initscan) {
         mdns_initscan_count_inc(mdns->finding.method);
     }
@@ -243,7 +299,8 @@ mdns_finding_find (ZEROCONF_METHOD method, int ifindex, const char *name)
 /* Get mdns_finding: find existing or add a new one
  */
 static mdns_finding*
-mdns_finding_get (ZEROCONF_METHOD method, int ifindex, const char *name)
+mdns_finding_get (ZEROCONF_METHOD method, int ifindex, const char *name,
+        bool initscan)
 {
     mdns_finding *mdns;
 
@@ -254,11 +311,22 @@ mdns_finding_get (ZEROCONF_METHOD method, int ifindex, const char *name)
     }
 
     /* Add new mdns_finding state */
-    mdns = mdns_finding_new(method, ifindex, name);
+    mdns = mdns_finding_new(method, ifindex, name, initscan);
 
     ll_push_end(&mdns_finding_list, &mdns->node_list);
 
     return mdns;
+}
+
+/* Kill pending resolvers
+ */
+static void
+mdns_finding_kill_resolvers (mdns_finding *mdns)
+{
+    while (mdns->resolvers->len > 0) {
+        avahi_service_resolver_free(mdns->resolvers->pdata[0]);
+        g_ptr_array_remove_index(mdns->resolvers, 0);
+    }
 }
 
 /* Del the mdns_finding
@@ -270,6 +338,7 @@ mdns_finding_del (mdns_finding *mdns)
         zeroconf_finding_withdraw(&mdns->finding);
     }
     ll_del(&mdns->node_list);
+    mdns_finding_kill_resolvers(mdns);
     mdns_finding_free(mdns);
 }
 
@@ -359,6 +428,100 @@ mdns_make_escl_endpoint (ZEROCONF_METHOD method, const AvahiAddress *addr,
     return zeroconf_endpoint_new(ID_PROTO_ESCL, uri);
 }
 
+/* Handle AVAHI_RESOLVER_FOUND event
+ */
+static void
+mdns_avahi_resolver_found (mdns_finding *mdns, MDNS_SERVICE service,
+        AvahiStringList *txt, const AvahiAddress *addr, uint16_t port,
+        AvahiIfIndex interface)
+{
+    const char        *txt_ty = NULL;
+    const char        *txt_uuid = NULL;
+    const char        *txt_scan = NULL;
+    const char        *txt_rs = NULL;
+    AvahiStringList   *s;
+    zeroconf_endpoint *endpoint;
+    ZEROCONF_METHOD   method = mdns->finding.method;
+
+    /* Decode TXT record */
+    s = avahi_string_list_find(txt, "ty");
+    if (s != NULL && s->size > 3) {
+        txt_ty = (char*) s->text + 3;
+    }
+
+    s = avahi_string_list_find(txt, "uuid");
+    if (s != NULL && s->size > 5) {
+        txt_uuid = (char*) s->text + 5;
+    }
+
+    switch (service) {
+    case MDNS_SERVICE_IPP_TCP:
+    case MDNS_SERVICE_IPPS_TCP:
+        s = avahi_string_list_find(txt, "scan");
+        if (s != NULL && s->size > 5) {
+            txt_scan = (char*) s->text + 5;
+        }
+        break;
+
+    default:
+        break;
+    }
+
+    switch (service) {
+    case MDNS_SERVICE_USCAN_TCP:
+    case MDNS_SERVICE_USCANS_TCP:
+        s = avahi_string_list_find(txt, "rs");
+        if (s != NULL && s->size > 3) {
+            txt_rs = (char*) s->text + 3;
+        }
+        break;
+
+    default:
+        break;
+    }
+
+    /* Update finding */
+    if (mdns->finding.model == NULL && txt_ty != NULL) {
+        mdns->finding.model = g_strdup(txt_ty);
+    }
+
+    if (!uuid_valid(mdns->finding.uuid) && txt_uuid != NULL) {
+        mdns->finding.uuid = uuid_parse(txt_uuid);
+    }
+
+    /* Handle the event */
+    switch (service) {
+    case MDNS_SERVICE_IPP_TCP:
+    case MDNS_SERVICE_IPPS_TCP:
+        if (txt_scan != NULL && !strcasecmp(txt_scan, "t")) {
+            mdns->publish = true;
+        }
+        break;
+
+    case MDNS_SERVICE_USCAN_TCP:
+    case MDNS_SERVICE_USCANS_TCP:
+        endpoint = mdns_make_escl_endpoint(method, addr, port,
+            txt_rs, interface);
+
+        endpoint->next = mdns->finding.endpoints;
+        mdns->finding.endpoints = endpoint;
+        mdns->publish = true;
+        break;
+
+    case MDNS_SERVICE_SCANNER_TCP:
+        mdns->publish = true;
+        break;
+
+    case MDNS_SERVICE_UNKNOWN:
+    case NUM_MDNS_SERVICE:
+        log_internal_error(NULL);
+    }
+
+    if (mdns->finding.method == ZEROCONF_MDNS_HINT && mdns->publish) {
+        mdns_finding_kill_resolvers(mdns);
+    }
+}
+
 /* AVAHI service resolver callback
  */
 static void
@@ -370,7 +533,7 @@ mdns_avahi_resolver_callback (AvahiServiceResolver *r,
         void *userdata)
 {
     mdns_finding      *mdns = userdata;
-    ZEROCONF_METHOD   method = mdns->finding.method;
+    MDNS_SERVICE      service = mdns_service_by_name(type);
 
     (void) domain;
     (void) host_name;
@@ -393,46 +556,7 @@ mdns_avahi_resolver_callback (AvahiServiceResolver *r,
     /* Handle event */
     switch (event) {
     case AVAHI_RESOLVER_FOUND:
-        if (mdns->finding.model == NULL) {
-            AvahiStringList *ty = avahi_string_list_find(txt, "ty");
-            if (ty != NULL && ty->size > 3) {
-                mdns->finding.model = g_strdup((char*) (ty->text + 3));
-            }
-        }
-
-        if (!uuid_valid(mdns->finding.uuid)) {
-            AvahiStringList *uuid = avahi_string_list_find(txt, "uuid");
-            if (uuid != NULL && uuid->size > 5) {
-                mdns->finding.uuid = uuid_parse((const char*) uuid->text + 5);
-            }
-        }
-
-        if (method == ZEROCONF_USCAN_TCP || method == ZEROCONF_USCANS_TCP) {
-            AvahiStringList   *rs;
-            const char        *rs_text = NULL;
-            zeroconf_endpoint *endpoint;
-
-            rs = avahi_string_list_find(txt, "rs");
-            if (rs != NULL && rs->size > 3) {
-                rs_text = (char*) (rs->text + 3);
-            }
-
-            endpoint = mdns_make_escl_endpoint(method, addr, port,
-                rs_text, interface);
-
-            endpoint->next = mdns->finding.endpoints;
-            mdns->finding.endpoints = endpoint;
-            mdns->publish = true;
-        } else {
-            AvahiStringList *scan;
-            const char      *val;
-
-            scan = avahi_string_list_find(txt, "scan");
-            if (scan != NULL && scan->size > 5) {
-                val = (char*) (scan->text + 5);
-                mdns->publish = !strcasecmp(val, "t");
-            }
-        }
+        mdns_avahi_resolver_found(mdns, service, txt, addr, port, interface);
         break;
 
     case AVAHI_RESOLVER_FAILURE:
@@ -440,35 +564,37 @@ mdns_avahi_resolver_callback (AvahiServiceResolver *r,
     }
 
     /* Perform appropriate actions, if resolving is done */
-    if (mdns->resolvers->len != 0) {
-        return;
-    }
+    if (mdns->resolvers->len == 0) {
+        /* Fixup endpoints */
+        mdns->finding.endpoints = zeroconf_endpoint_list_sort_dedup(
+                mdns->finding.endpoints);
 
-    mdns->finding.endpoints = zeroconf_endpoint_list_sort_dedup(
-            mdns->finding.endpoints);
+        /* Fixup model and UUID */
+        if (mdns->finding.model == NULL) {
+            /* Very unlikely, just paranoia */
+            mdns->finding.model = g_strdup(mdns->finding.name);
+        }
 
-    if (mdns->finding.model == NULL) {
-        /* Very unlikely, just paranoia */
-        mdns->finding.model = g_strdup(mdns->finding.name);
-    }
+        if (!uuid_valid(mdns->finding.uuid)) {
+            /* Paranoia too
+             *
+             * If device UUID is not available from DNS-SD (which
+             * is very unlikely), we generate a synthetic UUID,
+             * based on device name hash
+             */
+            mdns->finding.uuid = uuid_hash(mdns->finding.name);
+        }
 
-    if (!uuid_valid(mdns->finding.uuid)) {
-        /* Paranoia too
-         *
-         * If device UUID is not available from DNS-SD (which
-         * is very unlikely), we generate a synthetic UUID,
-         * based on device name hash
-         */
-        mdns->finding.uuid = uuid_hash(mdns->finding.name);
-    }
+        /* Update initscan count */
+        if (mdns->initscan) {
+            mdns->initscan = false;
+            mdns_initscan_count_dec(mdns->finding.method);
+        }
 
-    if (mdns->initscan) {
-        mdns->initscan = false;
-        mdns_initscan_count_dec(mdns->finding.method);
-    }
-
-    if (mdns->publish) {
-        zeroconf_finding_publish(&mdns->finding);
+        /* Publish the finding */
+        if (mdns->publish) {
+            zeroconf_finding_publish(&mdns->finding);
+        }
     }
 }
 
@@ -481,7 +607,9 @@ mdns_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
         AvahiLookupResultFlags flags, void* userdata)
 {
     mdns_finding    *mdns;
-    ZEROCONF_METHOD method = (ZEROCONF_METHOD) userdata;
+    MDNS_SERVICE    service = (MDNS_SERVICE) userdata;
+    ZEROCONF_METHOD method = mdns_service_to_method(service);
+    bool            initscan = mdns_initscan[service];
 
     (void) b;
     (void) flags;
@@ -497,7 +625,7 @@ mdns_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
     switch (event) {
     case AVAHI_BROWSER_NEW:
         /* Add a device (or lookup for already added) */
-        mdns = mdns_finding_get(method, interface, name);
+        mdns = mdns_finding_get(method, interface, name, initscan);
 
         /* Initiate resolver */
         AvahiServiceResolver *r;
@@ -530,8 +658,8 @@ mdns_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
         break;
 
     case AVAHI_BROWSER_ALL_FOR_NOW:
-        if (mdns_initscan[method]) {
-            mdns_initscan[method] = false;
+        if (mdns_initscan[service]) {
+            mdns_initscan[service] = false;
             mdns_initscan_count_dec(method);
         }
         break;
@@ -541,20 +669,28 @@ mdns_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
 /* Start browser for specified service type
  */
 static bool
-mdns_avahi_browser_start_for_type (ZEROCONF_METHOD method, const char *type)
+mdns_avahi_browser_start_for_type (MDNS_SERVICE service, const char *type)
 {
-    log_assert(NULL, mdns_avahi_browser[method] == NULL);
+    bool ok;
 
-    mdns_avahi_browser[method] = avahi_service_browser_new(mdns_avahi_client,
+    log_assert(NULL, mdns_avahi_browser[service] == NULL);
+
+    mdns_avahi_browser[service] = avahi_service_browser_new(mdns_avahi_client,
             AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC, type, NULL,
-            0, mdns_avahi_browser_callback, (void*) method);
+            0, mdns_avahi_browser_callback, (void*) service);
 
-    if (mdns_avahi_browser[method] == NULL) {
+    ok = mdns_avahi_browser[service] != NULL;
+
+    if (!ok) {
         log_debug(NULL, "MDNS: avahi_service_browser_new(%s): %s",
             type, avahi_strerror(avahi_client_errno(mdns_avahi_client)));
     }
 
-    return mdns_avahi_browser[method] != NULL;
+    if (ok && mdns_initscan[service]) {
+        mdns_initscan_count_inc(mdns_service_to_method(service));
+    }
+
+    return mdns_avahi_browser[service] != NULL;
 }
 
 /* Start/restart service browser
@@ -562,21 +698,16 @@ mdns_avahi_browser_start_for_type (ZEROCONF_METHOD method, const char *type)
 static bool
 mdns_avahi_browser_start (void)
 {
-    static struct { ZEROCONF_METHOD method; const char *type; } svc[] = {
-        { ZEROCONF_IPP_TCP,    "_ipp._tcp" },
-        { ZEROCONF_IPPS_TCP,   "_ipps._tcp" },
-        { ZEROCONF_USCAN_TCP,  "_uscan._tcp" },
-        { ZEROCONF_USCANS_TCP, "_uscans._tcp" },
-    };
-
-    unsigned int i;
-    bool         ok = true;
+    int  i;
+    bool ok = true;
 
     log_assert(NULL, !mdns_avahi_browser_running);
 
-    for (i = 0; ok && i < sizeof(svc)/sizeof(svc[0]); i ++) {
-        ok = mdns_avahi_browser_start_for_type(svc[i].method, svc[i].type);
+    for (i = 0; ok && i < NUM_MDNS_SERVICE; i ++) {
+        ok = mdns_avahi_browser_start_for_type(i, mdns_service_name(i));
     }
+
+    mdns_avahi_browser_running = true;
 
     return ok;
 }
@@ -586,12 +717,15 @@ mdns_avahi_browser_start (void)
 static void
 mdns_avahi_browser_stop (void)
 {
-    int i;
+    MDNS_SERVICE service;
 
-    for (i = 0; i < NUM_ZEROCONF_METHOD; i ++) {
-        if (mdns_avahi_browser[i] != NULL) {
-            avahi_service_browser_free(mdns_avahi_browser[i]);
-            mdns_avahi_browser[i] = NULL;
+    for (service = 0; service < NUM_MDNS_SERVICE; service ++) {
+        if (mdns_avahi_browser[service] != NULL) {
+            avahi_service_browser_free(mdns_avahi_browser[service]);
+            mdns_avahi_browser[service] = NULL;
+            if (mdns_initscan[service]) {
+                mdns_initscan_count_dec(mdns_service_to_method(service));
+            }
         }
     }
 
@@ -697,11 +831,18 @@ mdns_init (void)
 
     if (!conf.discovery) {
         log_debug(NULL, "MDNS: devices discovery disabled");
-        zeroconf_finding_done(ZEROCONF_IPP_TCP);
-        zeroconf_finding_done(ZEROCONF_IPPS_TCP);
+        zeroconf_finding_done(ZEROCONF_MDNS_HINT);
         zeroconf_finding_done(ZEROCONF_USCAN_TCP);
         zeroconf_finding_done(ZEROCONF_USCANS_TCP);
         return SANE_STATUS_GOOD;
+    }
+
+    for (i = 0; i < NUM_MDNS_SERVICE; i ++) {
+        mdns_initscan[i] = true;
+    }
+
+    for (i = 0; i < NUM_ZEROCONF_METHOD; i ++) {
+        mdns_initscan_count[i] = 0;
     }
 
     mdns_avahi_glib_poll = eloop_new_avahi_poll();
@@ -722,11 +863,6 @@ mdns_init (void)
     mdns_avahi_client_start();
     if (mdns_avahi_client == NULL) {
         return SANE_STATUS_NO_MEM;
-    }
-
-    for (i = 0; i < NUM_ZEROCONF_METHOD; i ++) {
-        mdns_initscan[i] = true;
-        mdns_initscan_count[i] = 1;
     }
 
     return SANE_STATUS_GOOD;
