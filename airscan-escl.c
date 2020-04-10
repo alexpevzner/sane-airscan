@@ -707,6 +707,8 @@ escl_status_query (const proto_ctx *ctx)
 }
 
 /* Parse ScannerStatus response.
+ *
+ * Returned SANE_STATUS_UNSUPPORTED means status not understood
  */
 static SANE_Status
 escl_decode_scanner_status (const proto_ctx *ctx,
@@ -737,6 +739,9 @@ escl_decode_scanner_status (const proto_ctx *ctx,
                 device_status = SANE_STATUS_GOOD;
             } else if (!strcmp(state, "Processing")) {
                 device_status = SANE_STATUS_DEVICE_BUSY;
+            } else if (!strcmp(state, "Testing")) {
+                /* HP LaserJet MFP M630 warm up */
+                device_status = SANE_STATUS_DEVICE_BUSY;
             } else {
                 device_status = SANE_STATUS_UNSUPPORTED;
             }
@@ -765,11 +770,8 @@ escl_decode_scanner_status (const proto_ctx *ctx,
         adf_status != SANE_STATUS_GOOD &&
         adf_status != SANE_STATUS_UNSUPPORTED) {
         status = adf_status;
-    } else if ( device_status != SANE_STATUS_GOOD &&
-                device_status != SANE_STATUS_UNSUPPORTED) {
-        status = device_status;
     } else {
-        status = SANE_STATUS_IO_ERROR;
+        status = device_status;
     }
 
 DONE:
