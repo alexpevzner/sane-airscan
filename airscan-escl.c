@@ -815,7 +815,7 @@ escl_status_decode (const proto_ctx *ctx)
         ctx->failed_attempt < ESCL_LOAD_RETRY_ATTEMPTS) {
 
         /* Note, some devices may return HTTP 503 error core, meaning
-         * that it makes sense to come back after small delat
+         * that it makes sense to come back after small delay
          *
          * So if status doesn't cleanly indicate any error, lets retry
          * several times
