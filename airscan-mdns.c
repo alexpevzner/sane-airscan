@@ -153,10 +153,10 @@ static ZEROCONF_METHOD
 mdns_service_to_method (MDNS_SERVICE service)
 {
     switch (service) {
-        case MDNS_SERVICE_USCANS_TCP:  return ZEROCONF_USCAN_TCP;
-        case MDNS_SERVICE_SCANNER_TCP: return ZEROCONF_USCANS_TCP;
+        case MDNS_SERVICE_USCAN_TCP:  return ZEROCONF_USCAN_TCP;
+        case MDNS_SERVICE_USCANS_TCP: return ZEROCONF_USCANS_TCP;
 
-        default:                       return ZEROCONF_MDNS_HINT;
+        default:                      return ZEROCONF_MDNS_HINT;
     }
 }
 
