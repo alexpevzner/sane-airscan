@@ -70,6 +70,9 @@ image_decoder_bmp_begin (image_decoder *decoder, const void *data,
     bmp->mem_file = (unsigned char*)data;
     bmp->size_file = size;
 
+    if (!bmp->mem_file || strlen(bmp->mem_file) < 30)
+        return ERROR("BMP: invalid header");
+
     /* Data offset 4 bytes 0x0A Offset in the file 
        where the pixel data is stored */
     if (memcpy((void*)&bmp->offset_data,
