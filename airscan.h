@@ -2035,6 +2035,11 @@ image_decoder_png_new (void);
 image_decoder*
 image_decoder_dib_new (void);
 
+/* Create BMP image decoder
+ */
+image_decoder*
+image_decoder_bmp_new (void);
+
 /* Free image decoder
  */
 static inline void
