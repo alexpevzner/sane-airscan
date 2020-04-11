@@ -826,7 +826,7 @@ escl_status_decode (const proto_ctx *ctx)
         case SANE_STATUS_GOOD:
         case SANE_STATUS_UNSUPPORTED:
         case SANE_STATUS_DEVICE_BUSY:
-                result.next = PROTO_OP_LOAD;
+                result.next = ctx->failed_op;
                 result.delay = ESCL_LOAD_RETRY_PAUSE;
                 return result;
 
