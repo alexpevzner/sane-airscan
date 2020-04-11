@@ -25,32 +25,50 @@ enum {
  *       OPENED
  *          |
  *          V
- *       PROBING->FAILED-------------------------------
- *          |                                         |
- *          V                                         |
- *     -->IDLE                                        |
- *     |    |                                         |
- *     |    V                                         |
- *     |  SCANNING -> CANCEL_REQ -> CANCEL_WAIT ---   |
- *     |    |                           |         |   |
- *     |    V                           V         |   |
- *     |  CLEANUP                   CANCELLING    |   |
- *     |    |                           |         |   |
- *     |    V                           V         V   |
- *     ---DONE<------------------------------------   |
- *          |                                         |
- *          V                                         |
- *       CLOSED<---------------------------------------
+ *       PROBING->PROBING_FAILED--------------------------------
+ *          |                                                  |
+ *          V                                                  |
+ *     -->IDLE                                                 |
+ *     |    | submit PROTO_OP_SCAN                             |
+ *     |    V                                                  |
+ *     |  SCANNING----------                                   |
+ *     |    |              | async cancel request received     |
+ *     |    |              V                                   |
+ *     |    |           CANCEL_REQ                             |
+ *     |    |              | stm_cancel_event callback         |
+ *     |    |              |                                   |
+ *     |    |              +------                             |
+ *     |    |              |     | PROTO_OP_SCAN still pending |
+ *     |    |              |     |                             |
+ *     |    |              |  CANCEL_DELAYED                   |
+ *     |    |              |     |  | PROTO_OP_SCAN failed     |
+ *     |    |              V     V  -----------------          |
+ *     |    |           CANCEL_SENT                 |          |
+ *     |    |     job      |     | cancel request   |          |
+ *     |    |     finished |     | finished         |          |
+ *     |    |              V     V                  |          |
+ *     |    |  CANCEL_JOB_DONE  CANCEL_REQ_DONE     |          |
+ *     |    |              |            |           |          |
+ *     |    V              |            |           |          |
+ *     |  CLEANUP          |            |           |          |
+ *     |    |              |            |           |          |
+ *     |    V              |            |           |          |
+ *     ---DONE<--------------------------------------          |
+ *          |                                                  |
+ *          V                                                  |
+ *       CLOSED<------------------------------------------------
  */
 typedef enum {
     DEVICE_STM_OPENED,
     DEVICE_STM_PROBING,
-    DEVICE_STM_FAILED,
+    DEVICE_STM_PROBING_FAILED,
     DEVICE_STM_IDLE,
     DEVICE_STM_SCANNING,
     DEVICE_STM_CANCEL_REQ,
-    DEVICE_STM_CANCEL_WAIT,
-    DEVICE_STM_CANCELLING,
+    DEVICE_STM_CANCEL_DELAYED,
+    DEVICE_STM_CANCEL_SENT,
+    DEVICE_STM_CANCEL_JOB_DONE,
+    DEVICE_STM_CANCEL_REQ_DONE,
     DEVICE_STM_CLEANUP,
     DEVICE_STM_DONE,
     DEVICE_STM_CLOSED
@@ -70,6 +88,7 @@ struct device {
     DEVICE_STM_STATE     stm_state;         /* Device state */
     GCond                stm_cond;          /* Signalled when state changes */
     eloop_event          *stm_cancel_event; /* Signalled to initiate cancel */
+    http_query           *stm_cancel_query; /* CANCEL query */
     eloop_timer          *stm_timer;        /* Delay timer */
 
     /* Protocol handling */
@@ -79,7 +98,7 @@ struct device {
     /* I/O handling (AVAHI and HTTP) */
     zeroconf_endpoint    *endpoint_current; /* Current endpoint to probe */
 
-    /* Scanning state machinery */
+    /* Job status */
     SANE_Status          job_status;          /* Job completion status */
     SANE_Word            job_skip_x;          /* How much pixels to skip, */
     SANE_Word            job_skip_y;          /*    from left and top */
@@ -343,7 +362,8 @@ device_proto_op_name (device *dev, PROTO_OP op)
 /* Submit operation request
  */
 static void
-device_proto_op_submit (device *dev, PROTO_OP op, void (*callback) (void*, http_query*))
+device_proto_op_submit (device *dev, PROTO_OP op,
+        void (*callback) (void*, http_query*))
 {
     http_query *(*func) (const proto_ctx *ctx) = NULL;
     http_query *q;
@@ -430,6 +450,7 @@ static void
 device_http_cancel (device *dev)
 {
     http_client_cancel(dev->proto_ctx.http);
+
     if (dev->stm_timer != NULL) {
         eloop_timer_cancel(dev->stm_timer);
         dev->stm_timer = NULL;
@@ -502,7 +523,7 @@ DONE:
             dev->endpoint_current->next != NULL) {
             device_probe_endpoint(dev, dev->endpoint_current->next);
         } else {
-            device_stm_state_set(dev, DEVICE_STM_FAILED);
+            device_stm_state_set(dev, DEVICE_STM_PROBING_FAILED);
         }
     } else {
         device_stm_state_set(dev, DEVICE_STM_IDLE);
@@ -517,17 +538,19 @@ static const char*
 device_stm_state_name (DEVICE_STM_STATE state)
 {
     switch (state) {
-    case DEVICE_STM_OPENED:      return "DEVICE_STM_OPENED";
-    case DEVICE_STM_PROBING:     return "DEVICE_STM_PROBING";
-    case DEVICE_STM_FAILED:      return "DEVICE_STM_FAILED";
-    case DEVICE_STM_IDLE:        return "DEVICE_STM_IDLE";
-    case DEVICE_STM_SCANNING:    return "DEVICE_STM_SCANNING";
-    case DEVICE_STM_CANCEL_REQ:  return "DEVICE_STM_CANCEL_REQ";
-    case DEVICE_STM_CANCEL_WAIT: return "DEVICE_STM_CANCEL_WAIT";
-    case DEVICE_STM_CANCELLING:  return "DEVICE_STM_CANCELLING";
-    case DEVICE_STM_CLEANUP:     return "DEVICE_STM_CLEANUP";
-    case DEVICE_STM_DONE:        return "DEVICE_STM_DONE";
-    case DEVICE_STM_CLOSED:      return "DEVICE_STM_CLOSED";
+    case DEVICE_STM_OPENED:          return "DEVICE_STM_OPENED";
+    case DEVICE_STM_PROBING:         return "DEVICE_STM_PROBING";
+    case DEVICE_STM_PROBING_FAILED:  return "DEVICE_STM_PROBING_FAILED";
+    case DEVICE_STM_IDLE:            return "DEVICE_STM_IDLE";
+    case DEVICE_STM_SCANNING:        return "DEVICE_STM_SCANNING";
+    case DEVICE_STM_CANCEL_REQ:      return "DEVICE_STM_CANCEL_REQ";
+    case DEVICE_STM_CANCEL_DELAYED:  return "DEVICE_STM_CANCEL_DELAYED";
+    case DEVICE_STM_CANCEL_SENT:     return "DEVICE_STM_CANCEL_SENT";
+    case DEVICE_STM_CANCEL_JOB_DONE: return "DEVICE_STM_CANCEL_JOB_DONE";
+    case DEVICE_STM_CANCEL_REQ_DONE: return "DEVICE_STM_CANCEL_REQ_DONE";
+    case DEVICE_STM_CLEANUP:         return "DEVICE_STM_CLEANUP";
+    case DEVICE_STM_DONE:            return "DEVICE_STM_DONE";
+    case DEVICE_STM_CLOSED:          return "DEVICE_STM_CLOSED";
     }
 
     return NULL;
@@ -550,6 +573,21 @@ device_stm_state_working (device *dev)
     return state > DEVICE_STM_IDLE && state < DEVICE_STM_DONE;
 }
 
+/* Check if CANCEL request was sent
+ */
+static bool
+device_stm_state_cancel_sent (device *dev)
+{
+    switch (device_stm_state_get(dev)) {
+    case DEVICE_STM_CANCEL_SENT:
+    case DEVICE_STM_CANCEL_REQ_DONE:
+        return true;
+
+    default:
+        return false;
+    }
+}
+
 /* Set state
  */
 static void
@@ -566,16 +604,38 @@ device_stm_state_set (device *dev, DEVICE_STM_STATE state)
     }
 }
 
+/* cancel_query() callback
+ */
+static void
+device_stm_cancel_callback (void *ptr, http_query *q)
+{
+    device       *dev = ptr;
+
+    (void) q;
+
+    dev->stm_cancel_query = NULL;
+    if (device_stm_state_get(dev) == DEVICE_STM_CANCEL_JOB_DONE) {
+        device_stm_state_set(dev, DEVICE_STM_DONE);
+    } else {
+        device_stm_state_set(dev, DEVICE_STM_CANCEL_REQ_DONE);
+    }
+}
+
 /* Perform cancel, if possible
  */
 static bool
 device_stm_cancel_perform (device *dev, SANE_Status status)
 {
+    proto_ctx *ctx = &dev->proto_ctx;
+
     device_job_set_status(dev, status);
-    if (dev->proto_ctx.location != NULL) {
-        device_http_cancel(dev);
-        device_stm_state_set(dev, DEVICE_STM_CANCELLING);
-        device_proto_op_submit(dev, PROTO_OP_CANCEL, device_stm_op_callback);
+    if (ctx->location != NULL) {
+
+        device_stm_state_set(dev, DEVICE_STM_CANCEL_SENT);
+        log_assert(dev->log, dev->stm_cancel_query == NULL);
+        dev->stm_cancel_query = ctx->proto->cancel_query(ctx);
+        http_query_submit(dev->stm_cancel_query, device_stm_cancel_callback);
+
         return true;
     }
 
@@ -591,7 +651,7 @@ device_stm_cancel_event_callback (void *data)
 
     log_debug(dev->log, "cancel requested");
     if (!device_stm_cancel_perform(dev, SANE_STATUS_CANCELLED)) {
-        device_stm_state_set(dev, DEVICE_STM_CANCEL_WAIT);
+        device_stm_state_set(dev, DEVICE_STM_CANCEL_DELAYED);
     }
 }
 
@@ -655,6 +715,16 @@ device_stm_op_callback (void *ptr, http_query *q)
     /* Update job status */
     device_job_set_status(dev, result.status);
 
+    /* If CANCEL was sent, and next operation is cleanup or
+     * current operation is CHECK, finish the job
+     */
+    if (device_stm_state_cancel_sent(dev)) {
+        if (result.next == PROTO_OP_CLEANUP ||
+            dev->proto_op_current == PROTO_OP_CHECK) {
+            result.next = PROTO_OP_FINISH;
+        }
+    }
+
     /* Check for FINISH */
     if (result.next == PROTO_OP_FINISH) {
         if (dev->proto_ctx.images_received == 0) {
@@ -665,12 +735,16 @@ device_stm_op_callback (void *ptr, http_query *q)
             device_job_set_status(dev, SANE_STATUS_IO_ERROR);
         }
 
-        device_stm_state_set(dev, DEVICE_STM_DONE);
+        if (device_stm_state_get(dev) == DEVICE_STM_CANCEL_SENT) {
+            device_stm_state_set(dev, DEVICE_STM_CANCEL_JOB_DONE);
+        } else {
+            device_stm_state_set(dev, DEVICE_STM_DONE);
+        }
         return;
     }
 
     /* Handle delayed cancellation */
-    if (device_stm_state_get(dev) == DEVICE_STM_CANCEL_WAIT) {
+    if (device_stm_state_get(dev) == DEVICE_STM_CANCEL_DELAYED) {
         if (!device_stm_cancel_perform(dev, SANE_STATUS_CANCELLED)) {
             device_stm_state_set(dev, DEVICE_STM_DONE);
         }
@@ -679,7 +753,7 @@ device_stm_op_callback (void *ptr, http_query *q)
 
     /* Update state, if needed */
     if (result.next == PROTO_OP_CANCEL) {
-        device_stm_state_set(dev, DEVICE_STM_CANCELLING);
+        device_stm_state_set(dev, DEVICE_STM_CANCEL_SENT);
     } else if (result.next == PROTO_OP_CLEANUP) {
         device_stm_state_set(dev, DEVICE_STM_CLEANUP);
     }
@@ -925,7 +999,7 @@ device_open (const char *ident, SANE_Status *status)
         eloop_cond_wait(&dev->stm_cond);
     }
 
-    if (device_stm_state_get(dev) == DEVICE_STM_FAILED) {
+    if (device_stm_state_get(dev) == DEVICE_STM_PROBING_FAILED) {
         device_free(dev);
         dev = NULL;
         *status = SANE_STATUS_IO_ERROR;
