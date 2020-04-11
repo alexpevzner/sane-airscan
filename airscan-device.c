@@ -593,8 +593,12 @@ device_stm_state_cancel_sent (device *dev)
 static void
 device_stm_state_set (device *dev, DEVICE_STM_STATE state)
 {
-    if (dev->stm_state != state) {
-        log_debug(dev->log, "state=%s", device_stm_state_name(state));
+    DEVICE_STM_STATE old_state = device_stm_state_get(dev);
+
+    if (old_state != state) {
+        log_debug(dev->log, "%s->%s",
+            device_stm_state_name(old_state), device_stm_state_name(state));
+
         __atomic_store_n(&dev->stm_state, state, __ATOMIC_SEQ_CST);
         g_cond_broadcast(&dev->stm_cond);
 
@@ -629,11 +633,13 @@ device_stm_cancel_perform (device *dev, SANE_Status status)
     proto_ctx *ctx = &dev->proto_ctx;
 
     device_job_set_status(dev, status);
-    if (ctx->location != NULL) {
-
+    if (ctx->location != NULL && !device_stm_state_cancel_sent(dev)) {
         device_stm_state_set(dev, DEVICE_STM_CANCEL_SENT);
+
         log_assert(dev->log, dev->stm_cancel_query == NULL);
         dev->stm_cancel_query = ctx->proto->cancel_query(ctx);
+
+        http_query_onerror(dev->stm_cancel_query, NULL);
         http_query_submit(dev->stm_cancel_query, device_stm_cancel_callback);
 
         return true;
