@@ -634,14 +634,23 @@ device_stm_cancel_perform (device *dev, SANE_Status status)
 
     device_job_set_status(dev, status);
     if (ctx->location != NULL && !device_stm_state_cancel_sent(dev)) {
-        device_stm_state_set(dev, DEVICE_STM_CANCEL_SENT);
+        if (ctx->params.src == ID_SOURCE_PLATEN &&
+            ctx->images_received > 0) {
+            /* If we are not expecting more images, skip cancel
+             * and simple wait until job is done
+             */
+            device_stm_state_set(dev, DEVICE_STM_CANCEL_REQ_DONE);
+        } else {
+            /* Otherwise, perform a normal cancel operation
+             */
+            device_stm_state_set(dev, DEVICE_STM_CANCEL_SENT);
 
-        log_assert(dev->log, dev->stm_cancel_query == NULL);
-        dev->stm_cancel_query = ctx->proto->cancel_query(ctx);
+            log_assert(dev->log, dev->stm_cancel_query == NULL);
+            dev->stm_cancel_query = ctx->proto->cancel_query(ctx);
 
-        http_query_onerror(dev->stm_cancel_query, NULL);
-        http_query_submit(dev->stm_cancel_query, device_stm_cancel_callback);
-
+            http_query_onerror(dev->stm_cancel_query, NULL);
+            http_query_submit(dev->stm_cancel_query, device_stm_cancel_callback);
+        }
         return true;
     }
 
