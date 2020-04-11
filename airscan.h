@@ -917,6 +917,16 @@ http_query_new_relative(http_client *client,
         const http_uri *base_uri, const char *path,
         const char *method, char *body, const char *content_type);
 
+/* For this particular query override on-error callback, previously
+ * set by http_client_onerror()
+ *
+ * If canllback is NULL, the completion callback, specified on a
+ * http_query_submit() call, will be used even in a case of
+ * transport error.
+ */
+void
+http_query_onerror (http_query *q, void (*onerror)(void *ptr, error err));
+
 /* Submit the query.
  *
  * When query is finished, callback will be called. After return from

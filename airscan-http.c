@@ -673,9 +673,9 @@ http_client_free (http_client *client)
  */
 void
 http_client_onerror (http_client *client,
-        void (*callback)(void *ptr, error err))
+        void (*onerror)(void *ptr, error err))
 {
-    client->onerror = callback;
+    client->onerror = onerror;
 }
 
 /* Cancel all pending queries, if any
@@ -714,6 +714,8 @@ struct http_query {
     http_uri          *uri;                     /* Query URI */
     SoupMessage       *msg;                     /* Underlying SOUP message */
     uintptr_t         uintptr;                  /* User-defined parameter */
+    void              (*onerror) (void *ptr,    /* On-error callback */
+                                error err);
     void              (*callback) (void *ptr,   /* Completion callback */
                                 http_query *q);
     http_query_cached *cached;                  /* Cached data */
@@ -797,8 +799,8 @@ http_query_callback (SoupSession *session, SoupMessage *msg, gpointer userdata)
 
         trace_http_query_hook(log_ctx_trace(client->log), q);
 
-        if (err != NULL && client->onerror != NULL) {
-            client->onerror(client->ptr, err);
+        if (err != NULL && q->onerror != NULL) {
+            q->onerror(client->ptr, err);
         } else if (q->callback != NULL) {
             q->callback(client->ptr, q);
         }
@@ -851,6 +853,7 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
     q->uri = uri;
     q->msg = soup_message_new_from_uri(method, uri->parsed);
     q->cached = g_new0(http_query_cached, 1);
+    q->onerror = client->onerror;
 
     if (body != NULL) {
         soup_message_set_request(q->msg, content_type, SOUP_MEMORY_TAKE,
@@ -887,6 +890,19 @@ http_query_new_relative(http_client *client,
 {
     http_uri *uri = http_uri_new_relative(base_uri, path, true, false);
     return http_query_new(client, uri, method, body, content_type);
+}
+
+/* For this particular query override on-error callback, previously
+ * set by http_client_onerror()
+ *
+ * If canllback is NULL, the completion callback, specified on a
+ * http_query_submit() call, will be used even in a case of
+ * transport error.
+ */
+void
+http_query_onerror (http_query *q, void (*onerror)(void *ptr, error err))
+{
+    q->onerror = onerror;
 }
 
 /* Submit the query.
