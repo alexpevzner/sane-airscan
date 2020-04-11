@@ -33,17 +33,17 @@
  */
 typedef struct {
     image_decoder                 decoder;   /* Base class */
-    int                           num_lines; /* Num of lines left to read */
-    int                           width; /* Width of the image in pixels. */
-    int                           bytes_per_pixel; /* */
-    int                           bytes_per_line; /*  */
-    int                           real_bytes_per_line; /*  */
-    int                           current_line; /* Current of lines */
+    int32_t                       num_lines; /* Num of lines left to read */
+    int32_t                       width; /* Width of the image in pixels. */
+    int32_t                       bytes_per_pixel; /* */
+    int32_t                       bytes_per_line; /*  */
+    int32_t                       real_bytes_per_line; /*  */
+    int32_t                       current_line; /* Current of lines */
     unsigned char                 *mem_file; /* Position of the beginning
                                                of the tiff file. */
-    int                           offset_data; /* Offset in the file where
+    int32_t                       offset_data; /* Offset in the file where
                                                   the pixel data is stored */
-    int                           offset_file; /* Moving the start position 
+    int32_t                       offset_file; /* Moving the start position 
                                                   of the bmp data file. */
                                          
     size_t                        size_file; /* Size of the bmp file. */
@@ -91,9 +91,11 @@ image_decoder_bmp_begin (image_decoder *decoder, const void *data,
         return ERROR("BMP: invalid header");
 
     bmp->offset_file = 0;
-    bmp->bytes_per_pixel = (int)bits_per_pixel / 8;
+    bmp->bytes_per_pixel = (int32_t)bits_per_pixel / 8;
     bmp->bytes_per_line = bmp->width * bmp->bytes_per_pixel;
-    bmp->real_bytes_per_line = (int)(4 * ceil((float)bmp->width / 4.0f)) * bmp->bytes_per_pixel;
+    bmp->real_bytes_per_line = (int32_t)
+                 (4 * ceil((float)bmp->width / 4.0f)) *
+                 bmp->bytes_per_pixel;
     return NULL;
 }
 
