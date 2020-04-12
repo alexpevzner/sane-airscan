@@ -55,6 +55,9 @@ static GCond zeroconf_initscan_cond;
 static int zeroconf_initscan_bits;
 
 /******************** Forward declarations *********************/
+static bool
+zeroconf_device_ifaces_lookup (zeroconf_device *device, int ifindex);
+
 static zeroconf_endpoint*
 zeroconf_endpoint_copy_single (const zeroconf_endpoint *endpoint);
 
@@ -110,7 +113,9 @@ zeroconf_device_add (zeroconf_finding *finding)
 
     device->ident = devid_new();
     device->uuid = finding->uuid;
-    device->name = g_strdup(finding->name);
+    if (finding->name != NULL) {
+        device->name = g_strdup(finding->name);
+    }
 
     ll_init(&device->findings);
 
@@ -143,13 +148,15 @@ zeroconf_device_find (zeroconf_finding *finding)
         zeroconf_device *device;
         device = OUTER_STRUCT(node, zeroconf_device, node_list);
         if (uuid_equal(device->uuid, finding->uuid)) {
-            if (finding->name == NULL && device->name == NULL) {
-                return device;
+            bool        found;
+
+            if (finding->name != NULL && device->name != NULL) {
+                found = !strcasecmp(finding->name, device->name);
+            } else {
+                found = zeroconf_device_ifaces_lookup(device, finding->ifindex);
             }
 
-            if (finding->name != NULL &&
-                device->name != NULL &&
-                !strcasecmp(finding->name, device->name)) {
+            if (found) {
                 return device;
             }
         }
@@ -279,6 +286,19 @@ zeroconf_device_name_model_source (zeroconf_device *device)
     }
 
     return hint ? hint : wsd;
+}
+
+/* Get device name and model
+ */
+static void
+zeroconf_device_name_model (zeroconf_device *device,
+        const char **name, const char **model)
+{
+    const zeroconf_finding *finding = zeroconf_device_name_model_source(device);
+    log_assert(NULL, finding != NULL);
+
+    *name = device->name ? device->name : finding->model;
+    *model = finding->model;
 }
 
 /* Get device endpoints.
@@ -603,7 +623,7 @@ zeroconf_finding_publish (zeroconf_finding *finding)
     log_debug(NULL, "zeroconf: found %s", finding->uuid.text);
     log_debug(NULL, "  method:    %s", zeroconf_method_name(finding->method));
     log_debug(NULL, "  interface: %d (%s)", finding->ifindex, ifname);
-    log_debug(NULL, "  name:      %s", finding->name);
+    log_debug(NULL, "  name:      %s", finding->name ? finding->name : "-");
     log_debug(NULL, "  model:     %s", finding->model);
 
     if (proto != ID_PROTO_UNKNOWN) {
@@ -614,11 +634,6 @@ zeroconf_finding_publish (zeroconf_finding *finding)
         for (ep = finding->endpoints; ep != NULL; ep = ep->next) {
             log_debug(NULL, "    %s", http_uri_str(ep->uri));
         }
-    }
-
-    if (zeroconf_find_static_by_name(finding->name) != NULL) {
-        log_debug(NULL, "ignoring statically configured device");
-        return;
     }
 
     device = zeroconf_device_find(finding);
@@ -742,25 +757,26 @@ zeroconf_device_list_get (void)
     for (LL_FOR_EACH(node, &zeroconf_device_list)) {
         zeroconf_device *device;
         ID_PROTO        proto;
+        const char      *name, *model;
 
         device = OUTER_STRUCT(node, zeroconf_device, node_list);
+        zeroconf_device_name_model(device, &name, &model);
+
+        if (zeroconf_find_static_by_name(name) != NULL) {
+            /* Static configuration overrides discovery */
+            continue;
+        }
+
         for (proto = 0; proto < NUM_ID_PROTO; proto ++) {
             if ((device->protocols & (1 << proto)) != 0) {
                 SANE_Device            *info = g_new0(SANE_Device, 1);
                 const char             *proto_name = id_proto_name(proto);
-                const zeroconf_finding *finding;
 
                 dev_list[dev_count ++] = info;
-                finding = zeroconf_device_name_model_source(device);
-                log_assert(NULL, finding != NULL);
 
                 info->name = zeroconf_device_ident(device, proto);
                 info->vendor = g_strdup(proto_name);
-                if (conf.model_is_netname) {
-                    info->model = g_strdup(finding->name);
-                } else {
-                    info->model = g_strdup(finding->model);
-                }
+                info->model = g_strdup(conf.model_is_netname ? name : model);
                 info->type = g_strdup_printf("%s network scanner", proto_name);
             }
         }
@@ -808,6 +824,9 @@ zeroconf_devinfo_lookup (const char *ident)
     zeroconf_device  *device = NULL;
     zeroconf_devinfo *devinfo;
 
+    /* Wait until device table is ready */
+    zeroconf_initscan_wait();
+
     /* Lookup a device, static first */
     dev_conf = zeroconf_find_static_by_ident(ident);
     if (dev_conf == NULL) {
@@ -831,12 +850,11 @@ zeroconf_devinfo_lookup (const char *ident)
         devinfo->name = g_strdup(dev_conf->name);
         devinfo->endpoints = zeroconf_endpoint_new(dev_conf->proto, uri);
     } else {
-        const zeroconf_finding *finding;
+        const char      *name, *model;
 
-        finding = zeroconf_device_name_model_source(device);
-        log_assert(NULL, finding != NULL);
+        zeroconf_device_name_model(device, &name, &model);
+        devinfo->name = g_strdup(name);
 
-        devinfo->name = g_strdup(finding->name);
         devinfo->endpoints = zeroconf_device_endpoints(device, ID_PROTO_ESCL);
     }
 
@@ -864,7 +882,8 @@ zeroconf_init (void)
 
     zeroconf_initscan_bits = (1 << ZEROCONF_MDNS_HINT) |
                              (1 << ZEROCONF_USCAN_TCP) |
-                             (1 << ZEROCONF_USCANS_TCP);
+                             (1 << ZEROCONF_USCANS_TCP) |
+                             (1 << ZEROCONF_WSD);
 
     return SANE_STATUS_GOOD;
 }

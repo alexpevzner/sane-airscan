@@ -47,6 +47,7 @@ typedef struct {
     ll_head           xaddrs;       /* List of wsdd_xaddr */
     http_client       *http_client; /* HTTP client */
     ll_node           list_node;    /* In wsdd_finding_list */
+    bool              published;    /* This finding is published */
 } wsdd_finding;
 
 /* wsdd_xaddr represents device transport address
@@ -208,12 +209,14 @@ wsdd_finding_new (int ifindex, const char *address)
 {
     wsdd_finding *wsdd = g_new0(wsdd_finding, 1);
 
-    wsdd->address = g_strdup(address);
+    wsdd->finding.method = ZEROCONF_WSD;
     wsdd->finding.uuid = uuid_parse(address);
     if (!uuid_valid(wsdd->finding.uuid)) {
         wsdd->finding.uuid = uuid_hash(address);
     }
     wsdd->finding.ifindex = ifindex;
+
+    wsdd->address = g_strdup(address);
     ll_init(&wsdd->xaddrs);
     wsdd->http_client = http_client_new (wsdd_log, wsdd);
 
@@ -225,6 +228,10 @@ wsdd_finding_new (int ifindex, const char *address)
 static void
 wsdd_finding_free (wsdd_finding *wsdd)
 {
+    if (wsdd->published) {
+        zeroconf_finding_withdraw(&wsdd->finding);
+    }
+
     http_client_cancel(wsdd->http_client);
     http_client_free(wsdd->http_client);
 
@@ -422,7 +429,6 @@ wsdd_finding_get_metadata_callback (void *ptr, http_query *q)
         } else {
             wsdd->finding.model = g_strdup(wsdd->address);
         }
-        wsdd->finding.name = g_strdup(wsdd->finding.model);
     }
 
     /* Cleanup and exit */
@@ -447,6 +453,11 @@ DONE:
         for (endpoint = wsdd->finding.endpoints; endpoint != NULL;
             endpoint = endpoint->next) {
             log_debug(wsdd_log, "  %s", http_uri_str(endpoint->uri));
+        }
+
+        if (!wsdd->published) {
+            wsdd->published = true;
+            zeroconf_finding_publish(&wsdd->finding);
         }
     }
 }
