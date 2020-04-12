@@ -282,7 +282,7 @@ device_find_by_ident (const char *ident)
 
     for (i = 0; i < device_table->len; i ++) {
         device *dev = g_ptr_array_index(device_table, i);
-        if (!strcmp(dev->devinfo->ident.text, ident)) {
+        if (!strcmp(dev->devinfo->ident, ident)) {
             return dev;
         }
     }

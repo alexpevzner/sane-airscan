@@ -1680,8 +1680,8 @@ zeroconf_finding_done (ZEROCONF_METHOD method);
 /* zeroconf_devinfo represents a device information
  */
 typedef struct {
-    devid             ident;      /* Device ident */
-    const char        *name;      /* Device name */
+    const char        *ident;     /* Unique ident */
+    const char        *name;      /* Human-friendly name */
     zeroconf_endpoint *endpoints; /* Device endpoints */
 } zeroconf_devinfo;
 
@@ -2180,6 +2180,18 @@ math_rand_max (uint32_t max);
  */
 uint32_t
 math_rand_range (uint32_t min, uint32_t max);
+
+/* Count nonzero bits in 32-bit integer
+ */
+static inline unsigned int
+math_popcount (unsigned int n)
+{
+    unsigned int count = (n & 0x55555555) + ((n >> 1) & 0x55555555);
+    count = (count & 0x33333333) + ((count >> 2) & 0x33333333);
+    count = (count & 0x0F0F0F0F) + ((count >> 4) & 0x0F0F0F0F);
+    count = (count & 0x00FF00FF) + ((count >> 8) & 0x00FF00FF);
+    return (count & 0x0000FFFF) + ((count >> 16) & 0x0000FFFF);
+}
 
 /******************** Logging ********************/
 /* Initialize logging

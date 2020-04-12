@@ -308,19 +308,54 @@ zeroconf_device_endpoints (zeroconf_device *device, ID_PROTO proto)
     return zeroconf_endpoint_list_sort_dedup(endpoints);
 }
 
+/* Build device ident string by prefixing devid with protocol
+ * The returned string must be released with g_free()
+ */
+static const char*
+zeroconf_device_ident (zeroconf_device *device, ID_PROTO proto)
+{
+    return g_strconcat( device->ident.text, "@", id_proto_name(proto), NULL);
+}
+
 /* Find zeroconf_device by ident
  */
 static zeroconf_device*
 zeroconf_device_find_by_ident (const char *ident)
 {
-    ll_node *node;
+    ll_node         *node;
+    char            *buf, *proto_name;
+    ID_PROTO        proto;
+    zeroconf_device *device = NULL;
 
+    /* Split ident into devid and protocol */
+    buf = g_alloca(strlen(ident) + 1);
+    strcpy(buf, ident);
+    ident = buf;
+    proto_name = strchr(ident, '@');
+    if (proto_name == NULL) {
+        return NULL;
+    }
+
+    *(proto_name ++) = '\0';
+    proto = id_proto_by_name(proto_name);
+    if (proto == ID_PROTO_UNKNOWN) {
+        return NULL;
+    }
+
+    /* Lookup device */
     for (LL_FOR_EACH(node, &zeroconf_device_list)) {
-        zeroconf_device *device;
         device = OUTER_STRUCT(node, zeroconf_device, node_list);
         if (!strcmp(device->ident.text, ident)) {
-            return device;
+            break;
         }
+    }
+
+    if (device == NULL)
+        return NULL;
+
+    /* Check that device supports requested protocol */
+    if ((device->protocols & (1 << proto)) != 0) {
+        return device;
     }
 
     return NULL;
@@ -520,6 +555,7 @@ zeroconf_endpoint_list_sort_dedup (zeroconf_endpoint *list)
     return list;
 }
 
+/******************** Static configuration *********************/
 /* Look for device's static configuration by device name
  */
 static conf_device*
@@ -536,7 +572,6 @@ zeroconf_find_static_by_name (const char *name)
     return NULL;
 }
 
-/******************** Static configuration *********************/
 /* Look for device's static configuration by device ident
  */
 static conf_device*
@@ -647,7 +682,16 @@ zeroconf_initscan_wait (void)
 static int
 zeroconf_device_list_qsort_cmp (const void *p1, const void *p2)
 {
-    return strcmp(((SANE_Device*) p1)->name, ((SANE_Device*) p2)->name);
+    int   cmp;
+    const SANE_Device *d1 = *(SANE_Device**) p1;
+    const SANE_Device *d2 = *(SANE_Device**) p2;
+
+    cmp = strcmp(d1->model, d2->model);
+    if (cmp != 0) {
+        cmp = strcmp(d1->name, d2->name);
+    }
+
+    return cmp;
 }
 
 /* Get list of devices, in SANE format
@@ -674,10 +718,7 @@ zeroconf_device_list_get (void)
         zeroconf_device *device;
 
         device = OUTER_STRUCT(node, zeroconf_device, node_list);
-
-        if ((device->protocols & (1 << ID_PROTO_ESCL)) != 0) {
-            dev_count ++;
-        }
+        dev_count += math_popcount(device->protocols);
     }
 
     /* Build list of devices */
@@ -700,25 +741,28 @@ zeroconf_device_list_get (void)
 
     for (LL_FOR_EACH(node, &zeroconf_device_list)) {
         zeroconf_device *device;
+        ID_PROTO        proto;
 
         device = OUTER_STRUCT(node, zeroconf_device, node_list);
-        if ((device->protocols & (1 << ID_PROTO_ESCL)) != 0) {
-            SANE_Device            *info = g_new0(SANE_Device, 1);
-            const char             *proto = id_proto_name(ID_PROTO_ESCL); // FIXME
-            const zeroconf_finding *finding;
+        for (proto = 0; proto < NUM_ID_PROTO; proto ++) {
+            if ((device->protocols & (1 << proto)) != 0) {
+                SANE_Device            *info = g_new0(SANE_Device, 1);
+                const char             *proto_name = id_proto_name(proto);
+                const zeroconf_finding *finding;
 
-            dev_list[dev_count ++] = info;
-            finding = zeroconf_device_name_model_source(device);
-            log_assert(NULL, finding != NULL);
+                dev_list[dev_count ++] = info;
+                finding = zeroconf_device_name_model_source(device);
+                log_assert(NULL, finding != NULL);
 
-            info->name = g_strdup(device->ident.text);
-            info->vendor = g_strdup(proto);
-            if (conf.model_is_netname) {
-                info->model = g_strdup(finding->name);
-            } else {
-                info->model = g_strdup(finding->model);
+                info->name = zeroconf_device_ident(device, proto);
+                info->vendor = g_strdup(proto_name);
+                if (conf.model_is_netname) {
+                    info->model = g_strdup(finding->name);
+                } else {
+                    info->model = g_strdup(finding->model);
+                }
+                info->type = g_strdup_printf("%s network scanner", proto_name);
             }
-            info->type = g_strdup_printf("%s network scanner", proto);
         }
     }
 
@@ -775,6 +819,8 @@ zeroconf_devinfo_lookup (const char *ident)
 
     /* Build a zeroconf_devinfo */
     devinfo = g_new0(zeroconf_devinfo, 1);
+    devinfo->ident = g_strdup(ident);
+
     if (dev_conf != NULL) {
         http_uri *uri = http_uri_clone(dev_conf->uri);
 
@@ -782,7 +828,6 @@ zeroconf_devinfo_lookup (const char *ident)
             http_uri_fix_end_slash(uri);
         }
 
-        devinfo->ident = dev_conf->ident;
         devinfo->name = g_strdup(dev_conf->name);
         devinfo->endpoints = zeroconf_endpoint_new(dev_conf->proto, uri);
     } else {
@@ -791,7 +836,6 @@ zeroconf_devinfo_lookup (const char *ident)
         finding = zeroconf_device_name_model_source(device);
         log_assert(NULL, finding != NULL);
 
-        devinfo->ident = device->ident;
         devinfo->name = g_strdup(finding->name);
         devinfo->endpoints = zeroconf_device_endpoints(device, ID_PROTO_ESCL);
     }
@@ -804,6 +848,7 @@ zeroconf_devinfo_lookup (const char *ident)
 void
 zeroconf_devinfo_free (zeroconf_devinfo *devinfo)
 {
+    g_free((char*) devinfo->ident);
     g_free((char*) devinfo->name);
     zeroconf_endpoint_list_free(devinfo->endpoints);
     g_free(devinfo);
@@ -830,7 +875,6 @@ void
 zeroconf_cleanup (void)
 {
 }
-
 
 /* vim:ts=8:sw=4:et
  */
