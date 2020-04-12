@@ -1831,7 +1831,6 @@ typedef enum {
     PROTO_OP_SCAN,    /* New scan */
     PROTO_OP_LOAD,    /* Load image */
     PROTO_OP_CHECK,   /* Check device status */
-    PROTO_OP_CANCEL,  /* Cancel current job */
     PROTO_OP_CLEANUP, /* Cleanup after scan */
     PROTO_OP_FINISH   /* Finish scanning */
 } PROTO_OP;

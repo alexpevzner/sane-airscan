@@ -32,15 +32,16 @@ enum {
  *     |    | submit PROTO_OP_SCAN                             |
  *     |    V                                                  |
  *     |  SCANNING----------                                   |
- *     |    |              | async cancel request received     |
+ *     |    |              | async cancel request received,    |
+ *     |    |              | dev->stm_cancel_event signalled   |
  *     |    |              V                                   |
  *     |    |           CANCEL_REQ                             |
- *     |    |              | stm_cancel_event callback         |
+ *     |    |              | dev->stm_cancel_event callback    |
  *     |    |              |                                   |
  *     |    |              +------                             |
- *     |    |              |     | PROTO_OP_SCAN still pending |
- *     |    |              |     |                             |
- *     |    |              |  CANCEL_DELAYED                   |
+ *     |    | reached      |     | PROTO_OP_SCAN still pending |
+ *     |    | CLEANUP      |     V                             |
+ *     |    |<----------------CANCEL_DELAYED                   |
  *     |    |              |     |  | PROTO_OP_SCAN failed     |
  *     |    |              V     V  -----------------          |
  *     |    |           CANCEL_SENT                 |          |
@@ -52,7 +53,7 @@ enum {
  *     |    V              |            |           |          |
  *     |  CLEANUP          |            |           |          |
  *     |    |              |            |           |          |
- *     |    V              |            |           |          |
+ *     |    V              V            V           V          |
  *     ---DONE<--------------------------------------          |
  *          |                                                  |
  *          V                                                  |
@@ -350,7 +351,6 @@ device_proto_op_name (device *dev, PROTO_OP op)
     case PROTO_OP_SCAN:    return "PROTO_OP_SCAN";
     case PROTO_OP_LOAD:    return "PROTO_OP_LOAD";
     case PROTO_OP_CHECK:   return "PROTO_OP_CHECK";
-    case PROTO_OP_CANCEL:  return "PROTO_OP_CANCEL";
     case PROTO_OP_CLEANUP: return "PROTO_OP_CLEANUP";
     case PROTO_OP_FINISH:  return "PROTO_OP_FINISH";
     }
@@ -373,7 +373,6 @@ device_proto_op_submit (device *dev, PROTO_OP op,
     case PROTO_OP_SCAN:    func = dev->proto_ctx.proto->scan_query; break;
     case PROTO_OP_LOAD:    func = dev->proto_ctx.proto->load_query; break;
     case PROTO_OP_CHECK:   func = dev->proto_ctx.proto->status_query; break;
-    case PROTO_OP_CANCEL:  func = dev->proto_ctx.proto->cancel_query; break;
     case PROTO_OP_CLEANUP: func = dev->proto_ctx.proto->cleanup_query; break;
     case PROTO_OP_FINISH:  log_internal_error(dev->log); break;
     }
@@ -414,7 +413,6 @@ device_proto_op_decode (device *dev, PROTO_OP op)
     case PROTO_OP_SCAN:    func = dev->proto_ctx.proto->scan_decode; break;
     case PROTO_OP_LOAD:    func = dev->proto_ctx.proto->load_decode; break;
     case PROTO_OP_CHECK:   func = dev->proto_ctx.proto->status_decode; break;
-    case PROTO_OP_CANCEL:  func = device_proto_dummy_decode; break;
     case PROTO_OP_CLEANUP: func = device_proto_dummy_decode; break;
     case PROTO_OP_FINISH:  log_internal_error(dev->log); break;
     }
@@ -573,13 +571,14 @@ device_stm_state_working (device *dev)
     return state > DEVICE_STM_IDLE && state < DEVICE_STM_DONE;
 }
 
-/* Check if CANCEL request was sent
+/* Check if CANCEL request was sent to device
  */
 static bool
 device_stm_state_cancel_sent (device *dev)
 {
     switch (device_stm_state_get(dev)) {
     case DEVICE_STM_CANCEL_SENT:
+    case DEVICE_STM_CANCEL_JOB_DONE:
     case DEVICE_STM_CANCEL_REQ_DONE:
         return true;
 
@@ -730,8 +729,8 @@ device_stm_op_callback (void *ptr, http_query *q)
     /* Update job status */
     device_job_set_status(dev, result.status);
 
-    /* If CANCEL was sent, and next operation is cleanup or
-     * current operation is CHECK, finish the job
+    /* If CANCEL was sent, and next operation is CLEANUP or
+     * current operation is CHECK, FINISH the job
      */
     if (device_stm_state_cancel_sent(dev)) {
         if (result.next == PROTO_OP_CLEANUP ||
@@ -758,19 +757,20 @@ device_stm_op_callback (void *ptr, http_query *q)
         return;
     }
 
+    /* Handle switch to PROTO_OP_CLEANUP state */
+    if (result.next == PROTO_OP_CLEANUP) {
+        device_stm_state_set(dev, DEVICE_STM_CLEANUP);
+    }
+
     /* Handle delayed cancellation */
     if (device_stm_state_get(dev) == DEVICE_STM_CANCEL_DELAYED) {
         if (!device_stm_cancel_perform(dev, SANE_STATUS_CANCELLED)) {
+            /* Finish the job, if we has not yet reached cancellable
+             * state
+             */
             device_stm_state_set(dev, DEVICE_STM_DONE);
+            return;
         }
-        return;
-    }
-
-    /* Update state, if needed */
-    if (result.next == PROTO_OP_CANCEL) {
-        device_stm_state_set(dev, DEVICE_STM_CANCEL_SENT);
-    } else if (result.next == PROTO_OP_CLEANUP) {
-        device_stm_state_set(dev, DEVICE_STM_CLEANUP);
     }
 
     /* Handle delay */
