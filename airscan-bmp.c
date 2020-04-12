@@ -58,6 +58,24 @@ image_decoder_bmp_free (image_decoder *decoder)
     g_free(bmp);
 }
 
+static int 
+read_memory(unsigned char*dest, unsigned char *src, int size_src, int offset, int count)
+{
+	int i = 0, j;
+	
+	if (size_src < (offset + count))
+	    return 0;
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+    for (j = 0; j < count; j++) {
+#elif __BYTE_ORDER == __BIG_ENDIAN
+    for (j = count - 1; j > -1; j--) {
+#endif
+        dest[i] = src[j + offset];
+        i++;
+    }
+    return 1;
+}
+
 /* Begin BMP decoding
  */
 static error
@@ -72,28 +90,38 @@ image_decoder_bmp_begin (image_decoder *decoder, const void *data,
     if (!bmp->mem_file || size < 30)
         return ERROR("BMP: invalid header");
     /* Bits per pixel 2 bytes 0x1C Number of bits per pixel */
-    if (memcpy((void*)&bits_per_pixel,
-               (void *)(bmp->mem_file + 28), 2) == NULL)
+    if (!read_memory((unsigned char*)&bits_per_pixel,
+                bmp->mem_file,
+                bmp->size_file,
+                28,
+                2))
         return ERROR("BMP: invalid header");
     bmp->bytes_per_pixel = (int32_t)bits_per_pixel / 8;
     if (bmp->bytes_per_pixel != 1 && bmp->bytes_per_pixel != 3)
          return ERROR("BMP: format unsupported");
     /* Data offset 4 bytes 0x0A Offset in the file 
        where the pixel data is stored */
-    if (memcpy((void*)&bmp->offset_data,
-               (void *)(bmp->mem_file + 10), 4) == NULL)
+    if (!read_memory((unsigned char*)&bmp->offset_data,
+                bmp->mem_file,
+                bmp->size_file,
+                10,
+                4))
         return ERROR("BMP: invalid header");
     /* Width 4 bytes 0x12 Width of the image in pixels */
-    if (memcpy((void*)&bmp->width,
-               (void *)(bmp->mem_file + 18), 4) == NULL)
+    if (!read_memory((unsigned char*)&bmp->width,
+                bmp->mem_file,
+                bmp->size_file,
+                18,
+                4))
         return ERROR("BMP: invalid header");
 
     /* Height 4 bytes 0x16 Height of the image in pixels */
-    if (memcpy((void*)&bmp->num_lines,
-               (void *)(bmp->mem_file + 22), 4) == NULL)
+    if (!read_memory((unsigned char*)&bmp->num_lines,
+                bmp->mem_file,
+                bmp->size_file,
+                22,
+                4))
         return ERROR("BMP: invalid header");
-
-
 
     bmp->offset_file = 0;
     bmp->bytes_per_line = bmp->width * bmp->bytes_per_pixel;
