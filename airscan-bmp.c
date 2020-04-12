@@ -69,32 +69,33 @@ image_decoder_bmp_begin (image_decoder *decoder, const void *data,
 
     bmp->mem_file = (unsigned char*)data;
     bmp->size_file = size;
-
-    if (!bmp->mem_file || strlen(bmp->mem_file) < 30)
+    if (!bmp->mem_file || size < 30)
         return ERROR("BMP: invalid header");
-
-    /* Data offset 4 bytes 0x0A Offset in the file 
-       where the pixel data is stored */
-    if (memcpy((void*)&bmp->offset_data,
-               (void *)(bmp->mem_file + 10), 4) == NULL)
-        return ERROR("BMP: invalid header"); 
-    /* Width 4 bytes 0x12 Width of the image in pixels */
-    if (memcpy((void*)&bmp->width,
-               (void *)(bmp->mem_file + 18), 4) == NULL)
-        return ERROR("BMP: invalid header");
-    
-    /* Height 4 bytes 0x16 Height of the image in pixels */
-    if (memcpy((void*)&bmp->num_lines,
-               (void *)(bmp->mem_file + 22), 4) == NULL)
-        return ERROR("BMP: invalid header");
-    
     /* Bits per pixel 2 bytes 0x1C Number of bits per pixel */
     if (memcpy((void*)&bits_per_pixel,
                (void *)(bmp->mem_file + 28), 2) == NULL)
         return ERROR("BMP: invalid header");
+    bmp->bytes_per_pixel = (int32_t)bits_per_pixel / 8;
+    if (bmp->bytes_per_pixel != 1 && bmp->bytes_per_pixel != 3)
+         return ERROR("BMP: format unsupported");
+    /* Data offset 4 bytes 0x0A Offset in the file 
+       where the pixel data is stored */
+    if (memcpy((void*)&bmp->offset_data,
+               (void *)(bmp->mem_file + 10), 4) == NULL)
+        return ERROR("BMP: invalid header");
+    /* Width 4 bytes 0x12 Width of the image in pixels */
+    if (memcpy((void*)&bmp->width,
+               (void *)(bmp->mem_file + 18), 4) == NULL)
+        return ERROR("BMP: invalid header");
+
+    /* Height 4 bytes 0x16 Height of the image in pixels */
+    if (memcpy((void*)&bmp->num_lines,
+               (void *)(bmp->mem_file + 22), 4) == NULL)
+        return ERROR("BMP: invalid header");
+
+
 
     bmp->offset_file = 0;
-    bmp->bytes_per_pixel = (int32_t)bits_per_pixel / 8;
     bmp->bytes_per_line = bmp->width * bmp->bytes_per_pixel;
     bmp->real_bytes_per_line = (int32_t)
                  (4 * ceil((float)bmp->width / 4.0f)) *
@@ -196,8 +197,6 @@ image_decoder_bmp_read_line (image_decoder *decoder, void *buffer)
 		     buf[bpl + 0] = current_data[bpl + 2];
 		     buf[bpl + 1] = current_data[bpl + 1];
 		     buf[bpl + 2] = current_data[bpl + 0];
-		     if (bmp->bytes_per_pixel == 4)
-			    buf[bpl + 3] = 255; //current_data[bpl + 3];
 		  }
     }
     bmp->offset_file += bmp->real_bytes_per_line;
