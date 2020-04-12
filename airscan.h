@@ -358,6 +358,21 @@ id_format_mime_name (ID_FORMAT id);
 ID_FORMAT
 id_format_by_mime_name (const char *name);
 
+/******************** Device ID ********************/
+/* Type devid represents an unique device ID
+ *
+ * It is wrapped into struct, so it can be returned
+ * by value, without need to mess with memory allocation
+ */
+typedef struct {
+    char text[32];
+} devid;
+
+/* Allocate new devid
+ */
+devid
+devid_new (void);
+
 /******************** UUID utilities ********************/
 /* Type uuid represents a random UUID string.
  *
@@ -414,7 +429,7 @@ uuid_equal (uuid u1, uuid u2)
 typedef struct conf_device conf_device;
 struct conf_device {
     const char  *name; /* Device name */
-    uuid        uuid;  /* uuid_hash(name) */
+    devid       ident;      /* Device ident */
     ID_PROTO    proto; /* Protocol to use */
     http_uri    *uri;  /* Device URI, parsed; NULL if device disabled */
     conf_device *next; /* Next device in the list */
@@ -1581,6 +1596,10 @@ SANE_Status
 devopt_get_option (devopt *opt, SANE_Int option, void *value);
 
 /******************** ZeroConf (device discovery) ********************/
+/* zeroconf_device represents a single device
+ */
+typedef struct zeroconf_device zeroconf_device;
+
 /* zeroconf_endpoint represents a device endpoint
  */
 typedef struct zeroconf_endpoint zeroconf_endpoint;
@@ -1619,12 +1638,17 @@ typedef enum {
  */
 typedef struct {
     ZEROCONF_METHOD   method;     /* Discovery method */
-    const char        *name;      /* Device name */
+    const char        *name;      /* Network-unique name, NULL for WSD */
     const char        *model;     /* Model name */
     uuid              uuid;       /* Device UUID */
     int               ifindex;    /* Network interface index */
     zeroconf_endpoint *endpoints; /* List of endpoints */
-    ll_node           list_node;  /* Should not be used by discovery providers*/
+
+    /* The following fields are reserved for zeroconf core
+     * and should not be used by discovery providers
+     */
+    zeroconf_device   *device;    /* Device the finding points to */
+    ll_node           list_node;  /* Node in device's list of findings */
 } zeroconf_finding;
 
 /* Publish the zeroconf_finding.
@@ -1656,7 +1680,7 @@ zeroconf_finding_done (ZEROCONF_METHOD method);
 /* zeroconf_devinfo represents a device information
  */
 typedef struct {
-    uuid              uuid;       /* Device UUID */
+    devid             ident;      /* Device ident */
     const char        *name;      /* Device name */
     zeroconf_endpoint *endpoints; /* Device endpoints */
 } zeroconf_devinfo;
