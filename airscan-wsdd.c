@@ -36,6 +36,7 @@ typedef struct {
     uint32_t     total_time;   /* Total elapsed time */
     ip_straddr   str_ifaddr;   /* Interface address */
     ip_straddr   str_sockaddr; /* Per-interface socket address */
+    bool         initscan;     /* Initial scan in progress */
 } wsdd_resolver;
 
 /* wsdd_finding represents zeroconf_finding for WSD
@@ -99,6 +100,7 @@ static char                wsdd_buf[65536];
 static struct sockaddr_in  wsdd_mcast_ipv4;
 static struct sockaddr_in6 wsdd_mcast_ipv6;
 static ll_head             wsdd_finding_list;
+static int                 wsdd_initscan_count;
 
 /* WS-DD Probe template
  */
@@ -200,6 +202,28 @@ wsdd_xaddr_list_purge (ll_head *list)
         wsdd_xaddr_free(xaddr);
     }
 }
+
+/******************** wsdd_initscan_count operations ********************/
+/* Increment wsdd_initscan_count
+ */
+static void
+wsdd_initscan_count_inc (void)
+{
+    wsdd_initscan_count ++;
+}
+
+/* Decrement wsdd_initscan_count
+ */
+static void
+wsdd_initscan_count_dec (void)
+{
+    log_assert(wsdd_log, wsdd_initscan_count > 0);
+    wsdd_initscan_count --;
+    if (wsdd_initscan_count == 0) {
+        zeroconf_finding_done(ZEROCONF_WSD);
+    }
+}
+
 
 /******************** wsdd_finding operations ********************/
 /* Create new wsdd_finding
@@ -745,6 +769,11 @@ wsdd_resolver_timer_callback (void *data)
         resolver->fdpoll = NULL;
         resolver->fd = -1;
         log_debug(wsdd_log, "%s: done discovery", resolver->str_ifaddr.text);
+
+        if (resolver->initscan) {
+            resolver->initscan = false;
+            wsdd_initscan_count_dec();
+        }
     } else {
         wsdd_resolver_send_probe(resolver);
     };
@@ -807,7 +836,7 @@ wsdd_resolver_send_probe (wsdd_resolver *resolver)
 /* Create wsdd_resolver
  */
 static wsdd_resolver*
-wsdd_resolver_new (const netif_addr *addr)
+wsdd_resolver_new (const netif_addr *addr, bool initscan)
 {
     wsdd_resolver *resolver = g_new0(wsdd_resolver, 1);
     int           af = addr->ipv6 ? AF_INET6 : AF_INET;
@@ -906,6 +935,12 @@ wsdd_resolver_new (const netif_addr *addr)
 
     wsdd_resolver_send_probe(resolver);
 
+    /* Update wsdd_initscan_count */
+    resolver->initscan = initscan;
+    if (resolver->initscan) {
+        wsdd_initscan_count_inc();
+    }
+
     return resolver;
 
     /* Error: cleanup and exit */
@@ -922,6 +957,10 @@ FAIL:
 static void
 wsdd_resolver_free (wsdd_resolver *resolver)
 {
+    if (resolver->initscan) {
+        wsdd_initscan_count_dec();
+    }
+
     if (resolver->fdpoll != NULL) {
         eloop_fdpoll_free(resolver->fdpoll);
         close(resolver->fd);
@@ -1097,7 +1136,7 @@ wsdd_netif_resolver_by_ifindex (int ifindex)
 /* Update network interfaces addresses
  */
 static void
-wsdd_netif_update_addresses (void) {
+wsdd_netif_update_addresses (bool initscan) {
     netif_addr *addr_list = netif_addr_get();
     netif_addr *addr;
     netif_diff diff = netif_diff_compute(wsdd_netif_addr_list, addr_list);
@@ -1127,7 +1166,7 @@ wsdd_netif_update_addresses (void) {
 
     for (addr = wsdd_netif_addr_list; addr != NULL; addr = addr->next) {
         if (addr->data == NULL) {
-            addr->data = wsdd_resolver_new(addr);
+            addr->data = wsdd_resolver_new(addr, initscan);
         }
     }
 }
@@ -1140,7 +1179,7 @@ wsdd_netif_notifier_callback (void *data)
     (void) data;
 
     log_debug(wsdd_log, "netif event");
-    wsdd_netif_update_addresses();
+    wsdd_netif_update_addresses(false);
 }
 
 /******************** Initialization and cleanup ********************/
@@ -1164,7 +1203,7 @@ wsdd_start_stop_callback (bool start)
         }
 
         /* Update netif addresses */
-        wsdd_netif_update_addresses();
+        wsdd_netif_update_addresses(true);
     } else {
         /* Stop multicast reception */
         if (wsdd_fdpoll_ipv4 != NULL) {
