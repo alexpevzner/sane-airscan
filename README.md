@@ -40,28 +40,36 @@ image received from scanner
 
 ### Compatibility
 
-Any **eSCL** capable scanner expected to work, but only few of them
-were actually tested.
+Any **eSCL** capable scanner expected to work. Here is a list of devices
+that were actually tested. If you have success with a scanner not included
+into this list, please let me know.
 
-Sane-airscan was tested and found to work with the following scanners:
 * Canon D570
+* Canon ImageCLASS MF743cdw <sup>[1](#noteMF743cdw)</sup>
 * Canon TR4529 (PIXMA TR4500 Series)
+* Canon TS 3100
+* Canon TS 3300
 * Canon TS 6151
+* Canon TS 6250
 * EPSON WF-7710
 * EPSON XP-7100 Series
 * HP Color Laserjet MFP m178-m181
 * HP Color LaserJet MFP M281fdw
 * HP DeskJet 2540
 * HP ENVY 4500
+* HP ENVY 5540
 * HP LaserJet Pro M28w
+* HP LaserJet Pro MFP M428dw
+* HP Officejet 4630
 * HP Officejet Pro 6970
 * HP OfficeJet Pro 6978
 * HP OfficeJet Pro 8730
 * Kyocera ECOSYS M2040dn
 * TODO
 
-If you have success with a scanner not included into this list,
-please let me know.
+---
+<a name="noteMF743cdw">1</a>: this device requires manual activation of AirPrint scanning on its web console:
+Home->Menu->Preferences->Network->TCP/IP Settings->Network Link Scan Settings->On.
 
 ### Installation from pre-build binaries
 
@@ -124,6 +132,19 @@ cd sane-airscan
 make
 make install
 ```
+### Contribution
+
+If you want to contribute to this project, consider using the following
+branch:
+
+https://github.com/alexpevzner/sane-airscan-wsd
+
+All new features should go there. Here I can accept only bug fixing
+and packaging changes.
+
+Changes from the sane-airscan-wsd branch will be periodically merged into
+the sane-airscan. Next merge expected to happen before middle of April 2020.
+
 ### Code Quality
 I greatly appreciate a good static code analysis tools, as they help to maintain
 a high code quality.
@@ -141,7 +162,7 @@ To report a bug, please [create a new GitHub issue](https://github.com/alexpevzn
 To create a helpful bug report, please perform the following steps:
 
 1. Enable protocol trace in the sane-airscan, by adding the following
-entries into the configuration file:
+entries into the configuration file <br> (**/etc/sane.d/airscan.conf**):
 ```
 [debug]
 trace = ~/airscan/trace ; Path to directory where trace files will be saved
