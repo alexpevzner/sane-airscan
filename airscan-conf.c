@@ -742,6 +742,22 @@ conf_load_from_ini (inifile *ini)
                     } else {
                         conf_perror(rec, "usage: model = network | hardware");
                     }
+                } else if (inifile_match_name(rec->variable, "protocol")) {
+                    if (inifile_match_name(rec->value, "auto")) {
+                        conf.proto_manual = false;
+                    } else if (inifile_match_name(rec->value, "manual")) {
+                        conf.proto_manual = true;
+                    } else {
+                        conf_perror(rec, "usage: protocol = auto | manual");
+                    }
+                } else if (inifile_match_name(rec->variable, "ws-discovery")) {
+                    if (inifile_match_name(rec->value, "fast")) {
+                        conf.fast_wsdd = true;
+                    } else if (inifile_match_name(rec->value, "full")) {
+                        conf.fast_wsdd = false;
+                    } else {
+                        conf_perror(rec, "usage: ws-discovery = fast | full");
+                    }
                 }
             } else if (inifile_match_name(rec->section, "debug")) {
                 if (inifile_match_name(rec->variable, "trace")) {
