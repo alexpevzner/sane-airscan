@@ -833,7 +833,6 @@ zeroconf_device_list_get (void)
 
         dev_list[dev_count ++] = info;
 
-        info->name = g_strdup(dev_conf->name);
         info->name = zeroconf_ident_make(dev_conf->name, dev_conf->devid,
             dev_conf->proto);
         info->vendor = g_strdup(proto);
