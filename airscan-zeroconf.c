@@ -37,7 +37,7 @@
 /* zeroconf_device represents a single device
  */
 struct zeroconf_device {
-    devid        ident;      /* Unique ident */
+    unsigned int devid;      /* Unique ident */
     uuid         uuid;       /* Device UUID */
     const char   *name;      /* Device name */
     unsigned int protocols;  /* Supported protocols, (set of 1 << ID_PROTO) */
@@ -60,6 +60,9 @@ zeroconf_device_ifaces_lookup (zeroconf_device *device, int ifindex);
 
 static zeroconf_endpoint*
 zeroconf_endpoint_copy_single (const zeroconf_endpoint *endpoint);
+
+static const char*
+zeroconf_ident_split (const char *ident, unsigned int *devid, ID_PROTO *proto);
 
 /******************** Discovery methods *********************/
 /* Map ZEROCONF_METHOD to ID_PROTO
@@ -111,7 +114,7 @@ zeroconf_device_add (zeroconf_finding *finding)
 {
     zeroconf_device *device = g_new0(zeroconf_device, 1);
 
-    device->ident = devid_new();
+    device->devid = devid_alloc();
     device->uuid = finding->uuid;
     if (finding->name != NULL) {
         device->name = g_strdup(finding->name);
@@ -134,6 +137,7 @@ zeroconf_device_del (zeroconf_device *device)
     g_free(device->ifaces);
     ll_del(&device->node_list);
     g_free((char*) device->name);
+    devid_free(device->devid);
     g_free(device);
 }
 
@@ -301,6 +305,21 @@ zeroconf_device_name_model (zeroconf_device *device,
     *model = finding->model;
 }
 
+/* Get device name
+ */
+static const char*
+zeroconf_device_name (zeroconf_device *device)
+{
+    const char *name, *model;
+
+    if (device->name) {
+        return device->name;
+    }
+
+    zeroconf_device_name_model(device, &name, &model);
+    return name;
+}
+
 /* Get device endpoints.
  * Caller is responsible to free the returned list
  */
@@ -328,44 +347,27 @@ zeroconf_device_endpoints (zeroconf_device *device, ID_PROTO proto)
     return zeroconf_endpoint_list_sort_dedup(endpoints);
 }
 
-/* Build device ident string by prefixing devid with protocol
- * The returned string must be released with g_free()
- */
-static const char*
-zeroconf_device_ident (zeroconf_device *device, ID_PROTO proto)
-{
-    return g_strconcat( device->ident.text, "@", id_proto_name(proto), NULL);
-}
-
 /* Find zeroconf_device by ident
  */
 static zeroconf_device*
 zeroconf_device_find_by_ident (const char *ident)
 {
-    ll_node         *node;
-    char            *buf, *proto_name;
     ID_PROTO        proto;
+    unsigned int    devid;
+    const char      *name;
+    ll_node         *node;
     zeroconf_device *device = NULL;
 
-    /* Split ident into devid and protocol */
-    buf = g_alloca(strlen(ident) + 1);
-    strcpy(buf, ident);
-    ident = buf;
-    proto_name = strchr(ident, '@');
-    if (proto_name == NULL) {
-        return NULL;
-    }
-
-    *(proto_name ++) = '\0';
-    proto = id_proto_by_name(proto_name);
-    if (proto == ID_PROTO_UNKNOWN) {
+    name = zeroconf_ident_split(ident, &devid, &proto);
+    if (name == NULL) {
         return NULL;
     }
 
     /* Lookup device */
     for (LL_FOR_EACH(node, &zeroconf_device_list)) {
         device = OUTER_STRUCT(node, zeroconf_device, node_list);
-        if (!strcmp(device->ident.text, ident)) {
+        if (device->devid == devid &&
+            !strcmp(name, zeroconf_device_name(device))) {
             break;
         }
     }
@@ -379,6 +381,81 @@ zeroconf_device_find_by_ident (const char *ident)
     }
 
     return NULL;
+}
+
+/******************** Ident Strings *********************/
+/* Encode ID_PROTO for device ident
+ */
+static char
+zeroconf_ident_proto_encode (ID_PROTO proto)
+{
+    switch (proto) {
+    case ID_PROTO_ESCL: return 'e';
+    case ID_PROTO_WSD:  return 'w';
+
+    case ID_PROTO_UNKNOWN:
+    case NUM_ID_PROTO:
+        break;
+    }
+
+    log_internal_error(NULL);
+    return 0;
+}
+
+/* Decode ID_PROTO from device ident
+ */
+static ID_PROTO
+zeroconf_ident_proto_decode (char c)
+{
+    switch (c) {
+    case 'e': return ID_PROTO_ESCL;
+    case 'w': return ID_PROTO_WSD;
+    }
+
+    return ID_PROTO_UNKNOWN;
+}
+
+/* Make device ident string
+ * The returned string must be released with g_free()
+ */
+static const char*
+zeroconf_ident_make (const char *name, unsigned int devid, ID_PROTO proto)
+{
+    return g_strdup_printf("%c%x:%s", zeroconf_ident_proto_encode(proto),
+        devid, name);
+}
+
+/* Split device ident string.
+ * Returns NULL on error, device name on success.
+ * Device name points somewhere into the input buffer
+ */
+static const char*
+zeroconf_ident_split (const char *ident, unsigned int *devid, ID_PROTO *proto)
+{
+    const char *name;
+    char       *end;
+
+    /* Find name */
+    name = strchr(ident, ':');
+    if (name == NULL) {
+        return NULL;
+    }
+
+    name ++;
+
+    /* Decode proto and devid */
+    *proto = zeroconf_ident_proto_decode(*ident);
+    if (*proto == NUM_ID_PROTO) {
+        return NULL;
+    }
+
+    ident ++;
+    *devid = (unsigned int) strtoul(ident, &end, 16);
+    if (end == ident || *end != ':') {
+        return NULL;
+    }
+
+    return name;
 }
 
 /******************** Endpoints *********************/
@@ -597,10 +674,20 @@ zeroconf_find_static_by_name (const char *name)
 static conf_device*
 zeroconf_find_static_by_ident (const char *ident)
 {
-    conf_device *dev_conf;
+    conf_device  *dev_conf;
+    ID_PROTO     proto;
+    unsigned int devid;
+    const char   *name;
+
+    name = zeroconf_ident_split(ident, &devid, &proto);
+    if (name == NULL) {
+        return NULL;
+    }
 
     for (dev_conf = conf.devices; dev_conf != NULL; dev_conf = dev_conf->next) {
-        if (!strcmp(dev_conf->ident.text, ident)) {
+        if (dev_conf->devid == devid &&
+            dev_conf->proto == proto &&
+            !strcmp(dev_conf->name, name)) {
             return dev_conf;
         }
     }
@@ -638,10 +725,10 @@ zeroconf_finding_publish (zeroconf_finding *finding)
 
     device = zeroconf_device_find(finding);
     if (device != NULL) {
-        log_debug(NULL, "zeroconf: using device %s", device->ident.text);
+        log_debug(NULL, "zeroconf: using device %4.4x", device->devid);
     } else {
         device = zeroconf_device_add(finding);
-        log_debug(NULL, "zeroconf: added device %s", device->ident.text);
+        log_debug(NULL, "zeroconf: added device %4.4x", device->devid);
     }
 
     zeroconf_device_add_finding(device, finding);
@@ -746,7 +833,9 @@ zeroconf_device_list_get (void)
 
         dev_list[dev_count ++] = info;
 
-        info->name = g_strdup(dev_conf->ident.text);
+        info->name = g_strdup(dev_conf->name);
+        info->name = zeroconf_ident_make(dev_conf->name, dev_conf->devid,
+            dev_conf->proto);
         info->vendor = g_strdup(proto);
         info->model = g_strdup(dev_conf->name);
         info->type = g_strdup_printf("%s network scanner", proto);
@@ -774,7 +863,7 @@ zeroconf_device_list_get (void)
 
                 dev_list[dev_count ++] = info;
 
-                info->name = zeroconf_device_ident(device, proto);
+                info->name = zeroconf_ident_make(name, device->devid, proto);
                 info->vendor = g_strdup(proto_name);
                 info->model = g_strdup(conf.model_is_netname ? name : model);
                 info->type = g_strdup_printf("%s network scanner", proto_name);

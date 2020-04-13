@@ -617,6 +617,7 @@ conf_device_list_free (void)
         next = list->next;
         g_free((char*) list->name);
         g_free((char*) list->uri);
+        devid_free(list->devid);
         g_free(list);
         list = next;
     }
@@ -629,7 +630,7 @@ conf_device_list_prepend (const char *name, http_uri *uri, ID_PROTO proto)
 {
     conf_device *dev = g_new0(conf_device, 1);
     dev->name = g_strdup(name);
-    dev->ident = devid_new();
+    dev->devid = devid_alloc();
     dev->proto = proto;
     dev->uri = uri;
     dev->next = conf.devices;

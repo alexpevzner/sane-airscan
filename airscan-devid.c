@@ -8,18 +8,55 @@
 
 #include "airscan.h"
 
-/* Allocate new devid
+/* DEVID_RANGE defines device ID range, 0 ... DEVID_RANGE-1
+ * It must be power of two
  */
-devid
-devid_new (void)
+#define DEVID_RANGE     65536
+
+static uint16_t devid_next;
+static uint32_t devid_bits[DEVID_RANGE/32];
+
+/* Get bit in devid_bits[]
+ */
+static bool
+devid_bits_get(unsigned int id)
 {
-    static uint64_t next;
-    devid id;
+    uint32_t mask = 1 << (id & 31);
+    return (devid_bits[id / 32] & mask) != 0;
+}
 
-    sprintf(id.text, "%16.16lx",
-        __atomic_add_fetch(&next, 1, __ATOMIC_SEQ_CST));
+/* Set bit in devid_bits[]
+ */
+static void
+devid_bits_set(unsigned int id, bool v)
+{
+    uint32_t mask = 1 << (id & 31);
+    if (v) {
+        devid_bits[id / 32] |= mask;
+    } else {
+        devid_bits[id / 32] &= ~mask;
+    }
+}
 
-    return id;
+/* Allocate unique device ID
+ */
+unsigned int
+devid_alloc (void )
+{
+    while (devid_bits_get(devid_next)) {
+        devid_next ++;
+    }
+
+    devid_bits_set(devid_next, true);
+    return devid_next ++;
+}
+
+/* Free device ID
+ */
+void
+devid_free (unsigned int id)
+{
+    devid_bits_set(id, false);
 }
 
 /* vim:ts=8:sw=4:et

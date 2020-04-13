@@ -359,19 +359,15 @@ ID_FORMAT
 id_format_by_mime_name (const char *name);
 
 /******************** Device ID ********************/
-/* Type devid represents an unique device ID
- *
- * It is wrapped into struct, so it can be returned
- * by value, without need to mess with memory allocation
+/* Allocate unique device ID
  */
-typedef struct {
-    char text[32];
-} devid;
+unsigned int
+devid_alloc (void);
 
-/* Allocate new devid
+/* Free device ID
  */
-devid
-devid_new (void);
+void
+devid_free (unsigned int id);
 
 /******************** UUID utilities ********************/
 /* Type uuid represents a random UUID string.
@@ -428,11 +424,11 @@ uuid_equal (uuid u1, uuid u2)
  */
 typedef struct conf_device conf_device;
 struct conf_device {
-    const char  *name; /* Device name */
-    devid       ident;      /* Device ident */
-    ID_PROTO    proto; /* Protocol to use */
-    http_uri    *uri;  /* Device URI, parsed; NULL if device disabled */
-    conf_device *next; /* Next device in the list */
+    unsigned int devid; /* Device ident */
+    const char   *name; /* Device name */
+    ID_PROTO     proto; /* Protocol to use */
+    http_uri     *uri;  /* Device URI, parsed; NULL if device disabled */
+    conf_device  *next; /* Next device in the list */
 };
 
 /* Backend configuration
