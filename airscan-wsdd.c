@@ -106,14 +106,16 @@ static int                 wsdd_initscan_count;
  */
 static const char *wsdd_probe_template =
     "<?xml version=\"1.0\" ?>\n"
-    "<s:Envelope xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\" xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\">\n"
+    "<s:Envelope xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\" xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:wsdp=\"http://schemas.xmlsoap.org/ws/2006/02/devprof\">\n"
     " <s:Header>\n"
     "  <a:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</a:Action>\n"
     "  <a:MessageID>%s</a:MessageID>\n"
     "  <a:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</a:To>\n"
     " </s:Header>\n"
     " <s:Body>\n"
-    "  <d:Probe/>\n"
+    "  <d:Probe>\n"
+    "   <d:Types>wsdp:Device</d:Types>\n"
+    "  </d:Probe>\n"
     " </s:Body>\n"
     "</s:Envelope>\n";
 
