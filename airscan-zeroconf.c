@@ -181,29 +181,19 @@ zeroconf_device_find_by_uuid(uuid uuid)
     return NULL;
 }
 
-#if     0
-/* Find zeroconf_device to add finding to
+/* Find named device by uuid and interface index
  */
 static zeroconf_device*
-zeroconf_device_find (zeroconf_finding *finding)
+zeroconf_device_find_by_uuid_and_ifindex (uuid uuid, int ifindex)
 {
     ll_node *node;
 
     for (LL_FOR_EACH(node, &zeroconf_device_list)) {
         zeroconf_device *device;
         device = OUTER_STRUCT(node, zeroconf_device, node_list);
-        if (uuid_equal(device->uuid, finding->uuid)) {
-            bool        found = false;
 
-            if (finding->name == NULL && device->name == NULL) {
-                found = true;
-            } else if (finding->name != NULL && device->name != NULL) {
-                found = !strcasecmp(finding->name, device->name);
-            } else if (finding->name == NULL && device->name != NULL) {
-                found = zeroconf_device_ifaces_lookup(device, finding->ifindex);
-            }
-
-            if (found) {
+        if (device->name != NULL && uuid_equal(uuid, device->uuid)) {
+            if (zeroconf_device_ifaces_lookup(device, ifindex)) {
                 return device;
             }
         }
@@ -211,7 +201,6 @@ zeroconf_device_find (zeroconf_finding *finding)
 
     return NULL;
 }
-#endif
 
 /* Check if device is visible from the particular network interface
  */
@@ -787,9 +776,9 @@ zeroconf_finding_publish (zeroconf_finding *finding)
     zeroconf_device   *device;
     ID_PROTO          proto = zeroconf_method_to_proto(finding->method);
     char              ifname[IF_NAMESIZE];
-    bool              newdev = false;
     ll_head           findings;
     ll_node           *node;
+    const char        *found_by = NULL;
 
     ll_init(&findings);
     ll_push_end(&findings, &finding->list_node);
@@ -816,6 +805,7 @@ zeroconf_finding_publish (zeroconf_finding *finding)
              * interface; upgrade anonymous device to named
              */
             device->name = g_strdup(finding->name);
+            found_by = "found by uuid";
         } else {
             /* Case 3: borrow findings that belongs to the new finding's
              * interface. Leave found device to keep remaining findings
@@ -824,20 +814,27 @@ zeroconf_finding_publish (zeroconf_finding *finding)
                 finding->ifindex, &findings);
 
             device = NULL;
-            newdev = true;
         }
     }
 
-    /* Lookup device with name */
+    /* Lookup device by name and uuid */
     if (device == NULL && finding->name != NULL) {
+        found_by = "found by uuid+name";
         device = zeroconf_device_find_by_uuid_and_name(finding->uuid,
             finding->name);
     }
 
+    /* Lookup device by uuid and interface index */
+    if (device == NULL && finding->name == NULL) {
+        found_by = "found by uuid+ifindex";
+        device = zeroconf_device_find_by_uuid_and_ifindex(finding->uuid,
+            finding->ifindex);
+    }
+
     /* Create new device, if still not found */
     if (device == NULL) {
+        found_by = "created";
         device = zeroconf_device_add(finding);
-        newdev = true;
     }
 
     /* Print log messages */
@@ -850,8 +847,7 @@ zeroconf_finding_publish (zeroconf_finding *finding)
     log_debug(NULL, "  interface: %d (%s)", finding->ifindex, ifname);
     log_debug(NULL, "  name:      %s", finding->name ? finding->name : "-");
     log_debug(NULL, "  model:     %s", finding->model);
-    log_debug(NULL, "  device:    %4.4x%s", device->devid,
-        newdev ? " (created)" : "");
+    log_debug(NULL, "  device:    %4.4x (%s)", device->devid, found_by);
 
     if (proto != ID_PROTO_UNKNOWN) {
         zeroconf_endpoint *ep;
