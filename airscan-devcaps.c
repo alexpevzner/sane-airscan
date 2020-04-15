@@ -189,7 +189,7 @@ devcaps_dump (log_ctx *log, devcaps *caps)
         }
     }
 
-    log_trace(log, "  Sources:    %s", buf->str);
+    log_trace(log, "  Sources:          %s", buf->str);
 
     ID_SOURCE id_src;
     for (id_src = (ID_SOURCE) 0; id_src < NUM_ID_SOURCE; id_src ++) {
