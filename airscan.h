@@ -342,7 +342,9 @@ typedef enum {
     ID_FORMAT_UNKNOWN = -1,
     ID_FORMAT_JPEG,
     ID_FORMAT_TIFF,
+    ID_FORMAT_PNG,
     ID_FORMAT_PDF,
+    ID_FORMAT_DIB,
 
     NUM_ID_FORMAT
 } ID_FORMAT;

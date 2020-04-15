@@ -143,7 +143,9 @@ id_colormode_by_sane_name (const char *name)
 static id_name_table id_format_mime_name_table[] = {
     {ID_FORMAT_JPEG, "image/jpeg"},
     {ID_FORMAT_TIFF, "image/tiff"},
+    {ID_FORMAT_PNG,  "image/png"},
     {ID_FORMAT_PDF,  "application/pdf"},
+    {ID_FORMAT_DIB,  "application/dib"},
     {-1, NULL}
 };
 
