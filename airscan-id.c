@@ -164,5 +164,16 @@ id_format_by_mime_name (const char *name)
     return id_by_name(name, strcasecmp, id_format_mime_name_table);
 }
 
+/* if_format_short_name returns short name for ID_FORMAT
+ */
+const char*
+if_format_short_name (ID_FORMAT id)
+{
+    const char *mime = id_format_mime_name(id);
+    const char *name = mime ? (strchr(mime, '/') + 1) : NULL;
+
+    return name ? name : mime;
+}
+
 /* vim:ts=8:sw=4:et
  */

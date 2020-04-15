@@ -358,6 +358,11 @@ id_format_mime_name (ID_FORMAT id);
 ID_FORMAT
 id_format_by_mime_name (const char *name);
 
+/* if_format_short_name returns short name for ID_FORMAT
+ */
+const char*
+if_format_short_name (ID_FORMAT id);
+
 /******************** Device ID ********************/
 /* Allocate unique device ID
  */
