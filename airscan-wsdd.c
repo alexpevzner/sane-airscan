@@ -226,7 +226,6 @@ wsdd_initscan_count_dec (void)
     }
 }
 
-
 /******************** wsdd_finding operations ********************/
 /* Create new wsdd_finding
  */
@@ -537,7 +536,7 @@ wsdd_message_parse_endpoint (wsdd_message *msg, xml_rd *xml)
     }
 
     if (xaddrs_text != NULL) {
-        char *tok, *saveptr;
+        char              *tok, *saveptr;
         static const char *delim = "\t\n\v\f\r \x85\xA0";
 
         for (tok = strtok_r(xaddrs_text, delim, &saveptr); tok != NULL;
@@ -710,7 +709,7 @@ wsdd_resolver_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
         .msg_iov = &vec,
         .msg_iovlen = 1,
         .msg_control = aux,
-        .msg_controllen = sizeof(aux),
+        .msg_controllen = sizeof(aux)
     };
 
     (void) mask;
