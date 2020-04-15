@@ -49,8 +49,21 @@ static const xml_ns wsd_ns_wr[] = {
  */
 typedef struct {
     proto_handler proto; /* Base class */
-    bool          exif;  /* "exif" format supported */
-    bool          jfif;  /* "jfif" format supported */
+
+    /* Supported formats: JPEG variants */
+    bool          exif;
+    bool          jfif;
+
+    /* Supported formats: TIFF variabls */
+    bool          tiff_single_uncompressed;
+    bool          tiff_single_g4;
+    bool          tiff_single_g3mh;
+    bool          tiff_single_jpeg_tn2;
+
+    /* Other formats */
+    bool          pdf;
+    bool          png;
+    bool          dib;
 } proto_handler_wsd;
 
 /* Free ESCL protocol handler
@@ -140,14 +153,16 @@ wsd_devcaps_parse_description (devcaps *caps, xml_rd *xml)
  */
 static error
 wsd_devcaps_parse_formats (proto_handler_wsd *wsd,
-        devcaps *caps, xml_rd *xml, unsigned int *formats)
+        devcaps *caps, xml_rd *xml, unsigned int *formats_out)
 {
     error        err = NULL;
     unsigned int level = xml_rd_depth(xml);
     size_t       prefixlen = strlen(xml_rd_node_path(xml));
+    unsigned int formats = 0;
 
     (void) caps;
 
+    /* Decode supported formats */
     while (!xml_rd_end(xml)) {
         const char *path = xml_rd_node_path(xml) + prefixlen;
 
@@ -155,20 +170,56 @@ wsd_devcaps_parse_formats (proto_handler_wsd *wsd,
             const char *v = xml_rd_node_value(xml);
 
             if (!strcmp(v, "jfif")) {
-                *formats |= 1 << ID_FORMAT_JPEG;
                 wsd->jfif = true;
             } else if (!strcmp(v, "exif")) {
-                *formats |= 1 << ID_FORMAT_JPEG;
                 wsd->exif = true;
+
+            } else if (!strcmp(v, "tiff-single-uncompressed")) {
+                wsd->tiff_single_uncompressed = true;
+            } else if (!strcmp(v, "tiff-single-g4")) {
+                wsd->tiff_single_g4 = true;
+            } else if (!strcmp(v, "tiff-single-g3mh")) {
+                wsd->tiff_single_g3mh = true;
+            } else if (!strcmp(v, "tiff-single-jpeg-tn2")) {
+                wsd->tiff_single_jpeg_tn2 = true;
             } else if (!strcmp(v, "pdf-a")) {
-                *formats |= 1 << ID_FORMAT_PDF;
+                wsd->pdf = true;
+            } else if (!strcmp(v, "png")) {
+                wsd->png = true;
             }
         }
 
         xml_rd_deep_next(xml, level);
     }
 
-    if (((*formats) & DEVCAPS_FORMATS_SUPPORTED) == 0) {
+    /* Set formats bits */
+    if (wsd->jfif || wsd->exif) {
+        formats |= 1 << ID_FORMAT_JPEG;
+    }
+
+    if (wsd->pdf) {
+        formats |= 1 << ID_FORMAT_PDF;
+    }
+
+    if (wsd->png) {
+        formats |= 1 << ID_FORMAT_PDF;
+    }
+
+    if (wsd->tiff_single_g4 || wsd->tiff_single_g3mh) {
+        formats |= 1 << ID_FORMAT_TIFF;
+    }
+
+    if (((formats) & DEVCAPS_FORMATS_SUPPORTED) == 0) {
+        /* These used as last resort */
+        if (wsd->tiff_single_jpeg_tn2 || wsd->tiff_single_uncompressed) {
+            formats |= 1 << ID_FORMAT_TIFF;
+        } else if (wsd->dib) {
+            formats |= 1 << ID_FORMAT_DIB;
+        }
+    }
+
+    *formats_out = formats;
+    if (((formats) & DEVCAPS_FORMATS_SUPPORTED) == 0) {
         err = ERROR("no supported image formats");
     }
 
