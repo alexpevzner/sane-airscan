@@ -226,6 +226,39 @@ http_uri_fix_ipv6_zone (http_uri *uri, int ifindex)
     }
 }
 
+/* Strip zone suffix from literal IPv6 host address
+ *
+ * If address is not IPv6 or doesn't have zone suffix, it is
+ * not changed
+ */
+void
+http_uri_strip_zone_suffux (http_uri *uri)
+{
+    char            *host = uri->parsed->host;
+    char            *suffix;
+
+    /* Copy hostname to writable buffer */
+    host = g_alloca(strlen(host) + 1);
+    strcpy(host, uri->parsed->host);
+
+    /* Is it IPv6 address? */
+    if (!strchr(host, ':')) {
+        return; /* Not IPv6 */
+    }
+
+    /* Check for zone suffix */
+    suffix = strchr(host, '%');
+    if (suffix == NULL) {
+        return; /* Not IPv6 */
+    }
+
+    /* Strip zone suffix and update URI */
+    *suffix = '\0';
+    soup_uri_set_host(uri->parsed, host);
+    g_free(uri->str);
+    uri->str = NULL;
+}
+
 /* Make sure URI's path ends with the slash character
  */
 void

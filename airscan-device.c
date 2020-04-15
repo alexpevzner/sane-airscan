@@ -229,6 +229,7 @@ device_free (device *dev)
     devopt_cleanup(&dev->opt);
 
     http_client_free(dev->proto_ctx.http);
+    http_uri_free(dev->proto_ctx.base_uri_nozone);
     g_free((char*) dev->proto_ctx.location);
 
     g_cond_clear(&dev->stm_cond);
@@ -482,6 +483,10 @@ device_probe_endpoint (device *dev, zeroconf_endpoint *endpoint)
 
     dev->endpoint_current = endpoint;
     dev->proto_ctx.base_uri = endpoint->uri;
+
+    http_uri_free(dev->proto_ctx.base_uri_nozone);
+    dev->proto_ctx.base_uri_nozone = http_uri_clone(endpoint->uri);
+    http_uri_strip_zone_suffux(dev->proto_ctx.base_uri_nozone);
 
     /* Fetch device capabilities */
     device_proto_devcaps_submit (dev, device_scanner_capabilities_callback);

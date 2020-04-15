@@ -80,7 +80,7 @@ wsd_make_request_header (const proto_ctx *ctx, xml_wr *xml, const char *action)
     xml_wr_enter(xml, "s:Header");
     xml_wr_add_text(xml, "a:MessageID", u.text);
     //xml_wr_add_text(xml, "a:To", WSD_ADDR_ANONYMOUS);
-    xml_wr_add_text(xml, "a:To", http_uri_str(ctx->base_uri));
+    xml_wr_add_text(xml, "a:To", http_uri_str(ctx->base_uri_nozone));
     xml_wr_enter(xml, "a:ReplyTo");
     xml_wr_add_text(xml, "a:Address", WSD_ADDR_ANONYMOUS);
     xml_wr_leave(xml);

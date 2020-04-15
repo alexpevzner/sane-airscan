@@ -804,6 +804,14 @@ http_uri_set_path (http_uri *uri, const char *path);
 void
 http_uri_fix_ipv6_zone (http_uri *uri, int ifindex);
 
+/* Strip zone suffix from literal IPv6 host address
+ *
+ * If address is not IPv6 or doesn't have zone suffix, it is
+ * not changed
+ */
+void
+http_uri_strip_zone_suffux (http_uri *uri);
+
 /* Make sure URI's path ends with the slash character
  */
 void
@@ -1876,6 +1884,7 @@ typedef struct {
     const devcaps        *devcaps;        /* Device capabilities */
     http_client          *http;           /* HTTP client for sending requests */
     http_uri             *base_uri;       /* HTTP base URI for protocol */
+    http_uri             *base_uri_nozone;/* base_uri without IPv6 zone */
     proto_scan_params    params;          /* Scan parameters */
     const char           *location;       /* Image location */
     unsigned int         images_received; /* Total count of received images */
