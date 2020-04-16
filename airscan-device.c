@@ -896,6 +896,27 @@ device_geom_compute (SANE_Fixed tl, SANE_Fixed br,
     return geom;
 }
 
+/* Choose image format
+ */
+static ID_FORMAT
+device_choose_format (device *dev, devcaps_source *src)
+{
+    unsigned int formats = src->formats;
+
+    formats &= DEVCAPS_FORMATS_SUPPORTED;
+
+    if ((formats & (1 << ID_FORMAT_TIFF)) != 0) {
+        return ID_FORMAT_TIFF;
+    }
+
+    if ((formats & (1 << ID_FORMAT_JPEG)) != 0) {
+        return ID_FORMAT_JPEG;
+    }
+
+    log_internal_error(dev->log);
+    return ID_FORMAT_UNKNOWN;
+}
+
 /* Request scan
  */
 static void
@@ -929,7 +950,7 @@ device_stm_start_scan (device *dev)
     params->y_res = y_resolution;
     params->src = dev->opt.src;
     params->colormode = dev->opt.colormode;
-    params->format = ID_FORMAT_JPEG; /* FIXME */
+    params->format = device_choose_format(dev, src);
 
     /* Dump parameters */
     log_trace(dev->log, "==============================");
