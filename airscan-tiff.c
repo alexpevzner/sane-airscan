@@ -269,7 +269,7 @@ image_decoder_tiff_read_line (image_decoder *decoder, void *buffer)
     image_decoder_tiff *tiff = (image_decoder_tiff*) decoder;
     tdata_t buf = (tdata_t) buffer;
 
-    if (tiff->num_lines <= (tiff->current_line + 1)) {
+    if (tiff->num_lines < (tiff->current_line + 1)) {
         return ERROR("TIFF: end of file");
     }
 
