@@ -531,7 +531,7 @@ escl_scan_query (const proto_ctx *ctx)
     const proto_scan_params *params = &ctx->params;
     const char              *source = NULL;
     const char              *colormode = NULL;
-    const char              *mime = "image/jpeg";
+    const char              *mime = id_format_mime_name(ctx->params.format);
     const devcaps_source    *src = ctx->devcaps->src[params->src];
     bool                    duplex = false;
     http_query              *query;

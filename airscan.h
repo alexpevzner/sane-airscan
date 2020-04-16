@@ -1880,6 +1880,7 @@ typedef struct {
     int           x_res, y_res; /* X/Y resolution */
     ID_SOURCE     src;          /* Desired source */
     ID_COLORMODE  colormode;    /* Desired color mode */
+    ID_FORMAT     format;       /* Image format */
 } proto_scan_params;
 
 /* proto_ctx represents request context

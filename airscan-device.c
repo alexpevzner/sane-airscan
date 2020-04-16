@@ -888,6 +888,7 @@ device_stm_start_scan (device *dev)
     params->y_res = y_resolution;
     params->src = dev->opt.src;
     params->colormode = dev->opt.colormode;
+    params->format = ID_FORMAT_JPEG; /* FIXME */
 
     /* Dump parameters */
     log_trace(dev->log, "==============================");
@@ -903,6 +904,8 @@ device_stm_start_scan (device *dev)
     log_trace(dev->log, "  image Y offset: %d", params->y_off);
     log_trace(dev->log, "  x_resolution:   %d", params->x_res);
     log_trace(dev->log, "  y_resolution:   %d", params->y_res);
+    log_trace(dev->log, "  format:         %s",
+            id_format_short_name(params->format));
     log_trace(dev->log, "");
 
     /* Submit a request */

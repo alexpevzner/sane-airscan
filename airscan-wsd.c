@@ -61,7 +61,7 @@ typedef struct {
     bool          tiff_single_jpeg_tn2;
 
     /* Other formats */
-    bool          pdf;
+    bool          pdf_a;
     bool          png;
     bool          dib;
 } proto_handler_wsd;
@@ -183,7 +183,7 @@ wsd_devcaps_parse_formats (proto_handler_wsd *wsd,
             } else if (!strcmp(v, "tiff-single-jpeg-tn2")) {
                 wsd->tiff_single_jpeg_tn2 = true;
             } else if (!strcmp(v, "pdf-a")) {
-                wsd->pdf = true;
+                wsd->pdf_a = true;
             } else if (!strcmp(v, "png")) {
                 wsd->png = true;
             }
@@ -197,7 +197,7 @@ wsd_devcaps_parse_formats (proto_handler_wsd *wsd,
         formats |= 1 << ID_FORMAT_JPEG;
     }
 
-    if (wsd->pdf) {
+    if (wsd->pdf_a) {
         formats |= 1 << ID_FORMAT_PDF;
     }
 
@@ -651,6 +651,7 @@ wsd_scan_query (const proto_ctx *ctx)
     xml_wr                  *xml = xml_wr_begin("s:Envelope", wsd_ns_wr);
     const char              *source = NULL;
     const char              *colormode = NULL;
+    const char              *format = NULL;
     static const char       *sides_simplex[] = {"scan:MediaFront", NULL};
     static const char       *sides_duplex[] = {"scan:MediaFront", "scan:MediaBack", NULL};
     const char              **sides;
@@ -692,13 +693,52 @@ wsd_scan_query (const proto_ctx *ctx)
     xml_wr_enter(xml, "scan:DocumentParameters");
 
     // FIXME -- JPEG hardcoded for now
-    if (wsd->jfif) {
-        xml_wr_add_text(xml, "scan:Format", "jfif"); // FIXME
-    } else if (wsd->exif) {
-        xml_wr_add_text(xml, "scan:Format", "exif"); // FIXME
-    } else {
-        log_internal_error(ctx->log);
+    switch (ctx->params.format) {
+    case ID_FORMAT_JPEG:
+        if (wsd->jfif) {
+            format = "jfif";
+        } else if (wsd->exif) {
+            format = "exif";
+        }
+        break;
+
+    case ID_FORMAT_TIFF:
+        if (wsd->tiff_single_g4) {
+            format = "tiff-single_g4";
+        } else if (wsd->tiff_single_g3mh) {
+            format = "tiff-single_g3mh";
+        } else if (wsd->tiff_single_jpeg_tn2) {
+            format = "tiff-single_jpeg_tn2";
+        } else if (wsd->tiff_single_uncompressed) {
+            format = "tiff-single_uncompressed";
+        }
+        break;
+
+    case ID_FORMAT_PNG:
+        if (wsd->png) {
+            format = "png";
+        }
+        break;
+
+    case ID_FORMAT_PDF:
+        if (wsd->pdf_a) {
+            format = "pdf-a";
+        }
+        break;
+
+    case ID_FORMAT_DIB:
+        if (wsd->dib) {
+            format = "png";
+        }
+        break;
+
+    case ID_FORMAT_UNKNOWN:
+    case NUM_ID_FORMAT:
+        break;
     }
+
+    log_assert(ctx->log, format != NULL);
+    xml_wr_add_text(xml, "scan:Format", format);
 
     xml_wr_add_text(xml, "scan:ImagesToTransfer", "0");
 
