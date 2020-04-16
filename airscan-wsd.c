@@ -704,13 +704,13 @@ wsd_scan_query (const proto_ctx *ctx)
 
     case ID_FORMAT_TIFF:
         if (wsd->tiff_single_g4) {
-            format = "tiff-single_g4";
+            format = "tiff-single-g4";
         } else if (wsd->tiff_single_g3mh) {
-            format = "tiff-single_g3mh";
+            format = "tiff-single-g3mh";
         } else if (wsd->tiff_single_jpeg_tn2) {
-            format = "tiff-single_jpeg_tn2";
+            format = "tiff-single-jpeg-tn2";
         } else if (wsd->tiff_single_uncompressed) {
-            format = "tiff-single_uncompressed";
+            format = "tiff-single-uncompressed";
         }
         break;
 
