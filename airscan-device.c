@@ -104,9 +104,11 @@ struct device {
     SANE_Word            job_skip_x;          /* How much pixels to skip, */
     SANE_Word            job_skip_y;          /*    from left and top */
 
+    /* Image decoders */
+    image_decoder        *decoders[NUM_ID_FORMAT]; /* Decoders by format */
+
     /* Read machinery */
     SANE_Bool            read_non_blocking;  /* Non-blocking I/O mode */
-    image_decoder        *read_decoder_jpeg; /* JPEG decoder */
     pollable             *read_pollable;     /* Signalled when read won't
                                                 block */
     http_data_queue      *read_queue;        /* Queue of received images */
@@ -193,7 +195,6 @@ device_new (zeroconf_devinfo *devinfo)
 
     g_cond_init(&dev->stm_cond);
 
-    dev->read_decoder_jpeg = image_decoder_jpeg_new();
     dev->read_pollable = pollable_new();
     dev->read_queue = http_data_queue_new();
 
@@ -208,6 +209,8 @@ device_new (zeroconf_devinfo *devinfo)
 static void
 device_free (device *dev)
 {
+    int i;
+
     /* Remove device from table */
     log_debug(dev->log, "removed from device table");
     g_ptr_array_remove(device_table, dev);
@@ -234,7 +237,14 @@ device_free (device *dev)
 
     g_cond_clear(&dev->stm_cond);
 
-    image_decoder_free(dev->read_decoder_jpeg);
+    for (i = 0; i < NUM_ID_FORMAT; i ++) {
+        image_decoder *decoder = dev->decoders[i];
+        if (decoder != NULL) {
+            image_decoder_free(decoder);
+            log_debug(dev->log, "closed decoder: %s", id_format_short_name(i));
+        }
+    }
+
     http_data_queue_free(dev->read_queue);
     pollable_free(dev->read_pollable);
 
@@ -497,8 +507,10 @@ device_probe_endpoint (device *dev, zeroconf_endpoint *endpoint)
 static void
 device_scanner_capabilities_callback (void *ptr, http_query *q)
 {
-    error err   = NULL;
-    device *dev = ptr;
+    error        err   = NULL;
+    device       *dev = ptr;
+    int          i;
+    unsigned int formats;
 
     /* Check request status */
     err = http_query_error(q);
@@ -516,6 +528,35 @@ device_scanner_capabilities_callback (void *ptr, http_query *q)
 
     devcaps_dump(dev->log, &dev->opt.caps);
     devopt_set_defaults(&dev->opt);
+
+    /* Setup decoders */
+    formats = 0;
+    for (i = 0; i < NUM_ID_SOURCE; i ++) {
+        devcaps_source *src = dev->opt.caps.src[i];
+        if (src != NULL) {
+            formats |= src->formats;
+        }
+    }
+
+    formats &= DEVCAPS_FORMATS_SUPPORTED;
+    for (i = 0; i < NUM_ID_FORMAT; i ++) {
+        if ((formats & (1 << i)) != 0) {
+            switch (i) {
+            case ID_FORMAT_JPEG:
+                dev->decoders[i] = image_decoder_jpeg_new();
+                break;
+
+            case ID_FORMAT_TIFF:
+                dev->decoders[i] = image_decoder_tiff_new();
+                break;
+
+            default:
+                log_internal_error(dev->log);
+            }
+
+            log_debug(dev->log, "new decoder: %s", id_format_short_name(i));
+        }
+    }
 
     /* Cleanup and exit */
 DONE:
@@ -1228,8 +1269,10 @@ device_read_next (device *dev)
     error           err;
     size_t          line_capacity;
     SANE_Parameters params;
-    image_decoder   *decoder = dev->read_decoder_jpeg;
+    image_decoder   *decoder = dev->decoders[dev->proto_ctx.params.format];
     int             wid, hei;
+
+    log_assert(dev->log, decoder != NULL);
 
     dev->read_image = http_data_queue_pull(dev->read_queue);
     if (dev->read_image == NULL) {
@@ -1339,6 +1382,9 @@ static SANE_Status
 device_read_decode_line (device *dev)
 {
     const SANE_Int n = dev->read_line_num;
+    image_decoder  *decoder = dev->decoders[dev->proto_ctx.params.format];
+
+    log_assert(dev->log, decoder != NULL);
 
     if (n == dev->opt.params.lines) {
         return SANE_STATUS_EOF;
@@ -1347,8 +1393,7 @@ device_read_decode_line (device *dev)
     if (n < dev->read_skip_lines || n >= dev->read_line_end) {
         memset(dev->read_line_buf, 0xff, dev->opt.params.bytes_per_line);
     } else {
-        error err = image_decoder_read_line(dev->read_decoder_jpeg,
-                dev->read_line_buf);
+        error err = image_decoder_read_line(decoder, dev->read_line_buf);
 
         if (err != NULL) {
             log_debug(dev->log, ESTRING(err));
@@ -1367,10 +1412,13 @@ device_read_decode_line (device *dev)
 SANE_Status
 device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
 {
-    SANE_Int     len = 0;
-    SANE_Status  status = SANE_STATUS_GOOD;
+    SANE_Int      len = 0;
+    SANE_Status   status = SANE_STATUS_GOOD;
+    image_decoder *decoder = dev->decoders[dev->proto_ctx.params.format];
 
     *len_out = 0; /* Must return 0, if status is not GOOD */
+
+    log_assert(dev->log, decoder != NULL);
 
     /* Check device state */
     if ((dev->flags & DEVICE_READING) == 0) {
@@ -1446,7 +1494,7 @@ DONE:
 
     /* Scan and read finished - cleanup device */
     dev->flags &= ~(DEVICE_SCANNING | DEVICE_READING);
-    image_decoder_reset(dev->read_decoder_jpeg);
+    image_decoder_reset(decoder);
     if (dev->read_image != NULL) {
         http_data_unref(dev->read_image);
         dev->read_image = NULL;
