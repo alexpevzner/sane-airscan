@@ -1100,10 +1100,12 @@ zeroconf_init (void)
 {
     ll_init(&zeroconf_device_list);
 
-    zeroconf_initscan_bits = (1 << ZEROCONF_MDNS_HINT) |
-                             (1 << ZEROCONF_USCAN_TCP) |
-                             (1 << ZEROCONF_USCANS_TCP) |
-                             (1 << ZEROCONF_WSD);
+    if (conf.discovery) {
+        zeroconf_initscan_bits = (1 << ZEROCONF_MDNS_HINT) |
+                                 (1 << ZEROCONF_USCAN_TCP) |
+                                 (1 << ZEROCONF_USCANS_TCP) |
+                                 (1 << ZEROCONF_WSD);
+    }
 
     return SANE_STATUS_GOOD;
 }
