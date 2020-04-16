@@ -247,7 +247,7 @@ devcaps_dump (log_ctx *log, devcaps *caps)
                 if (buf->len != 0) {
                     g_string_append(buf, ", ");
                 }
-                g_string_append(buf, if_format_short_name(i));
+                g_string_append(buf, id_format_short_name(i));
             }
         }
 
