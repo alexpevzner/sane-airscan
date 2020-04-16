@@ -209,7 +209,7 @@ wsd_devcaps_parse_formats (proto_handler_wsd *wsd,
         formats |= 1 << ID_FORMAT_TIFF;
     }
 
-    if (((formats) & DEVCAPS_FORMATS_SUPPORTED) == 0) {
+    if ((formats & DEVCAPS_FORMATS_SUPPORTED) == 0) {
         /* These used as last resort */
         if (wsd->tiff_single_jpeg_tn2 || wsd->tiff_single_uncompressed) {
             formats |= 1 << ID_FORMAT_TIFF;
