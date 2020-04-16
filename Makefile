@@ -37,8 +37,10 @@ airscan_CFLAGS	= $(CFLAGS)
 airscan_CFLAGS += -fPIC
 airscan_CFLAGS += $(foreach lib, $(DEPENDS), $(shell pkg-config --cflags $(lib)))
 
+airscan_LIBS := $(foreach lib, $(DEPENDS), $(shell pkg-config --libs $(lib))) -lm
+
 airscan_LDFLAGS = $(LDFLAGS)
-airscan_LDFLAGS += $(foreach lib, $(DEPENDS), $(shell pkg-config --libs $(lib)))
+airscan_LDFLAGS += $(airscan_LIBS)
 airscan_LDFLAGS += -Wl,--version-script=airscan.sym
 
 # This magic is a workaround for libsoup bug.
@@ -62,7 +64,7 @@ $(OBJDIR)%.o: %.c Makefile airscan.h
 
 .PHONY: all clean install
 
-all:	tags $(BACKEND) test
+all:	tags $(BACKEND) test test-decode
 
 tags: $(SRC) airscan.h test.c
 	-ctags -R .
@@ -86,3 +88,6 @@ clean:
 
 test:	$(BACKEND) test.c
 	$(CC) -o test test.c $(BACKEND) -Wl,-rpath . ${airscan_CFLAGS}
+
+test-decode: test-decode.c $(OBJ)
+	 $(CC) -o test-decode test-decode.c $(OBJ) $(CPPFLAGS) $(airscan_CFLAGS) $(airscan_LIBS)
