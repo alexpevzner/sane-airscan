@@ -185,8 +185,10 @@ static void
 image_decoder_tiff_reset (image_decoder *decoder)
 {
     image_decoder_tiff *tiff = (image_decoder_tiff*) decoder;
-    TIFFCleanup(tiff->tif);
-    tiff->offset_file = 0;
+    if (tiff->tif != NULL) {
+        TIFFClose(tiff->tif);
+        tiff->tif = NULL;
+    }
 }
 
 /* Get bytes count per pixel
