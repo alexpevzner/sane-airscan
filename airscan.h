@@ -862,7 +862,6 @@ void
 http_data_queue_free (http_data_queue *queue);
 
 /* Push item into the http_data_queue.
- * If queue is not empty, it will be purged
  */
 void
 http_data_queue_push (http_data_queue *queue, http_data *data);

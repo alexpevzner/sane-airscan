@@ -596,7 +596,6 @@ http_data_queue_free (http_data_queue *queue)
 }
 
 /* Push item into the http_data_queue.
- * If queue is not empty, it will be purged
  */
 void
 http_data_queue_push (http_data_queue *queue, http_data *data)
@@ -635,37 +634,6 @@ http_data_queue_purge (http_data_queue *queue)
         http_data_unref(data);
     }
 }
-
-/* Create new http_data_queue
- */
-http_data_queue*
-http_data_queue_new (void);
-
-/* Destroy http_data_queue
- */
-void
-http_data_queue_free (http_data_queue *queue);
-
-/* Push item into the http_data_queue.
- * If queue is not empty, it will be purged
- */
-void
-http_data_queue_push (http_data_queue *queue, http_data *data);
-
-/* Pull an item from the http_data_queue. Returns NULL if queue is empty
- */
-http_data*
-http_data_queue_pull (http_data_queue *queue);
-
-/* Get queue length
- */
-int
-http_data_queue_len (const http_data_queue *queue);
-
-/* Purge the queue
- */
-void
-http_data_queue_purge (http_data_queue *queue);
 
 /******************** HTTP client ********************/
 /* Type http_client represents HTTP client instance
