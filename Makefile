@@ -67,7 +67,7 @@ $(OBJDIR)%.o: %.c Makefile airscan.h
 
 all:	tags $(BACKEND) test test-decode
 
-tags: $(SRC) airscan.h test.c
+tags: $(SRC) airscan.h test.c test-decode.c
 	-ctags -R .
 
 $(BACKEND): $(OBJ) Makefile airscan.sym
