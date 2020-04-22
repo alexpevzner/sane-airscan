@@ -50,10 +50,12 @@ main (int argc, char **argv)
     ext = ext ? ext + 1 : "";
 
     /* Create decoder */
-    if (!strcmp(ext, "jpeg")) {
+    if (!strcmp(ext, "jpeg") || !strcmp(ext, "jpg")) {
         decoder = image_decoder_jpeg_new();
-    } else if (!strcmp(ext, "tiff")) {
+    } else if (!strcmp(ext, "tiff") || !strcmp(ext, "tif")) {
         decoder = image_decoder_tiff_new();
+    } else if (!strcmp(ext, "png")) {
+        decoder = image_decoder_png_new();
     }
 
     if (decoder == NULL) {

@@ -52,6 +52,7 @@ scan_test (void)
     int         len, count = 0;
 
     TRY(sane_start,handle);
+    //sane_cancel (handle);
 
     for (;;) {
         s = sane_read(handle, buf, sizeof(buf), &len);
@@ -64,6 +65,8 @@ scan_test (void)
     if (count != 0) {
         printf("%d bytes of data received\n", count);
     }
+
+    //sane_cancel (handle);
 }
 
 int
@@ -84,7 +87,7 @@ main (void)
     printf("image size: %dx%d\n", params.pixels_per_line, params.lines);
 
     scan_test();
-    scan_test();
+//    scan_test();
 
     sane_close(handle);
 
