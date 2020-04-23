@@ -59,6 +59,8 @@ into this list, please let me know.
 * HP ENVY 4500
 * HP ENVY 5540
 * HP LaserJet MFP M227sdn
+* HP LaserJet MFP M426dw
+* HP LaserJet MFP M630
 * HP LaserJet Pro M28w
 * HP LaserJet Pro MFP M428dw
 * HP Officejet 4630
@@ -66,6 +68,7 @@ into this list, please let me know.
 * HP OfficeJet Pro 6978
 * HP OfficeJet Pro 8730
 * Kyocera ECOSYS M2040dn
+* Xerox VersaLink B405
 * TODO
 
 ---
