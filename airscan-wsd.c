@@ -186,6 +186,8 @@ wsd_devcaps_parse_formats (proto_handler_wsd *wsd,
                 wsd->pdf_a = true;
             } else if (!strcmp(v, "png")) {
                 wsd->png = true;
+            } else if (!strcmp(v, "dib")) {
+                wsd->dib = true;
             }
         }
 
@@ -692,7 +694,6 @@ wsd_scan_query (const proto_ctx *ctx)
 
     xml_wr_enter(xml, "scan:DocumentParameters");
 
-    // FIXME -- JPEG hardcoded for now
     switch (ctx->params.format) {
     case ID_FORMAT_JPEG:
         if (wsd->jfif) {
@@ -728,7 +729,7 @@ wsd_scan_query (const proto_ctx *ctx)
 
     case ID_FORMAT_DIB:
         if (wsd->dib) {
-            format = "png";
+            format = "dib";
         }
         break;
 
