@@ -550,6 +550,10 @@ device_scanner_capabilities_callback (void *ptr, http_query *q)
                 dev->decoders[i] = image_decoder_tiff_new();
                 break;
 
+            case ID_FORMAT_PNG:
+                dev->decoders[i] = image_decoder_png_new();
+                break;
+
             default:
                 log_internal_error(dev->log);
             }
@@ -905,12 +909,16 @@ device_choose_format (device *dev, devcaps_source *src)
 
     formats &= DEVCAPS_FORMATS_SUPPORTED;
 
-    if ((formats & (1 << ID_FORMAT_TIFF)) != 0) {
-        return ID_FORMAT_TIFF;
+    if ((formats & (1 << ID_FORMAT_PNG)) != 0) {
+        return ID_FORMAT_PNG;
     }
 
     if ((formats & (1 << ID_FORMAT_JPEG)) != 0) {
         return ID_FORMAT_JPEG;
+    }
+
+    if ((formats & (1 << ID_FORMAT_TIFF)) != 0) {
+        return ID_FORMAT_TIFF;
     }
 
     log_internal_error(dev->log);
