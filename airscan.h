@@ -1482,7 +1482,8 @@ enum {
 /* Supported image formats
  */
 #define DEVCAPS_FORMATS_SUPPORTED       \
-    ((1 << ID_FORMAT_JPEG))
+    ((1 << ID_FORMAT_JPEG) |            \
+     (1 << ID_FORMAT_PNG))
 
 /* Supported color modes
  *
