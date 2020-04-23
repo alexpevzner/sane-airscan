@@ -204,7 +204,7 @@ wsd_devcaps_parse_formats (proto_handler_wsd *wsd,
     }
 
     if (wsd->png) {
-        formats |= 1 << ID_FORMAT_PDF;
+        formats |= 1 << ID_FORMAT_PNG;
     }
 
     if (wsd->tiff_single_g4 || wsd->tiff_single_g3mh) {
