@@ -52,6 +52,7 @@ into this list, please let me know.
 * HP DeskJet 2540
 * HP ENVY 4500
 * HP ENVY 5540
+* HP LaserJet MFP M227sdn
 * HP LaserJet Pro M28w
 * HP LaserJet Pro MFP M428dw
 * HP Officejet 4630
