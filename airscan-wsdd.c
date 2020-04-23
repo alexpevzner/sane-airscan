@@ -1286,6 +1286,7 @@ wsdd_cleanup (void)
     }
 
     netif_addr_free(wsdd_netif_addr_list);
+    wsdd_netif_addr_list = NULL;
 
     if (wsdd_mcsock_ipv4 >= 0) {
         close(wsdd_mcsock_ipv4);
@@ -1296,6 +1297,8 @@ wsdd_cleanup (void)
         close(wsdd_mcsock_ipv6);
         wsdd_mcsock_ipv6 = -1;
     }
+
+    log_assert(wsdd_log, ll_empty(&wsdd_finding_list));
 
     if (wsdd_log != NULL) {
         log_ctx_free(wsdd_log);
