@@ -1483,7 +1483,8 @@ enum {
  */
 #define DEVCAPS_FORMATS_SUPPORTED       \
     ((1 << ID_FORMAT_JPEG) |            \
-     (1 << ID_FORMAT_PNG))
+     (1 << ID_FORMAT_PNG)  |            \
+     (1 << ID_FORMAT_DIB))
 
 /* Supported color modes
  *
@@ -2028,6 +2029,11 @@ image_decoder_tiff_new (void);
  */
 image_decoder*
 image_decoder_png_new (void);
+
+/* Create DIB image decoder
+ */
+image_decoder*
+image_decoder_dib_new (void);
 
 /* Free image decoder
  */
