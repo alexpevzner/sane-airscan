@@ -1229,13 +1229,14 @@ wsdd_init (void)
     /* Initialize logging */
     wsdd_log = log_ctx_new("WSDD");
 
-    if (!conf.discovery) {
-        log_debug(NULL, "devices discovery disabled");
-        return SANE_STATUS_GOOD;
-    }
-
     /* Initialize wsdd_finding_list */
     ll_init(&wsdd_finding_list);
+
+    /* All for now, if WS-Discovery is disabled */
+    if (!conf.discovery) {
+        log_debug(wsdd_log, "devices discovery disabled");
+        return SANE_STATUS_GOOD;
+    }
 
     /* Create IPv4/IPv6 multicast addresses */
     wsdd_mcast_ipv4.sin_family = AF_INET;
