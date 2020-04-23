@@ -588,6 +588,7 @@ inifile_match_name (const char *n1, const char *n2)
 /* Configuration data
  */
 conf_data conf = CONF_INIT;
+static conf_data conf_init = CONF_INIT;
 
 /* Revert conf.devices list
  */
@@ -879,10 +880,9 @@ conf_load (void)
     GString   *dir_list = g_string_new(NULL);
     GString   *path = g_string_new(NULL);
     char      *s;
-    conf_data init = CONF_INIT;
 
     /* Reset the configuration */
-    conf = init;
+    conf = conf_init;
 
     /* Look to configuration path in environment */
     s = getenv(CONFIG_PATH_ENV);
@@ -929,7 +929,7 @@ conf_unload (void)
 {
     conf_device_list_free();
     g_free((char*) conf.dbg_trace);
-    memset(&conf, 0, sizeof(conf));
+    conf = conf_init;
 }
 
 /* vim:ts=8:sw=4:et

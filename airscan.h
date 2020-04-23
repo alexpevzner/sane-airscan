@@ -376,6 +376,11 @@ devid_alloc (void);
 void
 devid_free (unsigned int id);
 
+/* Initialize device ID allocator
+ */
+void
+devid_init (void);
+
 /******************** UUID utilities ********************/
 /* Type uuid represents a random UUID string.
  *

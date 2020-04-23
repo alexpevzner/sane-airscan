@@ -8,6 +8,8 @@
 
 #include "airscan.h"
 
+#include <string.h>
+
 /* DEVID_RANGE defines device ID range, 0 ... DEVID_RANGE-1
  * It must be power of two
  */
@@ -57,6 +59,15 @@ void
 devid_free (unsigned int id)
 {
     devid_bits_set(id, false);
+}
+
+/* Initialize device ID allocator
+ */
+void
+devid_init (void)
+{
+    devid_next = 0;
+    memset(devid_bits, 0, sizeof(devid_bits));
 }
 
 /* vim:ts=8:sw=4:et

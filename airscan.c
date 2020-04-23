@@ -23,7 +23,9 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
     trace_init();
     log_debug(NULL, "sane_init() called");
 
+    devid_init();
     conf_load();
+
     log_configure(); /* As soon, as configuration is available */
 
     if (version_code != NULL) {
