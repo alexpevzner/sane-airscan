@@ -1,28 +1,10 @@
 /* sane - Scanner Access Now Easy.
-
-   Copyright (C) 2020 Thierry HUCHARD <thierry@ordissimo.com>
-
-   This file is part of the SANE package.
-
-   SANE is free software; you can redistribute it and/or modify it under
-   the terms of the GNU General Public License as published by the Free
-   Software Foundation; either version 3 of the License, or (at your
-   option) any later version.
-
-   SANE is distributed in the hope that it will be useful, but WITHOUT
-   ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-   FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
-   for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with sane; see the file COPYING.  If not, write to the Free
-   Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
-
-   This file implements a SANE backend for airscan scanners. */
+ *
+ * Copyright (C) 2020 Thierry HUCHARD <thierry@ordissimo.com>
+ * See LICENSE for license terms and conditions
+ */
 
 #include "airscan.h"
-
-// gcc -o airscan-bmp airscan-bmp.c $(pkg-config --libs --cflags gtk+-3.0) -lm
 
 #include <stdio.h>
 #include <string.h>
@@ -48,9 +30,8 @@ typedef struct {
                                                of the tiff file. */
     int32_t                       offset_data; /* Offset in the file where
                                                   the pixel data is stored */
-    int32_t                       offset_file; /* Moving the start position 
+    int32_t                       offset_file; /* Moving the start position
                                                   of the bmp data file. */
-                                         
     size_t                        size_bmp; /* Size of the bmp file. */
     size_t                        size_file; /* Size of the bmp file. */
 } image_decoder_bmp;
@@ -64,13 +45,14 @@ image_decoder_bmp_free (image_decoder *decoder)
     g_free(bmp);
 }
 
-static int 
+static int
 read_memory(unsigned char*dest, unsigned char *src, int size_src, int offset, int count)
 {
-	int i = 0, j;
-	
-	if (size_src < (offset + count))
-	    return 0;
+    int i = 0, j;
+
+    if (size_src < (offset + count))
+        return 0;
+
 #if __BYTE_ORDER == __LITTLE_ENDIAN
     for (j = 0; j < count; j++) {
 #elif __BYTE_ORDER == __BIG_ENDIAN
@@ -88,14 +70,15 @@ static error
 image_decoder_bmp_begin (image_decoder *decoder, const void *data,
         size_t size)
 {
-    int index;
-    uint32_t header_size;
     image_decoder_bmp *bmp = (image_decoder_bmp*) decoder;
+    int               index;
+    uint32_t          header_size;
 
     bmp->mem_file = (unsigned char*)data;
     bmp->size_file = size;
     if (!bmp->mem_file || size < 30)
         return ERROR("BMP: invalid header");
+
     /* Bits per pixel 2 bytes 0x1C Number of bits per pixel */
     if (!read_memory((unsigned char*)&bmp->bits_per_pixel,
                 bmp->mem_file,
@@ -105,7 +88,8 @@ image_decoder_bmp_begin (image_decoder *decoder, const void *data,
         return ERROR("unsupported BMP type");
     }
     bmp->bytes_per_pixel = (int32_t)bmp->bits_per_pixel / 8;
-    /* Data offset 4 bytes 0x0A Offset in the file 
+
+    /* Data offset 4 bytes 0x0A Offset in the file
        where the pixel data is stored */
     if (!read_memory((unsigned char*)&bmp->offset_data,
                 bmp->mem_file,
@@ -128,6 +112,7 @@ image_decoder_bmp_begin (image_decoder *decoder, const void *data,
                 18,
                 4))
         return ERROR("BMP: invalid header");
+
     if (bmp->width < 0)
          bmp->width = abs(bmp->width);
 
@@ -138,6 +123,7 @@ image_decoder_bmp_begin (image_decoder *decoder, const void *data,
                 22,
                 4))
         return ERROR("BMP: invalid header");
+
     if (bmp->num_lines)
          bmp->num_lines = abs(bmp->num_lines);
 
@@ -150,15 +136,18 @@ image_decoder_bmp_begin (image_decoder *decoder, const void *data,
         return ERROR("BMP: invalid header");
 
     if(bmp->bits_per_pixel <= 8) {
-		if (bmp->bits_per_pixel == 8)
-		  bmp->n_colors = 256;
+        if (bmp->bits_per_pixel == 8)
+            bmp->n_colors = 256;
+
         if(!bmp->n_colors) {
             bmp->n_colors = 1 << bmp->bits_per_pixel;
         }
+
         bmp->palettes = (uint8_t*)calloc(1, sizeof(uint8_t) * 4 * 256);
         if(!bmp->palettes) {
             return ERROR("out of memory");
         }
+
         /* read the palette information */
 	for(index=0;index<bmp->n_colors;index++) {
 	    bmp->palettes[index * 4 + 0] = (uint8_t)bmp->mem_file[(index * 4) + 54];
@@ -183,6 +172,7 @@ static void
 image_decoder_bmp_reset (image_decoder *decoder)
 {
     image_decoder_bmp *bmp = (image_decoder_bmp*) decoder;
+
     bmp->offset_file = 0;
     bmp->current_line = 0;
 }
@@ -193,7 +183,8 @@ static int
 image_decoder_bmp_get_bytes_per_pixel (image_decoder *decoder)
 {
     image_decoder_bmp *bmp = (image_decoder_bmp*) decoder;
-    if (bmp->bits_per_pixel == 1) 
+
+    if (bmp->bits_per_pixel == 1)
        return 1;
     else
        return 3;
@@ -210,12 +201,13 @@ image_decoder_bmp_get_params (image_decoder *decoder, SANE_Parameters *params)
     params->pixels_per_line = bmp->width;
     params->lines = bmp->num_lines;
     params->depth = 8;
+
     if (bmp->bytes_per_pixel == 1)
        params->format = SANE_FRAME_GRAY;
     else
        params->format = SANE_FRAME_RGB;
-    params->bytes_per_line = bmp->bytes_per_line;
 
+    params->bytes_per_line = bmp->bytes_per_line;
 }
 
 /* Set clipping window
@@ -224,32 +216,11 @@ static error
 image_decoder_bmp_set_window (image_decoder *decoder, image_window *win)
 {
     image_decoder_bmp *bmp = (image_decoder_bmp*) decoder;
-// #if     1
+
     win->x_off = win->y_off = 0;
     win->wid = bmp->width;
     win->hei = bmp->num_lines;
     return NULL;
-/*
-#else
-    int         x_off = win->x_off;
-    int         wid = win->wid;
-
-    if (!setjmp(jpeg->jmpb)) {
-        jpeg_crop_scanline(&jpeg->cinfo, &x_off, &wid);
-        if (win->y_off > 0) {
-            jpeg_skip_scanlines(&jpeg->cinfo, win->y_off);
-        }
-
-        tiff->num_lines = win->hei;
-
-        win->x_off = x_off;
-        win->wid = wid;
-
-        return NULL;
-    }
-    return ERROR(jpeg->errbuf);
-#endif
-*/
 }
 
 /* Read next line of image
@@ -257,14 +228,15 @@ image_decoder_bmp_set_window (image_decoder *decoder, image_window *win)
 static error
 image_decoder_bmp_read_line (image_decoder *decoder, void *buffer)
 {
-	unsigned char *current_data = NULL;
-	unsigned char *buf = (unsigned char*)buffer;
     image_decoder_bmp *bmp = (image_decoder_bmp*) decoder;
-    int bpl = 0;
-    
+    unsigned char     *current_data = NULL;
+    unsigned char     *buf = (unsigned char*)buffer;
+    int               bpl = 0;
+
     if (bmp->num_lines <= (bmp->current_line + 1)) {
         return ERROR("BMP: end of file");
     }
+
     current_data = bmp->offset_data + bmp->mem_file;
     int rs = ((bmp->width * (int32_t)bmp->bits_per_pixel / 8) + 3) & ~3;
     switch (bmp->bits_per_pixel) {
