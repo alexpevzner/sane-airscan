@@ -158,6 +158,8 @@ main (int argc, char **argv)
         decoder = image_decoder_tiff_new();
     } else if (!strcmp(ext, "png")) {
         decoder = image_decoder_png_new();
+    } else if (!strcmp(ext, "bmp")) {
+        decoder = image_decoder_bmp_new();
     }
 
     if (decoder == NULL) {
