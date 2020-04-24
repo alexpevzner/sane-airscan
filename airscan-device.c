@@ -555,7 +555,7 @@ device_scanner_capabilities_callback (void *ptr, http_query *q)
                 break;
 
             case ID_FORMAT_DIB:
-                dev->decoders[i] = image_decoder_dib_new();
+                dev->decoders[i] = image_decoder_bmp_new();
                 break;
 
             default:
