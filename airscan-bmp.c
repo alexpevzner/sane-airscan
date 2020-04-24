@@ -70,7 +70,7 @@ image_decoder_bmp_begin (image_decoder *decoder, const void *data,
 {
     image_decoder_bmp *bmp = (image_decoder_bmp*) decoder;
     BITMAPFILEHEADER  file_header;
-    size_t            header_size;
+    size_t            header_size, padding;
     uint64_t          size_required;
 
     /* Decode BMP header */
@@ -138,14 +138,15 @@ image_decoder_bmp_begin (image_decoder *decoder, const void *data,
     /* Compute BMP row size */
     bmp->bmp_row_size = bmp->info_header.biWidth;
     bmp->bmp_row_size *= bmp->info_header.biBitCount / 8;
-    bmp->bmp_row_size += 3;
-    bmp->bmp_row_size &= ~ (size_t) 3;
+    padding = (4 - (bmp->bmp_row_size & 3)) & 3;
+    bmp->bmp_row_size += padding;
 
     /* Make sure image is not truncated */
     header_size = sizeof(BITMAPFILEHEADER) + bmp->info_header.biSize;
     size_required = header_size;
     size_required += ((uint64_t) labs(bmp->info_header.biHeight)) *
         (uint64_t) bmp->bmp_row_size;
+    size_required -= padding; /* Last row may be unpadded */
 
     if (size_required > (uint64_t) size) {
         return ERROR("BMP: paletted image truncated");
