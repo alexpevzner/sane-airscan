@@ -344,7 +344,7 @@ typedef enum {
     ID_FORMAT_TIFF,
     ID_FORMAT_PNG,
     ID_FORMAT_PDF,
-    ID_FORMAT_DIB,
+    ID_FORMAT_BMP,
 
     NUM_ID_FORMAT
 } ID_FORMAT;
@@ -1484,7 +1484,7 @@ enum {
 #define DEVCAPS_FORMATS_SUPPORTED       \
     ((1 << ID_FORMAT_JPEG) |            \
      (1 << ID_FORMAT_PNG)  |            \
-     (1 << ID_FORMAT_DIB))
+     (1 << ID_FORMAT_BMP))
 
 /* Supported color modes
  *

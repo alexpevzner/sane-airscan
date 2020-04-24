@@ -145,7 +145,7 @@ static id_name_table id_format_mime_name_table[] = {
     {ID_FORMAT_TIFF, "image/tiff"},
     {ID_FORMAT_PNG,  "image/png"},
     {ID_FORMAT_PDF,  "application/pdf"},
-    {ID_FORMAT_DIB,  "application/dib"},
+    {ID_FORMAT_BMP,  "application/bmp"},
     {-1, NULL}
 };
 

@@ -554,7 +554,7 @@ device_scanner_capabilities_callback (void *ptr, http_query *q)
                 dev->decoders[i] = image_decoder_png_new();
                 break;
 
-            case ID_FORMAT_DIB:
+            case ID_FORMAT_BMP:
                 dev->decoders[i] = image_decoder_bmp_new();
                 break;
 
@@ -921,8 +921,8 @@ device_choose_format (device *dev, devcaps_source *src)
         return ID_FORMAT_JPEG;
     }
 
-    if ((formats & (1 << ID_FORMAT_DIB)) != 0) {
-        return ID_FORMAT_DIB;
+    if ((formats & (1 << ID_FORMAT_BMP)) != 0) {
+        return ID_FORMAT_BMP;
     }
 
     if ((formats & (1 << ID_FORMAT_TIFF)) != 0) {

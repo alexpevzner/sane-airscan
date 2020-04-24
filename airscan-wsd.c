@@ -215,8 +215,10 @@ wsd_devcaps_parse_formats (proto_handler_wsd *wsd,
         /* These used as last resort */
         if (wsd->tiff_single_jpeg_tn2 || wsd->tiff_single_uncompressed) {
             formats |= 1 << ID_FORMAT_TIFF;
-        } else if (wsd->dib) {
-            formats |= 1 << ID_FORMAT_DIB;
+        }
+
+        if (wsd->dib) {
+            formats |= 1 << ID_FORMAT_BMP;
         }
     }
 
@@ -727,7 +729,7 @@ wsd_scan_query (const proto_ctx *ctx)
         }
         break;
 
-    case ID_FORMAT_DIB:
+    case ID_FORMAT_BMP:
         if (wsd->dib) {
             format = "dib";
         }
