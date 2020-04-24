@@ -2030,6 +2030,11 @@ image_decoder_tiff_new (void);
 image_decoder*
 image_decoder_png_new (void);
 
+/* Create BMP image decoder
+ */
+image_decoder*
+image_decoder_bmp_new (void);
+
 /* Create DIB image decoder
  */
 image_decoder*

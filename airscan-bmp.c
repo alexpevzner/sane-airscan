@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+
 /* BMP image decoder
  */
 typedef struct {
@@ -37,7 +38,11 @@ typedef struct {
     int32_t                       width; /* Width of the image in pixels. */
     int32_t                       bytes_per_pixel; /* */
     int32_t                       bytes_per_line; /*  */
+    int16_t                       bits_per_pixel;
     int32_t                       real_bytes_per_line; /*  */
+    int32_t                       compression; /* Compression */
+    int32_t                       n_colors; /* Number of colors */
+    uint8_t                       *palettes;
     int32_t                       current_line; /* Current of lines */
     unsigned char                 *mem_file; /* Position of the beginning
                                                of the tiff file. */
@@ -46,6 +51,7 @@ typedef struct {
     int32_t                       offset_file; /* Moving the start position 
                                                   of the bmp data file. */
                                          
+    size_t                        size_bmp; /* Size of the bmp file. */
     size_t                        size_file; /* Size of the bmp file. */
 } image_decoder_bmp;
 
@@ -76,13 +82,35 @@ read_memory(unsigned char*dest, unsigned char *src, int size_src, int offset, in
     return 1;
 }
 
+
+static int			pow2(int a)
+{
+	return (a * a);
+}
+
+static int
+read_data_memory(unsigned char*dest, unsigned char *src, int size_src, int offset, int count)
+{
+	int i = 0, j;
+
+	if (size_src < (offset + count))
+	    return 0;
+    for (j = 0; j < count; j++) {
+		dest[i] = src[j + offset];
+        i++;
+    }
+    return 1;
+}
+
 /* Begin BMP decoding
  */
 static error
 image_decoder_bmp_begin (image_decoder *decoder, const void *data,
         size_t size)
 {
-	short bits_per_pixel;
+    int index;
+    uint32_t header_size;
+    short bits_per_pixel;
     image_decoder_bmp *bmp = (image_decoder_bmp*) decoder;
 
     bmp->mem_file = (unsigned char*)data;
@@ -90,15 +118,14 @@ image_decoder_bmp_begin (image_decoder *decoder, const void *data,
     if (!bmp->mem_file || size < 30)
         return ERROR("BMP: invalid header");
     /* Bits per pixel 2 bytes 0x1C Number of bits per pixel */
-    if (!read_memory((unsigned char*)&bits_per_pixel,
+    if (!read_memory((unsigned char*)&bmp->bits_per_pixel,
                 bmp->mem_file,
                 bmp->size_file,
                 28,
-                2))
-        return ERROR("BMP: invalid header");
-    bmp->bytes_per_pixel = (int32_t)bits_per_pixel / 8;
-    if (bmp->bytes_per_pixel != 1 && bmp->bytes_per_pixel != 3)
-         return ERROR("BMP: format unsupported");
+                2)) {
+        return ERROR("unsupported BMP type");
+    }
+    bmp->bytes_per_pixel = (int32_t)bmp->bits_per_pixel / 8;
     /* Data offset 4 bytes 0x0A Offset in the file 
        where the pixel data is stored */
     if (!read_memory((unsigned char*)&bmp->offset_data,
@@ -107,6 +134,14 @@ image_decoder_bmp_begin (image_decoder *decoder, const void *data,
                 10,
                 4))
         return ERROR("BMP: invalid header");
+
+    if (!read_memory((unsigned char*)&header_size,
+                bmp->mem_file,
+                bmp->size_file,
+                14,
+                4))
+        return ERROR("BMP: invalid header");
+
     /* Width 4 bytes 0x12 Width of the image in pixels */
     if (!read_memory((unsigned char*)&bmp->width,
                 bmp->mem_file,
@@ -114,6 +149,8 @@ image_decoder_bmp_begin (image_decoder *decoder, const void *data,
                 18,
                 4))
         return ERROR("BMP: invalid header");
+    if (bmp->width < 0)
+         bmp->width = abs(bmp->width);
 
     /* Height 4 bytes 0x16 Height of the image in pixels */
     if (!read_memory((unsigned char*)&bmp->num_lines,
@@ -122,6 +159,36 @@ image_decoder_bmp_begin (image_decoder *decoder, const void *data,
                 22,
                 4))
         return ERROR("BMP: invalid header");
+    if (bmp->num_lines)
+         bmp->num_lines = abs(bmp->num_lines);
+
+    /* Height 4 bytes 0x16 Height of the image in pixels */
+    if (!read_memory((unsigned char*)&bmp->compression,
+                bmp->mem_file,
+                bmp->size_file,
+                30,
+                4))
+        return ERROR("BMP: invalid header");
+
+    if(bmp->bits_per_pixel <= 8) {
+		if (bmp->bits_per_pixel == 8)
+		  bmp->n_colors = 256;
+        if(!bmp->n_colors) {
+            bmp->n_colors = 1 << bmp->bits_per_pixel;
+        }
+        bmp->palettes = (uint8_t*)calloc(1, sizeof(uint8_t) * 4 * 256);
+        if(!bmp->palettes) {
+            return ERROR("out of memory");
+        }
+        /* read the palette information */
+	for(index=0;index<bmp->n_colors;index++) {
+	    bmp->palettes[index * 4 + 0] = (uint8_t)bmp->mem_file[(index * 4) + 54];
+	    bmp->palettes[index * 4 + 1] = (uint8_t)bmp->mem_file[(index * 4) + 55];
+	    bmp->palettes[index * 4 + 2] = (uint8_t)bmp->mem_file[(index * 4) + 56];
+	    bmp->palettes[index * 4 + 3] = (uint8_t)bmp->mem_file[(index * 4) + 57];;
+	}
+    }
+    // create_safety_palette();
 
     bmp->offset_file = 0;
     bmp->bytes_per_line = bmp->width * bmp->bytes_per_pixel;
@@ -147,7 +214,10 @@ static int
 image_decoder_bmp_get_bytes_per_pixel (image_decoder *decoder)
 {
     image_decoder_bmp *bmp = (image_decoder_bmp*) decoder;
-    return bmp->bytes_per_pixel;
+    if (bmp->bits_per_pixel == 1) 
+       return 1;
+    else
+       return 3;
 }
 
 /* Get image parameters
@@ -211,23 +281,50 @@ image_decoder_bmp_read_line (image_decoder *decoder, void *buffer)
 	unsigned char *current_data = NULL;
 	unsigned char *buf = (unsigned char*)buffer;
     image_decoder_bmp *bmp = (image_decoder_bmp*) decoder;
-    int bpl = 0;
+    int bpl = 0, y = 0;
     
     if (bmp->num_lines <= (bmp->current_line + 1)) {
         return ERROR("BMP: end of file");
     }
-    current_data = bmp->offset_file + bmp->offset_data + bmp->mem_file;
-    for(; bpl < bmp->bytes_per_line; bpl+=bmp->bytes_per_pixel)
-      {
-		  if (bmp->bytes_per_pixel == 1)
-			 buf[bpl] = current_data[bpl];
-		  else {
-		     buf[bpl + 0] = current_data[bpl + 2];
-		     buf[bpl + 1] = current_data[bpl + 1];
-		     buf[bpl + 2] = current_data[bpl + 0];
-		  }
-    }
-    bmp->offset_file += bmp->real_bytes_per_line;
+    current_data = bmp->offset_data + bmp->mem_file;
+    int rs = ((bmp->width * (int32_t)bmp->bits_per_pixel / 8) + 3) & ~3;
+    switch (bmp->bits_per_pixel) {
+		case 8:
+		    for(bpl = 0; bpl < bmp->width; bpl++) {
+                       int byt = bmp->current_line * rs + bpl;
+                       uint8_t p = current_data[byt];
+		       buf[(bpl * 3) + 2] = bmp->palettes[p + 0];
+		       buf[(bpl * 3) + 1] = bmp->palettes[p + 1];
+		       buf[(bpl * 3) + 0] = bmp->palettes[p + 2];
+		    }
+		    break;
+		case 4:
+		    for(bpl = 0; bpl < bmp->width; bpl++) {
+                      int byt = bmp->current_line *  rs + (bpl >> 1);
+                      uint8_t p = ( (bpl & 0x01) ? current_data[byt] : (current_data[byt] >> 4) ) & 0x0F;
+                      buf[bpl + 2] = bmp->palettes[p + +0];
+		      buf[bpl + 1] = bmp->palettes[p + 1];
+		      buf[bpl + 0] = bmp->palettes[p + 2];
+                    }
+		    break;
+		case 1:
+                    for(bpl = 0; bpl < bmp->width; bpl++) {
+                      int byt = bmp->current_line *  rs + (bpl >> 3);
+                      int bit = 7 - (bpl % 8);
+                      uint8_t p = (current_data[byt] & (1 << bit)) >> bit;
+                      buf[bpl] = bmp->palettes[p];
+                    }
+		    break;
+		default:
+		    for(bpl = 0; bpl < bmp->width; bpl++) {
+                      int p = (int)(bmp->current_line *  rs + bpl * (bmp->bits_per_pixel / 8));
+                      buf[(bpl * 3) + 0] = current_data[p+2];
+                      buf[(bpl * 3) + 1] = current_data[p+1];
+                      buf[(bpl * 3) + 2] = current_data[p+0];
+                    }
+		    break;
+	}
+    bmp->offset_file += rs;
     bmp->current_line ++;
     return NULL;
 }
