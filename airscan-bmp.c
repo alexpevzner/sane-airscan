@@ -11,29 +11,46 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* BITMAPFILEHEADER structure, see MSDN for details
+ */
+#pragma pack (push,1)
+typedef struct {
+    uint16_t bfType;           /* File magic, always 'BM' */
+    uint32_t bfSize;           /* File size in bytes */
+    uint16_t bfReserved1;      /* Reserved; must be zero */
+    uint16_t bfReserved2;      /* Reserved; must be zero */
+    uint32_t bfOffBits;        /* Offset to bitmap bits */
+} BITMAPFILEHEADER;
+#pragma pack (pop)
+
+/* BITMAPINFOHEADER structure, see MSDN for details
+ */
+#pragma pack (push,1)
+typedef struct {
+    uint32_t  biSize;          /* Header size, bytes */
+    int32_t   biWidth;         /* Image width, pixels */
+    int32_t   biHeight;        /* Image height, pixels */
+    uint16_t  biPlanes;        /* Number of planes, always 1 */
+    uint16_t  biBitCount;      /* Bits per pixel */
+    uint32_t  biCompression;   /* Compression type, see MSDN */
+    uint32_t  biSizeImage;     /* Image size, can be o */
+    int32_t   biXPelsPerMeter; /* Horizontal resolution, pixels per meter */
+    int32_t   biYPelsPerMeter; /* Vertical resolution, pixels per meter */
+    uint32_t  biClrUsed;       /* Number of used palette indices */
+    uint32_t  biClrImportant;  /* Number of important palette indices */
+} BITMAPINFOHEADER;
+#pragma pack (pop)
 
 /* BMP image decoder
  */
 typedef struct {
-    image_decoder                 decoder;   /* Base class */
-    int32_t                       num_lines; /* Num of lines left to read */
-    int32_t                       width; /* Width of the image in pixels. */
-    int32_t                       bytes_per_pixel; /* */
-    int32_t                       bytes_per_line; /*  */
-    int16_t                       bits_per_pixel;
-    int32_t                       real_bytes_per_line; /*  */
-    int32_t                       compression; /* Compression */
-    int32_t                       n_colors; /* Number of colors */
-    uint8_t                       *palettes;
-    int32_t                       current_line; /* Current of lines */
-    unsigned char                 *mem_file; /* Position of the beginning
-                                               of the tiff file. */
-    int32_t                       offset_data; /* Offset in the file where
-                                                  the pixel data is stored */
-    int32_t                       offset_file; /* Moving the start position
-                                                  of the bmp data file. */
-    size_t                        size_bmp; /* Size of the bmp file. */
-    size_t                        size_file; /* Size of the bmp file. */
+    image_decoder                 decoder;       /* Base class */
+    char                          error[256];    /* Error message buffer */
+    const uint8_t                 *image_data;   /* Image data */
+    BITMAPINFOHEADER              info_header;   /* DIB header, decoded */
+    size_t                        bmp_row_size;  /* Row size in BMP file */
+    SANE_Frame                    format;        /* SANE_FRAME_GRAY/RBG */
+    unsigned int                  next_line;     /* Next line to read */
 } image_decoder_bmp;
 
 /* Free BMP decoder
@@ -45,25 +62,6 @@ image_decoder_bmp_free (image_decoder *decoder)
     g_free(bmp);
 }
 
-static int
-read_memory(unsigned char*dest, unsigned char *src, int size_src, int offset, int count)
-{
-    int i = 0, j;
-
-    if (size_src < (offset + count))
-        return 0;
-
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-    for (j = 0; j < count; j++) {
-#elif __BYTE_ORDER == __BIG_ENDIAN
-    for (j = count - 1; j > -1; j--) {
-#endif
-        dest[i] = src[j + offset];
-        i++;
-    }
-    return 1;
-}
-
 /* Begin BMP decoding
  */
 static error
@@ -71,98 +69,91 @@ image_decoder_bmp_begin (image_decoder *decoder, const void *data,
         size_t size)
 {
     image_decoder_bmp *bmp = (image_decoder_bmp*) decoder;
-    int               index;
-    uint32_t          header_size;
+    BITMAPFILEHEADER  file_header;
+    size_t            header_size;
+    uint64_t          size_required;
 
-    bmp->mem_file = (unsigned char*)data;
-    bmp->size_file = size;
-    if (!bmp->mem_file || size < 30)
-        return ERROR("BMP: invalid header");
-
-    /* Bits per pixel 2 bytes 0x1C Number of bits per pixel */
-    if (!read_memory((unsigned char*)&bmp->bits_per_pixel,
-                bmp->mem_file,
-                bmp->size_file,
-                28,
-                2)) {
-        return ERROR("unsupported BMP type");
+    /* Decode BMP header */
+    if (size < sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER)) {
+        return ERROR("BMP: header truncated");
     }
-    bmp->bytes_per_pixel = (int32_t)bmp->bits_per_pixel / 8;
 
-    /* Data offset 4 bytes 0x0A Offset in the file
-       where the pixel data is stored */
-    if (!read_memory((unsigned char*)&bmp->offset_data,
-                bmp->mem_file,
-                bmp->size_file,
-                10,
-                4))
-        return ERROR("BMP: invalid header");
+    memcpy(&file_header, data, sizeof(BITMAPFILEHEADER));
+    memcpy(&bmp->info_header, ((char*) data) + sizeof(BITMAPFILEHEADER),
+        sizeof(BITMAPINFOHEADER));
 
-    if (!read_memory((unsigned char*)&header_size,
-                bmp->mem_file,
-                bmp->size_file,
-                14,
-                4))
-        return ERROR("BMP: invalid header");
+    file_header.bfType = le16toh(file_header.bfType);
+    file_header.bfSize = le32toh(file_header.bfSize);
+    file_header.bfOffBits = le32toh(file_header.bfOffBits);
 
-    /* Width 4 bytes 0x12 Width of the image in pixels */
-    if (!read_memory((unsigned char*)&bmp->width,
-                bmp->mem_file,
-                bmp->size_file,
-                18,
-                4))
-        return ERROR("BMP: invalid header");
+    bmp->info_header.biSize = le32toh(bmp->info_header.biSize);
+    bmp->info_header.biWidth = le32toh(bmp->info_header.biWidth);
+    bmp->info_header.biHeight = le32toh(bmp->info_header.biHeight);
+    bmp->info_header.biPlanes = le16toh(bmp->info_header.biPlanes);
+    bmp->info_header.biBitCount = le16toh(bmp->info_header.biBitCount);
+    bmp->info_header.biCompression = le32toh(bmp->info_header.biCompression);
+    bmp->info_header.biSizeImage = le32toh(bmp->info_header.biSizeImage);
+    bmp->info_header.biXPelsPerMeter = le32toh(bmp->info_header.biXPelsPerMeter);
+    bmp->info_header.biYPelsPerMeter = le32toh(bmp->info_header.biYPelsPerMeter);
+    bmp->info_header.biClrUsed = le32toh(bmp->info_header.biClrUsed);
+    bmp->info_header.biClrImportant = le32toh(bmp->info_header.biClrImportant);
 
-    if (bmp->width < 0)
-         bmp->width = abs(bmp->width);
-
-    /* Height 4 bytes 0x16 Height of the image in pixels */
-    if (!read_memory((unsigned char*)&bmp->num_lines,
-                bmp->mem_file,
-                bmp->size_file,
-                22,
-                4))
-        return ERROR("BMP: invalid header");
-
-    if (bmp->num_lines)
-         bmp->num_lines = abs(bmp->num_lines);
-
-    /* Height 4 bytes 0x16 Height of the image in pixels */
-    if (!read_memory((unsigned char*)&bmp->compression,
-                bmp->mem_file,
-                bmp->size_file,
-                30,
-                4))
-        return ERROR("BMP: invalid header");
-
-    if(bmp->bits_per_pixel <= 8) {
-        if (bmp->bits_per_pixel == 8)
-            bmp->n_colors = 256;
-
-        if(!bmp->n_colors) {
-            bmp->n_colors = 1 << bmp->bits_per_pixel;
-        }
-
-        bmp->palettes = (uint8_t*)calloc(1, sizeof(uint8_t) * 4 * 256);
-        if(!bmp->palettes) {
-            return ERROR("out of memory");
-        }
-
-        /* read the palette information */
-	for(index=0;index<bmp->n_colors;index++) {
-	    bmp->palettes[index * 4 + 0] = (uint8_t)bmp->mem_file[(index * 4) + 54];
-	    bmp->palettes[index * 4 + 1] = (uint8_t)bmp->mem_file[(index * 4) + 55];
-	    bmp->palettes[index * 4 + 2] = (uint8_t)bmp->mem_file[(index * 4) + 56];
-	    bmp->palettes[index * 4 + 3] = (uint8_t)bmp->mem_file[(index * 4) + 57];;
-	}
+    /* Validate BMP header */
+    if (file_header.bfType != ('M' << 8 | 'B')) {
+        return ERROR("BMP: invalid header signature");
     }
-    // create_safety_palette();
 
-    bmp->offset_file = 0;
-    bmp->bytes_per_line = bmp->width * bmp->bytes_per_pixel;
-    bmp->real_bytes_per_line = (int32_t)
-                 (4 * ceil((float)bmp->width / 4.0f)) *
-                 bmp->bytes_per_pixel;
+    if (bmp->info_header.biSize < sizeof(BITMAPINFOHEADER)) {
+        sprintf(bmp->error, "BMP: invalid header size %d",
+            bmp->info_header.biSize);
+        return ERROR(bmp->error);
+    }
+
+    if (bmp->info_header.biCompression != 0) {
+        sprintf(bmp->error, "BMP: compression %d not supported",
+            bmp->info_header.biCompression);
+        return ERROR(bmp->error);
+    }
+
+    if (bmp->info_header.biClrUsed != 0) {
+        return ERROR("BMP: paletted images not supported");
+    }
+
+    switch (bmp->info_header.biBitCount) {
+    case 8:
+        bmp->format = SANE_FRAME_GRAY;
+        break;
+
+    case 24:
+    case 32:
+        bmp->format = SANE_FRAME_RGB;
+        break;
+
+    default:
+        sprintf(bmp->error, "BMP: %d bits per pixel not supported",
+            bmp->info_header.biBitCount);
+        return ERROR(bmp->error);
+    }
+
+    /* Compute BMP row size */
+    bmp->bmp_row_size = bmp->info_header.biWidth;
+    bmp->bmp_row_size *= bmp->info_header.biBitCount / 8;
+    bmp->bmp_row_size += 3;
+    bmp->bmp_row_size &= ~ (size_t) 3;
+
+    /* Make sure image is not truncated */
+    header_size = sizeof(BITMAPFILEHEADER) + bmp->info_header.biSize;
+    size_required = header_size;
+    size_required += ((uint64_t) labs(bmp->info_header.biHeight)) *
+        (uint64_t) bmp->bmp_row_size;
+
+    if (size_required > (uint64_t) size) {
+        return ERROR("BMP: paletted image truncated");
+    }
+
+    /* Save pointer to image data */
+    bmp->image_data = header_size + (const uint8_t*) data;
+
     return NULL;
 }
 
@@ -173,8 +164,7 @@ image_decoder_bmp_reset (image_decoder *decoder)
 {
     image_decoder_bmp *bmp = (image_decoder_bmp*) decoder;
 
-    bmp->offset_file = 0;
-    bmp->current_line = 0;
+    (void) bmp;
 }
 
 /* Get bytes count per pixel
@@ -184,10 +174,7 @@ image_decoder_bmp_get_bytes_per_pixel (image_decoder *decoder)
 {
     image_decoder_bmp *bmp = (image_decoder_bmp*) decoder;
 
-    if (bmp->bits_per_pixel == 1)
-       return 1;
-    else
-       return 3;
+    return bmp->format == SANE_FRAME_GRAY ? 1 : 3;
 }
 
 /* Get image parameters
@@ -198,16 +185,14 @@ image_decoder_bmp_get_params (image_decoder *decoder, SANE_Parameters *params)
     image_decoder_bmp *bmp = (image_decoder_bmp*) decoder;
 
     params->last_frame = SANE_TRUE;
-    params->pixels_per_line = bmp->width;
-    params->lines = bmp->num_lines;
+    params->pixels_per_line = bmp->info_header.biWidth;
+    params->lines = labs(bmp->info_header.biHeight);
     params->depth = 8;
-
-    if (bmp->bytes_per_pixel == 1)
-       params->format = SANE_FRAME_GRAY;
-    else
-       params->format = SANE_FRAME_RGB;
-
-    params->bytes_per_line = bmp->bytes_per_line;
+    params->format = bmp->format;
+    params->bytes_per_line = params->pixels_per_line;
+    if (params->format == SANE_FRAME_RGB) {
+        params->bytes_per_line *= 3;
+    }
 }
 
 /* Set clipping window
@@ -218,8 +203,9 @@ image_decoder_bmp_set_window (image_decoder *decoder, image_window *win)
     image_decoder_bmp *bmp = (image_decoder_bmp*) decoder;
 
     win->x_off = win->y_off = 0;
-    win->wid = bmp->width;
-    win->hei = bmp->num_lines;
+    win->wid = bmp->info_header.biWidth;
+    win->hei = labs(bmp->info_header.biHeight);
+
     return NULL;
 }
 
@@ -229,54 +215,54 @@ static error
 image_decoder_bmp_read_line (image_decoder *decoder, void *buffer)
 {
     image_decoder_bmp *bmp = (image_decoder_bmp*) decoder;
-    unsigned char     *current_data = NULL;
-    unsigned char     *buf = (unsigned char*)buffer;
-    int               bpl = 0;
+    size_t            row_num;
+    const uint8_t     *row_data;
+    int               i, wid = bmp->info_header.biWidth;
+    uint8_t           *out = buffer;
 
-    if (bmp->num_lines <= (bmp->current_line + 1)) {
+    if (bmp->next_line == labs(bmp->info_header.biHeight)) {
         return ERROR("BMP: end of file");
     }
 
-    current_data = bmp->offset_data + bmp->mem_file;
-    int rs = ((bmp->width * (int32_t)bmp->bits_per_pixel / 8) + 3) & ~3;
-    switch (bmp->bits_per_pixel) {
-		case 8:
-		    for(bpl = 0; bpl < bmp->width; bpl++) {
-                       int byt = bmp->current_line * rs + bpl;
-                       uint8_t p = current_data[byt];
-		       buf[(bpl * 3) + 2] = bmp->palettes[p + 0];
-		       buf[(bpl * 3) + 1] = bmp->palettes[p + 1];
-		       buf[(bpl * 3) + 0] = bmp->palettes[p + 2];
-		    }
-		    break;
-		case 4:
-		    for(bpl = 0; bpl < bmp->width; bpl++) {
-                      int byt = bmp->current_line *  rs + (bpl >> 1);
-                      uint8_t p = ( (bpl & 0x01) ? current_data[byt] : (current_data[byt] >> 4) ) & 0x0F;
-                      buf[bpl + 2] = bmp->palettes[p + +0];
-		      buf[bpl + 1] = bmp->palettes[p + 1];
-		      buf[bpl + 0] = bmp->palettes[p + 2];
-                    }
-		    break;
-		case 1:
-                    for(bpl = 0; bpl < bmp->width; bpl++) {
-                      int byt = bmp->current_line *  rs + (bpl >> 3);
-                      int bit = 7 - (bpl % 8);
-                      uint8_t p = (current_data[byt] & (1 << bit)) >> bit;
-                      buf[bpl] = bmp->palettes[p];
-                    }
-		    break;
-		default:
-		    for(bpl = 0; bpl < bmp->width; bpl++) {
-                      int p = (int)(bmp->current_line *  rs + bpl * (bmp->bits_per_pixel / 8));
-                      buf[(bpl * 3) + 0] = current_data[p+2];
-                      buf[(bpl * 3) + 1] = current_data[p+1];
-                      buf[(bpl * 3) + 2] = current_data[p+0];
-                    }
-		    break;
-	}
-    bmp->offset_file += rs;
-    bmp->current_line ++;
+    /* Compute row number */
+    row_num = bmp->next_line ++;
+    if (bmp->info_header.biHeight > 0) {
+        row_num = bmp->info_header.biHeight - row_num - 1;
+    }
+
+    /* Compute row address */
+    row_data = bmp->image_data + row_num * bmp->bmp_row_size;
+
+    /* Decode the row */
+    switch (bmp->info_header.biBitCount) {
+    case 8:
+        memcpy(out, row_data, wid);
+        break;
+
+    case 24:
+        for (i = 0; i < wid; i ++) {
+            out[0] = row_data[2]; /* Red */
+            out[1] = row_data[1]; /* Green */
+            out[2] = row_data[0]; /* Blue */
+            out += 3;
+            row_data += 3;
+        }
+        break;
+
+    case 32:
+        for (i = 0; i < wid; i ++) {
+            out[0] = row_data[2]; /* Red */
+            out[1] = row_data[1]; /* Green */
+            out[2] = row_data[0]; /* Blue */
+            out += 3;
+            row_data += 4;
+        }
+        break;
+
+    default:
+        log_internal_error(NULL);
+    }
+
     return NULL;
 }
 
@@ -295,10 +281,6 @@ image_decoder_bmp_new (void)
     bmp->decoder.get_params = image_decoder_bmp_get_params;
     bmp->decoder.set_window = image_decoder_bmp_set_window;
     bmp->decoder.read_line = image_decoder_bmp_read_line;
-    bmp->mem_file = NULL;
-    bmp->offset_file = 0;
-    bmp->size_file = 0;
-    bmp->current_line = 0;
 
     return &bmp->decoder;
 }
