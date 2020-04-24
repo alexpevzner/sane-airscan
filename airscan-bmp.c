@@ -82,26 +82,6 @@ read_memory(unsigned char*dest, unsigned char *src, int size_src, int offset, in
     return 1;
 }
 
-
-static int			pow2(int a)
-{
-	return (a * a);
-}
-
-static int
-read_data_memory(unsigned char*dest, unsigned char *src, int size_src, int offset, int count)
-{
-	int i = 0, j;
-
-	if (size_src < (offset + count))
-	    return 0;
-    for (j = 0; j < count; j++) {
-		dest[i] = src[j + offset];
-        i++;
-    }
-    return 1;
-}
-
 /* Begin BMP decoding
  */
 static error
@@ -110,7 +90,6 @@ image_decoder_bmp_begin (image_decoder *decoder, const void *data,
 {
     int index;
     uint32_t header_size;
-    short bits_per_pixel;
     image_decoder_bmp *bmp = (image_decoder_bmp*) decoder;
 
     bmp->mem_file = (unsigned char*)data;
@@ -281,7 +260,7 @@ image_decoder_bmp_read_line (image_decoder *decoder, void *buffer)
 	unsigned char *current_data = NULL;
 	unsigned char *buf = (unsigned char*)buffer;
     image_decoder_bmp *bmp = (image_decoder_bmp*) decoder;
-    int bpl = 0, y = 0;
+    int bpl = 0;
     
     if (bmp->num_lines <= (bmp->current_line + 1)) {
         return ERROR("BMP: end of file");
