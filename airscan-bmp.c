@@ -115,7 +115,8 @@ image_decoder_bmp_begin (image_decoder *decoder, const void *data,
         return ERROR(bmp->error);
     }
 
-    if (bmp->info_header.biClrUsed != 0) {
+    /* Ignore palette for 8-bit (grayscale) images, reject it otherwise */
+    if (bmp->info_header.biClrUsed != 0 && bmp->info_header.biBitCount != 8) {
         return ERROR("BMP: paletted images not supported");
     }
 
@@ -143,13 +144,14 @@ image_decoder_bmp_begin (image_decoder *decoder, const void *data,
 
     /* Make sure image is not truncated */
     header_size = sizeof(BITMAPFILEHEADER) + bmp->info_header.biSize;
+    header_size += (size_t) bmp->info_header.biClrUsed * 4;
     size_required = header_size;
     size_required += ((uint64_t) labs(bmp->info_header.biHeight)) *
         (uint64_t) bmp->bmp_row_size;
     size_required -= padding; /* Last row may be unpadded */
 
     if (size_required > (uint64_t) size) {
-        return ERROR("BMP: paletted image truncated");
+        return ERROR("BMP: image truncated");
     }
 
     /* Save pointer to image data */
