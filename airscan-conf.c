@@ -698,7 +698,11 @@ conf_load_from_ini (inifile *ini)
                     conf_perror(rec, "device already defined");
                 } else if (!strcmp(rec->value, CONF_DEVICE_DISABLE)) {
                     conf_device_list_prepend(rec->variable, NULL);
-                } else if ((uri = http_uri_new(rec->value, true)) != NULL) {
+                } else if (rec->tokc != 1 && rec->tokc != 2) {
+                    conf_perror(rec, "usage: \"device name\" = URL[,protocol]");
+                } else if (rec->tokc == 2 && strcasecmp(rec->tokv[1], "escl")) {
+                    conf_perror(rec, "only \"escl\" protocol is supported");
+                } else if ((uri = http_uri_new(rec->tokv[0], true)) != NULL) {
                     conf_device_list_prepend(rec->variable, http_uri_str(uri));
                     http_uri_free(uri);
                 } else {
