@@ -90,6 +90,7 @@ struct device {
     GCond                stm_cond;          /* Signalled when state changes */
     eloop_event          *stm_cancel_event; /* Signalled to initiate cancel */
     http_query           *stm_cancel_query; /* CANCEL query */
+    bool                 stm_cancel_sent;   /* Cancel was sent to device */
     eloop_timer          *stm_timer;        /* Delay timer */
 
     /* Protocol handling */
@@ -625,22 +626,6 @@ device_stm_state_working (device *dev)
     return state > DEVICE_STM_IDLE && state < DEVICE_STM_DONE;
 }
 
-/* Check if CANCEL request was sent to device
- */
-static bool
-device_stm_state_cancel_sent (device *dev)
-{
-    switch (device_stm_state_get(dev)) {
-    case DEVICE_STM_CANCEL_SENT:
-    case DEVICE_STM_CANCEL_JOB_DONE:
-    case DEVICE_STM_CANCEL_REQ_DONE:
-        return true;
-
-    default:
-        return false;
-    }
-}
-
 /* Set state
  */
 static void
@@ -686,12 +671,13 @@ device_stm_cancel_perform (device *dev, SANE_Status status)
     proto_ctx *ctx = &dev->proto_ctx;
 
     device_job_set_status(dev, status);
-    if (ctx->location != NULL && !device_stm_state_cancel_sent(dev)) {
+    if (ctx->location != NULL && !dev->stm_cancel_sent) {
         if (ctx->params.src == ID_SOURCE_PLATEN &&
             ctx->images_received > 0) {
             /* If we are not expecting more images, skip cancel
              * and simple wait until job is done
              */
+            log_debug(dev->log, "cancel skipped as job is almost done");
             device_stm_state_set(dev, DEVICE_STM_CANCEL_REQ_DONE);
         } else {
             /* Otherwise, perform a normal cancel operation
@@ -703,6 +689,8 @@ device_stm_cancel_perform (device *dev, SANE_Status status)
 
             http_query_onerror(dev->stm_cancel_query, NULL);
             http_query_submit(dev->stm_cancel_query, device_stm_cancel_callback);
+
+            dev->stm_cancel_sent = true;
         }
         return true;
     }
@@ -786,7 +774,7 @@ device_stm_op_callback (void *ptr, http_query *q)
     /* If CANCEL was sent, and next operation is CLEANUP or
      * current operation is CHECK, FINISH the job
      */
-    if (device_stm_state_cancel_sent(dev)) {
+    if (dev->stm_cancel_sent) {
         if (result.next == PROTO_OP_CLEANUP ||
             dev->proto_op_current == PROTO_OP_CHECK) {
             result.next = PROTO_OP_FINISH;
@@ -1183,6 +1171,7 @@ device_start_do (gpointer data)
 static SANE_Status
 device_start_new_job (device *dev)
 {
+    dev->stm_cancel_sent = false;
     dev->job_status = SANE_STATUS_GOOD;
     g_free((char*) dev->proto_ctx.location);
     dev->proto_ctx.location = NULL;
