@@ -1,48 +1,50 @@
 # WARNING WARNING WARNING WARNING
 
-This project is a fork of [sane-airscan](https://github.com/alexpevzner/sane-airscan-wsd/)
-made with intend to add WSD protocol support. It is not intended for common use. When this code
-will be stable enough, these two project will merge again.
+This project is a "development/unstable" branch of the [sane-airscan](https://github.com/alexpevzner/sane-airscan/)
+project, forked for convenience into the separate repository. New major features
+are developed here, and then merged back to sane-airscan.  It is not intended for common use.
 
-# sane-airscan -- Linux support of Apple AirScan (eSCL) compatible document scanners
+# sane-airscan -- Linux support for Apple AirScan (eSCL) and Miscosoft WSD document scanners
 
-If you are a lucky owner of scanner or MFP which works via network with
-Apple devices, I have a good news for you: now your scanner works with
-Linux as well!
+Similar to how most modern network printers support "driverless" printing,
+using the universal vendor-neutral printing protocol, many modern network
+scanners and MFPs support "driverless" scanning.
 
-In theory, this backend should work with any scanner that supports the
-**eSCL** protocol (unofficially known as **AirScan** or **AirPrint scanning**).
-In practice, it was tested on several devices from **Canon**, **Kyocera**
-and **HP**, and this list constantly grows, though slowly, so feedback
-regarding other devices is very welcomed.
+Driverless scanning comes in two flavors:
+* Apple **AirScan** or **AirPrint scanning** (official protocol name is eSCL)
+* Microsoft **WSD**, or **WS-Scan** (term WSD means "Web Services for Devices)
 
-Apple maintains [a comprehensive list](https://support.apple.com/en-us/HT201311)
-of compatible devices, but please note, this list contains not only scanners
-and MFP, but pure printers as well.
+This backend implements both protocols, choosing automatically between them.
+It was successfully tested with many devices from **Canon**, **Kyocera**,
+**Epson**, **HP** and **Xerox** both in WSD and eSCL modes.
 
-To use this backend, you don't need to install ScanGear from Canon, HPLIP
-from HP or some other proprietary software from hardware vendor. This backend
-works directly with your device and doesn't depend on a 3rd party closed
-source components.
+For eSCL-compatible devices, Apple maintains [a comprehensive list](https://support.apple.com/en-us/HT201311),
+but please note, this list contains not only scanners and MFP, but pure printers as well.
+
+To use this backend, you don't have to install ScanGear from Canon, HPLIP
+from HP or some other proprietary software from hardware vendor. This
+backend works directly with your device and doesn't depend on a 3rd party
+closed source components (and doesn't conflict with them if they are
+installed)
 
 ### Features
 
-1. Scan from platen and ADF, in duplex and simplex modes, multi-page
+1. One backend for two different protocols, eSCL and WSD
+2. Automatic and manual device discovery and configuration
+3. Scan from platen and ADF, in duplex and simplex modes, multi-page
 scan from ADF supported as well
-2. Scan in color and gray scale modes
-3. Reasonably low memory footprint, achieved by on demand decompression of
-image received from scanner
-4. The cancel operation is as fast as possible, depending on your hardware
-5. Automatic discovery and configuration of the hardware
-6. Manual configuration is also possible, in case zeroconf doesn't work
-(i.e., computer and scanner are connected to the different subnets)
+4. Scan in color and gray scale modes
+5. Line-by-line image unpacking, for low memory footprint
+6. The cancel operation is as fast as possible, depending on your hardware
 7. Both IPv4 and IPv6 are supported
 
 ### Compatibility
 
-Any **eSCL** capable scanner expected to work. Here is a list of devices
+Any **eSCL** and **WSD** apable scanner expected to work. Here is a list of devices
 that were actually tested. If you have success with a scanner not included
 into this list, please let me know.
+
+#### Scanners, tested in eSCL mode
 
 * Canon D570
 * Canon ImageCLASS MF743cdw <sup>[1](#noteMF743cdw)</sup>
@@ -72,8 +74,19 @@ into this list, please let me know.
 * TODO
 
 ---
-<a name="noteMF743cdw">1</a>: this device requires manual activation of AirPrint scanning on its web console:
-Home->Menu->Preferences->Network->TCP/IP Settings->Network Link Scan Settings->On.
+<a name="noteMF743cdw">[1]</a>: this device requires manual activation of AirPrint
+scanning on its web console: Home->Menu->Preferences->Network->TCP/IP
+Settings->Network Link Scan Settings->On.
+
+#### Scanners, tested in WSD mode
+
+* HP LaserJet Pro MFP M521dn
+* HP OfficeJet Pro 8730
+* Kyocera ECOSYS M2040dn <sup>[2](#noteM2040dn)</sup>
+
+---
+<a name="noteM2040dn">[2]</a>: this device requires manual action on its front
+panel to initiate WSD scan: Send->WSD Scan->From Computer
 
 ### Installation from pre-build binaries
 
