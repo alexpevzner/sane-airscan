@@ -113,7 +113,7 @@ wsd_devcaps_query (const proto_ctx *ctx)
     xml_wr_enter(xml, "s:Body");
     xml_wr_enter(xml, "scan:GetScannerElementsRequest");
     xml_wr_enter(xml, "scan:RequestedElements");
-    xml_wr_add_text(xml, "scan:Name", "scan:ScannerDescription");
+    //xml_wr_add_text(xml, "scan:Name", "scan:ScannerDescription");
     xml_wr_add_text(xml, "scan:Name", "scan:ScannerConfiguration");
     xml_wr_add_text(xml, "scan:Name", "scan:DefaultScanTicket");
     //xml_wr_add_text(xml, "scan:Name", "scan:ScannerStatus");
@@ -122,31 +122,6 @@ wsd_devcaps_query (const proto_ctx *ctx)
     xml_wr_leave(xml);
 
     return wsd_http_post(ctx, xml_wr_finish(xml));
-}
-
-/* Parse scanner description
- */
-static error
-wsd_devcaps_parse_description (devcaps *caps, xml_rd *xml)
-{
-    unsigned int level = xml_rd_depth(xml);
-    size_t       prefixlen = strlen(xml_rd_node_path(xml));
-
-    (void) caps;
-
-    while (!xml_rd_end(xml)) {
-        const char *path = xml_rd_node_path(xml) + prefixlen;
-
-        if (!strcmp(path, "/scan:ScannerName")) {
-            if (caps->model == NULL) {
-                caps->model = g_strdup(xml_rd_node_value(xml));
-            }
-        }
-
-        xml_rd_deep_next(xml, level);
-    }
-
-    return NULL;
 }
 
 /* Parse supported formats
@@ -518,7 +493,6 @@ wsd_devcaps_parse (proto_handler_wsd *wsd,
 {
     error  err = NULL;
     xml_rd *xml;
-    bool   found_description = false;
     bool   found_configuration = false;
 
     /* Parse capabilities XML */
@@ -531,11 +505,6 @@ wsd_devcaps_parse (proto_handler_wsd *wsd,
         const char *path = xml_rd_node_path(xml);
 
         if (!strcmp(path, "s:Envelope/s:Body"
-                 "/scan:GetScannerElementsResponse/scan:ScannerElements/"
-                 "scan:ElementData/scan:ScannerDescription")) {
-            found_description = true;
-            err = wsd_devcaps_parse_description(caps, xml);
-        } else if (!strcmp(path, "s:Envelope/s:Body"
                 "/scan:GetScannerElementsResponse/scan:ScannerElements/"
                 "scan:ElementData/scan:ScannerConfiguration")) {
             found_configuration = true;
@@ -550,9 +519,7 @@ wsd_devcaps_parse (proto_handler_wsd *wsd,
     }
 
     /* Check things */
-    if (!found_description) {
-        err = ERROR("ScannerDescription missed");
-    } else if (!found_configuration) {
+    if (!found_configuration) {
         err = ERROR("ScannerConfiguration missed");
     }
 
@@ -579,10 +546,6 @@ wsd_devcaps_decode (const proto_ctx *ctx, devcaps *caps)
     caps->protocol = ctx->proto->name;
 
     err = wsd_devcaps_parse(wsd, caps, data->bytes, data->size);
-    if (err == NULL) {
-        caps->vendor = caps->vendor ? caps->vendor : g_strdup("AirScan");
-        caps->model = caps->model? caps->model : g_strdup("Unknown");
-    }
 
     return err;
 }

@@ -395,7 +395,6 @@ static error
 escl_devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
 {
     error  err = NULL;
-    char   *model = NULL, *make_and_model = NULL;
     xml_rd *xml;
 
     /* Parse capabilities XML */
@@ -411,13 +410,7 @@ escl_devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
 
     xml_rd_enter(xml);
     for (; !xml_rd_end(xml); xml_rd_next(xml)) {
-        if (xml_rd_node_name_match(xml, "pwg:ModelName")) {
-            g_free(model);
-            model = g_strdup(xml_rd_node_value(xml));
-        } else if (xml_rd_node_name_match(xml, "pwg:MakeAndModel")) {
-            g_free(make_and_model);
-            make_and_model = g_strdup(xml_rd_node_value(xml));
-        } else if (xml_rd_node_name_match(xml, "scan:Platen")) {
+        if (xml_rd_node_name_match(xml, "scan:Platen")) {
             xml_rd_enter(xml);
             if (xml_rd_node_name_match(xml, "scan:PlatenInputCaps")) {
                 err = escl_devcaps_source_parse(xml,
@@ -449,32 +442,6 @@ escl_devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
         }
     }
 
-    /* Save model, try to guess vendor */
-    size_t model_len = model ? strlen(model) : 0;
-    size_t make_and_model_len = make_and_model ? strlen(make_and_model) : 0;
-
-    if (model_len && make_and_model_len > model_len &&
-        g_str_has_suffix(make_and_model, model)) {
-
-        caps->vendor = g_strndup(make_and_model,
-                make_and_model_len - model_len);
-        g_strchomp((char*) caps->vendor);
-    }
-
-    if (caps->vendor == NULL) {
-        caps->vendor = g_strdup("AirScan");
-    }
-
-    if (model != NULL) {
-        caps->model = model;
-        model = NULL;
-    } else if (make_and_model != NULL) {
-        caps->model = make_and_model;
-        make_and_model = NULL;
-    } else {
-        caps->model = g_strdup("Unknown");
-    }
-
     /* Check that we have at least one source */
     ID_SOURCE id_src;
     bool      src_ok = false;
@@ -495,8 +462,6 @@ DONE:
         devcaps_reset(caps);
     }
 
-    g_free(model);
-    g_free(make_and_model);
     xml_rd_finish(&xml);
 
     return err;

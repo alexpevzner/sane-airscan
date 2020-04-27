@@ -139,9 +139,6 @@ devcaps_init (devcaps *caps)
 void
 devcaps_cleanup (devcaps *caps)
 {
-    g_free((void*) caps->vendor);
-    g_free((void*) caps->model);
-
     unsigned int i;
     for (i = 0; i < NUM_ID_SOURCE; i ++) {
         devcaps_source_free(caps->src[i]);
@@ -167,8 +164,6 @@ devcaps_dump (log_ctx *log, devcaps *caps)
     GString      *buf = g_string_new(NULL);
 
     log_trace(log, "===== device capabilities =====");
-    log_trace(log, "  Model:            \"%s\"", caps->model);
-    log_trace(log, "  Vendor:           \"%s\"", caps->vendor);
     log_trace(log, "  Size units:       %d DPI", caps->units);
     log_trace(log, "  Protocol:         %s", caps->protocol);
 

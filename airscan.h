@@ -1535,10 +1535,6 @@ devcaps_source_merge (const devcaps_source *s1, const devcaps_source *s2);
 /* Device Capabilities
  */
 typedef struct {
-    /* Device identification */
-    const char     *model;              /* Device model */
-    const char     *vendor;             /* Device vendor */
-
     /* Fundamental values */
     const char     *protocol;            /* Protocol name */
     SANE_Word      units;                /* Size units, pixels per inch */
