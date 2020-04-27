@@ -166,8 +166,9 @@ static void
 image_decoder_bmp_reset (image_decoder *decoder)
 {
     image_decoder_bmp *bmp = (image_decoder_bmp*) decoder;
+    size_t            off = sizeof(bmp->decoder);
 
-    (void) bmp;
+    memset(((char*) bmp) + off, 0, sizeof(*bmp) - off);
 }
 
 /* Get bytes count per pixel
