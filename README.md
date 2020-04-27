@@ -18,14 +18,13 @@ This backend implements both protocols, choosing automatically between them.
 It was successfully tested with many devices from **Canon**, **Kyocera**,
 **Epson**, **HP** and **Xerox** both in WSD and eSCL modes.
 
-For eSCL-compatible devices, Apple maintains [a comprehensive list](https://support.apple.com/en-us/HT201311),
-but please note, this list contains not only scanners and MFP, but pure printers as well.
+For eSCL devices, Apple maintains [a comprehensive list](https://support.apple.com/en-us/HT201311)
+of compatible devices, but please note, this list contains not only scanners and MFP,
+but pure printers as well.
 
-To use this backend, you don't have to install ScanGear from Canon, HPLIP
-from HP or some other proprietary software from hardware vendor. This
-backend works directly with your device and doesn't depend on a 3rd party
-closed source components (and doesn't conflict with them if they are
-installed)
+This backend doesn't require to install and doesn't conflict with
+vendor-provided proprietary software like ScanGear from Canon, HPLIP from HP
+and so on.
 
 ### Features
 
