@@ -730,6 +730,15 @@ escl_decode_scanner_status (const proto_ctx *ctx,
         }
     }
 
+    /* Ignore SANE_STATUS_NO_DOCS status if we have
+     * reached PROTO_OP_LOAD operation, as it is not
+     * reliable at this context
+     */
+    if (ctx->failed_op == PROTO_OP_LOAD &&
+        adf_status == SANE_STATUS_NO_DOCS) {
+        adf_status = SANE_STATUS_UNSUPPORTED;
+    }
+
     /* Decode Job status */
     if (ctx->params.src != ID_SOURCE_PLATEN &&
         adf_status != SANE_STATUS_GOOD &&
