@@ -133,6 +133,7 @@ void
 log_ctx_free (log_ctx *log)
 {
     trace_unref(log->trace);
+    g_free((char*) log->name);
     g_free(log);
 }
 
