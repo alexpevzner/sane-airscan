@@ -183,7 +183,7 @@ device_new (zeroconf_devinfo *devinfo)
     dev = g_new0(device, 1);
 
     dev->devinfo = devinfo;
-    dev->log = log_ctx_new(dev->devinfo->name);
+    dev->log = log_ctx_new(dev->devinfo->name, NULL);
 
     log_debug(dev->log, "device created");
 

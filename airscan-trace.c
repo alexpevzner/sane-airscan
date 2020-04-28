@@ -16,9 +16,10 @@
 /* Trace file handle
  */
 struct  trace {
-    FILE         *log;      /* Log file */
-    FILE         *data;     /* Data file */
-    unsigned int index;     /* Message index */
+    volatile gint refcnt;    /* Reference count */
+    FILE          *log;      /* Log file */
+    FILE          *data;     /* Data file */
+    unsigned int  index;     /* Message index */
 };
 
 /* TAR file hader
@@ -81,8 +82,8 @@ trace_cleanup ()
 trace*
 trace_open (const char *device_name)
 {
-    trace *t;
-    char  path[PATH_MAX];
+    trace  *t;
+    char   path[PATH_MAX];
     size_t len;
 
     if (conf.dbg_trace == NULL) {
@@ -91,6 +92,7 @@ trace_open (const char *device_name)
 
     g_mkdir_with_parents (conf.dbg_trace, 0755);
     t = g_new0(trace, 1);
+    t->refcnt = 1;
 
     strcpy(path, conf.dbg_trace);
     len = strlen(path);
@@ -117,16 +119,27 @@ trace_open (const char *device_name)
         return t;
     }
 
-    trace_close(t);
+    trace_unref(t);
     return NULL;
 }
 
-/* Close protocol trace
- */
-void
-trace_close (trace *t)
+/* Ref the trace
+  */
+trace*
+trace_ref (trace *t)
 {
     if (t != NULL) {
+        g_atomic_int_inc(&t->refcnt);
+    }
+    return t;
+}
+
+/* Unref the trace. When trace is not longer in use, it will be closed
+ */
+void
+trace_unref (trace *t)
+{
+    if (t != NULL && g_atomic_int_dec_and_test(&t->refcnt)) {
         if (t->log != NULL) {
             fclose(t->log);
         }

@@ -1113,10 +1113,15 @@ trace_cleanup (void);
 trace*
 trace_open (const char *device_name);
 
-/* Close protocol trace
+/* Ref the trace
+ */
+trace*
+trace_ref (trace *t);
+
+/* Unref the trace. When trace is not longer in use, it will be closed
  */
 void
-trace_close (trace *t);
+trace_unref (trace *t);
 
 /* This hook is called on every http_query completion
  */
@@ -2252,9 +2257,11 @@ void
 log_configure (void);
 
 /* log_ctx_new creates new logging context
+ * If parent != NULL, new logging context will have its own prefix,
+ * but trace file will be inherited from parent
  */
 log_ctx*
-log_ctx_new (const char *name);
+log_ctx_new (const char *name, log_ctx *parent);
 
 /* log_ctx_free destroys logging context
  */

@@ -108,13 +108,22 @@ struct log_ctx {
 };
 
 /* log_ctx_new creates new logging context
+ * If parent != NULL, new logging context will have its own prefix,
+ * but trace file will be inherited from parent
  */
 log_ctx*
-log_ctx_new (const char *name)
+log_ctx_new (const char *name, log_ctx *parent)
 {
     log_ctx *log = g_new0(log_ctx, 1);
-    log->name = name;
-    log->trace = trace_open(name);
+
+    log->name = g_strstrip(g_strdup(name));
+
+    if (parent != NULL) {
+        log->trace = trace_ref(parent->trace);
+    } else {
+        log->trace = trace_open(name);
+    }
+
     return log;
 }
 
@@ -123,7 +132,7 @@ log_ctx_new (const char *name)
 void
 log_ctx_free (log_ctx *log)
 {
-    trace_close(log->trace);
+    trace_unref(log->trace);
     g_free(log);
 }
 
@@ -153,7 +162,7 @@ log_message (log_ctx *log, bool trace_only, bool force, const char *fmt, va_list
 
     /* Format a log message */
     if (log != NULL) {
-        len += sprintf(msg, "\"%.64s\": ", log->name);
+        len += sprintf(msg, "%.64s: ", log->name);
         namelen = len;
     }
 

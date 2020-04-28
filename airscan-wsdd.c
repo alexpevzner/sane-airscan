@@ -1227,7 +1227,7 @@ SANE_Status
 wsdd_init (void)
 {
     /* Initialize logging */
-    wsdd_log = log_ctx_new("WSDD");
+    wsdd_log = log_ctx_new("WSDD", NULL);
 
     /* Initialize wsdd_finding_list */
     ll_init(&wsdd_finding_list);
