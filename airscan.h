@@ -1616,6 +1616,10 @@ SANE_Status
 devopt_get_option (devopt *opt, SANE_Int option, void *value);
 
 /******************** ZeroConf (device discovery) ********************/
+/* Common logging context for device discovery
+ */
+extern log_ctx *zeroconf_log;
+
 /* zeroconf_device represents a single device
  */
 typedef struct zeroconf_device zeroconf_device;

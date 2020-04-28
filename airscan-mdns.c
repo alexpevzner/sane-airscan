@@ -57,6 +57,7 @@ typedef struct {
 
 /* Static variables
  */
+static log_ctx *mdns_log;
 static ll_head mdns_finding_list;
 static AvahiGLibPoll *mdns_avahi_glib_poll;
 static const AvahiPoll *mdns_avahi_poll;
@@ -98,7 +99,7 @@ mdns_debug (const char *name, AvahiProtocol protocol, const char *action,
     vsnprintf(message, sizeof(message) - n, fmt, ap);
     va_end(ap);
 
-    log_debug(NULL, "MDNS: %s: %s", prefix, message);
+    log_debug(mdns_log, "%s: %s", prefix, message);
 }
 
 /* Print error message
@@ -127,7 +128,7 @@ mdns_service_name (MDNS_SERVICE service)
         break;
     }
 
-    log_internal_error(NULL);
+    log_internal_error(mdns_log);
     return NULL;
 }
 
@@ -230,7 +231,7 @@ mdns_initscan_count_inc (ZEROCONF_METHOD method)
 static void
 mdns_initscan_count_dec (ZEROCONF_METHOD method)
 {
-    log_assert(NULL, mdns_initscan_count[method] > 0);
+    log_assert(mdns_log, mdns_initscan_count[method] > 0);
     mdns_initscan_count[method] --;
     if (mdns_initscan_count[method] == 0) {
         zeroconf_finding_done(method);
@@ -422,7 +423,7 @@ mdns_make_escl_endpoint (ZEROCONF_METHOD method, const AvahiAddress *addr,
     }
 
     uri = http_uri_new(u, true);
-    log_assert(NULL, uri != NULL);
+    log_assert(mdns_log, uri != NULL);
     g_free(u);
 
     return zeroconf_endpoint_new(ID_PROTO_ESCL, uri);
@@ -514,7 +515,7 @@ mdns_avahi_resolver_found (mdns_finding *mdns, MDNS_SERVICE service,
 
     case MDNS_SERVICE_UNKNOWN:
     case NUM_MDNS_SERVICE:
-        log_internal_error(NULL);
+        log_internal_error(mdns_log);
     }
 
     if (mdns->finding.method == ZEROCONF_MDNS_HINT && mdns->publish) {
@@ -673,7 +674,7 @@ mdns_avahi_browser_start_for_type (MDNS_SERVICE service, const char *type)
 {
     bool ok;
 
-    log_assert(NULL, mdns_avahi_browser[service] == NULL);
+    log_assert(mdns_log, mdns_avahi_browser[service] == NULL);
 
     mdns_avahi_browser[service] = avahi_service_browser_new(mdns_avahi_client,
             AVAHI_IF_UNSPEC, AVAHI_PROTO_UNSPEC, type, NULL,
@@ -682,7 +683,7 @@ mdns_avahi_browser_start_for_type (MDNS_SERVICE service, const char *type)
     ok = mdns_avahi_browser[service] != NULL;
 
     if (!ok) {
-        log_debug(NULL, "MDNS: avahi_service_browser_new(%s): %s",
+        log_debug(mdns_log, "avahi_service_browser_new(%s): %s",
             type, avahi_strerror(avahi_client_errno(mdns_avahi_client)));
     }
 
@@ -701,7 +702,7 @@ mdns_avahi_browser_start (void)
     int  i;
     bool ok = true;
 
-    log_assert(NULL, !mdns_avahi_browser_running);
+    log_assert(mdns_log, !mdns_avahi_browser_running);
 
     for (i = 0; ok && i < NUM_MDNS_SERVICE; i ++) {
         ok = mdns_avahi_browser_start_for_type(i, mdns_service_name(i));
@@ -742,7 +743,7 @@ mdns_avahi_client_callback (AvahiClient *client, AvahiClientState state,
     (void) client;
     (void) userdata;
 
-    log_debug(NULL, "MDNS: %s", mdns_avahi_client_state_name(state));
+    log_debug(mdns_log, "%s", mdns_avahi_client_state_name(state));
 
     switch (state) {
     case AVAHI_CLIENT_S_REGISTERING:
@@ -799,7 +800,7 @@ mdns_avahi_client_start (void)
 {
     int error;
 
-    log_assert(NULL, mdns_avahi_client == NULL);
+    log_assert(mdns_log, mdns_avahi_client == NULL);
 
     mdns_avahi_client = avahi_client_new (mdns_avahi_poll,
         AVAHI_CLIENT_NO_FAIL, mdns_avahi_client_callback, NULL, &error);
@@ -827,10 +828,12 @@ mdns_init (void)
 {
     int i;
 
+    mdns_log = log_ctx_new("MDNS", zeroconf_log);
+
     ll_init(&mdns_finding_list);
 
     if (!conf.discovery) {
-        log_debug(NULL, "MDNS: devices discovery disabled");
+        log_debug(mdns_log, "devices discovery disabled");
         zeroconf_finding_done(ZEROCONF_MDNS_HINT);
         zeroconf_finding_done(ZEROCONF_USCAN_TCP);
         zeroconf_finding_done(ZEROCONF_USCANS_TCP);
@@ -887,6 +890,9 @@ mdns_cleanup (void)
         mdns_avahi_poll = NULL;
         mdns_avahi_glib_poll = NULL;
     }
+
+    log_ctx_free(mdns_log);
+    mdns_log = NULL;
 }
 
 /* vim:ts=8:sw=4:et

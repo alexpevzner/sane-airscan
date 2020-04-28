@@ -48,6 +48,10 @@ struct zeroconf_device {
     size_t       ifaces_cap; /* Capacity of ifaces array */
 };
 
+/* Global variables
+ */
+log_ctx *zeroconf_log;
+
 /* Static variables
  */
 static ll_head zeroconf_device_list;
@@ -264,7 +268,7 @@ static void
 zeroconf_device_add_finding (zeroconf_device *device,
     zeroconf_finding *finding)
 {
-    log_assert(NULL, finding->device == NULL);
+    log_assert(zeroconf_log, finding->device == NULL);
 
     finding->device = device;
 
@@ -286,7 +290,7 @@ zeroconf_device_del_finding (zeroconf_finding *finding)
 {
     zeroconf_device *device = finding->device;
 
-    log_assert(NULL, device != NULL);
+    log_assert(zeroconf_log, device != NULL);
 
     ll_del(&finding->list_node);
     if (ll_empty(&device->findings)) {
@@ -357,7 +361,7 @@ zeroconf_device_name_model_source (zeroconf_device *device)
                 break;
 
             default:
-                log_internal_error(NULL);
+                log_internal_error(zeroconf_log);
         }
     }
 
@@ -371,7 +375,7 @@ zeroconf_device_name_model (zeroconf_device *device,
         const char **name, const char **model)
 {
     const zeroconf_finding *finding = zeroconf_device_name_model_source(device);
-    log_assert(NULL, finding != NULL);
+    log_assert(zeroconf_log, finding != NULL);
 
     *name = device->name ? device->name : finding->model;
     *model = finding->model;
@@ -470,7 +474,7 @@ zeroconf_ident_proto_encode (ID_PROTO proto)
         break;
     }
 
-    log_internal_error(NULL);
+    log_internal_error(zeroconf_log);
     return 0;
 }
 
@@ -842,20 +846,22 @@ zeroconf_finding_publish (zeroconf_finding *finding)
         strcpy(ifname, "?");
     }
 
-    log_debug(NULL, "zeroconf: found %s", finding->uuid.text);
-    log_debug(NULL, "  method:    %s", zeroconf_method_name(finding->method));
-    log_debug(NULL, "  interface: %d (%s)", finding->ifindex, ifname);
-    log_debug(NULL, "  name:      %s", finding->name ? finding->name : "-");
-    log_debug(NULL, "  model:     %s", finding->model);
-    log_debug(NULL, "  device:    %4.4x (%s)", device->devid, found_by);
+    log_debug(zeroconf_log, "found %s", finding->uuid.text);
+    log_debug(zeroconf_log, "  method:    %s",
+        zeroconf_method_name(finding->method));
+    log_debug(zeroconf_log, "  interface: %d (%s)", finding->ifindex, ifname);
+    log_debug(zeroconf_log, "  name:      %s",
+        finding->name ? finding->name : "-");
+    log_debug(zeroconf_log, "  model:     %s", finding->model);
+    log_debug(zeroconf_log, "  device:    %4.4x (%s)", device->devid, found_by);
 
     if (proto != ID_PROTO_UNKNOWN) {
         zeroconf_endpoint *ep;
 
-        log_debug(NULL, "  protocol:  %s", id_proto_name(proto));
-        log_debug(NULL, "  endpoints:");
+        log_debug(zeroconf_log, "  protocol:  %s", id_proto_name(proto));
+        log_debug(zeroconf_log, "  endpoints:");
         for (ep = finding->endpoints; ep != NULL; ep = ep->next) {
-            log_debug(NULL, "    %s", http_uri_str(ep->uri));
+            log_debug(zeroconf_log, "    %s", http_uri_str(ep->uri));
         }
     }
 
@@ -875,9 +881,9 @@ zeroconf_finding_withdraw (zeroconf_finding *finding)
 
     if_indextoname(finding->ifindex, ifname);
 
-    log_debug(NULL, "zeroconf: gone %s", finding->uuid.text);
-    log_debug(NULL, "  method:    %s", zeroconf_method_name(finding->method));
-    log_debug(NULL, "  interface: %d (%s)", finding->ifindex, ifname);
+    log_debug(zeroconf_log, "device gone %s", finding->uuid.text);
+    log_debug(zeroconf_log, "  method:    %s", zeroconf_method_name(finding->method));
+    log_debug(zeroconf_log, "  interface: %d (%s)", finding->ifindex, ifname);
 
     zeroconf_device_del_finding(finding);
 }
@@ -888,7 +894,7 @@ zeroconf_finding_withdraw (zeroconf_finding *finding)
 void
 zeroconf_finding_done (ZEROCONF_METHOD method)
 {
-    log_debug(NULL, "zeroconf: %s: initial scan finished",
+    log_debug(zeroconf_log, "%s: initial scan finished",
         zeroconf_method_name(method));
 
     zeroconf_initscan_bits &= ~(1 << method);
@@ -1098,6 +1104,8 @@ zeroconf_devinfo_free (zeroconf_devinfo *devinfo)
 SANE_Status
 zeroconf_init (void)
 {
+    zeroconf_log = log_ctx_new("zeroconf", NULL);
+
     ll_init(&zeroconf_device_list);
 
     if (conf.discovery) {
@@ -1115,6 +1123,8 @@ zeroconf_init (void)
 void
 zeroconf_cleanup (void)
 {
+    log_ctx_free(zeroconf_log);
+    zeroconf_log = NULL;
 }
 
 /* vim:ts=8:sw=4:et
