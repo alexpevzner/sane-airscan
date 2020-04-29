@@ -1179,7 +1179,7 @@ sane_word_array_sort (SANE_Word *a);
 SANE_Word*
 sane_word_array_intersect_sorted ( const SANE_Word *a1, const SANE_Word *a2);
 
-/* Create initialize array of SANE_String
+/* Create array of SANE_String
  */
 SANE_String*
 sane_string_array_new (void);
@@ -1194,7 +1194,7 @@ sane_string_array_free (SANE_String *a);
 void
 sane_string_array_reset (SANE_String *a);
 
-/* Get length of the SANE_Word array
+/* Get length of the SANE_String array
  */
 size_t
 sane_string_array_len (const SANE_String *a);
@@ -1208,6 +1208,26 @@ sane_string_array_append(SANE_String *a, SANE_String s);
  */
 size_t
 sane_string_array_max_strlen(const SANE_String *a);
+
+/* Create array of SANE_Device
+ */
+const SANE_Device**
+sane_device_array_new (void);
+
+/* Free array of SANE_Device
+ */
+void
+sane_device_array_free (const SANE_Device **a);
+
+/* Get length of the SANE_Device array
+ */
+size_t
+sane_device_array_len (const SANE_Device * const *a);
+
+/* Append device to array. Returns new array (old becomes invalid)
+ */
+const SANE_Device**
+sane_device_array_append(const SANE_Device **a, SANE_Device *d);
 
 /******************** XML utilities ********************/
 /* xml_ns defines XML namespace.

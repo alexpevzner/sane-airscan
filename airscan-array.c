@@ -136,7 +136,7 @@ sane_string_array_reset (SANE_String *a)
     a[0] = NULL;
 }
 
-/* Get length of the SANE_Word array
+/* Get length of the SANE_String array
  */
 size_t
 sane_string_array_len (const SANE_String *a)
@@ -183,6 +183,54 @@ sane_string_array_max_strlen(const SANE_String *a)
     }
 
     return max_len;
+}
+
+/* Create array of SANE_Device
+ */
+const SANE_Device**
+sane_device_array_new (void)
+{
+    return g_new0(const SANE_Device*, ARRAY_INITIAL_CAPACITY);
+}
+
+/* Free array of SANE_Device
+ */
+void
+sane_device_array_free (const SANE_Device **a)
+{
+    g_free(a);
+}
+
+/* Get length of the SANE_Device array
+ */
+size_t
+sane_device_array_len (const SANE_Device * const *a)
+{
+    size_t sz;
+
+    for (sz = 0; a[sz] != NULL; sz ++)
+        ;
+
+    return sz;
+}
+
+/* Append device to array. Returns new array (old becomes invalid)
+ */
+const SANE_Device**
+sane_device_array_append(const SANE_Device **a, SANE_Device *d)
+{
+    size_t sz = sane_device_array_len(a) + 1;
+
+    /* If sz reached the power-of-2, reallocate the array, doubling its size */
+    if (sz >= ARRAY_INITIAL_CAPACITY && (sz & (sz - 1)) == 0) {
+        a = g_renew(const SANE_Device*, a, sz + sz);
+    }
+
+    /* Append a device */
+    a[sz - 1] = d;
+    a[sz] = NULL;
+
+    return a;
 }
 
 /* vim:ts=8:sw=4:et
