@@ -48,11 +48,12 @@ typedef enum {
  * device discovery
  */
 typedef struct {
-    zeroconf_finding  finding;     /* Base class */
-    GPtrArray         *resolvers;  /* Array of pending *AvahiServiceResolver */
-    ll_node           node_list;   /* In mdns_finding_list */
-    bool              publish;     /* Should we publish this finding */
-    bool              initscan;    /* Device discovered during initial scan */
+    zeroconf_finding finding;        /* Base class */
+    GPtrArray        *resolvers;     /* Array of pending AvahiServiceResolver */
+    ll_node          node_list;      /* In mdns_finding_list */
+    bool             should_publish; /* Should we publish this finding */
+    bool             is_published;   /* Finding actually published */
+    bool             initscan;       /* Device discovered during initial scan */
 } mdns_finding;
 
 /* Static variables
@@ -335,7 +336,7 @@ mdns_finding_kill_resolvers (mdns_finding *mdns)
 static void
 mdns_finding_del (mdns_finding *mdns)
 {
-    if (mdns->publish) {
+    if (mdns->is_published) {
         zeroconf_finding_withdraw(&mdns->finding);
     }
     ll_del(&mdns->node_list);
@@ -495,7 +496,7 @@ mdns_avahi_resolver_found (mdns_finding *mdns, MDNS_SERVICE service,
     case MDNS_SERVICE_IPP_TCP:
     case MDNS_SERVICE_IPPS_TCP:
         if (txt_scan != NULL && !strcasecmp(txt_scan, "t")) {
-            mdns->publish = true;
+            mdns->should_publish = true;
         }
         break;
 
@@ -506,11 +507,11 @@ mdns_avahi_resolver_found (mdns_finding *mdns, MDNS_SERVICE service,
 
         endpoint->next = mdns->finding.endpoints;
         mdns->finding.endpoints = endpoint;
-        mdns->publish = true;
+        mdns->should_publish = true;
         break;
 
     case MDNS_SERVICE_SCANNER_TCP:
-        mdns->publish = true;
+        mdns->should_publish = true;
         break;
 
     case MDNS_SERVICE_UNKNOWN:
@@ -518,7 +519,9 @@ mdns_avahi_resolver_found (mdns_finding *mdns, MDNS_SERVICE service,
         log_internal_error(mdns_log);
     }
 
-    if (mdns->finding.method == ZEROCONF_MDNS_HINT && mdns->publish) {
+    if (mdns->finding.method == ZEROCONF_MDNS_HINT && mdns->should_publish) {
+        /* We already have enough info for this kind of finding
+         */
         mdns_finding_kill_resolvers(mdns);
     }
 }
@@ -593,7 +596,8 @@ mdns_avahi_resolver_callback (AvahiServiceResolver *r,
         }
 
         /* Publish the finding */
-        if (mdns->publish) {
+        if (mdns->should_publish && !mdns->is_published) {
+            mdns->is_published = true;
             zeroconf_finding_publish(&mdns->finding);
         }
     }
