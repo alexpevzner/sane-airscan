@@ -451,7 +451,7 @@ typedef struct {
     conf_device *devices;         /* Manually configured devices */
     bool        discovery;        /* Scanners discovery enabled */
     bool        model_is_netname; /* Use network name instead of model */
-    bool        proto_manual;     /* Manual protocol switch */
+    bool        proto_manual;     /* Manual protocol selection */
     bool        fast_wsdd;        /* Fast WS-Discovery */
 } conf_data;
 
