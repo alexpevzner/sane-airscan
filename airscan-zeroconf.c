@@ -396,6 +396,28 @@ zeroconf_device_name (zeroconf_device *device)
     return name;
 }
 
+/* Get protocols, exposed by device
+ */
+static unsigned int
+zeroconf_device_protocols (zeroconf_device *device)
+{
+    unsigned int protocols = device->protocols;
+
+    if (conf.proto_manual) {
+        return protocols;
+    }
+
+    if ((protocols & (1 << ID_PROTO_ESCL)) != 0) {
+        return 1 << ID_PROTO_ESCL;
+    }
+
+    if ((protocols & (1 << ID_PROTO_WSD)) != 0) {
+        return 1 << ID_PROTO_WSD;
+    }
+
+    return 0;
+}
+
 /* Get device endpoints.
  * Caller is responsible to free the returned list
  */
@@ -939,10 +961,10 @@ zeroconf_device_list_qsort_cmp (const void *p1, const void *p2)
 const SANE_Device**
 zeroconf_device_list_get (void)
 {
-    size_t              dev_count, dev_count_static = 0;
-    conf_device         *dev_conf;
-    const SANE_Device   **dev_list;
-    ll_node             *node;
+    size_t      dev_count = 0, dev_count_static = 0;
+    conf_device *dev_conf;
+    const SANE_Device **dev_list = sane_device_array_new();
+    ll_node     *node;
 
     /* Wait until device table is ready */
     zeroconf_initscan_wait();
@@ -962,14 +984,14 @@ zeroconf_device_list_get (void)
     }
 
     /* Build list of devices */
-    dev_list = g_new0(const SANE_Device*, dev_count + 1);
     dev_count = 0;
 
     for (dev_conf = conf.devices; dev_conf != NULL; dev_conf = dev_conf->next) {
         SANE_Device *info = g_new0(SANE_Device, 1);
         const char  *proto = id_proto_name(dev_conf->proto);
 
-        dev_list[dev_count ++] = info;
+        dev_list = sane_device_array_append(dev_list, info);
+        dev_count ++;
 
         info->name = zeroconf_ident_make(dev_conf->name, dev_conf->devid,
             dev_conf->proto);
@@ -984,9 +1006,11 @@ zeroconf_device_list_get (void)
         zeroconf_device *device;
         ID_PROTO        proto;
         const char      *name, *model;
+        unsigned int    protocols;
 
         device = OUTER_STRUCT(node, zeroconf_device, node_list);
         zeroconf_device_name_model(device, &name, &model);
+        protocols = zeroconf_device_protocols(device);
 
         if (zeroconf_find_static_by_name(name) != NULL) {
             /* Static configuration overrides discovery */
@@ -994,11 +1018,12 @@ zeroconf_device_list_get (void)
         }
 
         for (proto = 0; proto < NUM_ID_PROTO; proto ++) {
-            if ((device->protocols & (1 << proto)) != 0) {
+            if ((protocols & (1 << proto)) != 0) {
                 SANE_Device            *info = g_new0(SANE_Device, 1);
                 const char             *proto_name = id_proto_name(proto);
 
-                dev_list[dev_count ++] = info;
+                dev_list = sane_device_array_append(dev_list, info);
+                dev_count ++;
 
                 info->name = zeroconf_ident_make(name, device->devid, proto);
                 info->vendor = g_strdup(proto_name);
@@ -1031,7 +1056,7 @@ zeroconf_device_list_free (const SANE_Device **dev_list)
             g_free((void*) info);
         }
 
-        g_free(dev_list);
+        sane_device_array_free(dev_list);
     }
 }
 
