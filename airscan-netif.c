@@ -35,6 +35,11 @@ netif_addr_get (void)
     }
 
     for (ifp = ifa; ifp != NULL; ifp = ifp->ifa_next) {
+        /* Skip interface without address */
+        if (ifp->ifa_addr == NULL) {
+            continue;
+        }
+
         /* Skip loopback interface */
         if ((ifp->ifa_flags & IFF_LOOPBACK) != 0) {
             continue;
