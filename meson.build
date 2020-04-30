@@ -26,6 +26,7 @@ m_dep = cc.find_library('m', required : false)
 shared_library(
   meson.project_name(),
   sources,
+  version: '1',
   dependencies: [
     m_dep,
     dependency('avahi-client'),
