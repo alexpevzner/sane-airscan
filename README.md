@@ -70,9 +70,9 @@ Home->Menu->Preferences->Network->TCP/IP Settings->Network Link Scan Settings->O
 
 If you use one of the following Linux distros:
 * **Debian** (9.0 and 10)
-* **Fedora** (29, 30 and 31)
+* **Fedora** (29, 30, 31 and 32)
 * **openSUSE** (Leap and Tumbleweed)
-* **Ubuntu** (16.04, 18.04, 19.04 and 19.10)
+* **Ubuntu** (16.04, 18.04, 19.04, 19.10 and 20.04)
 
 [Follow this link](https://software.opensuse.org//download.html?project=home%3Apzz&package=sane-airscan),
 where you will find packages and very detailed installation instructions.
