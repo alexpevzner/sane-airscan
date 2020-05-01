@@ -1235,8 +1235,14 @@ wsdd_start_stop_callback (bool start)
             eloop_fdpoll_set_mask(wsdd_fdpoll_ipv6, ELOOP_FDPOLL_READ);
         }
 
-        /* Update netif addresses */
+        /* Update netif addresses. Initscan counter is incremented and
+         *
+         * decremented to ensure that initial scan completion notification
+         * will be raised even if there are no network interfaces.
+         */
+        wsdd_initscan_count_inc();
         wsdd_netif_update_addresses(true);
+        wsdd_initscan_count_dec();
     } else {
         /* Stop multicast reception */
         if (wsdd_fdpoll_ipv4 != NULL) {
@@ -1267,6 +1273,7 @@ wsdd_init (void)
     /* All for now, if WS-Discovery is disabled */
     if (!conf.discovery) {
         log_debug(wsdd_log, "devices discovery disabled");
+        zeroconf_finding_done(ZEROCONF_WSD);
         return SANE_STATUS_GOOD;
     }
 
