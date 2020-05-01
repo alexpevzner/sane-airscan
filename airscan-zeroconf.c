@@ -897,6 +897,8 @@ zeroconf_finding_publish (zeroconf_finding *finding)
         finding = OUTER_STRUCT(node, zeroconf_finding, list_node);
         zeroconf_device_add_finding(device, finding);
     }
+
+    g_cond_broadcast(&zeroconf_initscan_cond);
 }
 
 /* Withdraw the finding
@@ -929,6 +931,57 @@ zeroconf_finding_done (ZEROCONF_METHOD method)
 }
 
 /******************** Support for SANE API *********************/
+/* Check if initial scan is done
+ */
+static bool
+zeroconf_initscan_done (void)
+{
+    ll_node         *node;
+    zeroconf_device *device;
+
+    /* If all discovery methods are done, we are done */
+    if (zeroconf_initscan_bits == 0) {
+        return true;
+    }
+
+    /* Regardless of options, all DNS-SD methods must be done */
+    if ((zeroconf_initscan_bits & ~(1 << ZEROCONF_WSD)) != 0) {
+        return false;
+    }
+
+    /* If we are here, ZEROCONF_WSD is not done yet,
+     * and if we are not in fast-wsdd mode, we must wait
+     */
+    log_assert(zeroconf_log,
+        (zeroconf_initscan_bits & (1 << ZEROCONF_WSD)) != 0);
+
+    if (!conf.fast_wsdd) {
+        return false;
+    }
+
+    /* Check for completion, device by device:
+     *
+     * In manual protocol switch mode, WSDD must be done
+     * for device, so we have a choice. Otherwise, it's
+     * enough if device has supported protocols
+     */
+    for (LL_FOR_EACH(node, &zeroconf_device_list)) {
+        device = OUTER_STRUCT(node, zeroconf_device, node_list);
+
+        if (conf.proto_manual) {
+            if ((device->methods & ZEROCONF_WSD) == 0) {
+                return false;
+            }
+        } else {
+            if (device->protocols == 0) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
 /* Wait intil initial scan is done
  */
 static void
@@ -939,7 +992,7 @@ zeroconf_initscan_wait (void)
     timeout = g_get_monotonic_time() +
         ZEROCONF_READY_TIMEOUT * G_TIME_SPAN_SECOND;
 
-    while (zeroconf_initscan_bits != 0 &&
+    while (!zeroconf_initscan_done() &&
            eloop_cond_wait_until(&zeroconf_initscan_cond, timeout)) {
     }
 }
