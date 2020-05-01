@@ -974,20 +974,6 @@ zeroconf_device_list_get (void)
     /* Wait until device table is ready */
     zeroconf_initscan_wait();
 
-    /* Compute table size */
-    dev_count = 0;
-
-    for (dev_conf = conf.devices; dev_conf != NULL; dev_conf = dev_conf->next) {
-        dev_count ++;
-    }
-
-    for (LL_FOR_EACH(node, &zeroconf_device_list)) {
-        zeroconf_device *device;
-
-        device = OUTER_STRUCT(node, zeroconf_device, node_list);
-        dev_count += math_popcount(device->protocols);
-    }
-
     /* Build list of devices */
     dev_count = 0;
 
