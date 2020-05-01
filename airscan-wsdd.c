@@ -74,6 +74,7 @@ typedef struct {
     const char   *address;   /* Endpoint reference */
     ll_head      xaddrs;     /* List of wsdd_xaddr */
     bool         is_scanner; /* Device is scanner */
+    bool         is_printer; /* Device is printer */
 } wsdd_message;
 
 /* Forward declarations
@@ -266,6 +267,17 @@ wsdd_finding_free (wsdd_finding *wsdd)
     g_free((char*) wsdd->finding.model);
     g_free((char*) wsdd->finding.name);
     g_free(wsdd);
+}
+
+/* Publish wsdd_finding
+ */
+static void
+wsdd_finding_publish (wsdd_finding *wsdd)
+{
+    if (!wsdd->published) {
+        wsdd->published = true;
+        zeroconf_finding_publish(&wsdd->finding);
+    }
 }
 
 /* Add wsdd_finding to the wsdd_finding_list.
@@ -480,10 +492,7 @@ DONE:
             log_debug(wsdd_log, "  %s", http_uri_str(endpoint->uri));
         }
 
-        if (!wsdd->published) {
-            wsdd->published = true;
-            zeroconf_finding_publish(&wsdd->finding);
-        }
+        wsdd_finding_publish(wsdd);
     }
 }
 
@@ -524,6 +533,7 @@ wsdd_message_parse_endpoint (wsdd_message *msg, xml_rd *xml)
         if (!strcmp(path, "/d:Types")) {
             val = xml_rd_node_value(xml);
             msg->is_scanner = !!strstr(val, "ScanDeviceType");
+            msg->is_printer = !!strstr(val, "PrintDeviceType");
         } else if (!strcmp(path, "/d:XAddrs")) {
             g_free(xaddrs_text);
             xaddrs_text = g_strdup(xml_rd_node_value(xml));
@@ -654,25 +664,45 @@ wsdd_resolver_message_dispatch (wsdd_resolver *resolver, wsdd_message *msg)
         wsdd_message_action_name(msg));
     log_trace(wsdd_log, "  address:    %s", msg->address);
     log_trace(wsdd_log, "  is_scanner: %s", msg->is_scanner ? "yes" : "no");
+    log_trace(wsdd_log, "  is_printer: %s", msg->is_printer ? "yes" : "no");
     for (LL_FOR_EACH(node, &msg->xaddrs)) {
         xaddr = OUTER_STRUCT(node, wsdd_xaddr, list_node);
         log_trace(wsdd_log, "  xaddr:      %s", http_uri_str(xaddr->uri));
     }
-    log_trace(wsdd_log, "");
 
     /* Handle the message */
     switch (msg->action) {
     case WSDD_ACTION_HELLO:
     case WSDD_ACTION_PROBEMATCHES:
-        wsdd = wsdd_finding_add(resolver->ifindex, msg->address);
-        if (wsdd != NULL) {
-            wsdd_xaddr *xaddr;
+        /* Ignore devices that are neither scanner not printer */
+        if (!(msg->is_scanner || msg->is_printer)) {
+            log_trace(wsdd_log,
+                "skipped: device is neither scanner not printer");
+            goto DONE;
+        }
 
-            ll_cat(&wsdd->xaddrs, &msg->xaddrs);
-            for (LL_FOR_EACH(node, &wsdd->xaddrs)) {
-                xaddr = OUTER_STRUCT(node, wsdd_xaddr, list_node);
-                wsdd_finding_get_metadata(wsdd, resolver->ifindex, xaddr);
-            }
+        /* Add a finding. Do nothing if device already exist */
+        wsdd = wsdd_finding_add(resolver->ifindex, msg->address);
+        if (wsdd == NULL) {
+            goto DONE;
+        }
+
+        /* If device is not scanner or (which is very unlikely)
+         * has no xaddrs, just publish it without endpoints,
+         * so zeroconf stuff will know that there is no need to
+         * wait anymore for a device with this UUID, and we
+         * are done
+         */
+        if (!msg->is_scanner || ll_empty(&msg->xaddrs)) {
+            wsdd_finding_publish(wsdd);
+            goto DONE;
+        }
+
+        /* Initiate metadata query */
+        ll_cat(&wsdd->xaddrs, &msg->xaddrs);
+        for (LL_FOR_EACH(node, &wsdd->xaddrs)) {
+            xaddr = OUTER_STRUCT(node, wsdd_xaddr, list_node);
+            wsdd_finding_get_metadata(wsdd, resolver->ifindex, xaddr);
         }
         break;
 
@@ -684,6 +714,8 @@ wsdd_resolver_message_dispatch (wsdd_resolver *resolver, wsdd_message *msg)
         break;
     }
 
+    /* Cleanup and exit */
+DONE:
     wsdd_message_free(msg);
 }
 
