@@ -40,7 +40,9 @@ struct zeroconf_device {
     unsigned int devid;      /* Unique ident */
     uuid         uuid;       /* Device UUID */
     const char   *name;      /* Device name */
-    unsigned int protocols;  /* Supported protocols, (set of 1 << ID_PROTO) */
+    unsigned int protocols;  /* Protocols with endpoints, set of 1<<ID_PROTO */
+    unsigned int methods;    /* How device was discovered, set of
+                                1 << ZEROCONF_METHOD */
     ll_node      node_list;  /* In zeroconf_device_list */
     ll_head      findings;   /* zeroconf_finding, by method */
     int          *ifaces;    /* Set of interfaces the device is visible from */
@@ -238,14 +240,15 @@ zeroconf_device_ifaces_add (zeroconf_device *device, int ifindex)
     }
 }
 
-/* Rebuild device->ifaces and device->protocols
+/* Rebuild device->ifaces, device->protocols and device->methods
  */
 static void
-zeroconf_device_rebuild_ifaces_and_protocols (zeroconf_device *device)
+zeroconf_device_rebuild_sets (zeroconf_device *device)
 {
     ll_node *node;
 
     device->protocols = 0;
+    device->methods = 0;
     device->ifaces_len = 0;
 
     for (LL_FOR_EACH(node, &device->findings)) {
@@ -259,6 +262,7 @@ zeroconf_device_rebuild_ifaces_and_protocols (zeroconf_device *device)
         if (proto != ID_PROTO_UNKNOWN) {
             device->protocols |= 1 << proto;
         }
+        device->methods |= 1 << finding->method;
     }
 }
 
@@ -280,6 +284,7 @@ zeroconf_device_add_finding (zeroconf_device *device,
         if (proto != ID_PROTO_UNKNOWN) {
             device->protocols |= 1 << proto;
         }
+        device->methods |= 1 << finding->method;
     }
 }
 
@@ -298,7 +303,7 @@ zeroconf_device_del_finding (zeroconf_finding *finding)
         return;
     }
 
-    zeroconf_device_rebuild_ifaces_and_protocols(device);
+    zeroconf_device_rebuild_sets(device);
 }
 
 /* Borrow findings that belongs to the particular interface.
@@ -327,7 +332,7 @@ zeroconf_device_borrow_findings (zeroconf_device *device,
         return;
     }
 
-    zeroconf_device_rebuild_ifaces_and_protocols(device);
+    zeroconf_device_rebuild_sets(device);
 }
 
 /* Get most authoritative zeroconf_finding, that provides
