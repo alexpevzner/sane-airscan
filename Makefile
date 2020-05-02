@@ -26,6 +26,7 @@ CONFDIR = /etc/sane.d
 LIBDIR := $(shell $(PKG_CONFIG) --variable=libdir sane-backends)
 BACKEND = libsane-airscan.so.1
 MANPAGE = sane-airscan.5
+MANTITLE = "AirScan (eSCL) SANE backend"
 DEPENDS	:= avahi-client avahi-glib libjpeg libsoup-2.4 libxml-2.0 libtiff-4
 DEPENDS += libpng
 
@@ -86,6 +87,9 @@ install: all
 clean:
 	rm -f test $(BACKEND) tags
 	rm -rf $(OBJDIR)
+
+$(MANPAGE): $(MANPAGE).md
+	ronn --roff --manual=$(MANTITLE) $(MANPAGE).md
 
 test:	$(BACKEND) test.c
 	$(CC) -o test test.c $(BACKEND) -Wl,-rpath . ${airscan_CFLAGS}
