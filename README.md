@@ -15,8 +15,8 @@ Driverless scanning comes in two flavors:
 * Microsoft **WSD**, or **WS-Scan** (term WSD means "Web Services for Devices)
 
 This backend implements both protocols, choosing automatically between them.
-It was successfully tested with many devices from **Canon**, **Kyocera**,
-**Epson**, **HP** and **Xerox** both in WSD and eSCL modes.
+It was successfully tested with many devices from **Brother**, **Canon**,
+**Kyocera**, **Epson**, **HP** and **Xerox** both in WSD and eSCL modes.
 
 For eSCL devices, Apple maintains [a comprehensive list](https://support.apple.com/en-us/HT201311)
 of compatible devices, but please note, this list contains not only scanners and MFP,
@@ -45,6 +45,7 @@ into this list, please let me know.
 
 #### Scanners, tested in eSCL mode
 
+* Brother MFC-L2750DW
 * Canon D570
 * Canon ImageCLASS MF743cdw <sup>[1](#noteMF743cdw)</sup>
 * Canon TR4529 (PIXMA TR4500 Series)
@@ -79,6 +80,7 @@ Settings->Network Link Scan Settings->On.
 
 #### Scanners, tested in WSD mode
 
+* Brother MFC-L2750DW
 * HP LaserJet Pro MFP M521dn
 * HP OfficeJet Pro 8730
 * Kyocera ECOSYS M2040dn <sup>[2](#noteM2040dn)</sup>
