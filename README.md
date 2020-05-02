@@ -130,7 +130,7 @@ dnf install gcc git make pkgconf-pkg-config
 dnf install avahi-devel avahi-glib-devel
 dnf install glib2-devel libsoup-devel libxml2-devel
 dnf install libjpeg-turbo-devel sane-backends-devel
-dnf install libtiff-devel libpng-devel
+dnf install libpng-devel
 ```
 #### Install required libraries - Ubuntu, Debian and similar
 As root, execute the following commands:
@@ -139,7 +139,7 @@ apt-get install libavahi-client-dev libavahi-glib-dev
 apt-get install gcc git make pkg-config
 apt-get install libglib2.0-dev libsoup2.4-dev libxml2-dev
 apt-get install libjpeg-dev libsane-dev
-apt-get install libtiff5-dev libpng-dev
+apt-get install libpng-dev
 ```
 #### Download, build and install sane-airscan
 ```

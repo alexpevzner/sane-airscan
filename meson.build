@@ -20,7 +20,6 @@ sources = [
   'airscan-netif.c',
   'airscan-png.c',
   'airscan-pollable.c',
-  'airscan-tiff.c',
   'airscan-trace.c',
   'airscan-uuid.c',
   'airscan-wsd.c',
@@ -45,7 +44,6 @@ shared_library(
     dependency('libjpeg'),
     dependency('libpng'),
     dependency('libsoup-2.4'),
-    dependency('libtiff-4'),
     dependency('libxml-2.0'),
   ],
   link_args : [

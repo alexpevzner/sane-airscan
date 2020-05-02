@@ -27,7 +27,7 @@ LIBDIR := $(shell $(PKG_CONFIG) --variable=libdir sane-backends)
 BACKEND = libsane-airscan.so.1
 MANPAGE = sane-airscan.5
 MANTITLE = "AirScan (eSCL) SANE backend"
-DEPENDS	:= avahi-client avahi-glib libjpeg libsoup-2.4 libxml-2.0 libtiff-4
+DEPENDS	:= avahi-client avahi-glib libjpeg libsoup-2.4 libxml-2.0
 DEPENDS += libpng
 
 # Sources and object files
