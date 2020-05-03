@@ -451,17 +451,17 @@ zeroconf_device_endpoints (zeroconf_device *device, ID_PROTO proto)
 }
 
 /* Find zeroconf_device by ident
+ * Protocol, encoded into ident, returned via second parameter
  */
 static zeroconf_device*
-zeroconf_device_find_by_ident (const char *ident)
+zeroconf_device_find_by_ident (const char *ident, ID_PROTO *proto)
 {
-    ID_PROTO        proto;
     unsigned int    devid;
     const char      *name;
     ll_node         *node;
     zeroconf_device *device = NULL;
 
-    name = zeroconf_ident_split(ident, &devid, &proto);
+    name = zeroconf_ident_split(ident, &devid, proto);
     if (name == NULL) {
         return NULL;
     }
@@ -479,7 +479,7 @@ zeroconf_device_find_by_ident (const char *ident)
         return NULL;
 
     /* Check that device supports requested protocol */
-    if ((device->protocols & (1 << proto)) != 0) {
+    if ((device->protocols & (1 << *proto)) != 0) {
         return device;
     }
 
@@ -1118,6 +1118,7 @@ zeroconf_devinfo_lookup (const char *ident)
     conf_device      *dev_conf = NULL;
     zeroconf_device  *device = NULL;
     zeroconf_devinfo *devinfo;
+    ID_PROTO         proto = ID_PROTO_UNKNOWN;
 
     /* Wait until device table is ready */
     zeroconf_initscan_wait();
@@ -1125,7 +1126,7 @@ zeroconf_devinfo_lookup (const char *ident)
     /* Lookup a device, static first */
     dev_conf = zeroconf_find_static_by_ident(ident);
     if (dev_conf == NULL) {
-        device = zeroconf_device_find_by_ident(ident);
+        device = zeroconf_device_find_by_ident(ident, &proto);
         if (device == NULL) {
             return NULL;
         }
@@ -1150,7 +1151,7 @@ zeroconf_devinfo_lookup (const char *ident)
         zeroconf_device_name_model(device, &name, &model);
         devinfo->name = g_strdup(name);
 
-        devinfo->endpoints = zeroconf_device_endpoints(device, ID_PROTO_ESCL);
+        devinfo->endpoints = zeroconf_device_endpoints(device, proto);
     }
 
     return devinfo;
