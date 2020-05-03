@@ -443,6 +443,14 @@ struct conf_device {
     conf_device  *next; /* Next device in the list */
 };
 
+/* WSDD_MODE represents WS-Discovery mode
+ */
+typedef enum {
+    WSDD_FAST,  /* Use hints from DNS-SD to speed up WSDD */
+    WSDD_FULL,  /* Full discovery, slow and fair */
+    WSDD_OFF    /* Disable WSDD */
+} WSDD_MODE;
+
 /* Backend configuration
  */
 typedef struct {
@@ -452,7 +460,7 @@ typedef struct {
     bool        discovery;        /* Scanners discovery enabled */
     bool        model_is_netname; /* Use network name instead of model */
     bool        proto_auto;       /* Auto protocol selection */
-    bool        fast_wsdd;        /* Fast WS-Discovery */
+    WSDD_MODE   wsdd_mode;        /* WS-Discovery mode */
 } conf_data;
 
 #define CONF_INIT {                     \
@@ -462,7 +470,7 @@ typedef struct {
         .discovery = true,              \
         .model_is_netname = true,       \
         .proto_auto = true,             \
-        .fast_wsdd = true               \
+        .wsdd_mode = WSDD_FAST          \
     }
 
 extern conf_data conf;

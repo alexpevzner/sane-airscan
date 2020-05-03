@@ -758,11 +758,14 @@ conf_load_from_ini (inifile *ini)
                     conf_load_bool(rec, &conf.proto_auto, "auto", "manual");
                 } else if (inifile_match_name(rec->variable, "ws-discovery")) {
                     if (inifile_match_name(rec->value, "fast")) {
-                        conf.fast_wsdd = true;
+                        conf.wsdd_mode = WSDD_FAST;
                     } else if (inifile_match_name(rec->value, "full")) {
-                        conf.fast_wsdd = false;
+                        conf.wsdd_mode = WSDD_FULL;
+                    } else if (inifile_match_name(rec->value, "off")) {
+                        conf.wsdd_mode = WSDD_OFF;
                     } else {
-                        conf_perror(rec, "usage: ws-discovery = fast | full");
+                        conf_perror(rec, "usage: %s = fast | full | off",
+                            rec->variable);
                     }
                 }
             } else if (inifile_match_name(rec->section, "debug")) {

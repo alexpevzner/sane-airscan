@@ -1271,7 +1271,7 @@ wsdd_init (void)
     ll_init(&wsdd_finding_list);
 
     /* All for now, if WS-Discovery is disabled */
-    if (!conf.discovery) {
+    if (!conf.discovery || conf.wsdd_mode == WSDD_OFF) {
         log_debug(wsdd_log, "devices discovery disabled");
         zeroconf_finding_done(ZEROCONF_WSD);
         return SANE_STATUS_GOOD;

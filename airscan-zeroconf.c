@@ -955,7 +955,7 @@ zeroconf_initscan_done (void)
     log_assert(zeroconf_log,
         (zeroconf_initscan_bits & (1 << ZEROCONF_WSD)) != 0);
 
-    if (!conf.fast_wsdd) {
+    if (conf.wsdd_mode != WSDD_FAST) {
         return false;
     }
 
