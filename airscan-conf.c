@@ -677,9 +677,16 @@ conf_expand_path (const char *path)
 /* Report configuration file error
  */
 static void
-conf_perror (const inifile_record *rec, const char *err)
+conf_perror (const inifile_record *rec, const char *format, ...)
 {
-    log_debug(NULL, "%s:%d: %s", rec->file, rec->line, err);
+    char    buf[1024];
+    va_list ap;
+
+    va_start(ap, format);
+    vsnprintf(buf, sizeof(buf), format, ap);
+    va_end(ap);
+
+    log_debug(NULL, "%s:%d: %s", rec->file, rec->line, buf);
 }
 
 /* Decode a device configuration
@@ -711,6 +718,21 @@ conf_decode_device (const inifile_record *rec) {
     }
 }
 
+/* Parse binary option
+ */
+static void
+conf_load_bool (const inifile_record *rec, bool *out,
+        const char *n_true, const char *n_false)
+{
+    if (inifile_match_name(rec->value, n_true)) {
+        *out = true;
+    } else if (inifile_match_name(rec->value, n_false)) {
+        *out = false;
+    } else {
+        conf_perror(rec, "usage: %s = %s | %s", rec->variable, n_true, n_false);
+    }
+}
+
 /* Load configuration from opened inifile
  */
 static void
@@ -728,29 +750,12 @@ conf_load_from_ini (inifile *ini)
                 conf_decode_device(rec);
             } else if (inifile_match_name(rec->section, "options")) {
                 if (inifile_match_name(rec->variable, "discovery")) {
-                    if (inifile_match_name(rec->value, "enable")) {
-                        conf.discovery = true;
-                    } else if (inifile_match_name(rec->value, "disable")) {
-                        conf.discovery = false;
-                    } else {
-                        conf_perror(rec, "usage: discovery = enable | disable");
-                    }
+                    conf_load_bool(rec, &conf.discovery, "enable", "disable");
                 } else if (inifile_match_name(rec->variable, "model")) {
-                    if (inifile_match_name(rec->value, "network")) {
-                        conf.model_is_netname = true;
-                    } else if (inifile_match_name(rec->value, "hardware")) {
-                        conf.model_is_netname = false;
-                    } else {
-                        conf_perror(rec, "usage: model = network | hardware");
-                    }
+                    conf_load_bool(rec, &conf.model_is_netname,
+                        "network", "hardware");
                 } else if (inifile_match_name(rec->variable, "protocol")) {
-                    if (inifile_match_name(rec->value, "auto")) {
-                        conf.proto_manual = false;
-                    } else if (inifile_match_name(rec->value, "manual")) {
-                        conf.proto_manual = true;
-                    } else {
-                        conf_perror(rec, "usage: protocol = auto | manual");
-                    }
+                    conf_load_bool(rec, &conf.proto_auto, "auto", "manual");
                 } else if (inifile_match_name(rec->variable, "ws-discovery")) {
                     if (inifile_match_name(rec->value, "fast")) {
                         conf.fast_wsdd = true;
@@ -768,13 +773,7 @@ conf_load_from_ini (inifile *ini)
                         conf_perror(rec, "failed to expand path");
                     }
                 } else if (inifile_match_name(rec->variable, "enable")) {
-                    if (inifile_match_name(rec->value, "true")) {
-                        conf.dbg_enabled = true;
-                    } else if (inifile_match_name(rec->value, "false")) {
-                        conf.dbg_enabled = false;
-                    } else {
-                        conf_perror(rec, "usage: enable = true | false");
-                    }
+                    conf_load_bool(rec, &conf.dbg_enabled, "true", "false");
                 }
             }
             break;

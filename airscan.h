@@ -451,11 +451,19 @@ typedef struct {
     conf_device *devices;         /* Manually configured devices */
     bool        discovery;        /* Scanners discovery enabled */
     bool        model_is_netname; /* Use network name instead of model */
-    bool        proto_manual;     /* Manual protocol selection */
+    bool        proto_auto;       /* Auto protocol selection */
     bool        fast_wsdd;        /* Fast WS-Discovery */
 } conf_data;
 
-#define CONF_INIT { false, NULL, NULL, true, true, false, true }
+#define CONF_INIT {                     \
+        .dbg_enabled = false,           \
+        .dbg_trace = NULL,              \
+        .devices = NULL,                \
+        .discovery = true,              \
+        .model_is_netname = true,       \
+        .proto_auto = true,             \
+        .fast_wsdd = true               \
+    }
 
 extern conf_data conf;
 

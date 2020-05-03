@@ -408,7 +408,7 @@ zeroconf_device_protocols (zeroconf_device *device)
 {
     unsigned int protocols = device->protocols;
 
-    if (conf.proto_manual) {
+    if (!conf.proto_auto) {
         return protocols;
     }
 
@@ -968,7 +968,7 @@ zeroconf_initscan_done (void)
     for (LL_FOR_EACH(node, &zeroconf_device_list)) {
         device = OUTER_STRUCT(node, zeroconf_device, node_list);
 
-        if (conf.proto_manual) {
+        if (!conf.proto_auto) {
             if ((device->methods & ZEROCONF_WSD) == 0) {
                 return false;
             }
