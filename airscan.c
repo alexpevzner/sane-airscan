@@ -38,10 +38,10 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
     /* Initialize all parts */
     status = eloop_init();
     if (status == SANE_STATUS_GOOD) {
-        http_init();
+        status = http_init();
     }
     if (status == SANE_STATUS_GOOD) {
-        device_management_init();
+        statis = device_management_init();
     }
     if (status == SANE_STATUS_GOOD) {
         status = zeroconf_init();

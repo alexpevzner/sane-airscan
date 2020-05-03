@@ -25,13 +25,15 @@ OBJDIR  = objs/
 CONFDIR = /etc/sane.d
 LIBDIR := $(shell $(PKG_CONFIG) --variable=libdir sane-backends)
 BACKEND = libsane-airscan.so.1
+DISCOVER = airscan-discover
+LIBAIRSCAN = $(OBJDIR)/libairscan.a
 MANPAGE = sane-airscan.5
 MANTITLE = "AirScan (eSCL) SANE backend"
 DEPENDS	:= avahi-client avahi-glib libjpeg libsoup-2.4 libxml-2.0
 DEPENDS += libpng
 
 # Sources and object files
-SRC	= $(wildcard airscan*.c) sane_strstatus.c
+SRC	= $(wildcard airscan-*.c) sane_strstatus.c
 OBJ	= $(addprefix $(OBJDIR), $(SRC:.c=.o))
 
 # Obtain CFLAGS and LDFLAGS for dependencies
@@ -66,13 +68,19 @@ $(OBJDIR)%.o: %.c Makefile airscan.h
 
 .PHONY: all clean install
 
-all:	tags $(BACKEND) test test-decode
+all:	tags $(BACKEND) $(DISCOVER) test test-decode
 
 tags: $(SRC) airscan.h test.c test-decode.c
 	-ctags -R .
 
-$(BACKEND): $(OBJ) Makefile airscan.sym
-	$(CC) -o $(BACKEND) -shared $(OBJ) $(airscan_LDFLAGS)
+$(BACKEND): $(OBJDIR)/airscan.o $(LIBAIRSCAN) airscan.sym
+	$(CC) -o $(BACKEND) -shared $(OBJDIR)/airscan.o $(LIBAIRSCAN) $(airscan_LDFLAGS)
+
+$(DISCOVER): $(OBJDIR)discover.o $(LIBAIRSCAN)
+	 $(CC) -o $(DISCOVER) discover.c $(CPPFLAGS) $(airscan_CFLAGS) $(LIBAIRSCAN) $(airscan_LIBS)
+
+$(LIBAIRSCAN): $(OBJ) Makefile
+	ar cru $(LIBAIRSCAN) $(OBJ)
 
 install: all
 	mkdir -p $(DESTDIR)$(PREFIX)$(CONFDIR)
@@ -94,5 +102,5 @@ $(MANPAGE): $(MANPAGE).md
 test:	$(BACKEND) test.c
 	$(CC) -o test test.c $(BACKEND) -Wl,-rpath . ${airscan_CFLAGS}
 
-test-decode: test-decode.c $(OBJ)
-	 $(CC) -o test-decode test-decode.c $(OBJ) $(CPPFLAGS) $(airscan_CFLAGS) $(airscan_LIBS)
+test-decode: test-decode.c $(LIBAIRSCAN)
+	 $(CC) -o test-decode test-decode.c $(CPPFLAGS) $(airscan_CFLAGS) $(LIBAIRSCAN) $(airscan_LIBS)
