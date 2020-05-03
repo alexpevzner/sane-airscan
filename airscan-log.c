@@ -148,12 +148,14 @@ log_ctx_trace (log_ctx *log)
 /* Write a log message
  */
 static void
-log_message (log_ctx *log, bool trace_only, bool force, const char *fmt, va_list ap)
+log_message (log_ctx *log, bool trace_only, bool force,
+        const char *fmt, va_list ap)
 {
     trace *t = log ? log->trace : NULL;
     char  msg[4096];
     int   len = 0, namelen = 0;
-    bool  dont_log = trace_only || (log_configured && !conf.dbg_enabled && !force);
+    bool  dont_log = trace_only ||
+                     (log_configured && !conf.dbg_enabled && !force);
 
     /* If logs suppressed and trace not in use, we have nothing
      * to do */
