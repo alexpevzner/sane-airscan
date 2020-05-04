@@ -969,7 +969,7 @@ zeroconf_initscan_done (void)
         device = OUTER_STRUCT(node, zeroconf_device, node_list);
 
         if (!conf.proto_auto) {
-            if ((device->methods & ZEROCONF_WSD) == 0) {
+            if ((device->methods & (1 << ZEROCONF_WSD)) == 0) {
                 return false;
             }
         } else {
