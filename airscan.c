@@ -41,7 +41,7 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
         status = http_init();
     }
     if (status == SANE_STATUS_GOOD) {
-        statis = device_management_init();
+        status = device_management_init();
     }
     if (status == SANE_STATUS_GOOD) {
         status = zeroconf_init();
