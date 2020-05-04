@@ -106,35 +106,35 @@ static int                 wsdd_initscan_count;
 /* WS-DD Probe template
  */
 static const char *wsdd_probe_template =
-    "<?xml version=\"1.0\" ?>\n"
-    "<s:Envelope xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\" xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:wsdp=\"http://schemas.xmlsoap.org/ws/2006/02/devprof\">\n"
-    " <s:Header>\n"
-    "  <a:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</a:Action>\n"
-    "  <a:MessageID>%s</a:MessageID>\n"
-    "  <a:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</a:To>\n"
-    " </s:Header>\n"
-    " <s:Body>\n"
-    "  <d:Probe>\n"
-    "   <d:Types>wsdp:Device</d:Types>\n"
-    "  </d:Probe>\n"
-    " </s:Body>\n"
-    "</s:Envelope>\n";
+    "<?xml version=\"1.0\"?>"
+    "<s:Envelope xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\" xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:wsdp=\"http://schemas.xmlsoap.org/ws/2006/02/devprof\">"
+    "<s:Header>"
+      "<a:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</a:Action>"
+      "<a:MessageID>%s</a:MessageID>"
+      "<a:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</a:To>"
+    "</s:Header>"
+    "<s:Body>"
+      "<d:Probe>"
+        "<d:Types>wsdp:Device</d:Types>"
+      "</d:Probe>"
+    "</s:Body>"
+    "</s:Envelope>";
 
 /* WS-DD Get (metadata) template
  */
 static const char *wsdd_get_metadata_template =
-    "<?xml version=\"1.0\" ?>\n"
-    "<s:Envelope xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\">\n"
-    " <s:Header>\n"
-    "  <a:Action>http://schemas.xmlsoap.org/ws/2004/09/transfer/Get</a:Action>\n"
-    "  <a:MessageID>%s</a:MessageID>\n"
-    "  <a:To>%s</a:To>\n"
-    "  <a:ReplyTo>\n"
-    "    <a:Address>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:Address>\n"
-    "  </a:ReplyTo>\n"
-    " </s:Header>\n"
-    " <s:Body/>\n"
-    "</s:Envelope>\n";
+    "<?xml version=\"1.0\"?>"
+    "<s:Envelope xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\">"
+      "<s:Header>"
+        "<a:Action>http://schemas.xmlsoap.org/ws/2004/09/transfer/Get</a:Action>"
+        "<a:MessageID>%s</a:MessageID>"
+        "<a:To>%s</a:To>"
+        "<a:ReplyTo>"
+          "<a:Address>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:Address>"
+        "</a:ReplyTo>"
+      "</s:Header>"
+      "<s:Body/>"
+    "</s:Envelope>";
 
 /* XML namespace translation
  */
@@ -938,17 +938,21 @@ wsdd_resolver_new (const netif_addr *addr, bool initscan)
     /* Bind the socket */
     if (addr->ipv6) {
         struct sockaddr_in6 a;
+        socklen_t           alen = sizeof(a);
 
         memset(&a, 0, sizeof(a));
         a.sin6_family = AF_INET6;
         a.sin6_addr = addr->ip.v6;
         a.sin6_scope_id = addr->ifindex;
         resolver->str_ifaddr = ip_straddr_from_ip(AF_INET6, &addr->ip);
-        resolver->str_sockaddr = ip_straddr_from_sockaddr((struct sockaddr*) &a);
 
         rc = bind(resolver->fd, (struct sockaddr*) &a, sizeof(a));
+
+        getsockname(resolver->fd, (struct sockaddr*) &a, &alen);
+        resolver->str_sockaddr = ip_straddr_from_sockaddr((struct sockaddr*) &a);
     } else {
         struct sockaddr_in a;
+        socklen_t          alen = sizeof(a);
 
         memset(&a, 0, sizeof(a));
         a.sin_family = AF_INET;
@@ -957,6 +961,9 @@ wsdd_resolver_new (const netif_addr *addr, bool initscan)
         resolver->str_sockaddr = ip_straddr_from_sockaddr((struct sockaddr*) &a);
 
         rc = bind(resolver->fd, (struct sockaddr*) &a, sizeof(a));
+
+        getsockname(resolver->fd, (struct sockaddr*) &a, &alen);
+        resolver->str_sockaddr = ip_straddr_from_sockaddr((struct sockaddr*) &a);
     }
 
     log_debug(wsdd_log, "%s: started discovery", resolver->str_ifaddr.text);
