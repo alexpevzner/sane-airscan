@@ -938,18 +938,24 @@ wsdd_resolver_new (const netif_addr *addr, bool initscan)
     /* Bind the socket */
     if (addr->ipv6) {
         struct sockaddr_in6 a;
+
+        memset(&a, 0, sizeof(a));
         a.sin6_family = AF_INET6;
         a.sin6_addr = addr->ip.v6;
         a.sin6_scope_id = addr->ifindex;
         resolver->str_ifaddr = ip_straddr_from_ip(AF_INET6, &addr->ip);
         resolver->str_sockaddr = ip_straddr_from_sockaddr((struct sockaddr*) &a);
+
         rc = bind(resolver->fd, (struct sockaddr*) &a, sizeof(a));
     } else {
         struct sockaddr_in a;
+
+        memset(&a, 0, sizeof(a));
         a.sin_family = AF_INET;
         a.sin_addr = addr->ip.v4;
         resolver->str_ifaddr = ip_straddr_from_ip(AF_INET, &addr->ip);
         resolver->str_sockaddr = ip_straddr_from_sockaddr((struct sockaddr*) &a);
+
         rc = bind(resolver->fd, (struct sockaddr*) &a, sizeof(a));
     }
 
