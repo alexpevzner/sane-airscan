@@ -73,7 +73,7 @@ all:	tags $(BACKEND) $(DISCOVER) test test-decode
 tags: $(SRC) airscan.h test.c test-decode.c
 	-ctags -R .
 
-$(BACKEND): $(OBJDIR)/airscan.o $(LIBAIRSCAN) airscan.sym
+$(BACKEND): $(OBJDIR)airscan.o $(LIBAIRSCAN) airscan.sym
 	$(CC) -o $(BACKEND) -shared $(OBJDIR)/airscan.o $(LIBAIRSCAN) $(airscan_LDFLAGS)
 
 $(DISCOVER): $(OBJDIR)discover.o $(LIBAIRSCAN)
