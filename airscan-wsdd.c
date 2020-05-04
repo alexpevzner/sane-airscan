@@ -1176,7 +1176,7 @@ wsdd_netif_resolver_by_ifindex (int ifindex)
  */
 static void
 wsdd_netif_update_addresses (bool initscan) {
-    netif_addr *addr_list = netif_addr_get();
+    netif_addr *addr_list = netif_addr_list_get();
     netif_addr *addr;
     netif_diff diff = netif_diff_compute(wsdd_netif_addr_list, addr_list);
 
@@ -1184,30 +1184,23 @@ wsdd_netif_update_addresses (bool initscan) {
     wsdd_netif_dump_addresses(" + ", diff.added);
     wsdd_netif_dump_addresses(" - ", diff.removed);
 
-    netif_addr_free(wsdd_netif_addr_list);
-    wsdd_netif_addr_list = addr_list;
-
-    /* Update multicast group membership */
+    /* Update multicast group membership, and start/stop
+     * per-interface-address resolvers */
     for (addr = diff.removed; addr != NULL; addr = addr->next) {
         int fd = addr->ipv6 ? wsdd_mcsock_ipv6 : wsdd_mcsock_ipv4;
         wsdd_mcast_update_membership(fd, addr, false);
+        wsdd_resolver_free(addr->data);
     }
 
     for (addr = diff.added; addr != NULL; addr = addr->next) {
         int fd = addr->ipv6 ? wsdd_mcsock_ipv6 : wsdd_mcsock_ipv4;
         wsdd_mcast_update_membership(fd, addr, true);
+        addr->data = wsdd_resolver_new(addr, initscan);
     }
 
-    /* Start/stop per-interface-address resolvers */
-    for (addr = diff.removed; addr != NULL; addr = addr->next) {
-        wsdd_resolver_free(addr->data);
-    }
-
-    for (addr = wsdd_netif_addr_list; addr != NULL; addr = addr->next) {
-        if (addr->data == NULL) {
-            addr->data = wsdd_resolver_new(addr, initscan);
-        }
-    }
+    /* Update wsdd_netif_addr_list */
+    wsdd_netif_addr_list = netif_addr_list_merge(diff.preserved, diff.added);
+    netif_addr_list_free(diff.removed);
 }
 
 /* Network interfaces address change notification
@@ -1326,12 +1319,18 @@ FAIL:
 void
 wsdd_cleanup (void)
 {
+    netif_addr *addr;
+
     if (wsdd_netif_notifier != NULL) {
         netif_notifier_free(wsdd_netif_notifier);
         wsdd_netif_notifier = NULL;
     }
 
-    netif_addr_free(wsdd_netif_addr_list);
+    for (addr = wsdd_netif_addr_list; addr != NULL; addr = addr->next) {
+        wsdd_resolver_free(addr->data);
+    }
+
+    netif_addr_list_free(wsdd_netif_addr_list);
     wsdd_netif_addr_list = NULL;
 
     if (wsdd_mcsock_ipv4 >= 0) {

@@ -25,7 +25,7 @@ netif_addr_list_sort (netif_addr *list);
 /* Get list of network interfaces addresses
  */
 netif_addr*
-netif_addr_get (void)
+netif_addr_list_get (void)
 {
     struct ifaddrs *ifa, *ifp;
     netif_addr     *list = NULL, *addr;
@@ -89,17 +89,6 @@ netif_addr_get (void)
     return netif_addr_list_sort(list);
 }
 
-/* Clone a single netif_addr
- */
-static netif_addr*
-netif_addr_clone_single (const netif_addr *addr)
-{
-    netif_addr *addr2 = g_new0(netif_addr, 1);
-    *addr2 = *addr;
-    addr2->next = NULL;
-    return addr2;
-}
-
 /* Free a single netif_addr
  */
 static void
@@ -111,7 +100,7 @@ netif_addr_free_single (netif_addr *addr)
 /* Free list of network interfaces addresses
  */
 void
-netif_addr_free (netif_addr *list)
+netif_addr_list_free (netif_addr *list)
 {
     while (list != NULL) {
         netif_addr *next = list->next;
@@ -219,13 +208,24 @@ netif_addr_list_sort (netif_addr *list)
     return netif_addr_list_revert(list);
 }
 
-/* Compute a difference between two lists of
- * addresses.
+/* Compute a difference between two lists of addresses.
+ *
+ * It works by tossing nodes between 3 output lists:
+ *   * if node is present in list2 only, it is moved
+ *     to netif_diff.added
+ *   * if node is present in list1 only, it is moved
+ *     to netif_diff.removed
+ *   * if node is present in both lists, node from
+ *     list1 is moved to preserved, and node from
+ *     list2 is released
+ *
+ * It assumes, both lists are sorted, as returned
+ * by netif_addr_get(). Returned lists are also sorted
  */
 netif_diff
 netif_diff_compute (netif_addr *list1, netif_addr *list2)
 {
-    netif_diff diff = {NULL, NULL};
+    netif_diff diff = {NULL, NULL, NULL};
 
     while (list1 != NULL || list2 != NULL) {
         netif_addr *addr;
@@ -240,25 +240,71 @@ netif_diff_compute (netif_addr *list1, netif_addr *list2)
         }
 
         if (cmp < 0) {
-            addr = netif_addr_clone_single(list1);
+            addr = list1;
             list1 = list1->next;
             addr->next = diff.removed;
             diff.removed = addr;
         } else if (cmp > 0) {
-            addr = netif_addr_clone_single(list2);
+            addr = list2;
             list2 = list2->next;
             addr->next = diff.added;
             diff.added = addr;
         } else {
+            addr = list1;
             list1 = list1->next;
+            addr->next = diff.preserved;
+            diff.preserved = addr;
+
+            addr = list2;
             list2 = list2->next;
+            netif_addr_free_single(addr);
         }
     }
 
     diff.added = netif_addr_list_revert(diff.added);
     diff.removed = netif_addr_list_revert(diff.removed);
+    diff.preserved = netif_addr_list_revert(diff.preserved);
 
     return diff;
+}
+
+/* Merge two lists of addresses
+ *
+ * Input lists are consumed and new list is created.
+ *
+ * Input lists are assumed to be sorted, and output
+ * list will be sorted as well
+ */
+netif_addr*
+netif_addr_list_merge (netif_addr *list1, netif_addr *list2)
+{
+    netif_addr *list = NULL;
+
+    while (list1 != NULL || list2 != NULL) {
+        netif_addr *addr;
+        int        cmp;
+
+        if (list1 == NULL) {
+            cmp = 1;
+        } else if (list2 == NULL) {
+            cmp = -1;
+        } else {
+            cmp = netif_addr_cmp(list1, list2);
+        }
+
+        if (cmp < 0) {
+            addr = list1;
+            list1 = list1->next;
+        } else {
+            addr = list2;
+            list2 = list2->next;
+        }
+
+        addr->next = list;
+        list = addr;
+    }
+
+    return netif_addr_list_revert(list);
 }
 
 /* Network interfaces addresses change notifier

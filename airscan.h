@@ -545,28 +545,47 @@ struct netif_addr {
  * The returned list is sorted
  */
 netif_addr*
-netif_addr_get (void);
+netif_addr_list_get (void);
 
 /* Free list of network interfaces addresses
  */
 void
-netif_addr_free (netif_addr *list);
+netif_addr_list_free (netif_addr *list);
 
 /* netif_diff represents a difference between two
  * lists of network interface addresses
  */
 typedef struct {
     netif_addr *added, *removed; /* What was added/removed */
+    netif_addr *preserved;
 } netif_diff;
 
-/* Compute a difference between two lists of
- * addresses.
+/* Compute a difference between two lists of addresses.
+ *
+ * It works by tossing nodes between 3 output lists:
+ *   * if node is present in list2 only, it is moved
+ *     to netif_diff.added
+ *   * if node is present in list1 only, it is moved
+ *     to netif_diff.removed
+ *   * if node is present in both lists, node from
+ *     list1 is moved to preserved, and node from
+ *     list2 is released
  *
  * It assumes, both lists are sorted, as returned
- * by netif_addr_get()
+ * by netif_addr_get(). Returned lists are also sorted
  */
 netif_diff
 netif_diff_compute (netif_addr *list1, netif_addr *list2);
+
+/* Merge two lists of addresses
+ *
+ * Input lists are consumed and new list is created.
+ *
+ * Input lists are assumed to be sorted, and output
+ * list will be sorted as well
+ */
+netif_addr*
+netif_addr_list_merge (netif_addr *list1, netif_addr *list2);
 
 /* Network interfaces addresses change notifier
  */
