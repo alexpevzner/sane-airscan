@@ -987,14 +987,20 @@ zeroconf_initscan_done (void)
 static void
 zeroconf_initscan_wait (void)
 {
-    gint64            timeout;
+    gint64 timeout;
+    bool   ok;
+
+    log_debug(zeroconf_log, "zeroconf_initscan_wait: requested");
 
     timeout = g_get_monotonic_time() +
         ZEROCONF_READY_TIMEOUT * G_TIME_SPAN_SECOND;
 
-    while (!zeroconf_initscan_done() &&
+    while (!(ok = zeroconf_initscan_done()) &&
            eloop_cond_wait_until(&zeroconf_initscan_cond, timeout)) {
     }
+
+    log_debug(zeroconf_log, "zeroconf_initscan_wait: %s",
+        ok ? "OK" : "timeout" );
 }
 
 /* Compare SANE_Device*, for qsort
