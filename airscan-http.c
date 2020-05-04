@@ -15,7 +15,7 @@
 
 /******************** Static variables ********************/
 static SoupSession *http_session;
-static http_query  *http_query_list;
+static ll_head http_query_list;
 
 /******************** Forward declarations ********************/
 typedef struct http_multipart http_multipart;
@@ -720,7 +720,7 @@ struct http_query {
     void              (*callback) (void *ptr,   /* Completion callback */
                                 http_query *q);
     http_query_cached *cached;                  /* Cached data */
-    http_query        *prev, *next;             /* In the http_query_list */
+    ll_node           list_node;                /* In http_query_list */
 };
 
 /* Insert http_query into http_query_list
@@ -728,13 +728,7 @@ struct http_query {
 static inline void
 http_query_list_ins (http_query *q)
 {
-    if (http_query_list == NULL) {
-        http_query_list = q;
-    } else {
-        q->next = http_query_list;
-        http_query_list->prev = q;
-        http_query_list = q;
-    }
+    ll_push_end(&http_query_list, &q->list_node);
 }
 
 /* Delete http_query from http_query_list
@@ -742,15 +736,7 @@ http_query_list_ins (http_query *q)
 static inline void
 http_query_list_del (http_query *q)
 {
-    if (q->next != NULL) {
-        q->next->prev = q->prev;
-    }
-
-    if (q->prev != NULL) {
-        q->prev->next = q->next;
-    } else {
-        http_query_list = q->next;
-    }
+    ll_del(&q->list_node);
 }
 
 /* Free http_query
@@ -1171,8 +1157,9 @@ http_start_stop (bool start)
         /* Note, soup_session_abort() may leave some requests
          * pending, so we must free them here explicitly
          */
-        while (http_query_list != NULL) {
-            http_query_free(http_query_list);
+        while (!ll_empty(&http_query_list)) {
+            ll_node *node = ll_first(&http_query_list);
+            http_query_free(OUTER_STRUCT(node, http_query, list_node));
         }
     }
 }
@@ -1183,6 +1170,7 @@ SANE_Status
 http_init (void)
 {
     eloop_add_start_stop_callback(http_start_stop);
+    ll_init(&http_query_list);
     return SANE_STATUS_GOOD;
 }
 
