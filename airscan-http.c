@@ -1158,8 +1158,10 @@ http_start_stop (bool start)
          * pending, so we must free them here explicitly
          */
         while (!ll_empty(&http_query_list)) {
-            ll_node *node = ll_first(&http_query_list);
-            http_query_free(OUTER_STRUCT(node, http_query, list_node));
+            ll_node    *node = ll_first(&http_query_list);
+            http_query *q = OUTER_STRUCT(node, http_query, list_node);
+
+            http_query_free(q);
         }
     }
 }
