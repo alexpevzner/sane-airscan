@@ -223,9 +223,9 @@ trace_dump_data (trace *t, http_data *data)
     fwrite(data->bytes, data->size, 1, t->data);
 
     /* Write padding */
-    i = 512 - (data->size & (512-1));
+    i = data->size & (512-1);
     if (i != 0) {
-        fwrite(zero_block, i, 1, t->data);
+        fwrite(zero_block, 512 - i, 1, t->data);
     }
 
     /* Put a note into the log file */

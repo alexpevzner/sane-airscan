@@ -913,7 +913,7 @@ wsdd_resolver_new (const netif_addr *addr, bool initscan)
                 &no, sizeof(no));
     } else {
         rc = setsockopt(resolver->fd, IPPROTO_IP, IP_MULTICAST_IF,
-                &addr->ip.v4, sizeof(&addr->ip.v4));
+                &addr->ip.v4, sizeof(addr->ip.v4));
 
         if (rc < 0) {
             log_debug(wsdd_log, "setsockopt(AF_INET,IP_MULTICAST_IF): %s",

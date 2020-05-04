@@ -398,7 +398,7 @@ http_multipart_new (SoupMessageHeaders *headers, http_data *data)
     http_multipart *mp;
     GHashTable     *params;
     const char     *boundary;
-    size_t         boundary_len;
+    size_t         boundary_len = 0;
     const char     *data_beg, *data_end, *data_prev;
     int            i;
 

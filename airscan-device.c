@@ -1047,7 +1047,7 @@ device_open (const char *ident, SANE_Status *status)
 
     /* Validate arguments */
     if (ident == NULL || *ident == '\0') {
-        log_debug(dev->log, "device_open: invalid name");
+        log_debug(NULL, "device_open: invalid name");
         *status = SANE_STATUS_INVAL;
         return NULL;
     }

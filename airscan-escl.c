@@ -352,9 +352,9 @@ DONE:
 static error
 escl_devcaps_compression_parse (xml_rd *xml, devcaps *caps)
 {
-    error err;
-
     for (; !xml_rd_end(xml); xml_rd_next(xml)) {
+        error err = NULL;
+
         if (xml_rd_node_name_match(xml, "scan:Min")) {
             err = xml_rd_node_value_uint(xml, &caps->compression_range.min);
         } else if (xml_rd_node_name_match(xml, "scan:Max")) {

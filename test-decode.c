@@ -81,7 +81,7 @@ save_open (const char *name, const SANE_Parameters *params)
     }
 
     png_set_write_fn(save->png_ptr, save, png_write_fn, NULL);
-    png_set_error_fn(save->png_ptr, save, png_error_fn, png_error_fn);
+    png_set_error_fn(save->png_ptr, save, png_error_fn, NULL);
 
     save->info_ptr = png_create_info_struct(save->png_ptr);
     if (save->info_ptr == NULL) {
