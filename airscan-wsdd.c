@@ -876,6 +876,7 @@ wsdd_resolver_new (const netif_addr *addr, bool initscan)
     const char    *af_name = addr->ipv6 ? "AF_INET6" : "AF_INET";
     int           rc;
     static int    no = 0, yes = 1;
+    uint16_t      port;
 
     /* Build resolver structure */
     resolver->ifindex = addr->ifindex;
@@ -949,6 +950,7 @@ wsdd_resolver_new (const netif_addr *addr, bool initscan)
         rc = bind(resolver->fd, (struct sockaddr*) &a, sizeof(a));
 
         getsockname(resolver->fd, (struct sockaddr*) &a, &alen);
+        port = a.sin6_port;
         resolver->str_sockaddr = ip_straddr_from_sockaddr((struct sockaddr*) &a);
     } else {
         struct sockaddr_in a;
@@ -963,10 +965,12 @@ wsdd_resolver_new (const netif_addr *addr, bool initscan)
         rc = bind(resolver->fd, (struct sockaddr*) &a, sizeof(a));
 
         getsockname(resolver->fd, (struct sockaddr*) &a, &alen);
+        port = a.sin_port;
         resolver->str_sockaddr = ip_straddr_from_sockaddr((struct sockaddr*) &a);
     }
 
-    log_debug(wsdd_log, "%s: started discovery", resolver->str_ifaddr.text);
+    log_debug(wsdd_log, "%s: started discovery, UDP port=%d",
+        resolver->str_ifaddr.text, ntohs(port));
 
     if (rc < 0) {
         log_debug(wsdd_log, "bind(%s): %s", resolver->str_sockaddr.text,
