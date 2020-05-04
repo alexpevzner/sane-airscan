@@ -669,6 +669,134 @@ xml_wr_leave (xml_wr *xml)
     xml->current = xml->current->parent;
 }
 
+/******************** XML formatter ********************/
+/* Format node name with namespace prefix
+ */
+static void
+xml_format_node_name (FILE *fp, xmlNode *node)
+{
+    if (node->ns != NULL) {
+        fputs((char*) node->ns->prefix, fp);
+        putc(':', fp);
+    }
+    fputs((char*) node->name, fp);
+}
+
+/* Format node attributes
+ */
+static void
+xml_format_node_attrs (FILE *fp, xmlNode *node)
+{
+    xmlNs   *ns;
+    xmlAttr *attr;
+
+    /* Format namespace attributes */
+    for (ns = node->nsDef; ns != NULL; ns = ns->next) {
+        /* Write namespace name */
+        putc(' ', fp);
+        fputs("xmlns:", fp);
+        fputs((char*) ns->prefix, fp);
+
+        /* Write namespace value */
+        putc('=', fp);
+        putc('"', fp);
+        fputs((char*) ns->href, fp);
+        putc('"', fp);
+    }
+
+    /* Format properties */
+    for (attr = node->properties; attr != NULL; attr = attr->next) {
+        xmlChar *val = xmlNodeListGetString(node->doc, attr->children, 1);
+
+        /* Write attribute name with namespace prefix */
+        putc(' ', fp);
+        if (attr->ns != NULL) {
+            fputs((char*) attr->ns->prefix, fp);
+            putc(':', fp);
+        }
+        fputs((char*) attr->name, fp);
+
+        /* Write attribute value */
+        putc('=', fp);
+        putc('"', fp);
+        fputs((char*) val, fp);
+        putc('"', fp);
+
+        xmlFree(val);
+    }
+}
+
+/* Format indent
+ */
+static void
+xml_format_indent (FILE *fp, int indent)
+{
+    int     i;
+
+    for (i = 0; i < indent; i ++) {
+        putc(' ', fp);
+        putc(' ', fp);
+    }
+}
+
+/* Format entire node
+ */
+static void
+xml_format_node (FILE *fp, xmlNode *node, int indent)
+{
+    xmlNode *child;
+    bool    with_children = false;
+    bool    with_value = false;
+
+    /* Format opening tag */
+    xml_format_indent(fp, indent);
+
+    putc('<', fp);
+    xml_format_node_name(fp, node);
+    xml_format_node_attrs(fp, node);
+
+    for (child = node->children; child != NULL; child = child->next) {
+        if (child->type == XML_ELEMENT_NODE) {
+            if (!with_children) {
+                putc('>', fp);
+                putc('\n', fp);
+                with_children = true;
+            }
+            xml_format_node(fp, child, indent + 1);
+        }
+    }
+
+    if (!with_children) {
+        xmlChar *val = xmlNodeGetContent(node);
+        g_strstrip((char*) val);
+
+        if (*val != '\0') {
+            putc('>', fp);
+            fputs((char*) val, fp);
+            with_value = true;
+        }
+
+        xmlFree(val);
+    }
+
+    if (with_children) {
+        xml_format_indent(fp, indent);
+    }
+
+    /* Format closing tag */
+    if (with_children || with_value) {
+        putc('<', fp);
+        putc('/', fp);
+        xml_format_node_name(fp, node);
+        putc('>', fp);
+    } else {
+        putc('/', fp);
+        putc('>', fp);
+    }
+
+    putc('\n', fp);
+}
+
 /* Format XML to file. It either succeeds, writes a formatted XML
  * and returns true, or fails, writes nothing to file and returns false
  */
@@ -676,22 +804,19 @@ bool
 xml_format (FILE *fp, const char *xml_text, size_t xml_len)
 {
     xmlDoc  *doc = xmlParseMemory(xml_text, xml_len);
-    xmlChar *out_data;
-    int     out_size;
+    xmlNode *node;
 
     if (doc == NULL) {
         return false;
     }
 
-    xmlDocDumpFormatMemory(doc, &out_data, &out_size, 1);
-    if (out_size > 0) {
-        fwrite(out_data, out_size, 1, fp);
+    for (node = doc->children; node != NULL; node = node->next) {
+        xml_format_node(fp, node, 0);
     }
 
-    xmlFree(out_data);
     xmlFreeDoc(doc);
 
-    return out_size > 0;
+    return true;
 }
 
 /* vim:ts=8:sw=4:et
