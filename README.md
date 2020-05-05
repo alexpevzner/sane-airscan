@@ -40,6 +40,7 @@ into this list, please let me know.
 
 * Canon D570
 * Canon ImageCLASS MF743cdw <sup>[1](#noteMF743cdw)</sup>
+* Canon Lide 400
 * Canon TR4529 (PIXMA TR4500 Series)
 * Canon TS 3100
 * Canon TS 3300
@@ -54,11 +55,13 @@ into this list, please let me know.
 * HP ENVY 5540
 * HP LaserJet MFP M227sdn
 * HP LaserJet Pro M28w
+* HP LaserJet Pro MFP 148fdw
 * HP LaserJet Pro MFP M428dw
 * HP Officejet 4630
 * HP Officejet Pro 6970
 * HP OfficeJet Pro 6978
 * HP OfficeJet Pro 8730
+* HP OfficeJet Pro 9010 series
 * Kyocera ECOSYS M2040dn
 * TODO
 
