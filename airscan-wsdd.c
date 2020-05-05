@@ -1023,6 +1023,16 @@ wsdd_resolver_free (wsdd_resolver *resolver)
     g_free(resolver);
 }
 
+/******************** WS-Discovery stable endpoints ********************/
+/* Query WS-Discovery stable endpoint
+ */
+void
+wsdd_probe_stable_endpoint (const ip_addr *addr)
+{
+    ip_straddr straddr = ip_straddr_from_ip(addr->af, &addr->ip);
+    log_debug(wsdd_log, "%s: probing stable endpoint", straddr.text);
+}
+
 /******************** Management of multicast sockets ********************/
 /* Open IPv4 or IPv6 multicast socket
  */

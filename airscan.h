@@ -517,6 +517,63 @@ ip_is_linklocal (int af, const void *addr);
 bool
 ip_sockaddr_is_linklocal (const struct sockaddr *addr);
 
+/* ip_addr represents IPv4 or IPv6 address
+ */
+typedef struct {
+    int                 af;      /* AF_INET or AF_INET6 */
+    int                 ifindex; /* For IPv6 link-local addresses */
+    union {
+        struct in_addr  v4;      /* IPv4 address */
+        struct in6_addr v6;      /* IPv4 address */
+    } ip;
+} ip_addr;
+
+/* Extract ip_addr from sockaddr
+ */
+static inline ip_addr
+ip_addr_from_sockaddr (const struct sockaddr *sockaddr)
+{
+    ip_addr addr;
+
+    memset(&addr, 0, sizeof(addr));
+    addr.af = sockaddr->sa_family;
+
+    switch (addr.af) {
+    case AF_INET:
+        addr.ip.v4 = ((struct sockaddr_in*) sockaddr)->sin_addr;
+        break;
+
+    case AF_INET6:
+        addr.ip.v6 = ((struct sockaddr_in6*) sockaddr)->sin6_addr;
+        if (ip_is_linklocal(AF_INET6, &addr.ip.v6)) {
+            addr.ifindex = ((struct sockaddr_in6*) sockaddr)->sin6_scope_id;
+        }
+        break;
+    }
+
+    return addr;
+}
+
+/* Check if two addresses are equal
+ */
+static inline bool
+ip_addr_equal (const ip_addr *a1, const ip_addr *a2)
+{
+    if (a1->af != a2->af) {
+        return false;
+    }
+
+    switch (a1->af) {
+    case AF_INET:
+        return a1->ip.v4.s_addr == a2->ip.v4.s_addr;
+    case AF_INET6:
+        return a1->ifindex == a2->ifindex &&
+               !memcmp(a1->ip.v6.s6_addr, a2->ip.v6.s6_addr, 16);
+    }
+
+    return false;
+}
+
 /******************** Network interfaces addresses ********************/
 /* Network interface name, wrapped into structure, so
  * it can be passed by value
@@ -1843,6 +1900,11 @@ void
 mdns_cleanup (void);
 
 /******************** WS-Discovery ********************/
+/* Query WS-Discovery stable endpoint
+ */
+void
+wsdd_probe_stable_endpoint (const ip_addr *addr);
+
 /* Initialize WS-Discovery
  */
 SANE_Status
