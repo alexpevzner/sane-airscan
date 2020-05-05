@@ -48,6 +48,7 @@ into this list, please let me know.
 * Brother MFC-L2750DW
 * Canon D570
 * Canon ImageCLASS MF743cdw <sup>[1](#noteMF743cdw)</sup>
+* Canon Lide 400
 * Canon TR4529 (PIXMA TR4500 Series)
 * Canon TS 3100
 * Canon TS 3300
@@ -64,11 +65,13 @@ into this list, please let me know.
 * HP LaserJet MFP M426dw
 * HP LaserJet MFP M630
 * HP LaserJet Pro M28w
+* HP LaserJet Pro MFP 148fdw
 * HP LaserJet Pro MFP M428dw
 * HP Officejet 4630
 * HP Officejet Pro 6970
 * HP OfficeJet Pro 6978
 * HP OfficeJet Pro 8730
+* HP OfficeJet Pro 9010 series
 * Kyocera ECOSYS M2040dn
 * Xerox VersaLink B405
 * TODO
@@ -93,9 +96,9 @@ panel to initiate WSD scan: Send->WSD Scan->From Computer
 
 If you use one of the following Linux distros:
 * **Debian** (9.0 and 10)
-* **Fedora** (29, 30 and 31)
+* **Fedora** (29, 30, 31 and 32)
 * **openSUSE** (Leap and Tumbleweed)
-* **Ubuntu** (16.04, 18.04, 19.04 and 19.10)
+* **Ubuntu** (16.04, 18.04, 19.04, 19.10 and 20.04)
 
 [Follow this link](https://software.opensuse.org//download.html?project=home%3Apzz&package=sane-airscan),
 where you will find packages and very detailed installation instructions.
