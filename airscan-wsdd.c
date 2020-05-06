@@ -17,6 +17,7 @@
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <net/if.h>
 #include <sys/socket.h>
 
 /* Protocol times, in milliseconds
@@ -1027,10 +1028,15 @@ wsdd_resolver_free (wsdd_resolver *resolver)
 /* Query WS-Discovery stable endpoint
  */
 void
-wsdd_probe_stable_endpoint (const ip_addr *addr)
+wsdd_probe_stable_endpoint (int ifindex, int af, const void *addr)
 {
-    ip_straddr straddr = ip_straddr_from_ip(addr->af, &addr->ip);
-    log_debug(wsdd_log, "%s: probing stable endpoint", straddr.text);
+    char          ifname[IF_NAMESIZE] = "?";
+    ip_straddr    straddr = ip_straddr_from_ip(af, addr);
+
+    /* Write log messages */
+    if_indextoname(ifindex, ifname);
+    log_debug(wsdd_log, "probing stable endpoint: if=%s, addr=%s",
+        ifname, straddr.text);
 }
 
 /******************** Management of multicast sockets ********************/
