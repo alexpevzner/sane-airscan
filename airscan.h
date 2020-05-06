@@ -524,6 +524,12 @@ ip_is_linklocal (int af, const void *addr);
 bool
 ip_sockaddr_is_linklocal (const struct sockaddr *addr);
 
+/* Check if address is loopback
+ * af must be AF_INET or AF_INET6
+ */
+bool
+ip_is_loopback (int af, const void *addr);
+
 /* ip_addr represents IPv4 or IPv6 address
  */
 typedef struct {
@@ -534,6 +540,32 @@ typedef struct {
         struct in6_addr v6;      /* IPv4 address */
     } ip;
 } ip_addr;
+
+/* Make ip_addr
+ */
+static inline ip_addr
+ip_addr_make (int ifindex, int af, const void *addr)
+{
+    ip_addr ip_addr;
+
+    memset(&ip_addr, 0, sizeof(ip_addr));
+    ip_addr.af = af;
+
+    switch (ip_addr.af) {
+    case AF_INET:
+        memcpy(&ip_addr.ip, addr, 4);
+        break;
+
+    case AF_INET6:
+        memcpy(&ip_addr.ip, addr, 16);
+        if (ip_is_linklocal(AF_INET6, &ip_addr.ip.v6)) {
+            ip_addr.ifindex = ifindex;
+        }
+        break;
+    }
+
+    return ip_addr;
+}
 
 /* Extract ip_addr from sockaddr
  */
@@ -564,22 +596,57 @@ ip_addr_from_sockaddr (const struct sockaddr *sockaddr)
 /* Check if two addresses are equal
  */
 static inline bool
-ip_addr_equal (const ip_addr *a1, const ip_addr *a2)
+ip_addr_equal (ip_addr a1, ip_addr a2)
 {
-    if (a1->af != a2->af) {
+    if (a1.af != a2.af) {
         return false;
     }
 
-    switch (a1->af) {
+    switch (a1.af) {
     case AF_INET:
-        return a1->ip.v4.s_addr == a2->ip.v4.s_addr;
+        return a1.ip.v4.s_addr == a2.ip.v4.s_addr;
     case AF_INET6:
-        return a1->ifindex == a2->ifindex &&
-               !memcmp(a1->ip.v6.s6_addr, a2->ip.v6.s6_addr, 16);
+        return a1.ifindex == a2.ifindex &&
+               !memcmp(a1.ip.v6.s6_addr, a2.ip.v6.s6_addr, 16);
     }
 
     return false;
 }
+
+/* ip_addr_set represents a set of IP addresses
+ */
+typedef struct ip_addrset ip_addrset;
+
+/* Create new ip_addrset
+ */
+ip_addrset*
+ip_addrset_new (void);
+
+/* Free ip_addrset
+ */
+void
+ip_addrset_free (ip_addrset *addrset);
+
+/* Check if address is in set
+ */
+bool
+ip_addrset_lookup (const ip_addrset *addrset, ip_addr addr);
+
+/* Add address to the set. Returns true, if address was
+ * actually added, false if it was already in the set
+ */
+bool
+ip_addrset_add (ip_addrset *addrset, ip_addr addr);
+
+/* Add address to the set without checking for duplicates
+ */
+void
+ip_addrset_add_unsafe (ip_addrset *addrset, ip_addr addr);
+
+/* Del address from the set.
+ */
+void
+ip_addrset_del (ip_addrset *addrset, ip_addr addr);
 
 /******************** Network interfaces addresses ********************/
 /* Network interface name, wrapped into structure, so
@@ -1907,10 +1974,10 @@ void
 mdns_cleanup (void);
 
 /******************** WS-Discovery ********************/
-/* Query WS-Discovery stable endpoint
+/* Send WD-Discovery directed probe
  */
 void
-wsdd_probe_stable_endpoint (int ifindex, int af, const void *addr);
+wsdd_send_directed_probe (int ifindex, int af, const void *addr);
 
 /* Initialize WS-Discovery
  */

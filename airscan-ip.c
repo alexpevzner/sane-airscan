@@ -100,5 +100,121 @@ ip_sockaddr_is_linklocal (const struct sockaddr *addr)
     return false;
 }
 
+/* Check if address is loopback
+ * af must be AF_INET or AF_INET6
+ */
+bool
+ip_is_loopback (int af, const void *addr)
+{
+    if (af == AF_INET) {
+        /* 169.254.0.0/16 */
+        const uint32_t *a = addr;
+        return ntohl(*a) == 0x7f000001;
+    } else {
+        static const uint8_t loopback[16] = {
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1
+        };
+
+        return !memcmp(addr, loopback, 16);
+    }
+}
+
+/* ip_addr_set represents a set of IP addresses
+ */
+struct ip_addrset {
+    ip_addr *addrs;   /* Addresses in the set */
+    size_t  len, cap; /* Set length and capacity */
+};
+
+/* Create new ip_addrset
+ */
+ip_addrset*
+ip_addrset_new (void)
+{
+    ip_addrset *addrset = g_new0(ip_addrset, 1);
+
+    addrset->cap = 4;
+    addrset->addrs = g_new(ip_addr, addrset->cap);
+
+    return addrset;
+}
+
+/* Free ip_addrset
+ */
+void
+ip_addrset_free (ip_addrset *addrset)
+{
+    g_free(addrset->addrs);
+    g_free(addrset);
+}
+
+/* Find address index within a set. Returns -1 if address was not found
+ */
+static int
+ip_addrset_index (const ip_addrset *addrset, ip_addr addr)
+{
+    size_t i;
+
+    for (i = 0; i < addrset->len; i ++) {
+        if (ip_addr_equal(addrset->addrs[i], addr)) {
+            return (int) i;
+        }
+    }
+
+    return -1;
+}
+
+/* Check if address is in set
+ */
+bool
+ip_addrset_lookup (const ip_addrset *addrset, ip_addr addr)
+{
+    return ip_addrset_index(addrset, addr) >= 0;
+}
+
+/* Add address to the set. Returns true, if address was
+ * actually added, false if it was already in the set
+ */
+bool
+ip_addrset_add (ip_addrset *addrset, ip_addr addr)
+{
+    if (ip_addrset_lookup(addrset, addr)) {
+        return false;
+    }
+
+    ip_addrset_add_unsafe(addrset, addr);
+    return true;
+}
+
+/* Add address to the set without checking for duplicates
+ */
+void
+ip_addrset_add_unsafe (ip_addrset *addrset, ip_addr addr)
+{
+    if (addrset->len == addrset->cap) {
+        addrset->cap *= 2;
+        addrset->addrs = g_renew(ip_addr, addrset->addrs, addrset->cap);
+    }
+
+    addrset->addrs[addrset->len ++] = addr;
+}
+
+/* Del address from the set.
+ */
+void
+ip_addrset_del (ip_addrset *addrset, ip_addr addr)
+{
+    int i = ip_addrset_index(addrset, addr);
+
+    if (i >= 0) {
+        size_t tail = addrset->len - (size_t) i - 1;
+        if (tail != 0) {
+            tail *= sizeof(*addrset->addrs);
+            memmove(&addrset->addrs[i], &addrset->addrs[i + 1], tail);
+        }
+        addrset->len --;
+    }
+}
+
 /* vim:ts=8:sw=4:et
  */

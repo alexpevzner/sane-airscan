@@ -26,6 +26,11 @@
 #define WSDD_RETRANSMIT_MAX     250     /* Max retransmit time */
 #define WSDD_DISCOVERY_TIME     2500    /* Overall discovery time */
 
+/* WS-Discovery stable endpoint path
+ */
+#define WSDD_STABLE_ENDPOINT    \
+        "/StableWSDiscoveryEndpoint/schemas-xmlsoap-org_ws_2005_04_discovery"
+
 /* wsdd_resolver represents a per-interface WSDD resolver
  */
 typedef struct {
@@ -103,6 +108,8 @@ static struct sockaddr_in  wsdd_mcast_ipv4;
 static struct sockaddr_in6 wsdd_mcast_ipv6;
 static ll_head             wsdd_finding_list;
 static int                 wsdd_initscan_count;
+static http_client         *wsdd_http_client;
+static ip_addrset          *wsdd_addrs_probing;
 
 /* WS-DD Probe template
  */
@@ -245,7 +252,7 @@ wsdd_finding_new (int ifindex, const char *address)
 
     wsdd->address = g_strdup(address);
     ll_init(&wsdd->xaddrs);
-    wsdd->http_client = http_client_new (wsdd_log, wsdd);
+    wsdd->http_client = http_client_new(wsdd_log, wsdd);
 
     return wsdd;
 }
@@ -304,6 +311,36 @@ wsdd_finding_add (int ifindex, const char *address)
     ll_push_end(&wsdd_finding_list, &wsdd->list_node);
 
     return wsdd;
+}
+
+/* Lookup wsdd_finding by IP address
+ */
+static wsdd_finding*
+wsdd_finding_by_address (ip_addr addr)
+{
+    ll_node               *node, *node2;
+    wsdd_finding          *wsdd;
+    wsdd_xaddr            *xaddr;
+    const struct sockaddr *sockaddr;
+
+    /* Check for duplicates */
+    for (LL_FOR_EACH(node, &wsdd_finding_list)) {
+        wsdd = OUTER_STRUCT(node, wsdd_finding, list_node);
+
+        for (LL_FOR_EACH(node2, &wsdd->xaddrs)) {
+            xaddr = OUTER_STRUCT(node2, wsdd_xaddr, list_node);
+            sockaddr = http_uri_addr(xaddr->uri);
+
+            if (sockaddr != NULL) {
+                ip_addr addr2 = ip_addr_from_sockaddr(sockaddr);
+                if (ip_addr_equal(addr, addr2)) {
+                    return wsdd;
+                }
+            }
+        }
+    }
+
+    return NULL;
 }
 
 /* Delete wsdd_finding from the wsdd_finding_list
@@ -497,7 +534,6 @@ DONE:
     }
 }
 
-
 /* Query device metadata
  */
 static void
@@ -648,7 +684,8 @@ wsdd_message_action_name (const wsdd_message *msg)
 /* Dispatch received WSDD message
  */
 static void
-wsdd_resolver_message_dispatch (wsdd_resolver *resolver, wsdd_message *msg)
+wsdd_resolver_message_dispatch (wsdd_resolver *resolver,
+        wsdd_message *msg, const char *from)
 {
     wsdd_finding *wsdd;
     wsdd_xaddr   *xaddr;
@@ -661,8 +698,8 @@ wsdd_resolver_message_dispatch (wsdd_resolver *resolver, wsdd_message *msg)
     }
 
     /* Write trace messages */
-    log_trace(wsdd_log, "%s message received:",
-        wsdd_message_action_name(msg));
+    log_trace(wsdd_log, "%s message received from %s:",
+        wsdd_message_action_name(msg), from);
     log_trace(wsdd_log, "  address:    %s", msg->address);
     log_trace(wsdd_log, "  is_scanner: %s", msg->is_scanner ? "yes" : "no");
     log_trace(wsdd_log, "  is_printer: %s", msg->is_printer ? "yes" : "no");
@@ -785,7 +822,7 @@ wsdd_resolver_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
     /* Parse and dispatch the message */
     msg = wsdd_message_parse(wsdd_buf, rc);
     if (msg != NULL) {
-        wsdd_resolver_message_dispatch(resolver, msg);
+        wsdd_resolver_message_dispatch(resolver, msg, "UDP");
     }
 }
 
@@ -1024,19 +1061,131 @@ wsdd_resolver_free (wsdd_resolver *resolver)
     g_free(resolver);
 }
 
-/******************** WS-Discovery stable endpoints ********************/
-/* Query WS-Discovery stable endpoint
+/******************** WS-Discovery directed probes ********************/
+/* WS-Discovery send directed probe callback
+ */
+static void
+wsdd_send_directed_probe_callback (void *ptr, http_query *q)
+{
+    error                 err;
+    const struct sockaddr *sockaddr = http_uri_addr(http_query_uri(q));
+    int                   ifindex;
+    http_data             *data;
+    wsdd_resolver         *resolver;
+    wsdd_message          *msg;
+
+    (void) ptr;
+
+    /* Drop query address from list of pending probes */
+    if (sockaddr != NULL) {
+        ip_addrset_del(wsdd_addrs_probing, ip_addr_from_sockaddr(sockaddr));
+    }
+
+    err = http_query_error(q);
+    if (err != NULL) {
+        log_debug(wsdd_log, "directed probe: HTTP %s", ESTRING(err));
+        return;
+    }
+
+    /* Find appropriate resolver */
+    ifindex = (int) http_query_get_uintptr(q);
+    resolver = wsdd_netif_resolver_by_ifindex(ifindex);
+    if (resolver == NULL) {
+        log_debug(wsdd_log,
+            "directed probe: resolver not found for interface %d", ifindex);
+        return;
+    }
+
+    /* Parse and dispatch the message */
+    data = http_query_get_response_data(q);
+    msg = wsdd_message_parse(data->bytes, data->size);
+    if (msg != NULL) {
+        wsdd_resolver_message_dispatch(resolver, msg, "HTTP");
+    }
+}
+
+/* Send WD-Discovery directed probe
+ *
+ * WS-Discovery defines two mechanisms for sending Probes:
+ *   * probes can be send using UDP milticasts
+ *   * probes can be send directly via HTTP POST to the following URL:
+ *     http://addr//StableWSDiscoveryEndpoint/schemas-xmlsoap-org_ws_2005_04_discovery
+ *
+ * The second mechanism is called "Directed discovery Probe message", and
+ * information about it is exceptionally hard to discover.
+ *
+ * BTW, this is why this protocol is called Web Services Discovery: you
+ * need to browse the entire web to discover a bit of useful information
+ *
+ * This function is called from DNS-SD module when new device is found,
+ * and sends directed probe to its HTTP stable discovery endpoint
+ *
+ * To avoid device overload with discovery requests, this function
+ * sends only one request a time per address and doesn't send
+ * requests to already known devices.
  */
 void
-wsdd_probe_stable_endpoint (int ifindex, int af, const void *addr)
+wsdd_send_directed_probe (int ifindex, int af, const void *addr)
 {
     char          ifname[IF_NAMESIZE] = "?";
     ip_straddr    straddr = ip_straddr_from_ip(af, addr);
+    char          uri_buf[1024];
+    http_uri      *uri;
+    uuid          u;
+    http_query    *q;
+    ip_addr       ipa = ip_addr_make(ifindex, af, addr);
 
     /* Write log messages */
     if_indextoname(ifindex, ifname);
-    log_debug(wsdd_log, "probing stable endpoint: if=%s, addr=%s",
+    log_debug(wsdd_log, "directed probe: trying if=%s, addr=%s",
         ifname, straddr.text);
+
+    /* Skip loopback address, we will not find anything interesting there */
+    if (ip_is_loopback(af, addr)) {
+        log_debug(wsdd_log, "directed probe: skipping loopback address");
+        return;
+    }
+
+    /* Already probing? */
+    if (ip_addrset_lookup(wsdd_addrs_probing, ipa)) {
+        log_debug(wsdd_log, "directed probe: already in progress, skipping");
+        return;
+    }
+
+    /* Already contacted? */
+    if (wsdd_finding_by_address(ipa) != NULL) {
+        log_debug(wsdd_log, "directed probe: device already contacted, skipping");
+        return;
+    }
+
+    ip_addrset_add_unsafe(wsdd_addrs_probing, ipa);
+
+    /* Build request URI */
+    if (af == AF_INET) {
+        sprintf(uri_buf, "http://%s", straddr.text);
+    } else if (!ip_is_linklocal(af, addr)) {
+        sprintf(uri_buf, "http://[%s]", straddr.text);
+    } else {
+        /* Percent character in the IPv6 address literal
+         * needs to be properly escaped, so it becomes %25
+         * See RFC6874 for details
+         */
+        sprintf(uri_buf, "http://[%s%%25%d]", straddr.text, ifindex);
+    }
+
+    strcat(uri_buf, WSDD_STABLE_ENDPOINT);
+    uri = http_uri_new(uri_buf, true);
+    log_assert(wsdd_log, uri != NULL);
+
+    /* Build probe request */
+    u = uuid_rand();
+    sprintf(wsdd_buf, wsdd_probe_template, u.text);
+
+    /* Send prove request */
+    q = http_query_new(wsdd_http_client, uri,
+        "POST", g_strdup(wsdd_buf), "application/soap+xml; charset=utf-8");
+    http_query_set_uintptr(q, ifindex);
+    http_query_submit(q, wsdd_send_directed_probe_callback);
 }
 
 /******************** Management of multicast sockets ********************/
@@ -1202,7 +1351,8 @@ wsdd_netif_resolver_by_ifindex (int ifindex)
 /* Update network interfaces addresses
  */
 static void
-wsdd_netif_update_addresses (bool initscan) {
+wsdd_netif_update_addresses (bool initscan)
+{
     netif_addr *addr_list = netif_addr_list_get();
     netif_addr *addr;
     netif_diff diff = netif_diff_compute(wsdd_netif_addr_list, addr_list);
@@ -1248,6 +1398,10 @@ static void
 wsdd_start_stop_callback (bool start)
 {
     if (start) {
+        /* Setup WS-Discovery stable endpoint handling */
+        wsdd_addrs_probing = ip_addrset_new();
+        wsdd_http_client = http_client_new(wsdd_log, NULL);
+
         /* Setup WSDD multicast reception */
         if (wsdd_mcsock_ipv4 >= 0) {
             wsdd_fdpoll_ipv4 = eloop_fdpoll_new(wsdd_mcsock_ipv4,
@@ -1270,6 +1424,14 @@ wsdd_start_stop_callback (bool start)
         wsdd_netif_update_addresses(true);
         wsdd_initscan_count_dec();
     } else {
+        /* Cleanup WS-Discovery stable endpoint handling */
+        ip_addrset_free(wsdd_addrs_probing);
+        http_client_cancel(wsdd_http_client);
+        http_client_free(wsdd_http_client);
+
+        wsdd_addrs_probing = NULL;
+        wsdd_http_client = NULL;
+
         /* Stop multicast reception */
         if (wsdd_fdpoll_ipv4 != NULL) {
             eloop_fdpoll_free(wsdd_fdpoll_ipv4);
