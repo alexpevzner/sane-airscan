@@ -27,6 +27,16 @@ ip_straddr_from_ip (int af, const void *addr)
 ip_straddr
 ip_straddr_from_sockaddr(const struct sockaddr *addr)
 {
+     return ip_straddr_from_sockaddr_dport(addr, -1);
+}
+
+/* Format ip_straddr from struct sockaddr.
+ * Port will not be appended, if it matches provided default port
+ * Both AF_INET and AF_INET6 are supported
+ */
+ip_straddr
+ip_straddr_from_sockaddr_dport(const struct sockaddr *addr, int dport)
+{
     ip_straddr straddr = {""};
     struct sockaddr_in  *addr_in = (struct sockaddr_in*) addr;
     struct sockaddr_in6 *addr_in6 = (struct sockaddr_in6*) addr;
@@ -47,7 +57,10 @@ ip_straddr_from_sockaddr(const struct sockaddr *addr)
         break;
     }
 
-    sprintf(straddr.text + strlen(straddr.text), ":%d", ntohs(port));
+    port = htons(port);
+    if (port != dport) {
+        sprintf(straddr.text + strlen(straddr.text), ":%d", port);
+    }
 
     return straddr;
 }

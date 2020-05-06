@@ -506,6 +506,13 @@ ip_straddr_from_ip (int af, const void *addr);
 ip_straddr
 ip_straddr_from_sockaddr(const struct sockaddr *addr);
 
+/* Format ip_straddr from struct sockaddr.
+ * Port will not be appended, if it matches provided default port
+ * Both AF_INET and AF_INET6 are supported
+ */
+ip_straddr
+ip_straddr_from_sockaddr_dport(const struct sockaddr *addr, int dport);
+
 /* Check if address is link-local
  * af must be AF_INET or AF_INET6
  */
@@ -1903,7 +1910,7 @@ mdns_cleanup (void);
 /* Query WS-Discovery stable endpoint
  */
 void
-wsdd_probe_stable_endpoint (const ip_addr *addr);
+wsdd_probe_stable_endpoint (int ifindex, int af, const void *addr);
 
 /* Initialize WS-Discovery
  */

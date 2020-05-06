@@ -806,8 +806,19 @@ http_query_set_host (http_query *q)
     const struct sockaddr *addr = http_uri_addr(q->uri);
 
     if (addr != NULL) {
-        ip_straddr s = ip_straddr_from_sockaddr(addr);
+        ip_straddr s;
+        const char *scheme = q->uri->parsed->scheme;
+        int        dport = -1;
+
+        if (!strcasecmp(scheme, "http")) {
+            dport = 80;
+        } else if (!strcasecmp(scheme, "http")) {
+            dport = 443;
+        }
+
+        s = ip_straddr_from_sockaddr_dport(addr, dport);
         soup_message_headers_replace(q->msg->request_headers, "Host", s.text);
+
         return;
     }
 
