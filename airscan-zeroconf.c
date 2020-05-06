@@ -31,11 +31,7 @@
 
 /* Initial size of zeroconf_device::ifaces
  */
-#define ZEROCONF_DEVICE_IFACES_INITIAL_CAP      4
-
-/* Initial capacity of zeroconf_device::addrs
- */
-#define ZEROCONF_DEVICE_ADDRS_INITIAL_CAP       4
+#define ZEROCONF_DEVICE_IFACES_INITIAL_LEN      4
 
 /******************** Local Types *********************/
 /* zeroconf_device represents a single device
@@ -52,9 +48,6 @@ struct zeroconf_device {
     int          *ifaces;    /* Set of interfaces the device is visible from */
     size_t       ifaces_len; /* Length of ifaces array */
     size_t       ifaces_cap; /* Capacity of ifaces array */
-    ip_addr      *addrs;     /* Device IP addresses */
-    size_t       addrs_len;  /* Length of addrs array */
-    size_t       addrs_cap;  /* Capacity of addrs array */
 };
 
 /* Global variables
@@ -135,11 +128,8 @@ zeroconf_device_add (zeroconf_finding *finding)
 
     ll_init(&device->findings);
 
-    device->ifaces_cap = ZEROCONF_DEVICE_IFACES_INITIAL_CAP;
+    device->ifaces_cap = ZEROCONF_DEVICE_IFACES_INITIAL_LEN;
     device->ifaces = g_malloc(device->ifaces_cap * sizeof(*device->ifaces));
-
-    device->addrs_cap = ZEROCONF_DEVICE_ADDRS_INITIAL_CAP;
-    device->addrs = g_malloc(device->addrs_cap * sizeof(*device->addrs));
 
     ll_push_end(&zeroconf_device_list, &device->node_list);
     return device;
@@ -150,7 +140,6 @@ zeroconf_device_add (zeroconf_finding *finding)
 static void
 zeroconf_device_del (zeroconf_device *device)
 {
-    g_free(device->addrs);
     g_free(device->ifaces);
     ll_del(&device->node_list);
     g_free((char*) device->name);
@@ -226,7 +215,7 @@ zeroconf_device_ifaces_lookup (zeroconf_device *device, int ifindex)
 {
     size_t i;
 
-    for (i = 0; i < device->ifaces_len; i ++) {
+    for (i = 0; i < device->ifaces_len; i ++ ) {
         if (ifindex == device->ifaces[i]) {
             return true;
         }
@@ -251,62 +240,6 @@ zeroconf_device_ifaces_add (zeroconf_device *device, int ifindex)
     }
 }
 
-/* Check if device has particular IP address
- */
-static bool
-zeroconf_device_addrs_lookup (const zeroconf_device *device,
-    const ip_addr *addr)
-{
-    size_t i;
-
-    for (i = 0; i < device->addrs_len; i ++) {
-        if (ip_addr_equal(&device->addrs[i], addr)) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-/* Add device address.
- *
- * Returns newly added address, if address was actually added, NULL otherwise
- */
-static const ip_addr*
-zeroconf_device_addrs_add (zeroconf_device *device, const ip_addr *addr)
-{
-    if (zeroconf_device_addrs_lookup(device, addr)) {
-        return NULL;
-    }
-
-    if (device->addrs_len == device->addrs_cap) {
-        device->addrs_cap *= 2;
-        device->addrs = g_realloc(device->addrs,
-            device->addrs_cap * sizeof(*device->addrs));
-    }
-
-    device->addrs[device->addrs_len] = *addr;
-    addr = &device->addrs[device->addrs_len];
-    device->addrs_len ++;
-
-    return addr;
-}
-
-/* Add device address, using address from zeroconf_endpoint
- */
-static const ip_addr*
-zeroconf_device_addrs_add_endpoint (zeroconf_device *device,
-    const zeroconf_endpoint *endpoint)
-{
-    const struct sockaddr *sockaddr = http_uri_addr(endpoint->uri);
-    if (sockaddr != NULL) {
-        ip_addr addr = ip_addr_from_sockaddr(sockaddr);
-        return zeroconf_device_addrs_add(device, &addr);
-    }
-
-    return NULL;
-}
-
 /* Rebuild device->ifaces, device->protocols and device->methods
  */
 static void
@@ -317,26 +250,19 @@ zeroconf_device_rebuild_sets (zeroconf_device *device)
     device->protocols = 0;
     device->methods = 0;
     device->ifaces_len = 0;
-    device->addrs_len = 0;
 
     for (LL_FOR_EACH(node, &device->findings)) {
-        zeroconf_finding  *finding;
-        ID_PROTO          proto;
-        zeroconf_endpoint *endpoint;
+        zeroconf_finding *finding;
+        ID_PROTO         proto;
 
         finding = OUTER_STRUCT(node, zeroconf_finding, list_node);
         proto = zeroconf_method_to_proto(finding->method);
 
-        zeroconf_device_ifaces_add(device, finding->ifindex);
+        zeroconf_device_ifaces_add(device, finding->ifindex );
         if (proto != ID_PROTO_UNKNOWN) {
             device->protocols |= 1 << proto;
         }
         device->methods |= 1 << finding->method;
-
-        for (endpoint = finding->endpoints; endpoint != NULL;
-             endpoint = endpoint->next) {
-            zeroconf_device_addrs_add_endpoint(device, endpoint);
-        }
     }
 }
 
@@ -354,25 +280,11 @@ zeroconf_device_add_finding (zeroconf_device *device,
     zeroconf_device_ifaces_add(device, finding->ifindex);
 
     if (finding->endpoints != NULL) {
-        ID_PROTO          proto = zeroconf_method_to_proto(finding->method);
-        zeroconf_endpoint *endpoint;
-        bool              wsdd_seen;
-        const ip_addr     *addr;
-
+        ID_PROTO proto = zeroconf_method_to_proto(finding->method);
         if (proto != ID_PROTO_UNKNOWN) {
             device->protocols |= 1 << proto;
         }
         device->methods |= 1 << finding->method;
-
-        wsdd_seen = (device->methods & (1 << ZEROCONF_WSD)) != 0;
-
-        for (endpoint = finding->endpoints; endpoint != NULL;
-             endpoint = endpoint->next) {
-            addr = zeroconf_device_addrs_add_endpoint(device, endpoint);
-            if (addr != NULL && !wsdd_seen) {
-                wsdd_probe_stable_endpoint(addr);
-            }
-        }
     }
 }
 
