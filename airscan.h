@@ -553,7 +553,7 @@ ip_addr_make (int ifindex, int af, const void *addr)
 
     switch (ip_addr.af) {
     case AF_INET:
-        memcpy(&ip_addr.ip, addr, 4);
+        memcpy(&ip_addr.ip.v4, addr, 4);
         break;
 
     case AF_INET6:
