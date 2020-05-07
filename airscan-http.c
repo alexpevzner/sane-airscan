@@ -697,6 +697,22 @@ http_client_num_pending (const http_client *client)
     return client->pending->len;
 }
 
+/* Check if query is pending on a client
+ */
+static bool
+http_client_is_pending (const http_client *client, const http_query *q)
+{
+    unsigned int i;
+
+    for (i = 0; i < client->pending->len; i ++) {
+        if (client->pending->pdata[i] == q) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 /******************** HTTP request handling ********************/
 /* http_query_cached represents a cached data, computed
  * on demand and associated with the http_query. This cache
@@ -770,6 +786,7 @@ http_query_callback (SoupSession *session, SoupMessage *msg, gpointer userdata)
     if (msg->status_code != SOUP_STATUS_CANCELLED) {
         error  err = http_query_transport_error(q);
 
+        log_assert(client->log, http_client_is_pending(client, q));
         g_ptr_array_remove(client->pending, q);
 
         if (err != NULL) {
@@ -925,7 +942,7 @@ http_query_cancel (http_query *q)
 {
     http_client *client = q->client;
 
-    log_assert(client->log, g_ptr_array_find(client->pending, q, NULL));
+    log_assert(client->log, http_client_is_pending(client, q));
     g_ptr_array_remove(client->pending, q);
 
     /* Note, if message processing already finished,
