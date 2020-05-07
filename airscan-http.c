@@ -770,7 +770,6 @@ http_query_callback (SoupSession *session, SoupMessage *msg, gpointer userdata)
     if (msg->status_code != SOUP_STATUS_CANCELLED) {
         error  err = http_query_transport_error(q);
 
-        log_assert(client->log, g_ptr_array_find(client->pending, q, NULL));
         g_ptr_array_remove(client->pending, q);
 
         if (err != NULL) {
