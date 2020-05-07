@@ -22,6 +22,7 @@ PKG_CONFIG = /usr/bin/pkg-config
 
 # These variables are not intended to be user-settable
 OBJDIR  = objs/
+BINDIR = /usr/bin
 CONFDIR = /etc/sane.d
 LIBDIR := $(shell $(PKG_CONFIG) --variable=libdir sane-backends)
 BACKEND = libsane-airscan.so.1
@@ -83,8 +84,10 @@ $(LIBAIRSCAN): $(OBJ) Makefile
 	ar cru $(LIBAIRSCAN) $(OBJ)
 
 install: all
+	mkdir -p $(DESTDIR)$(PREFIX)$(BINDIR)
 	mkdir -p $(DESTDIR)$(PREFIX)$(CONFDIR)
 	mkdir -p $(DESTDIR)$(PREFIX)$(CONFDIR)/dll.d
+	install -s -D -t $(DESTDIR)$(PREFIX)$(BINDIR) $(DISCOVER)
 	cp -n airscan.conf $(DESTDIR)$(PREFIX)$(CONFDIR)
 	cp -n dll.conf $(DESTDIR)$(PREFIX)$(CONFDIR)/dll.d/airscan
 	install -s -D -t $(DESTDIR)$(PREFIX)$(LIBDIR)/sane $(BACKEND)
