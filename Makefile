@@ -78,7 +78,7 @@ $(BACKEND): $(OBJDIR)airscan.o $(LIBAIRSCAN) airscan.sym
 	$(CC) -o $(BACKEND) -shared $(OBJDIR)/airscan.o $(LIBAIRSCAN) $(airscan_LDFLAGS)
 
 $(DISCOVER): $(OBJDIR)discover.o $(LIBAIRSCAN)
-	 $(CC) -o $(DISCOVER) discover.c $(CPPFLAGS) $(airscan_CFLAGS) $(LIBAIRSCAN) $(airscan_LIBS)
+	 $(CC) -o $(DISCOVER) discover.c $(CPPFLAGS) $(airscan_CFLAGS) $(LIBAIRSCAN) $(airscan_LIBS) -fPIE
 
 $(LIBAIRSCAN): $(OBJ) Makefile
 	ar cru $(LIBAIRSCAN) $(OBJ)
