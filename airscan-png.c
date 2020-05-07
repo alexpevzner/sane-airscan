@@ -21,7 +21,7 @@ typedef struct {
     const uint8_t         *image_data;    /* Remaining image data */
     size_t                image_size;     /* Remaining image data */
     char                  error[1024];    /* Error message buffer */
-    uint32_t              width, height;  /* Image size in pixels */
+    png_uint_32           width, height;  /* Image size in pixels */
     int                   bit_depth;      /* 1/2/4/8/16 */
     int                   color_type;     /* PNG_COLOR_TYPE_XXX */
     int                   interlace_type; /* PNG_INTERLACE_XXX */
