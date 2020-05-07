@@ -11,6 +11,7 @@
 #include <arpa/inet.h>
 #include <net/if.h>
 
+#include <stdlib.h>
 #include <string.h>
 
 /******************** Constants *********************/
