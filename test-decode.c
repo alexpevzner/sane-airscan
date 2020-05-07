@@ -121,7 +121,7 @@ save_close (save_file *save)
 /* Write a row of image data
  */
 void
-save_write (save_file *save, const void *data)
+save_write (save_file *save, void *data)
 {
     png_write_row(save->png_ptr, data);
 }
