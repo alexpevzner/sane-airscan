@@ -8,6 +8,8 @@
 
 #include "airscan.h"
 
+#pragma GCC diagnostic ignored "-Wunused-result"
+
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
