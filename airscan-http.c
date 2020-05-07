@@ -828,7 +828,7 @@ http_query_set_host (http_query *q)
 
         if (!strcasecmp(scheme, "http")) {
             dport = 80;
-        } else if (!strcasecmp(scheme, "http")) {
+        } else if (!strcasecmp(scheme, "https")) {
             dport = 443;
         }
 
