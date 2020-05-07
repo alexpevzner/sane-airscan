@@ -381,6 +381,22 @@ devid_free (unsigned int id);
 void
 devid_init (void);
 
+/******************** Random bytes ********************/
+/* Get N random bytes
+ */
+void
+rand_bytes (void *buf, size_t n);
+
+/* Initialize random bytes generator
+ */
+SANE_Status
+rand_init (void);
+
+/* Cleanup random bytes generator
+ */
+void
+rand_cleanup (void);
+
 /******************** UUID utilities ********************/
 /* Type uuid represents a random UUID string.
  *

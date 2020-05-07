@@ -11,7 +11,6 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/random.h>
 
 #pragma GCC diagnostic ignored "-Wunused-result"
 
@@ -45,7 +44,7 @@ uuid_rand (void)
 {
     uint8_t rnd[16];
 
-    getrandom(rnd, sizeof(rnd), 0);
+    rand_bytes(rnd, sizeof(rnd));
     return uuid_format(rnd);
 }
 

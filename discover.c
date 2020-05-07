@@ -65,6 +65,10 @@ airscan_init (void)
     trace_init();
     devid_init();
     eloop_init();
+    status = rand_init();
+    if (status != SANE_STATUS_GOOD) {
+        die("rand-init: %s", sane_strstatus(status));
+    }
     http_init();
     zeroconf_init();
 

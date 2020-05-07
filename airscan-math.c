@@ -8,8 +8,6 @@
 
 #include "airscan.h"
 
-#include <sys/random.h>
-
 #pragma GCC diagnostic ignored "-Wunused-result"
 
 /* Find greatest common divisor of two positive integers
@@ -172,7 +170,7 @@ uint32_t
 math_rand_u32 (void)
 {
     uint32_t r;
-    getrandom(&r, sizeof(r), 0);
+    rand_bytes(&r, sizeof(r));
     return r;
 }
 
