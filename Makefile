@@ -28,8 +28,10 @@ LIBDIR := $(shell $(PKG_CONFIG) --variable=libdir sane-backends)
 BACKEND = libsane-airscan.so.1
 DISCOVER = airscan-discover
 LIBAIRSCAN = $(OBJDIR)/libairscan.a
-MANPAGE = sane-airscan.5
-MANTITLE = "AirScan (eSCL) SANE backend"
+MAN_DISCOVER = $(DISCOVER).1
+MAN_DISCOVER_TITLE = "SANE Scanner Access Now Easy"
+MAN_BACKEND = sane-airscan.5
+MAN_BACKEND_TITLE = "AirScan (eSCL) and WSD SANE backend"
 DEPENDS	:= avahi-client avahi-glib libjpeg libsoup-2.4 libxml-2.0
 DEPENDS += libpng
 
@@ -67,7 +69,7 @@ $(OBJDIR)%.o: %.c Makefile airscan.h
 	mkdir -p $(OBJDIR)
 	$(CC) -c -o $@ $< $(CPPFLAGS) $(airscan_CFLAGS)
 
-.PHONY: all clean install
+.PHONY: all clean install man
 
 all:	tags $(BACKEND) $(DISCOVER) test test-decode
 
@@ -92,15 +94,22 @@ install: all
 	cp -n dll.conf $(DESTDIR)$(PREFIX)$(CONFDIR)/dll.d/airscan
 	install -s -D -t $(DESTDIR)$(PREFIX)$(LIBDIR)/sane $(BACKEND)
 	mkdir -p $(DESTDIR)$(PREFIX)/$(MANDIR)/man5
-	install -m 644 -D -t $(DESTDIR)$(PREFIX)$(MANDIR)/man5 $(MANPAGE)
-	[ "$(COMPRESS)" = "" ] || $(COMPRESS) -f $(DESTDIR)$(PREFIX)$(MANDIR)/man5/$(MANPAGE)
+	install -m 644 -D -t $(DESTDIR)$(PREFIX)$(MANDIR)/man1 $(MAN_DISCOVER)
+	install -m 644 -D -t $(DESTDIR)$(PREFIX)$(MANDIR)/man5 $(MAN_BACKEND)
+	[ "$(COMPRESS)" = "" ] || $(COMPRESS) -f $(DESTDIR)$(PREFIX)$(MANDIR)/man1/$(MAN_DISCOVER)
+	[ "$(COMPRESS)" = "" ] || $(COMPRESS) -f $(DESTDIR)$(PREFIX)$(MANDIR)/man5/$(MAN_BACKEND)
 
 clean:
 	rm -f test $(BACKEND) tags
 	rm -rf $(OBJDIR)
 
-$(MANPAGE): $(MANPAGE).md
-	ronn --roff --manual=$(MANTITLE) $(MANPAGE).md
+man: $(MAN_DISCOVER) $(MAN_BACKEND)
+
+$(MAN_DISCOVER): $(MAN_DISCOVER).md
+	ronn --roff --manual=$(MAN_DISCOVER_TITLE) $(MAN_DISCOVER).md
+
+$(MAN_BACKEND): $(MAN_BACKEND).md
+	ronn --roff --manual=$(MAN_BACKEND_TITLE) $(MAN_BACKEND).md
 
 test:	$(BACKEND) test.c
 	$(CC) -o test test.c $(BACKEND) -Wl,-rpath . ${airscan_CFLAGS}

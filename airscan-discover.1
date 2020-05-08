@@ -1,0 +1,49 @@
+.\" generated with Ronn/v0.7.3
+.\" http://github.com/rtomayko/ronn/tree/0.7.3
+.
+.TH "AIRSCAN\-DISCOVER" "1" "May 2020" "" "SANE Scanner Access Now Easy"
+.
+.SH "NAME"
+\fBairscan\-discover\fR \- Discover sane\-airscan compatible scanners
+.
+.SH "SYNOPSIS"
+\fBairscan\-discover [\-h] [\-d] [\-t]\fR
+.
+.SH "DESCRIPTION"
+\fBairscan\-discover\fR is a command\-line tool to find eSCL and WSD scanners on a local network
+.
+.P
+It uses Avahi to discover DNS\-SD devices and its own implementation of WS\-Discovery to discover WSD devices\.
+.
+.P
+On success, it outputs a fragment of sane\-airscan configuration file, that can be directly added to \fB/etc/sane\.d/airscan\.conf\fR
+.
+.SH "OPTIONS"
+.
+.TP
+\fB\-h\fR
+Print help screen
+.
+.TP
+\fB\-d\fR
+Print debug messages to console
+.
+.TP
+\fB\-t\fR
+Write a very detailed protocol trace to \fBairscan\-discover\-zeroconf\.log\fR and \fBairscan\-discover\-zeroconf\.tar\fR
+.
+.SH "FILES"
+.
+.TP
+\fBairscan\-discover\-zeroconf\.log\fR
+Protocol trace
+.
+.TP
+\fBairscan\-discover\-zeroconf\.tar\fR
+Non\-textual messages, if any, saved here\. Textual (i\.e\., XML) messages included directly into the \.log file
+.
+.SH "SEE ALSO"
+sane(7), sane\-airscan(5)
+.
+.SH "AUTHOR"
+Alexander Pevzner <pzz@apevzner\.com>

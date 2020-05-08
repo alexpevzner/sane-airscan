@@ -123,7 +123,7 @@ project page: **https://github.com/alexpevzner/sane-airscan**
 
 ## SEE ALSO
 
-sane(7), scanimage(1), xscane(1)
+sane(7), scanimage(1), xscane(1), airscan-discover(1)
 
 ## AUTHOR
 Alexander Pevzner <pzz@apevzner.com\>
