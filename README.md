@@ -155,29 +155,41 @@ make install
 ```
 ### Contribution
 
-If you want to contribute to this project, consider using the following
-branch:
+All contributions are welcome and greatly appreciated, assuming the following:
 
-https://github.com/alexpevzner/sane-airscan-wsd
+1. Feature that you propose has a general interest for many people
+2. Your code is well-formatted and has a good quality
 
-All new features should go there. Here I can accept only bug fixing
-and packaging changes.
+Please note, this project has two branches:
 
-Changes from the sane-airscan-wsd branch will be periodically merged into
-the sane-airscan. Next merge expected to happen before middle of April 2020.
+* stable branch: https://github.com/alexpevzner/sane-airscan
+* development branch: https://github.com/alexpevzner/sane-airscan-wsd
 
-### Code Quality
-I greatly appreciate a good static code analysis tools, as they help to maintain
-a high code quality.
+Stable branch accepts mostly bug fixes and minor features with small
+change in code base. Major features should be contributed into the
+development branch.
 
-This project compiles without any warning by gcc and clang compilers.
+### Paid consulting
 
-Recently it was checked by [PVS-Studio](https://www.viva64.com/en/pvs-studio/) static code
-analyser, and it found a couple of bugs (that were immediately fixed, of course), so I can
-recommend this tool. Though this tool is commercial, they offer a free subscription for
-open source projects.
+If your business depend on my project, and you require any specific feature not
+currently implemented here, you may consider contacting me on a paid basis.
+
+### PVS-Studio
+
+[PVS-Studio](https://www.viva64.com/en/pvs-studio/) is a static code analyser,
+supporting C, C++, C# and Java.
+
+Once upon a time I was chatting with its authors in Russian software development
+forum and told them, that if their tool will find something interesting in my
+code, I will put a reference to their project here.
+
+Their tool actually found a couple real bugs, so I had to fulfill my promise :-)
+
+Now I regularly test this code with PVS-Studio, and it really helps. Their
+product is not free, but they offer free licenses for open source projects.
 
 ### Reporting bugs
+
 To report a bug, please [create a new GitHub issue](https://github.com/alexpevzner/sane-airscan/issues/new)
 
 To create a helpful bug report, please perform the following steps:
