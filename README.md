@@ -4,7 +4,7 @@ This project is a "development/unstable" branch of the [sane-airscan](https://gi
 project, forked for convenience into the separate repository. New major features
 are developed here, and then merged back to sane-airscan.  It is not intended for common use.
 
-# sane-airscan -- Linux support for Apple AirScan (eSCL) and Miscosoft WSD document scanners
+# sane-airscan -- SANE backend for AirScan (eSCL) and WSD document scanners
 
 Similar to how most modern network printers support "driverless" printing,
 using the universal vendor-neutral printing protocol, many modern network
@@ -43,53 +43,53 @@ Any **eSCL** and **WSD** apable scanner expected to work. Here is a list of devi
 that were actually tested. If you have success with a scanner not included
 into this list, please let me know.
 
-#### Scanners, tested in eSCL mode
+Legend:
 
-* Brother MFC-L2750DW
-* Canon D570
-* Canon ImageCLASS MF743cdw <sup>[1](#noteMF743cdw)</sup>
-* Canon Lide 400
-* Canon TR4529 (PIXMA TR4500 Series)
-* Canon TS 3100
-* Canon TS 3300
-* Canon TS 6151
-* Canon TS 6250
-* EPSON WF-7710
-* EPSON XP-7100 Series
-* HP Color Laserjet MFP m178-m181
-* HP Color LaserJet MFP M281fdw
-* HP DeskJet 2540
-* HP ENVY 4500
-* HP ENVY 5540
-* HP LaserJet MFP M227sdn
-* HP LaserJet MFP M426dw
-* HP LaserJet MFP M630
-* HP LaserJet Pro M28w
-* HP LaserJet Pro MFP 148fdw
-* HP LaserJet Pro MFP M428dw
-* HP Officejet 4630
-* HP Officejet Pro 6970
-* HP OfficeJet Pro 6978
-* HP OfficeJet Pro 8730
-* HP OfficeJet Pro 9010 series
-* Kyocera ECOSYS M2040dn
-* Xerox VersaLink B405
-* TODO
+* Yes - device works perfectly
+* No - protocol not supported by device
+* Space - author has no information
+
+| Device                             | eSCL mode                 | WSD mode                  |
+| ---------------------------------- | :-----------------------: | :-----------------------: |
+| Brother MFC-L2750DW                | Yes                       | Yes                       |
+| Canon D570                         | Yes                       |                           |
+| Canon ImageCLASS MF743cdw          | Yes<sup>[1](#note1)</sup> |                           |
+| Canon Lide 400                     | Yes                       |                           |
+| Canon TR4529 (PIXMA TR4500 Series) | Yes                       |                           |
+| Canon TS 3100                      | Yes                       |                           |
+| Canon TS 3300                      | Yes                       |                           |
+| Canon TS 6151                      | Yes                       |                           |
+| Canon TS 6250                      | Yes                       |                           |
+| EPSON WF-7710                      | Yes                       |                           |
+| EPSON XP-7100 Series               | Yes                       |                           |
+| HP Color Laserjet MFP m178-m181    | Yes                       |                           |
+| HP Color LaserJet MFP M281fdw      | Yes                       |                           |
+| HP DeskJet 2540                    | Yes                       |                           |
+| HP ENVY 4500                       | Yes                       |                           |
+| HP ENVY 5540                       | Yes                       |                           |
+| HP LaserJet MFP M227sdn            | Yes                       |                           |
+| HP LaserJet MFP M426dw             | Yes                       |                           |
+| HP LaserJet MFP M630               | Yes                       |                           |
+| HP LaserJet Pro M28w               | Yes                       |                           |
+| HP LaserJet Pro MFP 148fdw         | Yes                       |                           |
+| HP LaserJet Pro MFP M125 series    | No                        | Yes                       |
+| HP LaserJet Pro MFP M428dw         | Yes                       |                           |
+| HP LaserJet Pro MFP M521 series    | No                        | Yes                       |
+| HP Officejet 4630                  | Yes                       |                           |
+| HP Officejet Pro 6970              | Yes                       |                           |
+| HP OfficeJet Pro 6978              | Yes                       |                           |
+| HP OfficeJet Pro 8730              | Yes                       | Yes                       |
+| HP OfficeJet Pro 9010 series       | Yes                       |                           |
+| Kyocera ECOSYS M2040dn             | Yes                       | Yes<sup>[2](#note2)</sup> |
+| Xerox VersaLink B405               | Yes                       |                           |
+| TODO                               |                           |                           |
 
 ---
-<a name="noteMF743cdw">[1]</a>: this device requires manual activation of AirPrint
+<a name="note1">[1]</a>: this device requires manual activation of AirPrint
 scanning on its web console: Home->Menu->Preferences->Network->TCP/IP
 Settings->Network Link Scan Settings->On.
 
-#### Scanners, tested in WSD mode
-
-* Brother MFC-L2750DW
-* HP LaserJet Pro MFP M521dn
-* HP OfficeJet Pro 8730
-* Kyocera ECOSYS M2040dn <sup>[2](#noteM2040dn)</sup>
-
----
-<a name="noteM2040dn">[2]</a>: this device requires manual action on its front
+<a name="note2">[2]</a>: this device requires manual action on its front
 panel to initiate WSD scan: Send->WSD Scan->From Computer
 
 ### Installation from pre-build binaries
