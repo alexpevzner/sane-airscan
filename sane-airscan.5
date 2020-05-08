@@ -4,10 +4,21 @@
 .TH "SANE\-AIRSCAN" "5" "May 2020" "" "AirScan (eSCL) and WSD SANE backend"
 .
 .SH "NAME"
-\fBsane\-airscan\fR \- SANE backend for AirScan (eSCL) scanners and MFP
+\fBsane\-airscan\fR \- SANE backend for AirScan (eSCL) and WSD scanners and MFP
 .
 .SH "DESCRIPTION"
-The \fBsane\-airscan\fR implements a SANE backend that provides access network scanners and MFP using eSCL protocol, also known as AirScan or AirPrint scan\.
+The \fBsane\-airscan\fR is the universal backend for "driverless" document scanning\. Currently it supports two protocols:
+.
+.IP "" 4
+.
+.nf
+
+1\. eSCL, also known as AirScan or AirPrint scan
+2\. WSD, also known as WS\-Scan
+.
+.fi
+.
+.IP "" 0
 .
 .SH "CONFIGURATION"
 The sane\-airscan loads its configuration files from the following places:
@@ -46,7 +57,20 @@ Leading and trailing spaces of variable name and value are striped\. If you want
 If scanner and computer are connected to the same LAN segment, everything expected to "just work" out of box, without any need of manual configuration\.
 .
 .P
-Unfortunately, automatic configuration doesn\'t work if there is an IP router between computer and scanner\. At this case scanner can be added manually\.
+However, in some cases manual configuration can be useful\. For example:
+.
+.IP "" 4
+.
+.nf
+
+1\. If computer and scanner are connected via IP router
+2\. There are a lot of devices on a corporate network, but
+   only few of them are interesting
+3\. Automatic discovery works unreliable
+.
+.fi
+.
+.IP "" 0
 .
 .P
 To manually configure a device, add the following section to the configuration file:
@@ -56,7 +80,8 @@ To manually configure a device, add the following section to the configuration f
 .nf
 
 [devices]
-"Kyocera MFP Scanner" = http://192\.168\.1\.102:9095/eSCL
+"Kyocera eSCL" = http://192\.168\.1\.102:9095/eSCL, eSCL
+"Kyocera WSD" = http://192\.168\.1\.102:5358/WSDScanner, WSD
 "Device I don\'t want to see" = disable
 .
 .fi
@@ -64,54 +89,13 @@ To manually configure a device, add the following section to the configuration f
 .IP "" 0
 .
 .P
-The \fB[devices]\fR section contains all manually configured devices, one line per device, and each line contains a device name on a left side of equation and device URL on a rights side\. You may also disable particular device by using the \fBdisable\fR keyword instead of URL\.
+The \fB[devices]\fR section contains all manually configured devices, one line per device, and each line contains a device name on a left side of equation and device URL on a rights side, followed by protocol (eSCL or WSD)\. If protocol is ommited, eSCL is assumed\. You may also disable particular device by using the \fBdisable\fR keyword instead of URL\.
 .
 .P
-To figure out the device URL, you need to know its components:
-.
-.IP "" 4
-.
-.nf
-
-http://192\.168\.1\.102:9095/eSCL
-       <\-\-\-\-\-\-\-\-\-\-\-> <\-\-> <\-\->
-             |         |    |
-             |         |    `\-\- URL path
-             |         `\-\-\-\-\-\-\- IP port
-             `\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\- Device IP address
-.
-.fi
-.
-.IP "" 0
+To figure out URLs of available devices, the simplest way is to run a supplied \fBairscan\-discover\fR tool on a computer connected with scanner to the same LAN segment\. On success, this program will dump to its standard output a list of discovered devices in a format suitable for inclusion into the configuration file\.
 .
 .P
-The most reliable way to obtain it information, is to execute the following command, using a Linux computer, connected to the same LAN segment as as a scanner:
-.
-.IP "" 4
-.
-.nf
-
-$ avahi\-browse _uscan\._tcp \-r
-= wlp2s0 IPv4 Kyocera ECOSYS M2040dn
-   hostname = [KM7B6A91\.local]
-   address = [192\.168\.1\.102]
-   port = [9095]
-   txt = ["duplex=T" "is=platen,adf" "cs=color,grayscale,binary"
-   "UUID=4509a320\-00a0\-008f\-00b6\-002507510eca"
-   "pdl=application/pdf,image/jpeg" "note="
-   "ty=Kyocera ECOSYS M2040dn" "rs=eSCL"
-   "representation=https://\.\.\."
-   "adminurl=https://\.\.\." "vers=2\.62" "txtvers=1"]
-.
-.fi
-.
-.IP "" 0
-.
-.P
-Address and port are on obvious places\. Please notice the "rs=eSCL" record in the txt section \- this is the path component of the URL\.
-.
-.P
-If running avahi\-browse on same LAN segment as a scanner is not possible, you will have to follow a hard way\. Your administrator must know device IP address, consult your device manual for the eSCL port, and the URL path component most likely is the "/eSCL", though on some devices it may differ\.
+If running \fBairscan\-discover\fR on same LAN segment as a scanner is not possible, you will have to follow a hard way\. Your administrator must know device IP address, consult your device manual for the eSCL port, and the URL path component most likely is the "/eSCL", though on some devices it may differ\. Discovering WSD URLs doing this way is much harder, because it is very difficult to guess TCP port and URL path, that in a case of eSCL\.
 .
 .SH "CONFIGURATION OPTIONS"
 Miscellaneous options all goes to the \fB[options]\fR section\. Currently the following options are supported:
@@ -122,13 +106,51 @@ Miscellaneous options all goes to the \fB[options]\fR section\. Currently the fo
 
 [options]
 ; If there are a lot of scanners around and you are only
-; interested if few of them, disable auto discovery and
+; interested in few of them, disable auto discovery and
 ; configure scanners manually
 discovery = enable | disable
 
 ; Choose what SANE apps will show in a list of devices:
 ; scanner network (the default) name or hardware model name
 model = network | hardware
+
+; If device supports both eSCL and WSD protocol, sane\-airscan
+; may either choose the "best" protocol automatically, or
+; expose all variants for user, allowing manual protocol selection\.
+; The default is "auto"
+protocol = auto | manual
+
+; Discovery of WSD devices may be "fast" or "full"\. The "fast"
+; mode works as fast as DNS\-SD discovery, but in some cases
+; may be unreliable\. The "full" mode is slow and reliable\.
+; This is also possible to disable automatic discovery
+; of WSD devices\. The default is "fast"\.
+ws\-discovery = fast | full | off
+.
+.fi
+.
+.IP "" 0
+.
+.SH "DEBUGGING"
+sane\-airscan provides very good instrumentation for troubleshooting without physical access to the problemmatic device\.
+.
+.P
+Debuggung facilities can be controlled using the \fB[debug]\fR section of the configuration file:
+.
+.IP "" 4
+.
+.nf
+
+[debug]
+; Enable or disable console logging
+enable = false | true
+
+; Enable protocol trace and configure output directory
+; for trace files\. To specify path relative to user\'s
+; home directory, start it with tilda character, followed
+; by slash, i\.e\., "~/airscan/trace"\. The directory will
+; be created automatically\.
+trace = path
 .
 .fi
 .

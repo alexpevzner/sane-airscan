@@ -1,10 +1,13 @@
-sane-airscan(5) -- SANE backend for AirScan (eSCL) scanners and MFP
-===================================================================
+sane-airscan(5) -- SANE backend for AirScan (eSCL) and WSD scanners and MFP
+===========================================================================
 
 ## DESCRIPTION
 
-The `sane-airscan` implements a SANE backend that provides access network
-scanners and MFP using eSCL protocol, also known as AirScan or AirPrint scan.
+The `sane-airscan` is the universal backend for "driverless" document
+scanning. Currently it supports two protocols:
+
+    1. eSCL, also known as AirScan or AirPrint scan
+    2. WSD, also known as WS-Scan
 
 ## CONFIGURATION
 
@@ -30,56 +33,40 @@ If you want to preserve them, put name or value into quotes ("like this").
 If scanner and computer are connected to the same LAN segment, everything
 expected to "just work" out of box, without any need of manual configuration.
 
-Unfortunately, automatic configuration doesn't work if there is an IP
-router between computer and scanner. At this case scanner can be added
-manually.
+However, in some cases manual configuration can be useful. For example:
 
+    1. If computer and scanner are connected via IP router
+    2. There are a lot of devices on a corporate network, but
+       only few of them are interesting
+    3. Automatic discovery works unreliable
 
 To manually configure a device, add the following section to the configuration
 file:
 
     [devices]
-    "Kyocera MFP Scanner" = http://192.168.1.102:9095/eSCL
+    "Kyocera eSCL" = http://192.168.1.102:9095/eSCL, eSCL
+    "Kyocera WSD" = http://192.168.1.102:5358/WSDScanner, WSD
     "Device I don't want to see" = disable
 
 The `[devices]` section contains all manually configured devices, one line per
 device, and each line contains a device name on a left side of equation and
-device URL on a rights side. You may also disable particular device by
+device URL on a rights side, followed by protocol (eSCL or WSD). If protocol
+is ommited, eSCL is assumed.  You may also disable particular device by
 using the `disable` keyword instead of URL.
 
-To figure out the device URL, you need to know its components:
+To figure out URLs of available devices, the simplest way is to
+run a supplied `airscan-discover` tool on a computer connected with
+scanner to the same LAN segment. On success, this program will
+dump to its standard output a list of discovered devices in a
+format suitable for inclusion into the configuration file.
 
-    http://192.168.1.102:9095/eSCL
-           <-----------> <--> <-->
-                 |         |    |
-                 |         |    `-- URL path
-                 |         `------- IP port
-                 `----------------- Device IP address
-
-The most reliable way to obtain it information, is to execute the following
-command, using a Linux computer, connected to the same LAN segment as as
-a scanner:
-
-    $ avahi-browse _uscan._tcp -r
-    = wlp2s0 IPv4 Kyocera ECOSYS M2040dn
-       hostname = [KM7B6A91.local]
-       address = [192.168.1.102]
-       port = [9095]
-       txt = ["duplex=T" "is=platen,adf" "cs=color,grayscale,binary"
-       "UUID=4509a320-00a0-008f-00b6-002507510eca"
-       "pdl=application/pdf,image/jpeg" "note="
-       "ty=Kyocera ECOSYS M2040dn" "rs=eSCL"
-       "representation=https://..."
-       "adminurl=https://..." "vers=2.62" "txtvers=1"]
-
-Address and port are on obvious places. Please notice the "rs=eSCL"
-record in the txt section - this is the path component of the URL.
-
-If running avahi-browse on same LAN segment as a scanner is not possible,
-you will have to follow a hard way. Your administrator must know
+If running `airscan-discover` on same LAN segment as a scanner is not
+possible, you will have to follow a hard way. Your administrator must know
 device IP address, consult your device manual for the eSCL port, and
 the URL path component most likely is the "/eSCL", though on some
-devices it may differ.
+devices it may differ. Discovering WSD URLs doing this way is much
+harder, because it is very difficult to guess TCP port and URL path,
+that in a case of eSCL.
 
 ## CONFIGURATION OPTIONS
 
@@ -88,13 +75,45 @@ the following options are supported:
 
     [options]
     ; If there are a lot of scanners around and you are only
-    ; interested if few of them, disable auto discovery and
+    ; interested in few of them, disable auto discovery and
     ; configure scanners manually
     discovery = enable | disable
 
     ; Choose what SANE apps will show in a list of devices:
     ; scanner network (the default) name or hardware model name
     model = network | hardware
+
+    ; If device supports both eSCL and WSD protocol, sane-airscan
+    ; may either choose the "best" protocol automatically, or
+    ; expose all variants for user, allowing manual protocol selection.
+    ; The default is "auto"
+    protocol = auto | manual
+
+    ; Discovery of WSD devices may be "fast" or "full". The "fast"
+    ; mode works as fast as DNS-SD discovery, but in some cases
+    ; may be unreliable. The "full" mode is slow and reliable.
+    ; This is also possible to disable automatic discovery
+    ; of WSD devices. The default is "fast".
+    ws-discovery = fast | full | off
+
+## DEBUGGING
+
+sane-airscan provides very good instrumentation for troubleshooting
+without physical access to the problemmatic device.
+
+Debuggung facilities can be controlled using the ``[debug]`` section
+of the configuration file:
+
+    [debug]
+    ; Enable or disable console logging
+    enable = false | true
+
+    ; Enable protocol trace and configure output directory
+    ; for trace files. To specify path relative to user's
+    ; home directory, start it with tilda character, followed
+    ; by slash, i.e., "~/airscan/trace". The directory will
+    ; be created automatically.
+    trace = path
 
 ## FILES
 
