@@ -45,9 +45,9 @@ into this list, please let me know.
 
 Legend:
 
-* Yes - device works perfectly
-* No - protocol not supported by device
-* Space - author has no information
+* **Yes** - device works perfectly
+* **No** - protocol not supported by device
+* Space - author has no information on this mode/device combination
 
 | Device                             | eSCL mode                 | WSD mode                  |
 | ---------------------------------- | :-----------------------: | :-----------------------: |
