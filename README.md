@@ -171,8 +171,8 @@ development branch.
 
 ### Paid consulting
 
-If your business depend on my project, and you require any specific feature not
-currently implemented here, you may consider contacting me on a paid basis.
+If your business depends on my project, and you require any specific feature not
+currently implemented here, you may consider contracting me on a paid basis.
 
 ### PVS-Studio
 
