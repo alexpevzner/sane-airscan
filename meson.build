@@ -20,6 +20,7 @@ sources = [
   'airscan-netif.c',
   'airscan-png.c',
   'airscan-pollable.c',
+  'airscan-rand.c',
   'airscan-trace.c',
   'airscan-uuid.c',
   'airscan-wsd.c',
