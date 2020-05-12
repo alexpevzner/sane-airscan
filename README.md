@@ -62,6 +62,7 @@ Legend:
 | Canon TS 6250                      | Yes                       |                           |
 | EPSON WF-7710                      | Yes                       |                           |
 | EPSON XP-7100 Series               | Yes                       |                           |
+| EPSON XP-8600 Series               | Yes                       |                           |
 | HP Color Laserjet MFP m178-m181    | Yes                       |                           |
 | HP Color LaserJet MFP M281fdw      | Yes                       |                           |
 | HP DeskJet 2540                    | Yes                       |                           |
