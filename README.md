@@ -48,6 +48,7 @@ into this list, please let me know.
 * Canon TS 6250
 * EPSON WF-7710
 * EPSON XP-7100 Series
+* EPSON XP-8600 Series
 * HP Color Laserjet MFP m178-m181
 * HP Color LaserJet MFP M281fdw
 * HP DeskJet 2540
