@@ -1135,6 +1135,11 @@ wsdd_send_directed_probe (int ifindex, int af, const void *addr)
     http_query    *q;
     ip_addr       ipa = ip_addr_make(ifindex, af, addr);
 
+    /* Do nothing, if discovery is disabled */
+    if (!conf.discovery || conf.wsdd_mode == WSDD_OFF) {
+        return;
+    }
+
     /* Write log messages */
     if_indextoname(ifindex, ifname);
     log_debug(wsdd_log, "directed probe: trying if=%s, addr=%s",
