@@ -1,9 +1,3 @@
-# WARNING WARNING WARNING WARNING
-
-This project is a "development/unstable" branch of the [sane-airscan](https://github.com/alexpevzner/sane-airscan/)
-project, forked for convenience into the separate repository. New major features
-are developed here, and then merged back to sane-airscan.  It is not intended for common use.
-
 # sane-airscan -- SANE backend for AirScan (eSCL) and WSD document scanners
 
 Similar to how most modern network printers support "driverless" printing,
