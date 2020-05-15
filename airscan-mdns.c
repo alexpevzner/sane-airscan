@@ -538,7 +538,6 @@ mdns_avahi_resolver_callback (AvahiServiceResolver *r,
 {
     mdns_finding      *mdns = userdata;
     MDNS_SERVICE      service = mdns_service_by_name(type);
-    int               af;
 
     (void) domain;
     (void) host_name;
@@ -603,9 +602,9 @@ mdns_avahi_resolver_callback (AvahiServiceResolver *r,
         }
     }
 
+    /* Notify WSDD about newly discovered address */
     if (event == AVAHI_RESOLVER_FOUND) {
-        /* Notify WSDD about newly discovered address */
-        af = addr->proto == AVAHI_PROTO_INET ? AF_INET : AF_INET6;
+        int af = addr->proto == AVAHI_PROTO_INET ? AF_INET : AF_INET6;
         wsdd_send_directed_probe(interface, af, &addr->data);
     }
 }
