@@ -603,9 +603,11 @@ mdns_avahi_resolver_callback (AvahiServiceResolver *r,
         }
     }
 
-    /* Notify WSDD about newly discovered address */
-    af = addr->proto == AVAHI_PROTO_INET ? AF_INET : AF_INET6;
-    wsdd_send_directed_probe(interface, af, &addr->data);
+    if (event == AVAHI_RESOLVER_FOUND) {
+        /* Notify WSDD about newly discovered address */
+        af = addr->proto == AVAHI_PROTO_INET ? AF_INET : AF_INET6;
+        wsdd_send_directed_probe(interface, af, &addr->data);
+    }
 }
 
 /* AVAHI browser callback
