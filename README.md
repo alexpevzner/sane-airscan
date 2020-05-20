@@ -16,7 +16,7 @@ Driverless scanning comes in two flavors:
 
 This backend implements both protocols, choosing automatically between them.
 It was successfully tested with many devices from **Brother**, **Canon**,
-**Kyocera**, **Epson**, **HP** and **Xerox** both in WSD and eSCL modes.
+**Kyocera**, **Lexmark**, **Epson**, **HP** and **Xerox** both in WSD and eSCL modes.
 
 For eSCL devices, Apple maintains [a comprehensive list](https://support.apple.com/en-us/HT201311)
 of compatible devices, but please note, this list contains not only scanners and MFP,
@@ -55,6 +55,8 @@ Legend:
 | Canon D570                         | Yes                       |                           |
 | Canon ImageCLASS MF743cdw          | Yes<sup>[1](#note1)</sup> |                           |
 | Canon Lide 400                     | Yes                       |                           |
+| Canon PIXMA MG7700 Series          | Yes                       |                           |
+| Canon PIXMA TS 9550 Series         | Yes                       |                           |
 | Canon TR4529 (PIXMA TR4500 Series) | Yes                       |                           |
 | Canon TS 3100                      | Yes                       |                           |
 | Canon TS 3300                      | Yes                       |                           |
@@ -65,6 +67,7 @@ Legend:
 | EPSON XP-8600 Series               | Yes                       |                           |
 | HP Color Laserjet MFP m178-m181    | Yes                       |                           |
 | HP Color LaserJet MFP M281fdw      | Yes                       |                           |
+| HP Color LaserJet MFP M477fdw      | Yes                       |                           |
 | HP DeskJet 2540                    | Yes                       |                           |
 | HP ENVY 4500                       | Yes                       |                           |
 | HP ENVY 5540                       | Yes                       |                           |
@@ -76,12 +79,14 @@ Legend:
 | HP LaserJet Pro MFP M125 series    | No                        | Yes                       |
 | HP LaserJet Pro MFP M428dw         | Yes                       |                           |
 | HP LaserJet Pro MFP M521 series    | No                        | Yes                       |
+| HP OfficeJet 3830 series           | Yes                       |                           |
 | HP Officejet 4630                  | Yes                       |                           |
 | HP Officejet Pro 6970              | Yes                       |                           |
 | HP OfficeJet Pro 6978              | Yes                       |                           |
 | HP OfficeJet Pro 8730              | Yes                       | Yes                       |
 | HP OfficeJet Pro 9010 series       | Yes                       |                           |
 | Kyocera ECOSYS M2040dn             | Yes                       | Yes<sup>[2](#note2)</sup> |
+| Lexmark MC2535adwe                 | Yes                       |                           |
 | Xerox VersaLink B405               | Yes                       |                           |
 | TODO                               |                           |                           |
 
