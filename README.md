@@ -79,7 +79,7 @@ Legend:
 | HP OfficeJet Pro 6978              | Yes                       |                           |
 | HP OfficeJet Pro 8730              | Yes                       | Yes                       |
 | HP OfficeJet Pro 9010 series       | Yes                       |                           |
-| HP Smart Tank Plus 550 series      | Yesy                      |                           |
+| HP Smart Tank Plus 550 series      | Yes                       |                           |
 | Kyocera ECOSYS M2040dn             | Yes                       | Yes<sup>[2](#note2)</sup> |
 | Lexmark MC2535adwe                 | Yes                       |                           |
 | Xerox VersaLink B405               | Yes                       |                           |
