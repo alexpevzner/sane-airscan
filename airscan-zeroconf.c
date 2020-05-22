@@ -383,8 +383,14 @@ zeroconf_device_name_model (zeroconf_device *device,
     const zeroconf_finding *finding = zeroconf_device_name_model_source(device);
     log_assert(zeroconf_log, finding != NULL);
 
-    *name = device->name ? device->name : finding->model;
-    *model = finding->model;
+    /* Note, device discovery may end up in the incomplete state,
+     * when neither name nor model is available. At this
+     * case we return device UUID as a name, to simplify
+     * outer logic that relies on a fact that name is
+     * always available
+     */
+    *model = finding->model ? finding->model : device->uuid.text;
+    *name = device->name ? device->name : *model;
 }
 
 /* Get device name
