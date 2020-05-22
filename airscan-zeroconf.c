@@ -1187,6 +1187,10 @@ zeroconf_devinfo_free (zeroconf_devinfo *devinfo)
 SANE_Status
 zeroconf_init (void)
 {
+    char        *s;
+    conf_device *dev;
+
+    /* Initialize zeroconf */
     zeroconf_log = log_ctx_new("zeroconf", NULL);
 
     ll_init(&zeroconf_device_list);
@@ -1196,6 +1200,35 @@ zeroconf_init (void)
                                  (1 << ZEROCONF_USCAN_TCP) |
                                  (1 << ZEROCONF_USCANS_TCP) |
                                  (1 << ZEROCONF_WSD);
+    }
+
+    /* Dump zeroconf configuration to the log */
+    log_trace(zeroconf_log, "zeroconf configuration:");
+
+    s = conf.discovery ? "enable" : "disable";
+    log_trace(zeroconf_log, "  discovery    = %s", s);
+
+    s = conf.model_is_netname ? "network" : "hardware";
+    log_trace(zeroconf_log, "  model        = %s", s);
+
+    s = conf.proto_auto ? "auto" : "manual";
+    log_trace(zeroconf_log, "  protocol     = %s", s);
+
+    s = "?";
+    switch (conf.wsdd_mode) {
+    case WSDD_FAST: s = "fast"; break;
+    case WSDD_FULL: s = "full"; break;
+    case WSDD_OFF:  s = "OFF"; break;
+    }
+    log_trace(zeroconf_log, "  ws-discovery = %s", s);
+
+    if (conf.devices != NULL) {
+        log_trace(zeroconf_log, "statically configured devices:");
+
+        for (dev = conf.devices; dev != NULL; dev = dev->next) {
+            log_debug(zeroconf_log, "  %s = %s, %s", dev->name,
+                http_uri_str(dev->uri), id_proto_name(dev->proto));
+        }
     }
 
     return SANE_STATUS_GOOD;
