@@ -821,11 +821,20 @@ escl_status_decode (const proto_ctx *ctx)
         }
     }
 
+    /* If status cannot be cleanly decoded, look to HTTP status */
     if (status == SANE_STATUS_GOOD || status == SANE_STATUS_UNSUPPORTED) {
-        if (ctx->failed_http_status == HTTP_STATUS_SERVICE_UNAVAILABLE) {
+        status = SANE_STATUS_IO_ERROR;
+        switch (ctx->failed_http_status) {
+        case HTTP_STATUS_SERVICE_UNAVAILABLE:
             status = SANE_STATUS_DEVICE_BUSY;
-        } else {
-            status = SANE_STATUS_IO_ERROR;
+            break;
+
+        case HTTP_STATUS_NOT_FOUND:
+            if (ctx->params.src != ID_SOURCE_PLATEN &&
+                ctx->failed_op == PROTO_OP_LOAD) {
+                status = SANE_STATUS_NO_DOCS;
+            }
+            break;
         }
     }
 
