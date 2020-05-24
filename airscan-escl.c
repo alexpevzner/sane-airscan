@@ -730,15 +730,6 @@ escl_decode_scanner_status (const proto_ctx *ctx,
         }
     }
 
-    /* Ignore SANE_STATUS_NO_DOCS status if we have
-     * reached PROTO_OP_LOAD operation, as it is not
-     * reliable at this context
-     */
-    if (ctx->failed_op == PROTO_OP_LOAD &&
-        adf_status == SANE_STATUS_NO_DOCS) {
-        adf_status = SANE_STATUS_UNSUPPORTED;
-    }
-
     /* Decode Job status */
     if (ctx->params.src != ID_SOURCE_PLATEN &&
         adf_status != SANE_STATUS_GOOD &&
@@ -796,24 +787,54 @@ escl_status_decode (const proto_ctx *ctx)
          * So if status doesn't cleanly indicate any error, lets retry
          * several times
          */
+        bool retry = false;
+
         switch (status) {
         case SANE_STATUS_GOOD:
         case SANE_STATUS_UNSUPPORTED:
         case SANE_STATUS_DEVICE_BUSY:
-                result.next = ctx->failed_op;
-                result.delay = ESCL_LOAD_RETRY_PAUSE;
-                return result;
+            retry = true;
+            break;
+
+        case SANE_STATUS_NO_DOCS:
+            /* For some devices SANE_STATUS_NO_DOCS is not
+             * reliable, if we have reached SANE_STATUS_NO_DOCS
+             * operation: HTTP 503 may mean "I'm temporary not
+             * ready, please try again", while ADF sensor
+             * raises "ADF empty" signal.
+             *
+             * So retry at this case
+             */
+            if (ctx->failed_op == PROTO_OP_LOAD) {
+                retry = true;
+            }
+            break;
 
         default:
             break;
         }
+
+        if (retry) {
+            result.next = ctx->failed_op;
+            result.delay = ESCL_LOAD_RETRY_PAUSE;
+            return result;
+        }
     }
 
+    /* If status cannot be cleanly decoded, look to HTTP status */
     if (status == SANE_STATUS_GOOD || status == SANE_STATUS_UNSUPPORTED) {
-        if (ctx->failed_http_status == HTTP_STATUS_SERVICE_UNAVAILABLE) {
+        status = SANE_STATUS_IO_ERROR;
+        switch (ctx->failed_http_status) {
+        case HTTP_STATUS_SERVICE_UNAVAILABLE:
             status = SANE_STATUS_DEVICE_BUSY;
-        } else {
-            status = SANE_STATUS_IO_ERROR;
+            break;
+
+        case HTTP_STATUS_NOT_FOUND:
+            if (ctx->params.src != ID_SOURCE_PLATEN &&
+                ctx->failed_op == PROTO_OP_LOAD) {
+                status = SANE_STATUS_NO_DOCS;
+            }
+            break;
         }
     }
 
