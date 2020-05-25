@@ -557,6 +557,8 @@ mdns_avahi_resolver_callback (AvahiServiceResolver *r,
         return;
     }
 
+    avahi_service_resolver_free(r);
+
     /* Handle event */
     switch (event) {
     case AVAHI_RESOLVER_FOUND:
