@@ -49,6 +49,7 @@ Legend:
 | Canon D570                         | Yes                       |                           |
 | Canon ImageCLASS MF743cdw          | Yes<sup>[1](#note1)</sup> |                           |
 | Canon Lide 400                     | Yes                       |                           |
+| Canon MF746Cx                      | Yes                       |                           |
 | Canon PIXMA MG7700 Series          | Yes                       |                           |
 | Canon PIXMA TS 9550 Series         | Yes                       |                           |
 | Canon TR4529 (PIXMA TR4500 Series) | Yes                       |                           |
