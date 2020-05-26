@@ -10,7 +10,8 @@ Driverless scanning comes in two flavors:
 
 This backend implements both protocols, choosing automatically between them.
 It was successfully tested with many devices from **Brother**, **Canon**,
-**Kyocera**, **Lexmark**, **Epson**, **HP** and **Xerox** both in WSD and eSCL modes.
+**Kyocera**, **Lexmark**, **Epson**, **HP**, **Ricoh** and **Xerox** both
+in WSD and eSCL modes.
 
 For eSCL devices, Apple maintains [a comprehensive list](https://support.apple.com/en-us/HT201311)
 of compatible devices, but please note, this list contains not only scanners and MFP,
@@ -83,6 +84,7 @@ Legend:
 | HP Smart Tank Plus 550 series      | Yes                       |                           |
 | Kyocera ECOSYS M2040dn             | Yes                       | Yes<sup>[2](#note2)</sup> |
 | Lexmark MC2535adwe                 | Yes                       |                           |
+| Ricoh MP C3003                     |                           | Yes<sup>[3](#note3)</sup> |
 | Xerox VersaLink B405               | Yes                       |                           |
 | TODO                               |                           |                           |
 
@@ -93,6 +95,11 @@ Settings->Network Link Scan Settings->On.
 
 <a name="note2">[2]</a>: this device requires manual action on its front
 panel to initiate WSD scan: Send->WSD Scan->From Computer
+
+<a name="note3">[3]</a>: by default, WSD scan command is disabled on this
+device and needs to be enabled before use: Click [Configuration], click [Initial Settings]
+under [Scanner], and then set [Prohibit WSD Scan Command] to [Do not Prohibit] (from
+http://support.ricoh.com/bb_v1oi/pub_e/oi_view/0001047/0001047003/view/scanner/int/0095.htm)
 
 ### Installation from pre-build binaries
 
