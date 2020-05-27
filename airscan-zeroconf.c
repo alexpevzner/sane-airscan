@@ -579,6 +579,10 @@ zeroconf_endpoint_new (ID_PROTO proto, http_uri *uri)
 
     endpoint->proto = proto;
     endpoint->uri = uri;
+    if (proto == ID_PROTO_ESCL) {
+        // We own the uri, so modify without making a separate copy.
+        http_uri_fix_end_slash(endpoint->uri);
+    }
 
     return endpoint;
 }
@@ -1117,6 +1121,69 @@ zeroconf_device_list_free (const SANE_Device **dev_list)
     }
 }
 
+/*
+ * The format "protocol:name:url" is accepted to directly specify a device
+ * without listing it in the config or finding it with autodiscovery.  Try
+ * to parse an identifier as that format.  On success, returns a newly allocated
+ * zeroconf_devinfo that the caller must free with zeroconf_devinfo_free().  On
+ * failure, returns NULL.
+ */
+static zeroconf_devinfo*
+zeroconf_parse_devinfo_from_ident(const char *ident)
+{
+    int              buf_size;
+    char             *buf = NULL;
+    ID_PROTO         proto;
+    char             *name;
+    char             *uri_str;
+    http_uri         *uri;
+    zeroconf_devinfo *devinfo;
+
+    if (ident == NULL) {
+        return NULL;
+    }
+
+    /* Copy the string so we can modify it in place while parsing. */
+    buf_size = strlen(ident) + 1;
+    buf = g_alloca(buf_size);
+    memcpy(buf, ident, buf_size);
+
+    name = strchr(buf, ':');
+    if (name == NULL) {
+        return NULL;
+    }
+    *name = '\0';
+    name++;
+
+    proto = id_proto_by_name(buf);
+    if (proto == ID_PROTO_UNKNOWN) {
+        return NULL;
+    }
+
+    uri_str = strchr(name, ':');
+    if (uri_str == NULL) {
+        return NULL;
+    }
+    *uri_str = '\0';
+    uri_str++;
+
+    if (*name == '\0') {
+        return NULL;
+    }
+
+    uri = http_uri_new(uri_str, true);
+    if (uri == NULL) {
+        return NULL;
+    }
+
+    /* Build a zeroconf_devinfo */
+    devinfo = g_new0(zeroconf_devinfo, 1);
+    devinfo->ident = g_strdup(ident);
+    devinfo->name = g_strdup(name);
+    devinfo->endpoints = zeroconf_endpoint_new(proto, uri);
+    return devinfo;
+}
+
 /* Lookup device by ident (ident is reported as SANE_Device::name)
  * by zeroconf_device_list_get())
  *
@@ -1132,6 +1199,12 @@ zeroconf_devinfo_lookup (const char *ident)
     zeroconf_device  *device = NULL;
     zeroconf_devinfo *devinfo;
     ID_PROTO         proto = ID_PROTO_UNKNOWN;
+
+    /* Check if the caller passed a direct device specification first. */
+    devinfo = zeroconf_parse_devinfo_from_ident(ident);
+    if (devinfo != NULL) {
+        return devinfo;
+    }
 
     /* Wait until device table is ready */
     zeroconf_initscan_wait();
@@ -1151,11 +1224,6 @@ zeroconf_devinfo_lookup (const char *ident)
 
     if (dev_conf != NULL) {
         http_uri *uri = http_uri_clone(dev_conf->uri);
-
-        if (dev_conf->proto == ID_PROTO_ESCL) {
-            http_uri_fix_end_slash(uri);
-        }
-
         devinfo->name = g_strdup(dev_conf->name);
         devinfo->endpoints = zeroconf_endpoint_new(dev_conf->proto, uri);
     } else {
