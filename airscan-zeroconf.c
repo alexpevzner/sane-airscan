@@ -1129,7 +1129,7 @@ zeroconf_device_list_free (const SANE_Device **dev_list)
  * failure, returns NULL.
  */
 static zeroconf_devinfo*
-parse_devinfo_from_ident(const char *ident)
+zeroconf_parse_devinfo_from_ident(const char *ident)
 {
     int              buf_size;
     char             *buf = NULL;
@@ -1196,7 +1196,7 @@ zeroconf_devinfo_lookup (const char *ident)
     ID_PROTO         proto = ID_PROTO_UNKNOWN;
 
     /* Check if the caller passed a direct device specification first. */
-    devinfo = parse_devinfo_from_ident(ident);
+    devinfo = zeroconf_parse_devinfo_from_ident(ident);
     if (devinfo != NULL) {
         return devinfo;
     }
