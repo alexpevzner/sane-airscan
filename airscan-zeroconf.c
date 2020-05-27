@@ -1166,6 +1166,11 @@ zeroconf_parse_devinfo_from_ident(const char *ident)
     }
     *uri_str = '\0';
     uri_str++;
+
+    if (*name == '\0') {
+        return NULL;
+    }
+
     uri = http_uri_new(uri_str, true);
     if (uri == NULL) {
         return NULL;
