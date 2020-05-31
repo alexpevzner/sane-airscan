@@ -84,7 +84,7 @@ Legend:
 | HP Smart Tank Plus 550 series      | Yes                       |                           |
 | Kyocera ECOSYS M2040dn             | Yes                       | Yes<sup>[2](#note2)</sup> |
 | Lexmark MC2535adwe                 | Yes                       |                           |
-| Ricoh MP C3003                     |                           | Yes<sup>[3](#note3)</sup> |
+| Ricoh MP C3003                     | No                        | Yes<sup>[3](#note3)</sup> |
 | Xerox VersaLink B405               | Yes                       |                           |
 | TODO                               |                           |                           |
 
