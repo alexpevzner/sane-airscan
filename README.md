@@ -67,6 +67,7 @@ Legend:
 | HP DeskJet 2540                    | Yes                       |                           |
 | HP ENVY 4500                       | Yes                       |                           |
 | HP ENVY 5540                       | Yes                       |                           |
+| HP ENVY 5640                       | Yes                       |                           |
 | HP LaserJet MFP M227sdn            | Yes                       |                           |
 | HP LaserJet MFP M426dw             | Yes                       |                           |
 | HP LaserJet MFP M630               | Yes                       |                           |
