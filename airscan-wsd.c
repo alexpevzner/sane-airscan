@@ -655,6 +655,7 @@ wsd_scan_query (const proto_ctx *ctx)
     xml_wr_enter(xml, "scan:JobDescription");
     xml_wr_add_text(xml, "scan:JobName", "sane-airscan request");
     xml_wr_add_text(xml, "scan:JobOriginatingUserName", "sane-airscan");
+    xml_wr_add_text(xml, "scan:JobInformation", "sane-airscan");
     xml_wr_leave(xml); // scan:JobDescription
 
     xml_wr_enter(xml, "scan:DocumentParameters");
