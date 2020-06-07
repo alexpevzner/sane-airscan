@@ -655,7 +655,13 @@ wsd_scan_query (const proto_ctx *ctx)
     xml_wr_enter(xml, "scan:JobDescription");
     xml_wr_add_text(xml, "scan:JobName", "sane-airscan request");
     xml_wr_add_text(xml, "scan:JobOriginatingUserName", "sane-airscan");
+
+    /* WS-Scan specification says that this parameter is optional,
+     * but without this parameter the Canon TR7500 rejects scan
+     * request with the InvalidArgs error
+     */
     xml_wr_add_text(xml, "scan:JobInformation", "sane-airscan");
+
     xml_wr_leave(xml); // scan:JobDescription
 
     xml_wr_enter(xml, "scan:DocumentParameters");
