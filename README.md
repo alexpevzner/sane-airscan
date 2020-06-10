@@ -69,6 +69,7 @@ Legend:
 | HP ENVY 4500                       | Yes                       |                           |
 | HP ENVY 5540                       | Yes                       |                           |
 | HP ENVY 5640                       | Yes                       |                           |
+| HP ENVY Pro 6400 series            | Yes                       |                           |
 | HP LaserJet MFP M227sdn            | Yes                       |                           |
 | HP LaserJet MFP M426dw             | Yes                       |                           |
 | HP LaserJet MFP M630               | Yes                       |                           |
@@ -77,6 +78,7 @@ Legend:
 | HP LaserJet Pro MFP M125 series    | No                        | Yes                       |
 | HP LaserJet Pro MFP M428dw         | Yes                       |                           |
 | HP LaserJet Pro MFP M521 series    | No                        | Yes                       |
+| HP Laser MFP 131 133 135-138       | Yes                       |                           |
 | HP OfficeJet 3830 series           | Yes                       |                           |
 | HP Officejet 4630                  | Yes                       |                           |
 | HP Officejet Pro 6970              | Yes                       |                           |
