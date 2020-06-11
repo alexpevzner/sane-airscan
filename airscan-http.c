@@ -407,7 +407,7 @@ http_multipart_new (SoupMessageHeaders *headers, http_data *data)
      */
 
     /* Check MIME type */
-    if (strncmp(data->content_type, "multipart/", 10)) {
+    if (strncasecmp(data->content_type, "multipart/", 10)) {
         return NULL;
     }
 
