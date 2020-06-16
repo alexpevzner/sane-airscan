@@ -535,7 +535,12 @@ static void
 http_data_set_content_type (http_data *data, const char *content_type)
 {
     g_free((char*) data->content_type);
-    data->content_type = g_strdup(content_type ? content_type : "text/plain");
+
+    if (content_type == NULL) {
+        content_type = "text/plain";
+    }
+
+    data->content_type = g_ascii_strdown(content_type, -1);
 }
 
 /* Ref http_data

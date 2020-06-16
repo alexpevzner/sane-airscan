@@ -1019,7 +1019,7 @@ http_uri_equal (const http_uri *uri1, const http_uri *uri2);
 /* HTTP data
  */
 typedef struct {
-    const char *content_type; /* Content type, with stripped directives */
+    const char *content_type; /* Normalized: low-case with stripped directives */
     const void *bytes;        /* Data bytes */
     size_t     size;          /* Data size */
 } http_data;
