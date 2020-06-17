@@ -60,6 +60,7 @@ log_ctx *zeroconf_log;
 static ll_head zeroconf_device_list;
 static GCond zeroconf_initscan_cond;
 static int zeroconf_initscan_bits;
+static eloop_timer *zeroconf_initscan_timer;
 
 /******************** Forward declarations *********************/
 static bool
@@ -942,6 +943,19 @@ zeroconf_finding_done (ZEROCONF_METHOD method)
 }
 
 /******************** Support for SANE API *********************/
+/* zeroconf_initscan_timer callback
+ */
+static void
+zeroconf_initscan_timer_callback (void *unused)
+{
+    (void) unused;
+
+    log_debug(zeroconf_log, "initial scan timer expired");
+
+    zeroconf_initscan_timer = NULL;
+    g_cond_broadcast(&zeroconf_initscan_cond);
+}
+
 /* Check if initial scan is done
  */
 static bool
@@ -998,16 +1012,16 @@ zeroconf_initscan_done (void)
 static void
 zeroconf_initscan_wait (void)
 {
-    gint64 timeout;
-    bool   ok;
+    bool   ok = false;
 
     log_debug(zeroconf_log, "zeroconf_initscan_wait: requested");
 
-    timeout = g_get_monotonic_time() +
-        ZEROCONF_READY_TIMEOUT * G_TIME_SPAN_SECOND;
-
-    while (!(ok = zeroconf_initscan_done()) &&
-           eloop_cond_wait_until(&zeroconf_initscan_cond, timeout)) {
+    for (;;) {
+        ok = zeroconf_initscan_done();
+        if (ok || zeroconf_initscan_timer == NULL) {
+            break;
+        }
+        eloop_cond_wait(&zeroconf_initscan_cond);
     }
 
     log_debug(zeroconf_log, "zeroconf_initscan_wait: %s",
@@ -1250,6 +1264,24 @@ zeroconf_devinfo_free (zeroconf_devinfo *devinfo)
 }
 
 /******************** Initialization and cleanup *********************/
+/* ZeroConf start/stop callback
+ */
+static void
+zeroconf_start_stop_callback (bool start)
+{
+    if (start) {
+        zeroconf_initscan_timer = eloop_timer_new(ZEROCONF_READY_TIMEOUT * 1000,
+                zeroconf_initscan_timer_callback, NULL);
+    } else {
+        if (zeroconf_initscan_timer != NULL) {
+            eloop_timer_cancel(zeroconf_initscan_timer);
+            zeroconf_initscan_timer = NULL;
+        }
+
+        g_cond_broadcast(&zeroconf_initscan_cond);
+    }
+}
+
 /* Initialize ZeroConf
  */
 SANE_Status
@@ -1269,6 +1301,8 @@ zeroconf_init (void)
                                  (1 << ZEROCONF_USCANS_TCP) |
                                  (1 << ZEROCONF_WSD);
     }
+
+    eloop_add_start_stop_callback(zeroconf_start_stop_callback);
 
     /* Dump zeroconf configuration to the log */
     log_trace(zeroconf_log, "zeroconf configuration:");
