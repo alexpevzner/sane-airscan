@@ -1420,10 +1420,10 @@ sane_device_array_append(const SANE_Device **a, SANE_Device *d);
  *
  * XML reader performs prefix substitutions
  *
- * If namespace substitution is enabled, function, each node,
- * which name's namespace matches the pattern, will be reported
- * with name prefix defined by substitution rule,
- * regardless of prefix actually used in the document
+ * If namespace substitution is enabled, for each note, if its
+ * namespace matches the pattern, will be reported with name prefix
+ * defined by substitution rule, regardless of prefix actually used
+ * in the document
  *
  * Example:
  *   <namespace:nodes xmlns:namespace="http://www.example.com/namespace">
