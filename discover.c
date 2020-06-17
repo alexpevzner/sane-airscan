@@ -122,8 +122,12 @@ main (int argc, char **argv)
     printf("[devices]\n");
     for (i = 0; devices[i] != NULL; i ++) {
         const SANE_Device *dev = devices[i];
-        zeroconf_devinfo  *devinfo = zeroconf_devinfo_lookup(dev->name);
+        zeroconf_devinfo  *devinfo;
         zeroconf_endpoint *endpoint;
+
+        eloop_mutex_lock();
+        devinfo = zeroconf_devinfo_lookup(dev->name);
+        eloop_mutex_unlock();
 
         for (endpoint = devinfo->endpoints; endpoint != NULL;
              endpoint = endpoint->next) {
