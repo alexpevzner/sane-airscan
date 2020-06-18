@@ -694,6 +694,33 @@ http_client_cancel (http_client *client)
     }
 }
 
+/* Cancel all pending queries with matching address family and uintptr
+ */
+void
+http_client_cancel_af_uintptr (http_client *client, int af, uintptr_t uintptr)
+{
+    http_query **qlist = g_alloca(sizeof(*qlist) * client->pending->len);
+    int        i, cnt = 0;
+
+    for (i = 0; i < (int) client->pending->len; i ++) {
+        http_query *q = client->pending->pdata[i];
+
+        if (uintptr != http_query_get_uintptr(q)) {
+            continue;
+        }
+
+        if (af != http_uri_af(http_query_uri(q))) {
+            continue;
+        }
+
+        qlist[cnt ++] = q;
+    }
+
+    for (i = 0; i < cnt; i ++) {
+        http_query_cancel(qlist[i]);
+    }
+}
+
 /* Get count of pending queries
  */
 int
@@ -960,6 +987,10 @@ http_query_cancel (http_query *q)
     soup_session_cancel_message(http_session, q->msg, SOUP_STATUS_CANCELLED);
     soup_message_set_status(q->msg, SOUP_STATUS_CANCELLED);
     g_object_unref(q->msg);
+
+    log_debug(q->client->log, "HTTP %s %s: %s", q->msg->method,
+            http_uri_str(q->uri),
+            soup_status_get_phrase(SOUP_STATUS_CANCELLED));
 
     http_query_free(q);
 }

@@ -983,6 +983,16 @@ http_uri_str (http_uri *uri);
 const struct sockaddr*
 http_uri_addr (http_uri *uri);
 
+/* Get URI's address family. May return AF_UNSPEC,
+ * if host address is not literal
+ */
+static inline int
+http_uri_af (http_uri *uri)
+{
+    const struct sockaddr *addr = http_uri_addr(uri);
+    return addr ? addr->sa_family : AF_UNSPEC;
+}
+
 /* Get URI path
  */
 const char*
@@ -1102,6 +1112,11 @@ http_client_onerror (http_client *client,
  */
 void
 http_client_cancel (http_client *client);
+
+/* Cancel all pending queries with matching address family and uintptr
+ */
+void
+http_client_cancel_af_uintptr (http_client *client, int af, uintptr_t uintptr);
 
 /* Get count of pending queries
  */

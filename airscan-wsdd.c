@@ -388,15 +388,18 @@ wsdd_finding_list_purge (void)
  *   </devprof:Hosted>
  *
  * It ignores all endpoints except ScannerServiceType, extracts endpoint
- * URLs and returns them as slice of strings
+ * URLs and prepends them to the wsdd->finding.endpoints
+ *
+ * Returns true if some endpoints were extracted, false otherwise
  */
-static void
+static bool
 wsdd_finding_parse_endpoints (wsdd_finding *wsdd, xml_rd *xml)
 {
     unsigned int      level = xml_rd_depth(xml);
     size_t            prefixlen = strlen(xml_rd_node_path(xml));
     bool              is_scanner = false;
     zeroconf_endpoint *endpoints = NULL;
+    bool              ok = false;
 
     while (!xml_rd_end(xml)) {
         const char *path = xml_rd_node_path(xml) + prefixlen;
@@ -426,8 +429,10 @@ wsdd_finding_parse_endpoints (wsdd_finding *wsdd, xml_rd *xml)
 
     if (!is_scanner) {
         zeroconf_endpoint_list_free(endpoints);
-        return;
+        return false;
     }
+
+    ok = endpoints != NULL;
 
     while (endpoints != NULL) {
         zeroconf_endpoint *ep = endpoints;
@@ -435,6 +440,8 @@ wsdd_finding_parse_endpoints (wsdd_finding *wsdd, xml_rd *xml)
         ep->next = wsdd->finding.endpoints;
         wsdd->finding.endpoints = ep;
     }
+
+    return ok;
 }
 
 /* Get metadata callback
@@ -447,6 +454,7 @@ wsdd_finding_get_metadata_callback (void *ptr, http_query *q)
     http_data    *data;
     wsdd_finding *wsdd = ptr;
     char         *model = NULL, *manufacturer = NULL;
+    bool         ok = false;
 
     (void) ptr;
 
@@ -476,7 +484,7 @@ wsdd_finding_get_metadata_callback (void *ptr, http_query *q)
 
         if (!strcmp(path, "s:Envelope/s:Body/mex:Metadata/mex:MetadataSection"
                 "/devprof:Relationship/devprof:Hosted")) {
-            wsdd_finding_parse_endpoints(wsdd, xml);
+            ok = wsdd_finding_parse_endpoints(wsdd, xml) || ok;
         } else if (!strcmp(path, "s:Envelope/s:Body/mex:Metadata/mex:MetadataSection"
                 "/devprof:ThisModel/devprof:Manufacturer")) {
             if (manufacturer == NULL) {
@@ -504,6 +512,17 @@ wsdd_finding_get_metadata_callback (void *ptr, http_query *q)
         } else {
             wsdd->finding.model = g_strdup(wsdd->address);
         }
+    }
+
+    /* Cancel all cancel all unnecessary metadata requests.
+     *
+     * Note, we consider request is unnecessary if:
+     *   * it has the same address family
+     *   * it belongs to the same network interface
+     */
+    if (ok) {
+        http_client_cancel_af_uintptr(wsdd->http_client,
+            http_uri_af(http_query_uri(q)), http_query_get_uintptr(q));
     }
 
     /* Cleanup and exit */
