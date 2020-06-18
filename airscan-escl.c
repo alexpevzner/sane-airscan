@@ -11,12 +11,19 @@
 /******************** Protocol constants ********************/
 /* If HTTP 503 reply is received, how many retry attempts
  * to perform before giving up
+ *
+ *   ESCL_RETRY_ATTEMPTS_LOAD - for NextDocument request
+ *   ESCL_RETRY_ATTEMPTS      - for other requests
+ *
+ * Note, some printers (namely, HP LaserJet MFP M28w) require
+ * a lot of retry attempts when loading next page at high res
  */
-#define ESCL_LOAD_RETRY_ATTEMPTS        10
+#define ESCL_RETRY_ATTEMPTS_LOAD        20
+#define ESCL_RETRY_ATTEMPTS             10
 
 /* And pause between retries, in milliseconds
  */
-#define ESCL_LOAD_RETRY_PAUSE           1000
+#define ESCL_RETRY_PAUSE                1000
 
 
 /* proto_handler_escl represents eSCL protocol handler
@@ -766,6 +773,7 @@ escl_status_decode (const proto_ctx *ctx)
     proto_result result = {0};
     error        err = NULL;
     SANE_Status  status;
+    int          max_attempts;
 
     /* Decode status */
     err = http_query_error(ctx->query);
@@ -778,8 +786,13 @@ escl_status_decode (const proto_ctx *ctx)
     }
 
     /* Now it's time to make a decision */
+    max_attempts = ESCL_RETRY_ATTEMPTS;
+    if (ctx->failed_op == PROTO_OP_LOAD) {
+        max_attempts = ESCL_RETRY_ATTEMPTS_LOAD;
+    }
+
     if (ctx->failed_http_status == HTTP_STATUS_SERVICE_UNAVAILABLE &&
-        ctx->failed_attempt < ESCL_LOAD_RETRY_ATTEMPTS) {
+        ctx->failed_attempt < max_attempts) {
 
         /* Note, some devices may return HTTP 503 error core, meaning
          * that it makes sense to come back after small delay
@@ -816,7 +829,7 @@ escl_status_decode (const proto_ctx *ctx)
 
         if (retry) {
             result.next = ctx->failed_op;
-            result.delay = ESCL_LOAD_RETRY_PAUSE;
+            result.delay = ESCL_RETRY_PAUSE;
             return result;
         }
     }
