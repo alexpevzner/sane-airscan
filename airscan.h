@@ -1995,6 +1995,11 @@ zeroconf_endpoint*
 zeroconf_endpoint_list_sort_dedup (zeroconf_endpoint *list);
 
 /******************** MDNS Discovery ********************/
+/* Called by zeroconf to notify MDNS about initial scan timer expiration
+ */
+void
+mdns_initscan_timer_expired (void);
+
 /* Initialize MDNS
  */
 SANE_Status
@@ -2006,6 +2011,11 @@ void
 mdns_cleanup (void);
 
 /******************** WS-Discovery ********************/
+/* Called by zeroconf to notify wsdd about initial scan timer expiration
+ */
+void
+wsdd_initscan_timer_expired (void);
+
 /* Send WD-Discovery directed probe
  */
 void

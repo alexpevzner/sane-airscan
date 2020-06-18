@@ -1080,6 +1080,30 @@ wsdd_resolver_free (wsdd_resolver *resolver)
     g_free(resolver);
 }
 
+/******************** Miscellaneous events ********************/
+/* Called by zeroconf to notify wsdd about initial scan timer expiration
+ */
+void
+wsdd_initscan_timer_expired (void)
+{
+    ll_node      *node;
+    wsdd_finding *wsdd;
+
+    /* Publish all incomplete but useful findings, if any
+     *
+     * Without it, if metadata query takes too long time (for example,
+     * device has 2 IP addresses, one is unreachable from PC) it
+     * effectively blocks the device from being discovered
+     */
+    for (LL_FOR_EACH(node, &wsdd_finding_list)) {
+        wsdd = OUTER_STRUCT(node, wsdd_finding, list_node);
+        if (!wsdd->published && wsdd->finding.endpoints != NULL) {
+            http_client_cancel(wsdd->http_client);
+            wsdd_finding_publish(wsdd);
+        }
+    }
+}
+
 /******************** WS-Discovery directed probes ********************/
 /* WS-Discovery send directed probe callback
  */

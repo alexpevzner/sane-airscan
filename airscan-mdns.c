@@ -833,6 +833,13 @@ mdns_avahi_client_restart_defer (void)
     mdns_avahi_poll->timeout_update(mdns_avahi_restart_timer, &tv);
 }
 
+/* Called by zeroconf to notify MDNS about initial scan timer expiration
+ */
+void
+mdns_initscan_timer_expired (void)
+{
+}
+
 /* Initialize MDNS
  */
 SANE_Status

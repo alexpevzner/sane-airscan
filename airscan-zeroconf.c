@@ -952,6 +952,9 @@ zeroconf_initscan_timer_callback (void *unused)
 
     log_debug(zeroconf_log, "initial scan timer expired");
 
+    mdns_initscan_timer_expired();
+    wsdd_initscan_timer_expired();
+
     zeroconf_initscan_timer = NULL;
     g_cond_broadcast(&zeroconf_initscan_cond);
 }
@@ -1007,7 +1010,7 @@ zeroconf_initscan_done (void)
     return true;
 }
 
-/* Wait intil initial scan is done
+/* Wait until initial scan is done
  */
 static void
 zeroconf_initscan_wait (void)
