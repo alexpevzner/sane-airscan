@@ -644,7 +644,7 @@ zeroconf_endpoint_list_free (zeroconf_endpoint *list)
     }
 }
 
-/* Compare two endpoints , for sorting
+/* Compare two endpoints, for sorting
  */
 static int
 zeroconf_endpoint_cmp (const zeroconf_endpoint *e1, const zeroconf_endpoint *e2)
@@ -655,6 +655,13 @@ zeroconf_endpoint_cmp (const zeroconf_endpoint *e1, const zeroconf_endpoint *e2)
     if (a1 != NULL && a2 != NULL) {
         bool ll1 = ip_sockaddr_is_linklocal(a1);
         bool ll2 = ip_sockaddr_is_linklocal(a2);
+        int  cmp;
+
+        /* Prefer directly reachable addresses */
+        cmp = netif_distance_cmp(a1, a2);
+        if (cmp != 0) {
+            return cmp;
+        }
 
         /* Prefer normal addresses, rather that link-local */
         if (ll1 != ll2) {
