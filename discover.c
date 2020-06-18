@@ -70,6 +70,7 @@ airscan_init (void)
         die("rand-init: %s", sane_strstatus(status));
     }
     http_init();
+    netif_init();
     zeroconf_init();
 
     status = mdns_init();

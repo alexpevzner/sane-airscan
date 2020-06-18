@@ -688,6 +688,33 @@ struct netif_addr {
     } ip;
 };
 
+/* NETIF_DISTANCE represents a distance to the target address
+ */
+typedef enum {
+    NETIF_DISTANCE_LOOPBACK, /* Target address is host's local address */
+    NETIF_DISTANCE_DIRECT,   /* Target is on a local network */
+    NETIF_DISTANCE_ROUTED    /* Target is behind a router */
+} NETIF_DISTANCE;
+
+/* Get distance to the target address
+ */
+NETIF_DISTANCE
+netif_distance_get (const struct sockaddr *addr);
+
+/* Compare addresses by distance. Returns:
+ *   <0, if addr1 is closer that addr2
+ *   >0, if addr2 is farther that addr2
+ *   0 if distance is equal
+ */
+static inline int
+netif_distance_cmp (const struct sockaddr *addr1, const struct sockaddr *addr2)
+{
+    int d1 = (int) netif_distance_get(addr1);
+    int d2 = (int) netif_distance_get(addr2);
+
+    return d1 - d2;
+}
+
 /* Get list of network interfaces addresses
  * The returned list is sorted
  */
@@ -747,6 +774,16 @@ netif_notifier_create (void (*callback) (void*), void *data);
  */
 void
 netif_notifier_free (netif_notifier *notifier);
+
+/* Initialize network interfaces monitoring
+ */
+SANE_Status
+netif_init (void);
+
+/* Cleanup network interfaces monitoring
+ */
+void
+netif_cleanup (void);
 
 /******************** Pollable events ********************/
 /* The pollable event

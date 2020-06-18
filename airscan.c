@@ -47,6 +47,9 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
         status = device_management_init();
     }
     if (status == SANE_STATUS_GOOD) {
+        status = netif_init();
+    }
+    if (status == SANE_STATUS_GOOD) {
         status = zeroconf_init();
     }
     if (status == SANE_STATUS_GOOD) {
@@ -84,6 +87,7 @@ sane_exit (void)
     mdns_cleanup();
     wsdd_cleanup();
     zeroconf_cleanup();
+    netif_cleanup();
     device_management_cleanup();
     http_cleanup();
     rand_cleanup();

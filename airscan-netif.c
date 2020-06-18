@@ -8,6 +8,7 @@
 
 #include "airscan.h"
 
+#include <errno.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -18,35 +19,100 @@
 #include <net/if.h>
 #include <sys/socket.h>
 
+/* Static variables */
+static int netif_rtnetlink_sock = -1;
+static eloop_fdpoll *netif_rtnetlink_fdpoll;
+static ll_head netif_notifier_list;
+static struct ifaddrs *netif_ifaddrs;
+
 /* Forward declarations */
 static netif_addr*
 netif_addr_list_sort (netif_addr *list);
+
+/* Get distance to the target address
+ */
+NETIF_DISTANCE
+netif_distance_get (const struct sockaddr *addr)
+{
+    struct ifaddrs         *ifa;
+    struct in_addr         addr4, ifaddr4, ifmask4;
+    struct in6_addr        addr6, ifaddr6, ifmask6;
+    static struct in6_addr zero6;
+    size_t                 i;
+    NETIF_DISTANCE         distance = NETIF_DISTANCE_ROUTED;
+
+    for (ifa = netif_ifaddrs; ifa != NULL; ifa = ifa->ifa_next) {
+        /* Skip interface without address or netmask */
+        if (ifa->ifa_addr == NULL || ifa->ifa_netmask == NULL) {
+            continue;
+        }
+
+        /* Compare address family */
+        if (addr->sa_family != ifa->ifa_addr->sa_family) {
+            continue;
+        }
+
+        /* Check direct reachability */
+        switch (addr->sa_family) {
+        case AF_INET:
+            addr4 = ((struct sockaddr_in*) addr)->sin_addr;
+            ifaddr4 = ((struct sockaddr_in*) ifa->ifa_addr)->sin_addr;
+            ifmask4 = ((struct sockaddr_in*) ifa->ifa_netmask)->sin_addr;
+
+            if (addr4.s_addr == ifaddr4.s_addr) {
+                return NETIF_DISTANCE_LOOPBACK;
+            }
+
+            if (((addr4.s_addr ^ ifaddr4.s_addr) & ifmask4.s_addr) == 0) {
+                distance = NETIF_DISTANCE_DIRECT;
+            }
+            break;
+
+        case AF_INET6:
+            addr6 = ((struct sockaddr_in6*) addr)->sin6_addr;
+            ifaddr6 = ((struct sockaddr_in6*) ifa->ifa_addr)->sin6_addr;
+            ifmask6 = ((struct sockaddr_in6*) ifa->ifa_netmask)->sin6_addr;
+
+            if (!memcmp(&addr6, &ifaddr6, sizeof(struct in6_addr))) {
+                return NETIF_DISTANCE_LOOPBACK;
+            }
+
+            for (i = 0; i < sizeof(struct in6_addr); i ++) {
+                addr6.s6_addr[i] ^= ifaddr6.s6_addr[i];
+                addr6.s6_addr[i] &= ifmask6.s6_addr[i];
+            }
+
+            if (!memcmp(&addr6, &zero6, sizeof(struct in6_addr))) {
+                distance = NETIF_DISTANCE_DIRECT;
+            }
+            break;
+        }
+    }
+
+    return distance;
+}
 
 /* Get list of network interfaces addresses
  */
 netif_addr*
 netif_addr_list_get (void)
 {
-    struct ifaddrs *ifa, *ifp;
+    struct ifaddrs *ifa;
     netif_addr     *list = NULL, *addr;
 
-    if (getifaddrs(&ifa) < 0) {
-        return NULL;
-    }
-
-    for (ifp = ifa; ifp != NULL; ifp = ifp->ifa_next) {
+    for (ifa = netif_ifaddrs; ifa != NULL; ifa = ifa->ifa_next) {
         /* Skip interface without address */
-        if (ifp->ifa_addr == NULL) {
+        if (ifa->ifa_addr == NULL) {
             continue;
         }
 
         /* Skip loopback interface */
-        if ((ifp->ifa_flags & IFF_LOOPBACK) != 0) {
+        if ((ifa->ifa_flags & IFF_LOOPBACK) != 0) {
             continue;
         }
 
         /* Obtain interface index. Skip address, if it failed */
-        int idx = if_nametoindex(ifp->ifa_name);
+        int idx = if_nametoindex(ifa->ifa_name);
         if (idx <= 0) {
             continue;
         }
@@ -55,19 +121,19 @@ netif_addr_list_get (void)
         addr = g_new0(netif_addr, 1);
         addr->next = list;
         addr->ifindex = idx;
-        strncpy(addr->ifname.text, ifp->ifa_name,
+        strncpy(addr->ifname.text, ifa->ifa_name,
             sizeof(addr->ifname.text) - 1);
 
-        switch (ifp->ifa_addr->sa_family) {
+        switch (ifa->ifa_addr->sa_family) {
         case AF_INET:
-            addr->ip.v4 = ((struct sockaddr_in*) ifp->ifa_addr)->sin_addr;
+            addr->ip.v4 = ((struct sockaddr_in*) ifa->ifa_addr)->sin_addr;
             inet_ntop(AF_INET, &addr->ip.v4,
                 addr->straddr, sizeof(addr->straddr));
             break;
 
         case AF_INET6:
             addr->ipv6 = true;
-            addr->ip.v6 = ((struct sockaddr_in6*) ifp->ifa_addr)->sin6_addr;
+            addr->ip.v6 = ((struct sockaddr_in6*) ifa->ifa_addr)->sin6_addr;
             inet_ntop(AF_INET6, &addr->ip.v6,
                 addr->straddr, sizeof(addr->straddr));
             break;
@@ -85,7 +151,6 @@ netif_addr_list_get (void)
         }
     }
 
-    freeifaddrs(ifa);
     return netif_addr_list_sort(list);
 }
 
@@ -310,11 +375,9 @@ netif_addr_list_merge (netif_addr *list1, netif_addr *list2)
 /* Network interfaces addresses change notifier
  */
 struct netif_notifier {
-    int          rtnetlink;          /* rtnetlink socket */
-    eloop_fdpoll *fdpoll;            /* fdpoll for rtnetlink */
     void         (*callback)(void*); /* Notification callback */
     void         *data;              /* Callback data */
-    uint8_t      buf[16384];         /* Input buffer */
+    ll_node      list_node;          /* in the netif_notifier_list */
 };
 
 /* netif_notifier read callback
@@ -322,20 +385,26 @@ struct netif_notifier {
 static void
 netif_notifier_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
 {
-    netif_notifier   *notifier = (netif_notifier*) data;
-    int              rc = read(fd, notifier->buf, sizeof(notifier->buf));
+    static uint8_t  buf[16384];
+    int             rc;
     struct nlmsghdr *p;
-    size_t           sz;
+    size_t          sz;
+    ll_node         *node;
+    struct ifaddrs  *new_ifaddrs;
 
+    (void) fd;
+    (void) data;
     (void) mask;
 
-    /* Parse rtnetlink message */
+    /* Get rtnetlink message */
+    rc = read(netif_rtnetlink_sock, buf, sizeof(buf));
     if (rc < 0) {
         return;
     }
 
+    /* Parse rtnetlink message */
     sz = (size_t) rc;
-    for (p = (struct nlmsghdr*) notifier->buf;
+    for (p = (struct nlmsghdr*) buf;
         sz >= sizeof(struct nlmsghdr); p = NLMSG_NEXT(p, sz)) {
 
         if (!NLMSG_OK(p, sz) || sz < p->nlmsg_len) {
@@ -348,7 +417,22 @@ netif_notifier_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
 
         case RTM_NEWADDR:
         case RTM_DELADDR:
-            notifier->callback(notifier->data);
+            /* Refresh netif_ifaddrs */
+            rc = getifaddrs(&new_ifaddrs);
+            if (rc >= 0) {
+                if (netif_ifaddrs != NULL) {
+                    freeifaddrs(netif_ifaddrs);
+                }
+
+                netif_ifaddrs = new_ifaddrs;
+            }
+
+            /* Call all registered callbacks */
+            for (LL_FOR_EACH(node, &netif_notifier_list)) {
+                netif_notifier *notifier;
+                notifier = OUTER_STRUCT(node, netif_notifier, list_node);
+                notifier->callback(notifier->data);
+            }
             return;
         }
     }
@@ -359,39 +443,12 @@ netif_notifier_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
 netif_notifier*
 netif_notifier_create (void (*callback) (void*), void *data)
 {
-    int                rtnetlink, rc;
-    struct sockaddr_nl addr;
-    netif_notifier     *notifier;
+    netif_notifier *notifier = g_new0(netif_notifier, 1);
 
-    /* Open rtnetlink socket */
-    rtnetlink = socket(AF_NETLINK,
-        SOCK_RAW | SOCK_CLOEXEC | SOCK_NONBLOCK, NETLINK_ROUTE);
-
-    if (rtnetlink < 0) {
-        return NULL;
-    }
-
-    /* Subscribe to notifications */
-    memset(&addr, 0, sizeof(addr));
-    addr.nl_family = AF_NETLINK;
-    addr.nl_groups = RTMGRP_IPV4_IFADDR | RTMGRP_IPV6_IFADDR;
-
-    rc = bind(rtnetlink, (struct sockaddr*) &addr, sizeof(addr));
-    if (rc < 0) {
-        close(rtnetlink);
-        return NULL;
-    }
-
-    /* Create netif_notifier structure */
-    notifier = g_new0(netif_notifier, 1);
-    notifier->rtnetlink = rtnetlink;
     notifier->callback = callback;
     notifier->data = data;
 
-    /* Register in event loop */
-    notifier->fdpoll = eloop_fdpoll_new(rtnetlink,
-        netif_notifier_read_callback, notifier);
-    eloop_fdpoll_set_mask(notifier->fdpoll, ELOOP_FDPOLL_READ);
+    ll_push_end(&netif_notifier_list, &notifier->list_node);
 
     return notifier;
 }
@@ -401,9 +458,83 @@ netif_notifier_create (void (*callback) (void*), void *data)
 void
 netif_notifier_free (netif_notifier *notifier)
 {
-    eloop_fdpoll_free(notifier->fdpoll);
-    close(notifier->rtnetlink);
+    ll_del(&notifier->list_node);
     g_free(notifier);
+}
+
+/* Start/stop callback
+ */
+static void
+netif_start_stop_callback (bool start)
+{
+    if (start) {
+        netif_rtnetlink_fdpoll = eloop_fdpoll_new(netif_rtnetlink_sock,
+            netif_notifier_read_callback, NULL);
+        eloop_fdpoll_set_mask(netif_rtnetlink_fdpoll, ELOOP_FDPOLL_READ);
+    } else {
+        eloop_fdpoll_free(netif_rtnetlink_fdpoll);
+        netif_rtnetlink_fdpoll = NULL;
+    }
+}
+
+/* Initialize network interfaces monitoring
+ */
+SANE_Status
+netif_init (void)
+{
+    struct sockaddr_nl addr;
+    int                rc;
+
+    ll_init(&netif_notifier_list);
+
+    /* Create AF_NETLINK socket */
+    netif_rtnetlink_sock = socket(AF_NETLINK,
+        SOCK_RAW | SOCK_CLOEXEC | SOCK_NONBLOCK, NETLINK_ROUTE);
+
+    if (netif_rtnetlink_sock < 0) {
+        log_debug(NULL, "can't open AF_NETLINK socket: %s", strerror(errno));
+        return SANE_STATUS_IO_ERROR;
+    }
+
+    /* Subscribe to notifications */
+    memset(&addr, 0, sizeof(addr));
+    addr.nl_family = AF_NETLINK;
+    addr.nl_groups = RTMGRP_IPV4_IFADDR | RTMGRP_IPV6_IFADDR;
+
+    rc = bind(netif_rtnetlink_sock, (struct sockaddr*) &addr, sizeof(addr));
+    if (rc < 0) {
+        log_debug(NULL, "can't bind AF_NETLINK socket: %s", strerror(errno));
+        close(netif_rtnetlink_sock);
+        return SANE_STATUS_IO_ERROR;
+    }
+
+    /* Initialize netif_ifaddrs */
+    if (getifaddrs(&netif_ifaddrs) < 0) {
+        log_debug(NULL, "getifaddrs(): %s", strerror(errno));
+        close(netif_rtnetlink_sock);
+        return SANE_STATUS_IO_ERROR;
+    }
+
+    /* Register start/stop callback */
+    eloop_add_start_stop_callback(netif_start_stop_callback);
+
+    return SANE_STATUS_GOOD;
+}
+
+/* Cleanup network interfaces monitoring
+ */
+void
+netif_cleanup (void)
+{
+    if (netif_ifaddrs != NULL) {
+        freeifaddrs(netif_ifaddrs);
+        netif_ifaddrs = NULL;
+    }
+
+    if (netif_rtnetlink_sock >= 0) {
+        close(netif_rtnetlink_sock);
+        netif_rtnetlink_sock = -1;
+    }
 }
 
 /* vim:ts=8:sw=4:et
