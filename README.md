@@ -10,8 +10,8 @@ Driverless scanning comes in two flavors:
 
 This backend implements both protocols, choosing automatically between them.
 It was successfully tested with many devices from **Brother**, **Canon**,
-**Kyocera**, **Lexmark**, **Epson**, **HP**, **Ricoh** and **Xerox** both
-in WSD and eSCL modes.
+**Kyocera**, **Lexmark**, **Epson**, **HP**, **Ricoh**, **Samsung** and **Xerox**
+both in WSD and eSCL modes.
 
 For eSCL devices, Apple maintains [a comprehensive list](https://support.apple.com/en-us/HT201311)
 of compatible devices, but please note, this list contains not only scanners and MFP,
@@ -91,6 +91,7 @@ Legend:
 | Kyocera ECOSYS M2040dn             | Yes                       | Yes<sup>[2](#note2)</sup> |
 | Lexmark MC2535adwe                 | Yes                       |                           |
 | Ricoh MP C3003                     | No                        | Yes<sup>[3](#note3)</sup> |
+| Samsung M288x Series               | No                        | Yes                       |
 | Xerox VersaLink B405               | Yes                       |                           |
 | TODO                               |                           |                           |
 
