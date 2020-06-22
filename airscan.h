@@ -18,6 +18,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -827,6 +828,22 @@ pollable_reset (pollable *p);
 void
 pollable_wait (pollable *p);
 
+/******************** Time stamps ********************/
+/* timestamp represents a monotonic time, in milliseconds
+ */
+typedef int64_t timestamp;
+
+/* timestamp_now() returns a current time as timestamp
+ */
+static inline timestamp
+timestamp_now (void)
+{
+    struct timespec t;
+
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return (timestamp) t.tv_sec * 1000 + (timestamp) t.tv_nsec / 1000000;
+}
+
 /******************** Event loop ********************/
 /* Initialize event loop
  */
@@ -1200,6 +1217,13 @@ http_query_onerror (http_query *q, void (*onerror)(void *ptr, error err));
  */
 void
 http_query_submit (http_query *q, void (*callback)(void *ptr, http_query *q));
+
+/* Get http_query timestamp. Timestamp is set when query is
+ * submitted. Getting timestamp before query is submited,
+ * and this function should not be called before http_query_submit()
+ */
+timestamp
+http_query_timestamp (const http_query *q);
 
 /* Set uintptr_t parameter, associated with query.
  * Completion callback may later use http_query_get_uintptr()

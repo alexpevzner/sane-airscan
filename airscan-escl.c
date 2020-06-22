@@ -25,6 +25,25 @@
  */
 #define ESCL_RETRY_PAUSE                1000
 
+/* Some devices (namely, Brother MFC-L2710DW) erroneously returns
+ * HTTP 404 Not Found when scanning from ADF, if next LOAD request
+ * send immediately after completion the previous one, and ScannerStatus
+ * returns ScannerAdfEmpty at this case, which leads to premature
+ * scan job termination with SANE_STATUS_NO_DOCS status
+ *
+ * Introducing a small delay between subsequent LOAD requests solves
+ * this problem.
+ *
+ * To avoid performance regression on a very fast scanners, this
+ * delay is limited to some fraction of the preceding LOAD
+ * query time
+ *
+ *   ESCL_NEXT_LOAD_DELAY     - delay between LOAD requests, milliseconds
+ *   ESCL_NEXT_LOAD_DELAY_MAX - upper limit of this delay, as a fraction
+ *                              of a previous LOAD time
+ */
+#define ESCL_NEXT_LOAD_DELAY           1000
+#define ESCL_NEXT_LOAD_DELAY_MAX       0.5
 
 /* proto_handler_escl represents eSCL protocol handler
  */
@@ -651,6 +670,7 @@ escl_load_decode (const proto_ctx *ctx)
 {
     proto_result result = {0};
     error        err = NULL;
+    timestamp    t = 0;
 
     /* Check HTTP status */
     err = http_query_error(ctx->query);
@@ -665,8 +685,21 @@ escl_load_decode (const proto_ctx *ctx)
         return result;
     }
 
+    /* Compute delay until next load */
+    if (ctx->params.src != ID_SOURCE_PLATEN) {
+        t = timestamp_now() - http_query_timestamp(ctx->query);
+        t *= ESCL_NEXT_LOAD_DELAY_MAX;
+
+        if (t > ESCL_NEXT_LOAD_DELAY) {
+            t = ESCL_NEXT_LOAD_DELAY;
+        }
+    }
+
+    /* Fill proto_result */
     result.next = PROTO_OP_LOAD;
+    result.delay = (int) t;
     result.data.image = http_data_ref(http_query_get_response_data(ctx->query));
+
     return result;
 }
 

@@ -762,6 +762,7 @@ struct http_query {
     http_client       *client;                  /* Client that owns the query */
     http_uri          *uri;                     /* Query URI */
     SoupMessage       *msg;                     /* Underlying SOUP message */
+    timestamp         timestamp;                /* Submission timestamp */
     uintptr_t         uintptr;                  /* User-defined parameter */
     void              (*onerror) (void *ptr,    /* On-error callback */
                                 error err);
@@ -963,6 +964,7 @@ http_query_submit (http_query *q, void (*callback)(void *ptr, http_query *q))
 
     log_debug(q->client->log, "HTTP %s %s", q->msg->method, http_uri_str(q->uri));
 
+    q->timestamp = timestamp_now();
     soup_session_queue_message(http_session, q->msg, http_query_callback, q);
 }
 
@@ -993,6 +995,16 @@ http_query_cancel (http_query *q)
             soup_status_get_phrase(SOUP_STATUS_CANCELLED));
 
     http_query_free(q);
+}
+
+/* Get http_query timestamp. Timestamp is set when query is
+ * submitted. Getting timestamp before query is submited,
+ * and this function should not be called before http_query_submit()
+ */
+timestamp
+http_query_timestamp (const http_query *q)
+{
+    return q->timestamp;
 }
 
 /* Set uintptr_t parameter, associated with query.
