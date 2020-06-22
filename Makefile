@@ -36,7 +36,7 @@ DEPENDS	:= avahi-client avahi-glib libjpeg libsoup-2.4 libxml-2.0
 DEPENDS += libpng
 
 # Sources and object files
-SRC	= $(wildcard airscan-*.c) sane_strstatus.c
+SRC	= $(wildcard airscan-*.c) sane_strstatus.c http_parser.c
 OBJ	= $(addprefix $(OBJDIR), $(SRC:.c=.o))
 
 # Obtain CFLAGS and LDFLAGS for dependencies
