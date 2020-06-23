@@ -13,12 +13,14 @@
 #   LDFLAGS                           Linker flags
 #   COMPRESS gzip                     Program to compress man page, or ""
 #   MANDIR   /usr/share/man/          Where to install man page
+#   STRIP    -s                       Stripping of debug symbols
 
 CC	= gcc
 COMPRESS = gzip
 CFLAGS	= -O2 -g -W -Wall -Werror
 MANDIR	= /usr/share/man/
 PKG_CONFIG = /usr/bin/pkg-config
+STRIP = -s
 
 # These variables are not intended to be user-settable
 OBJDIR  = objs/
@@ -89,10 +91,10 @@ install: all
 	mkdir -p $(DESTDIR)$(PREFIX)$(BINDIR)
 	mkdir -p $(DESTDIR)$(PREFIX)$(CONFDIR)
 	mkdir -p $(DESTDIR)$(PREFIX)$(CONFDIR)/dll.d
-	install -s -D -t $(DESTDIR)$(PREFIX)$(BINDIR) $(DISCOVER)
+	install $(STRIP) -D -t $(DESTDIR)$(PREFIX)$(BINDIR) $(DISCOVER)
 	cp -n airscan.conf $(DESTDIR)$(PREFIX)$(CONFDIR)
 	cp -n dll.conf $(DESTDIR)$(PREFIX)$(CONFDIR)/dll.d/airscan
-	install -s -D -t $(DESTDIR)$(PREFIX)$(LIBDIR)/sane $(BACKEND)
+	install $(STRIP) -D -t $(DESTDIR)$(PREFIX)$(LIBDIR)/sane $(BACKEND)
 	mkdir -p $(DESTDIR)$(PREFIX)/$(MANDIR)/man5
 	install -m 644 -D -t $(DESTDIR)$(PREFIX)$(MANDIR)/man1 $(MAN_DISCOVER)
 	install -m 644 -D -t $(DESTDIR)$(PREFIX)$(MANDIR)/man5 $(MAN_BACKEND)
