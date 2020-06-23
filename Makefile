@@ -24,9 +24,9 @@ STRIP 	= -s
 
 # These variables are not intended to be user-settable
 OBJDIR  = objs/
-BINDIR = /usr/bin
+BINDIR 	= /usr/bin
 CONFDIR = /etc/sane.d
-LIBDIR := $(shell $(PKG_CONFIG) --variable=libdir sane-backends)
+LIBDIR 	:= $(shell $(PKG_CONFIG) --variable=libdir sane-backends)
 BACKEND = libsane-airscan.so.1
 DISCOVER = airscan-discover
 LIBAIRSCAN = $(OBJDIR)/libairscan.a
