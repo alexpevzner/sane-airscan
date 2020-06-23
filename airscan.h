@@ -1332,14 +1332,24 @@ http_query_foreach_response_header (const http_query *q,
         void (*callback)(const char *name, const char *value, void *ptr),
         void *ptr);
 
+/* HTTP schemes
+ */
+typedef enum {
+    HTTP_SCHEME_UNSET = -1,
+    HTTP_SCHEME_HTTP,
+    HTTP_SCHEME_HTTPS
+} HTTP_SCHEME;
+
 /* Some HTTP status codes
  */
+#ifndef NO_HTTP_STATUS
 enum {
     HTTP_STATUS_OK                  = 200,
     HTTP_STATUS_CREATED             = 201,
     HTTP_STATUS_NOT_FOUND           = 404,
     HTTP_STATUS_SERVICE_UNAVAILABLE = 503
 };
+#endif
 
 /* Initialize HTTP client
  */

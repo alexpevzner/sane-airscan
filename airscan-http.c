@@ -8,7 +8,10 @@
 #define _GNU_SOURCE
 #include <string.h>
 
+#define NO_HTTP_STATUS
+
 #include "airscan.h"
+#include "http_parser.h"
 
 #include <arpa/inet.h>
 #include <libsoup/soup.h>
@@ -36,50 +39,370 @@ http_query_cancel (http_query *q);
 /* Type http_uri represents HTTP URI
  */
 struct http_uri {
-    SoupURI *parsed; /* Parsed URI */
-    char    *str;    /* URI string, computed on demand and cached here */
-    union {          /* Host address, computed on demand and cached here */
+    struct http_parser_url parsed; /* Parsed URI */
+    const char             *str;   /* URI string */
+    const char             *path;  /* URI path */
+    HTTP_SCHEME            scheme; /* URI scheme */
+    union {                 /* Host address*/
         struct sockaddr     sockaddr;
         struct sockaddr_in  in;
         struct sockaddr_in6 in6;
     } addr;
 };
 
+typedef struct {
+    const char *str;
+    size_t     len;
+} http_uri_field;
+
+/* Make http_uri_field
+ */
+static http_uri_field
+http_uri_field_make (const char *str)
+{
+    http_uri_field field = {str, strlen(str)};
+    return field;
+}
+
+/* Check if URI has a particular field
+ */
+static inline bool
+http_uri_field_present (const http_uri *uri, int num)
+{
+    return (uri->parsed.field_set & (1 << num)) != 0;
+}
+
+/* Check if URI field is present and non-empty
+ */
+static inline bool
+http_uri_field_nonempty (const http_uri *uri, int num)
+{
+    return uri->parsed.field_data[num].len != 0;
+}
+
+/* Get first character of the field. Returns -1, if
+ * field is empty, or non-negative character code otherwise
+ */
+static inline int
+http_uri_field_begin (const http_uri *uri, int num)
+{
+    if (http_uri_field_nonempty(uri, num)) {
+        return (unsigned char) uri->str[uri->parsed.field_data[num].off];
+    } else {
+        return -1;
+    }
+}
+
+/* Get field from URI
+ */
+static http_uri_field
+http_uri_field_get (const http_uri *uri, int num)
+{
+    http_uri_field field = {
+        uri->str + uri->parsed.field_data[num].off,
+        uri->parsed.field_data[num].len
+    };
+
+    return field;
+}
+
+/* Append field to buffer, and return pointer to
+ * updated buffer tail
+ */
+static inline char *
+http_uri_field_append (http_uri_field field, char *buf)
+{
+    memcpy(buf, field.str, field.len);
+    return buf + field.len;
+}
+
+/* Get field from URI and append to buffer
+ */
+static inline char*
+http_uri_field_copy (const http_uri *uri, int num, char *buf)
+{
+    return http_uri_field_append(http_uri_field_get(uri, num), buf);
+}
+
+/* Get and strdup the field
+ */
+static char*
+http_uri_field_strdup (const http_uri *uri, int num)
+{
+    http_uri_field field = http_uri_field_get(uri, num);
+    char           *s = g_malloc(field.len + 1);
+
+    memcpy(s, field.str, field.len);
+    s[field.len] = '\0';
+
+    return s;
+}
+
+/* Check are fields of two URIs are equal
+ */
+static bool
+http_uri_field_equal (const http_uri *uri1, const http_uri *uri2,
+        int num, bool nocase)
+{
+    http_uri_field f1 = http_uri_field_get(uri1, num);
+    http_uri_field f2 = http_uri_field_get(uri2, num);
+
+    if (f1.len != f2.len) {
+        return false;
+    }
+
+    if (nocase) {
+        return !strncasecmp(f1.str, f2.str, f1.len);
+    } else {
+        return !memcmp(f1.str, f2.str, f1.len);
+    }
+}
+
+/* Replace particular URI field
+ */
+static void
+http_uri_field_replace (http_uri *uri, int num, http_uri_field val)
+{
+    static const struct { char *pfx; int num; char *sfx; } fields[] = {
+        {"",  UF_SCHEMA, "://"},
+        {"",  UF_USERINFO, "@"},
+        {"",  UF_HOST, ""},
+        {":", UF_PORT, ""},
+        {"",  UF_PATH, ""},
+        {"?", UF_QUERY, ""},
+        {"#", UF_FRAGMENT, ""},
+        {NULL, -1, NULL}
+    };
+
+    int      i;
+    char     *buf = g_alloca(strlen(uri->str) + val.len + 4);
+    char     *end = buf;
+    http_uri *uri2;
+
+    /* Rebuild URI string */
+    for (i = 0; fields[i].num != -1; i ++) {
+        http_uri_field field;
+
+        if (num == fields[i].num) {
+            field = val;
+        } else {
+            field = http_uri_field_get(uri, fields[i].num);
+        }
+
+        if (field.len != 0) {
+            if (fields[i].pfx != NULL) {
+                http_uri_field pfx = http_uri_field_make(fields[i].pfx);
+                end = http_uri_field_append(pfx, end);
+            }
+
+            end = http_uri_field_append(field, end);
+
+            if (fields[i].sfx != NULL) {
+                http_uri_field sfx = http_uri_field_make(fields[i].sfx);
+                end = http_uri_field_append(sfx, end);
+            }
+        }
+    }
+
+    *end = '\0';
+
+    /* Reconstruct the URI */
+    uri2 = http_uri_new(buf, false);
+    log_assert(NULL, uri2 != NULL);
+
+    g_free((char*) uri->str);
+    g_free((char*) uri->path);
+    *uri = *uri2;
+    g_free(uri2);
+}
+
+/* Append UF_PATH part of URI to buffer up to the final '/'
+ * character
+ */
+static char*
+http_uri_field_copy_basepath (const http_uri *uri, char *buf)
+{
+    http_uri_field path = http_uri_field_get(uri, UF_PATH);
+    const char     *end = memrchr(path.str, '/', path.len);
+
+    path.len = end ? (size_t)(end - path.str) : 0;
+
+    buf = http_uri_field_append(path, buf);
+    *(buf ++) = '/';
+
+    return buf;
+}
+
+/* Parse URI in place. The parsed URI doesn't create
+ * a copy of URI string, and uses supplied string directly
+ */
+static error
+http_uri_parse (http_uri *uri, const char *str)
+{
+    /* Parse URI */
+    memset(uri, 0, sizeof(*uri));
+    if (http_parser_parse_url(str, strlen(str), 0, &uri->parsed) != 0) {
+        return ERROR("Invalid URI");
+    }
+
+    uri->str = str;
+
+    /* Decode scheme */
+    if (!strncasecmp(str, "http://", 7)) {
+        uri->scheme = HTTP_SCHEME_HTTP;
+    } else if (!strncasecmp(str, "https://", 8)) {
+        uri->scheme = HTTP_SCHEME_HTTPS;
+    } else {
+        uri->scheme = HTTP_SCHEME_UNSET;
+    }
+
+    return NULL;
+}
+
+/* Parse URI address
+ */
+static void
+http_uri_parse_addr (http_uri *uri)
+{
+    http_uri_field field;
+    char           *host = NULL, *port = NULL;
+    uint16_t       portnum;
+    int            rc;
+
+    /* Reset address */
+    memset(&uri->addr, 0, sizeof(uri->addr));
+
+    /* Get host and port */
+    field = http_uri_field_get(uri, UF_HOST);
+    if (field.len != 0) {
+        host = g_alloca(field.len + 1);
+        memcpy(host, field.str, field.len);
+        host[field.len] = '\0';
+    }
+
+    field = http_uri_field_get(uri, UF_PORT);
+    if (field.len != 0) {
+        port = g_alloca(field.len + 1);
+        memcpy(port, field.str, field.len);
+        port[field.len] = '\0';
+    }
+
+    if (host == NULL) {
+        return;
+    }
+
+    /* Parse port number */
+    if (port != NULL) {
+        char          *end;
+        unsigned long val = strtoul(port, &end, 10);
+
+        if (end == port || *end != '\0' || val > 0xffff) {
+            return;
+        }
+
+        portnum = htons((uint16_t) val);
+    } else {
+        switch (uri->scheme) {
+        case HTTP_SCHEME_HTTP:
+            portnum = htons(80);
+            break;
+
+        case HTTP_SCHEME_HTTPS:
+            portnum = htons(443);
+            break;
+
+        default:
+            return;
+        }
+    }
+
+    if (strchr(host, ':') != NULL) {
+        struct in6_addr in6;
+
+        /* Strip zone suffix */
+        char *s = strchr(host, '%');
+        if (s != NULL) {
+            s = '\0';
+        }
+
+        rc = inet_pton(AF_INET6, host, &in6);
+        if (rc != 1) {
+            return;
+        }
+
+        uri->addr.in6.sin6_family = AF_INET6;
+        uri->addr.in6.sin6_addr = in6;
+        uri->addr.in6.sin6_port = portnum;
+    } else {
+        struct in_addr in;
+
+        rc = inet_pton(AF_INET, host, &in);
+        if (rc != 1) {
+            return;
+        }
+
+        uri->addr.in.sin_family = AF_INET;
+        uri->addr.in.sin_addr = in;
+        uri->addr.in.sin_port = portnum;
+    }
+}
+
 /* Create new URI, by parsing URI string
  */
 http_uri*
 http_uri_new (const char *str, bool strip_fragment)
 {
-    http_uri *uri = NULL;
-    SoupURI  *parsed = soup_uri_new(str);
+    http_uri       *uri = g_new0(http_uri, 1);
+    char           *buf;
+
+    /* Parse URI */
+    if (http_uri_parse(uri, str) != NULL) {
+        goto FAIL;
+    }
 
     /* Allow only http and https schemes */
-    if (parsed != NULL) {
-        if (strcmp(parsed->scheme, "http") && strcmp(parsed->scheme, "https")) {
-            soup_uri_free(parsed);
-            parsed = NULL;
-        }
+    switch (uri->scheme) {
+    case HTTP_SCHEME_HTTP:
+    case HTTP_SCHEME_HTTPS:
+        break;
+
+    default:
+        goto FAIL;
     }
 
-    if (parsed != NULL) {
-        uri = g_new0(http_uri, 1);
-        if (strip_fragment) {
-            soup_uri_set_fragment(parsed, NULL);
-        }
-        uri->parsed = parsed;
-        uri->addr.sockaddr.sa_family = AF_UNSPEC;
+    uri->str = buf = g_strdup(str);
+
+    /* Honor strip_fragment flag */
+    if (strip_fragment && http_uri_field_present(uri, UF_FRAGMENT)) {
+        buf[uri->parsed.field_data[UF_FRAGMENT].off - 1] = '\0';
+        uri->parsed.field_set &= ~(1 << UF_FRAGMENT);
+        uri->parsed.field_data[UF_FRAGMENT].off = 0;
+        uri->parsed.field_data[UF_FRAGMENT].len = 0;
     }
+
+    /* Prepare addr, path */
+    http_uri_parse_addr(uri);
+    uri->path = http_uri_field_strdup(uri, UF_PATH);
 
     return uri;
+
+    /* Error: cleanup and exit */
+FAIL:
+    g_free(uri);
+    return NULL;
 }
 
-/* Clone an URI
+/* Clone the URI
  */
 http_uri*
 http_uri_clone (const http_uri *old)
 {
     http_uri *uri = g_new0(http_uri, 1);
-    uri->parsed = soup_uri_copy(old->parsed);
+
+    *uri = *old;
+    uri->str = g_strdup(uri->str);
+    uri->path = g_strdup(uri->path);
+
     return uri;
 }
 
@@ -91,25 +414,61 @@ http_uri*
 http_uri_new_relative (const http_uri *base, const char *path,
         bool strip_fragment, bool path_only)
 {
-    http_uri *uri = NULL;
-    SoupURI  *parsed = soup_uri_new_with_base(base->parsed, path);
+    char           *buf = g_alloca(strlen(base->str) + strlen(path) + 1);
+    char           *end = buf;
+    http_uri       ref;
+    const http_uri *uri;
 
-    if (parsed != NULL) {
-        uri = g_new0(http_uri, 1);
-        if (path_only) {
-            uri->parsed = soup_uri_copy(base->parsed);
-            soup_uri_set_path(uri->parsed, soup_uri_get_path(parsed));
-            soup_uri_free(parsed);
-        } else {
-            uri->parsed = parsed;
-        }
-
-        if (strip_fragment) {
-            soup_uri_set_fragment(uri->parsed, NULL);
-        }
+    if (http_uri_parse(&ref, path) != NULL) {
+        return NULL;
     }
 
-    return uri;
+    /* Set schema, userinfo, host and port */
+    if (path_only || !http_uri_field_present(&ref, UF_SCHEMA)) {
+        uri = base;
+    } else {
+        uri = &ref;
+    }
+
+    end = http_uri_field_copy(uri, UF_SCHEMA, end);
+    end = http_uri_field_append(http_uri_field_make("://"), end);
+
+    if (http_uri_field_present(uri, UF_SCHEMA)) {
+        end = http_uri_field_copy(uri, UF_USERINFO, end);
+        end = http_uri_field_append(http_uri_field_make("@"), end);
+    }
+
+    end = http_uri_field_copy(uri, UF_HOST, end);
+    if (http_uri_field_present(uri, UF_PORT)) {
+        end = http_uri_field_append(http_uri_field_make(":"), end);
+        end = http_uri_field_copy(uri, UF_PORT, end);
+    }
+
+    /* Set path */
+    //path = end;
+    if (!http_uri_field_nonempty(&ref, UF_PATH)) {
+        end = http_uri_field_copy(base, UF_PATH, end);
+    } else {
+        if (http_uri_field_begin(&ref, UF_PATH) != '/') {
+            end = http_uri_field_copy_basepath(base, end);
+        }
+        end = http_uri_field_copy(&ref, UF_PATH, end);
+    }
+
+    /* Query and fragment */
+    if (http_uri_field_present(&ref, UF_QUERY)) {
+        end = http_uri_field_append(http_uri_field_make("?"), end);
+        end = http_uri_field_copy(&ref, UF_QUERY, end);
+    }
+
+    if (!strip_fragment && http_uri_field_present(&ref, UF_FRAGMENT)) {
+        end = http_uri_field_append(http_uri_field_make("#"), end);
+        end = http_uri_field_copy(&ref, UF_FRAGMENT, end);
+    }
+
+    *end = '\0';
+
+    return http_uri_new(buf, false);
 }
 
 /* Free the URI
@@ -118,8 +477,8 @@ void
 http_uri_free (http_uri *uri)
 {
     if (uri != NULL) {
-        soup_uri_free(uri->parsed);
-        g_free(uri->str);
+        g_free((char*) uri->str);
+        g_free((char*) uri->path);
         g_free(uri);
     }
 }
@@ -129,10 +488,6 @@ http_uri_free (http_uri *uri)
 const char*
 http_uri_str (http_uri *uri)
 {
-    if (uri->str == NULL) {
-        uri->str = soup_uri_to_string(uri->parsed, FALSE);
-    }
-
     return uri->str;
 }
 
@@ -141,42 +496,11 @@ http_uri_str (http_uri *uri)
 const struct sockaddr*
 http_uri_addr (http_uri *uri)
 {
-    char    *host = uri->parsed->host;
-    int     af;
-    int     rc;
-
-    /* Check cached address */
-    if (uri->addr.sockaddr.sa_family != AF_UNSPEC) {
-        return &uri->addr.sockaddr;
+    if (uri->addr.sockaddr.sa_family == AF_UNSPEC) {
+        return NULL;
     }
 
-    /* Try to parse */
-    if (strchr(host, ':') != NULL) {
-        /* Strip zone suffix */
-        char *s = strchr(host, '%');
-        if (s != NULL) {
-            size_t sz = s - host;
-            host = g_alloca(sz + 1);
-            memcpy(host, uri->parsed->host, sz);
-            host[sz] = '\0';
-        }
-
-        /* Parse address */
-        af = AF_INET6;
-        rc = inet_pton(AF_INET6, host, &uri->addr.in6.sin6_addr);
-        uri->addr.in6.sin6_port = htons(uri->parsed->port);
-    } else {
-        af = AF_INET;
-        rc = inet_pton(AF_INET, host, &uri->addr.in.sin_addr);
-        uri->addr.in.sin_port = htons(uri->parsed->port);
-    }
-
-    if (rc == 1) {
-        uri->addr.sockaddr.sa_family = af;
-        return &uri->addr.sockaddr;
-    }
-
-    return NULL;
+    return &uri->addr.sockaddr;
 }
 
 /* Get URI path
@@ -184,7 +508,7 @@ http_uri_addr (http_uri *uri)
 const char*
 http_uri_get_path (const http_uri *uri)
 {
-    return soup_uri_get_path(uri->parsed);
+    return uri->path;
 }
 
 /* Set URI path
@@ -192,9 +516,7 @@ http_uri_get_path (const http_uri *uri)
 void
 http_uri_set_path (http_uri *uri, const char *path)
 {
-    soup_uri_set_path(uri->parsed, path);
-    g_free(uri->str);
-    uri->str = NULL;
+    http_uri_field_replace(uri, UF_PATH, http_uri_field_make(path));
 }
 
 /* Fix IPv6 address zone suffix
@@ -202,6 +524,9 @@ http_uri_set_path (http_uri *uri, const char *path)
 void
 http_uri_fix_ipv6_zone (http_uri *uri, int ifindex)
 {
+    (void) uri;
+    (void) ifindex;
+#if     0
     struct in6_addr addr;
     char            *host = uri->parsed->host;
 
@@ -224,6 +549,7 @@ http_uri_fix_ipv6_zone (http_uri *uri, int ifindex)
         g_free(uri->str);
         uri->str = NULL;
     }
+#endif
 }
 
 /* Strip zone suffix from literal IPv6 host address
@@ -234,6 +560,8 @@ http_uri_fix_ipv6_zone (http_uri *uri, int ifindex)
 void
 http_uri_strip_zone_suffux (http_uri *uri)
 {
+    (void) uri;
+#if     0
     char            *host = uri->parsed->host;
     char            *suffix;
 
@@ -257,6 +585,7 @@ http_uri_strip_zone_suffux (http_uri *uri)
     soup_uri_set_host(uri->parsed, host);
     g_free(uri->str);
     uri->str = NULL;
+#endif
 }
 
 /* Make sure URI's path ends with the slash character
@@ -280,7 +609,13 @@ http_uri_fix_end_slash (http_uri *uri)
 bool
 http_uri_equal (const http_uri *uri1, const http_uri *uri2)
 {
-    return soup_uri_equal(uri1->parsed, uri2->parsed);
+    return uri1->scheme == uri2->scheme &&
+           http_uri_field_equal(uri1, uri2, UF_HOST, true);
+           http_uri_field_equal(uri1, uri2, UF_PORT, true);
+           http_uri_field_equal(uri1, uri2, UF_PATH, false);
+           http_uri_field_equal(uri1, uri2, UF_QUERY, false);
+           http_uri_field_equal(uri1, uri2, UF_FRAGMENT, false);
+           http_uri_field_equal(uri1, uri2, UF_USERINFO, false);
 }
 
 /******************** HTTP multipart ********************/
@@ -856,13 +1191,20 @@ http_query_set_host (http_query *q)
 
     if (addr != NULL) {
         ip_straddr s;
-        const char *scheme = q->uri->parsed->scheme;
-        int        dport = -1;
+        int        dport;
 
-        if (!strcasecmp(scheme, "http")) {
+        switch (q->uri->scheme) {
+        case HTTP_SCHEME_HTTP:
             dport = 80;
-        } else if (!strcasecmp(scheme, "https")) {
+            break;
+
+        case HTTP_SCHEME_HTTPS:
             dport = 443;
+            break;
+
+        default:
+            dport = -1;
+            break;
         }
 
         s = ip_straddr_from_sockaddr_dport(addr, dport);
@@ -898,7 +1240,7 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
 
     q->client = client;
     q->uri = uri;
-    q->msg = soup_message_new_from_uri(method, uri->parsed);
+    q->msg = soup_message_new(method, uri->str);
     q->cached = g_new0(http_query_cached, 1);
     q->onerror = client->onerror;
 
