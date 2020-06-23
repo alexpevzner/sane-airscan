@@ -20,7 +20,7 @@ COMPRESS = gzip
 CFLAGS	= -O2 -g -W -Wall -Werror
 MANDIR	= /usr/share/man/
 PKG_CONFIG = /usr/bin/pkg-config
-STRIP = -s
+STRIP 	= -s
 
 # These variables are not intended to be user-settable
 OBJDIR  = objs/
