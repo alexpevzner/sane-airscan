@@ -89,21 +89,27 @@ Legend:
 | HP OfficeJet Pro 9010 series       | Yes                       |                           |
 | HP Smart Tank Plus 550 series      | Yes                       |                           |
 | Kyocera ECOSYS M2040dn             | Yes                       | Yes<sup>[2](#note2)</sup> |
+| Lexmark CX317dn                    | Yes<sup>[3](#note3)</sup> | Yes<sup>[3](#note3)</sup> |
 | Lexmark MC2535adwe                 | Yes                       |                           |
-| Ricoh MP C3003                     | No                        | Yes<sup>[3](#note3)</sup> |
+| Ricoh MP C3003                     | No                        | Yes<sup>[4](#note3)</sup> |
 | Samsung M288x Series               | No                        | Yes                       |
 | Xerox VersaLink B405               | Yes                       |                           |
 | TODO                               |                           |                           |
 
 ---
-<a name="note1">[1]</a>: this device requires manual activation of AirPrint
+<a name="note1"><sup>[1]</sup></a>: this device requires manual activation of AirPrint
 scanning on its web console: Home->Menu->Preferences->Network->TCP/IP
 Settings->Network Link Scan Settings->On.
 
-<a name="note2">[2]</a>: this device requires manual action on its front
+<a name="note2"><sup>[2]</sup></a>: this device requires manual action on its front
 panel to initiate WSD scan: Send->WSD Scan->From Computer
 
-<a name="note3">[3]</a>: by default, WSD scan command is disabled on this
+<a name="note3"><sup>[3]</sup></a>: when low in memory, this device may scan at 400 DPI
+instead of requested 600 DPI. As sane-airscan reports image parameters to SANE before actual
+image is received, and then adjust actual image to reported parameters, image will
+be scaled down by the factor 2/3 at this case. Lower resolutions works well.
+
+<a name="note3"><sup>[4]</sup></a>: by default, WSD scan command is disabled on this
 device and needs to be enabled before use: Click [Configuration], click [Initial Settings]
 under [Scanner], and then set [Prohibit WSD Scan Command] to [Do not Prohibit] (from
 http://support.ricoh.com/bb_v1oi/pub_e/oi_view/0001047/0001047003/view/scanner/int/0095.htm)
