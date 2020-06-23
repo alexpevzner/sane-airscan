@@ -71,9 +71,9 @@ $(OBJDIR)%.o: %.c Makefile airscan.h
 
 .PHONY: all clean install man
 
-all:	tags $(BACKEND) $(DISCOVER) test test-decode
+all:	tags $(BACKEND) $(DISCOVER) test test-decode test-uri
 
-tags: $(SRC) airscan.h test.c test-decode.c
+tags: $(SRC) airscan.h test.c test-decode.c test-uri.c
 	-ctags -R .
 
 $(BACKEND): $(OBJDIR)airscan.o $(LIBAIRSCAN) airscan.sym
@@ -100,7 +100,7 @@ install: all
 	[ "$(COMPRESS)" = "" ] || $(COMPRESS) -f $(DESTDIR)$(PREFIX)$(MANDIR)/man5/$(MAN_BACKEND)
 
 clean:
-	rm -f test $(BACKEND) tags
+	rm -f test test-decode test-uri $(BACKEND) tags
 	rm -rf $(OBJDIR)
 
 man: $(MAN_DISCOVER) $(MAN_BACKEND)
@@ -116,3 +116,6 @@ test:	$(BACKEND) test.c
 
 test-decode: test-decode.c $(LIBAIRSCAN)
 	 $(CC) -o test-decode test-decode.c $(CPPFLAGS) $(airscan_CFLAGS) $(LIBAIRSCAN) $(airscan_LIBS)
+
+test-uri: test-uri.c $(LIBAIRSCAN)
+	 $(CC) -o test-uri test-uri.c $(CPPFLAGS) $(airscan_CFLAGS) $(LIBAIRSCAN) $(airscan_LIBS)
