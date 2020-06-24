@@ -2594,6 +2594,7 @@ log_panic (log_ctx *log, const char *fmt, ...);
          if (!(expr)) {                                                 \
              log_panic(log,"file %s: line %d (%s): assertion failed: (%s)",\
                      __FILE__, __LINE__, __PRETTY_FUNCTION__, #expr);   \
+             __builtin_unreachable();                                   \
          }                                                              \
      } while (0)
 
@@ -2603,6 +2604,7 @@ log_panic (log_ctx *log, const char *fmt, ...);
      do {                                                               \
          log_panic(log,"file %s: line %d (%s): internal error",         \
                  __FILE__, __LINE__, __PRETTY_FUNCTION__);              \
+         __builtin_unreachable();                                       \
      } while (0)
 
 #endif
