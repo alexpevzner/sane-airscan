@@ -487,6 +487,8 @@ static void
 device_probe_endpoint (device *dev, zeroconf_endpoint *endpoint)
 {
     /* Switch endpoint */
+    log_assert(dev->log, endpoint->proto != ID_PROTO_UNKNOWN);
+
     if (dev->endpoint_current == NULL ||
         dev->endpoint_current->proto != endpoint->proto) {
         device_proto_set(dev, endpoint->proto);
