@@ -218,6 +218,7 @@ main (int argc, char **argv)
         save_write(save, line);
     }
 
+    g_free(line);
     save_close(save);
 
     return 0;
