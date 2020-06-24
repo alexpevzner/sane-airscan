@@ -54,6 +54,7 @@ Legend:
 | Canon i-SENSYS MF641C              | No                        | Yes                       |
 | Canon Lide 400                     | Yes                       |                           |
 | Canon MF745C/746C                  | Yes                       | Yes                       |
+| Canon PIXMA MG5500 Series          | No                        | Yes                       |
 | Canon PIXMA MG7700 Series          | Yes                       |                           |
 | Canon PIXMA TS 9550 Series         | Yes                       |                           |
 | Canon TR4529 (PIXMA TR4500 Series) | Yes                       |                           |
