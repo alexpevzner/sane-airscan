@@ -741,6 +741,7 @@ wsdd_resolver_message_dispatch (wsdd_resolver *resolver,
         /* Add a finding. Do nothing if device already exist */
         wsdd = wsdd_finding_add(resolver->ifindex, msg->address);
         if (wsdd == NULL) {
+            log_trace(wsdd_log, "skipped: device already known");
             goto DONE;
         }
 
@@ -751,6 +752,14 @@ wsdd_resolver_message_dispatch (wsdd_resolver *resolver,
          * are done
          */
         if (!msg->is_scanner || ll_empty(&msg->xaddrs)) {
+            if (!msg->is_scanner) {
+                log_trace(wsdd_log, "device is not scanner, won't request metadata");
+            }
+
+            if (ll_empty(&msg->xaddrs)) {
+                log_trace(wsdd_log, "device has no xaddrs, can't request metadata");
+            }
+
             wsdd_finding_publish(wsdd);
             goto DONE;
         }
@@ -774,6 +783,7 @@ wsdd_resolver_message_dispatch (wsdd_resolver *resolver,
     /* Cleanup and exit */
 DONE:
     wsdd_message_free(msg);
+    log_trace(wsdd_log, "");
 }
 
 
