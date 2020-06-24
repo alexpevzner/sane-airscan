@@ -260,7 +260,7 @@ zeroconf_device_rebuild_sets (zeroconf_device *device)
         finding = OUTER_STRUCT(node, zeroconf_finding, list_node);
         proto = zeroconf_method_to_proto(finding->method);
 
-        zeroconf_device_ifaces_add(device, finding->ifindex );
+        zeroconf_device_ifaces_add(device, finding->ifindex);
         if (proto != ID_PROTO_UNKNOWN) {
             device->protocols |= 1 << proto;
         }
@@ -325,6 +325,7 @@ zeroconf_device_borrow_findings (zeroconf_device *device,
         finding = OUTER_STRUCT(node, zeroconf_finding, list_node);
         if (finding->ifindex == ifindex) {
             finding->device = NULL;
+            ll_del(node);
             ll_push_end(output, node);
         }
     }
@@ -556,7 +557,7 @@ zeroconf_ident_split (const char *ident, unsigned int *devid, ID_PROTO *proto)
 
     /* Decode proto and devid */
     *proto = zeroconf_ident_proto_decode(*ident);
-    if (*proto == NUM_ID_PROTO) {
+    if (*proto == ID_PROTO_UNKNOWN) {
         return NULL;
     }
 
@@ -850,7 +851,7 @@ zeroconf_finding_publish (zeroconf_finding *finding)
      */
     device = zeroconf_device_find_by_uuid(finding->uuid);
     if (device != NULL && finding->name != NULL) {
-        if (device->ifaces_len == 1 && device->ifaces[0] == finding->ifindex ){
+        if (device->ifaces_len == 1 && device->ifaces[0] == finding->ifindex){
             /* Case 2: all findings belongs to the same network
              * interface; upgrade anonymous device to named
              */
