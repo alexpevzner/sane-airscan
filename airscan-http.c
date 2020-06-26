@@ -988,11 +988,12 @@ http_query_cancel (http_query *q)
     g_object_ref(q->msg);
     soup_session_cancel_message(http_session, q->msg, SOUP_STATUS_CANCELLED);
     soup_message_set_status(q->msg, SOUP_STATUS_CANCELLED);
-    g_object_unref(q->msg);
 
     log_debug(q->client->log, "HTTP %s %s: %s", q->msg->method,
             http_uri_str(q->uri),
             soup_status_get_phrase(SOUP_STATUS_CANCELLED));
+
+    g_object_unref(q->msg);
 
     http_query_free(q);
 }
