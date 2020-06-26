@@ -161,7 +161,7 @@ http_uri_field_equal (const http_uri *uri1, const http_uri *uri2,
 /* Replace particular URI field
  */
 static void
-http_uri_field_replace (http_uri *uri, int num, http_uri_field val)
+http_uri_field_replace (http_uri *uri, int num, const char *val)
 {
     static const struct { char *pfx; int num; char *sfx; } fields[] = {
         {"",  UF_SCHEMA, "://"},
@@ -175,7 +175,7 @@ http_uri_field_replace (http_uri *uri, int num, http_uri_field val)
     };
 
     int      i;
-    char     *buf = g_alloca(strlen(uri->str) + val.len + 4);
+    char     *buf = g_alloca(strlen(uri->str) + strlen(val) + 4);
     char     *end = buf;
     http_uri *uri2;
 
@@ -184,7 +184,7 @@ http_uri_field_replace (http_uri *uri, int num, http_uri_field val)
         http_uri_field field;
 
         if (num == fields[i].num) {
-            field = val;
+            field = http_uri_field_make(val);
         } else {
             field = http_uri_field_get(uri, fields[i].num);
         }
@@ -423,6 +423,10 @@ http_uri_new_relative (const http_uri *base, const char *path,
         return NULL;
     }
 
+printf("SCHEME: %s\n", http_uri_field_strdup(&ref, UF_SCHEMA));
+printf("HOST:   %s\n", http_uri_field_strdup(&ref, UF_HOST));
+printf("PATH:   %s\n", http_uri_field_strdup(&ref, UF_PATH));
+
     /* Set schema, userinfo, host and port */
     if (path_only || !http_uri_field_present(&ref, UF_SCHEMA)) {
         uri = base;
@@ -433,7 +437,7 @@ http_uri_new_relative (const http_uri *base, const char *path,
     end = http_uri_field_copy(uri, UF_SCHEMA, end);
     end = http_uri_field_append(http_uri_field_make("://"), end);
 
-    if (http_uri_field_present(uri, UF_SCHEMA)) {
+    if (http_uri_field_present(uri, UF_USERINFO)) {
         end = http_uri_field_copy(uri, UF_USERINFO, end);
         end = http_uri_field_append(http_uri_field_make("@"), end);
     }
@@ -516,7 +520,7 @@ http_uri_get_path (const http_uri *uri)
 void
 http_uri_set_path (http_uri *uri, const char *path)
 {
-    http_uri_field_replace(uri, UF_PATH, http_uri_field_make(path));
+    http_uri_field_replace(uri, UF_PATH, path);
 }
 
 /* Fix IPv6 address zone suffix
@@ -524,32 +528,34 @@ http_uri_set_path (http_uri *uri, const char *path)
 void
 http_uri_fix_ipv6_zone (http_uri *uri, int ifindex)
 {
-    (void) uri;
-    (void) ifindex;
-#if     0
-    struct in6_addr addr;
-    char            *host = uri->parsed->host;
+    http_uri_field field;
+    char           *host, *end;
 
-    if (!strchr(host, ':')) {
+    /* Check if we need to change something */
+    if (uri->addr.sockaddr.sa_family != AF_INET6) {
         return; /* Not IPv6 */
     }
 
-    if (strchr(host, '%')) {
+    if (!ip_is_linklocal(AF_INET6, &uri->addr.in6.sin6_addr)) {
+        return; /* Not link-local */
+    }
+
+    field = http_uri_field_get(uri, UF_HOST);
+    if (memchr(field.str, '%', field.len)) {
         return; /* Already has zone suffix */
     }
 
-    if (inet_pton(AF_INET6, host, &addr) != 1) {
-        return; /* Can't parse address */
-    }
+    /* Obtain writable copy of host name */
+    /* Append zone suffix */
+    host = g_alloca(field.len + 64);
+    memcpy(host, field.str, field.len);
 
-    if (addr.s6_addr[0] == 0xfe && (addr.s6_addr[1] & 0xc0) == 0x80) {
-        char *s = g_alloca(strlen(host) + 64);
-        sprintf(s, "%s%%%d", host, ifindex);
-        soup_uri_set_host(uri->parsed, s);
-        g_free(uri->str);
-        uri->str = NULL;
-    }
-#endif
+    end = host + field.len;
+    end += sprintf(end, "%%%d", ifindex);
+    *end = '\0';
+
+    /* Update URL's host */
+    http_uri_field_replace(uri, UF_HOST, host);
 }
 
 /* Strip zone suffix from literal IPv6 host address
@@ -560,32 +566,29 @@ http_uri_fix_ipv6_zone (http_uri *uri, int ifindex)
 void
 http_uri_strip_zone_suffux (http_uri *uri)
 {
-    (void) uri;
-#if     0
-    char            *host = uri->parsed->host;
-    char            *suffix;
+    http_uri_field field;
+    const char     *suffix;
+    size_t         len;
+    char           *host;
 
-    /* Copy hostname to writable buffer */
-    host = g_alloca(strlen(host) + 1);
-    strcpy(host, uri->parsed->host);
-
-    /* Is it IPv6 address? */
-    if (!strchr(host, ':')) {
+    /* Check if we need to change something */
+    if (uri->addr.sockaddr.sa_family != AF_INET6) {
         return; /* Not IPv6 */
     }
 
-    /* Check for zone suffix */
-    suffix = strchr(host, '%');
+    field = http_uri_field_get(uri, UF_HOST);
+    suffix = memchr(field.str, '%', field.len);
     if (suffix == NULL) {
-        return; /* Not IPv6 */
+        return; /* No zone suffix */
     }
 
-    /* Strip zone suffix and update URI */
-    *suffix = '\0';
-    soup_uri_set_host(uri->parsed, host);
-    g_free(uri->str);
-    uri->str = NULL;
-#endif
+    len = suffix - field.str;
+
+    /* Update host */
+    host = g_alloca(len + 1);
+    host[len] = '\0';
+
+    http_uri_field_replace(uri, UF_HOST, host);
 }
 
 /* Make sure URI's path ends with the slash character

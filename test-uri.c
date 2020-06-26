@@ -103,6 +103,30 @@ test_set_path (const char *path, const char *expected)
     http_uri_free(uri);
 }
 
+/* Test http_uri_new_relative
+ */
+static void
+test_relative (const char *base, const char *ref, const char *expected)
+{
+    http_uri   *uri_base, *uri_rel;
+    const char *s;
+
+    uri_base = http_uri_new(base, false);
+    if (uri_base == NULL) {
+        fail("URI parse failed: %s", base);
+    }
+
+    uri_rel = http_uri_new_relative(uri_base, ref, false, false);
+    if (uri_rel == NULL) {
+        fail("URI base=%s ref=%s: failed", base, ref);
+    }
+
+    s = http_uri_str(uri_rel);
+    if (strcmp(s, expected)) {
+        fail("URI base=%s ref=%s: %s != %s", base, ref, s, expected);
+    }
+}
+
 /* The main function
  */
 int
@@ -132,6 +156,8 @@ main (void)
     test_get_path("http://1.2.3.4/xxx",         "/xxx");
 
     test_set_path("/xxx",                       "http://user@host:123/xxx?q#frag");
+
+    test_relative("http://host/", "//x/path",       "http://host/path");
 
     return 0;
 }
