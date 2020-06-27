@@ -1328,6 +1328,8 @@ zeroconf_init (void)
     log_trace(zeroconf_log, "  protocol     = %s", s);
 
     s = "?";
+    (void) s; /* Silence CLANG analyzer warning */
+
     switch (conf.wsdd_mode) {
     case WSDD_FAST: s = "fast"; break;
     case WSDD_FULL: s = "full"; break;
