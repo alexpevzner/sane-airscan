@@ -26,7 +26,7 @@ typedef struct {
 
 /* Print error message and exit
  */
-void
+void __attribute__((noreturn))
 die (const char *format, ...)
 {
     va_list ap;
