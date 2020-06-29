@@ -109,15 +109,15 @@ to install additional program: either [ippusbxd](https://github.com/OpenPrinting
 comes with some distros, or [ipp-usb](https://github.com/OpenPrinting/ipp-usb). 'ipp-usb`
 works better, binary packages available for many popular distros.
 
-<a name="note3"><sup>[2]</sup></a>: this device requires manual action on its front
+<a name="note3"><sup>[3]</sup></a>: this device requires manual action on its front
 panel to initiate WSD scan: Send->WSD Scan->From Computer
 
-<a name="note4"><sup>[3]</sup></a>: when low in memory, this device may scan at 400 DPI
+<a name="note4"><sup>[4]</sup></a>: when low in memory, this device may scan at 400 DPI
 instead of requested 600 DPI. As sane-airscan reports image parameters to SANE before actual
 image is received, and then adjust actual image to reported parameters, image will
 be scaled down by the factor 2/3 at this case. Lower resolutions works well.
 
-<a name="note5"><sup>[4]</sup></a>: by default, WSD scan command is disabled on this
+<a name="note5"><sup>[5]</sup></a>: by default, WSD scan command is disabled on this
 device and needs to be enabled before use: Click [Configuration], click [Initial Settings]
 under [Scanner], and then set [Prohibit WSD Scan Command] to [Do not Prohibit] (from
 http://support.ricoh.com/bb_v1oi/pub_e/oi_view/0001047/0001047003/view/scanner/int/0095.htm)
