@@ -129,11 +129,8 @@ zeroconf_device_add (zeroconf_finding *finding)
     }
 
     ll_init(&device->findings);
-
-    device->ifaces_cap = ZEROCONF_DEVICE_IFACES_INITIAL_LEN;
-    device->ifaces = g_malloc(device->ifaces_cap * sizeof(*device->ifaces));
-
     ll_push_end(&zeroconf_device_list, &device->node_list);
+
     return device;
 }
 
@@ -233,7 +230,12 @@ zeroconf_device_ifaces_add (zeroconf_device *device, int ifindex)
 {
     if (!zeroconf_device_ifaces_lookup(device, ifindex)) {
         if (device->ifaces_len == device->ifaces_cap) {
-            device->ifaces_cap *= 2;
+            if (device->ifaces_cap == 0) {
+                device->ifaces_cap = ZEROCONF_DEVICE_IFACES_INITIAL_LEN;
+            } else {
+                device->ifaces_cap *= 2;
+            }
+
             device->ifaces = g_realloc(device->ifaces,
                 device->ifaces_cap * sizeof(*device->ifaces));
         }
@@ -316,19 +318,25 @@ static void
 zeroconf_device_borrow_findings (zeroconf_device *device,
     int ifindex, ll_head *output)
 {
-    ll_node          *node, *next;
-    zeroconf_finding *finding;
+    ll_node          *node;
+    ll_head          leftover;
 
-    for (node = ll_first(&device->findings); node != NULL; node = next) {
-        next = ll_next(&device->findings, node);
+    ll_init(&leftover);
+
+    while ((node = ll_pop_beg(&device->findings)) != NULL) {
+        zeroconf_finding *finding;
 
         finding = OUTER_STRUCT(node, zeroconf_finding, list_node);
+
         if (finding->ifindex == ifindex) {
             finding->device = NULL;
-            ll_del(node);
             ll_push_end(output, node);
+        } else {
+            ll_push_end(&leftover, node);
         }
     }
+
+    ll_cat(&device->findings, &leftover);
 
     if (ll_empty(&device->findings)) {
         zeroconf_device_del(device);
