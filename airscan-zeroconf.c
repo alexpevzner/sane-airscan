@@ -1064,6 +1064,41 @@ zeroconf_device_list_qsort_cmp (const void *p1, const void *p2)
     return cmp;
 }
 
+/* Format list of protocols, for zeroconf_device_list_log
+ */
+static void
+zeroconf_device_list_fmt_protocols (char *buf, size_t buflen, unsigned int protocols)
+{
+    ID_PROTO proto;
+    size_t   off = 0;
+
+    buf[0] = '\0';
+    for (proto = 0; proto < NUM_ID_PROTO; proto ++) {
+        if ((protocols & (1 << proto)) != 0) {
+            off += snprintf(buf + off, buflen - off, " %s",
+                id_proto_name(proto));
+        }
+    }
+
+    if (buf[0] == '\0') {
+        strcpy(buf, " none");
+    }
+}
+
+/* Log device information in a context of zeroconf_device_list_get
+ */
+static void
+zeroconf_device_list_log (zeroconf_device *device, const char *name, unsigned int protocols)
+{
+    char     buf[64];
+
+    zeroconf_device_list_fmt_protocols(buf, sizeof(buf), device->protocols);
+    log_debug(zeroconf_log, "%s: supported protocols:%s", name, buf);
+
+    zeroconf_device_list_fmt_protocols(buf, sizeof(buf), protocols);
+    log_debug(zeroconf_log, "%s: chosen protocols:%s", name, buf);
+}
+
 /* Get list of devices, in SANE format
  */
 const SANE_Device**
@@ -1074,10 +1109,14 @@ zeroconf_device_list_get (void)
     const SANE_Device **dev_list = sane_device_array_new();
     ll_node     *node;
 
+    log_debug(zeroconf_log, "zeroconf_device_list_get: requested");
+
     /* Wait until device table is ready */
     zeroconf_initscan_wait();
 
     /* Build list of devices */
+    log_debug(zeroconf_log, "zeroconf_device_list_get: building list of devices");
+
     dev_count = 0;
 
     for (dev_conf = conf.devices; dev_conf != NULL; dev_conf = dev_conf->next) {
@@ -1106,8 +1145,18 @@ zeroconf_device_list_get (void)
         zeroconf_device_name_model(device, &name, &model);
         protocols = zeroconf_device_protocols(device);
 
+        zeroconf_device_list_log(device, name, protocols);
+
         if (zeroconf_find_static_by_name(name) != NULL) {
             /* Static configuration overrides discovery */
+            log_debug(zeroconf_log,
+                "%s: skipping, device clashes statically configured", name);
+            continue;
+        }
+
+        if (protocols == 0) {
+            log_debug(zeroconf_log,
+                "%s: skipping, no of supported protocols discovered", name);
             continue;
         }
 
