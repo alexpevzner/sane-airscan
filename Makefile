@@ -105,6 +105,13 @@ clean:
 	rm -f test $(BACKEND) tags
 	rm -rf $(OBJDIR)
 
+uninstall:
+	rm -f $(DESTDIR)$(PREFIX)$(BINDIR)/$(DISCOVER)
+	rm -f $(DESTDIR)$(PREFIX)$(CONFDIR)/dll.d/airscan
+	rm -f $(DESTDIR)$(PREFIX)$(LIBDIR)/sane/$(BACKEND)
+	rm -f $(DESTDIR)$(PREFIX)$(MANDIR)/man1/$(MAN_DISCOVER)*
+	rm -f $(DESTDIR)$(PREFIX)$(MANDIR)/man5/$(MAN_BACKEND)*
+
 man: $(MAN_DISCOVER) $(MAN_BACKEND)
 
 $(MAN_DISCOVER): $(MAN_DISCOVER).md
