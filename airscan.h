@@ -130,8 +130,10 @@ ll_push_beg (ll_head *head, ll_node *node)
 static inline void
 ll_del (ll_node *node)
 {
-    node->ll_prev->ll_next = node->ll_next;
-    node->ll_next->ll_prev = node->ll_prev;
+    ll_node *p = node->ll_prev, *n = node->ll_next;
+
+    p->ll_next = n;
+    n->ll_prev = p;
 
     /* Make double-delete safe */
     node->ll_next = node->ll_prev = node;
@@ -143,14 +145,19 @@ ll_del (ll_node *node)
 static inline ll_node*
 ll_pop_beg (ll_head *head)
 {
-    ll_node *node;
-
-    if (ll_empty(head)) {
-        return NULL;
-    }
+    ll_node *node, *next;
 
     node = head->node.ll_next;
-    ll_del(node);
+    if (node == &head->node) {
+        return NULL; /* List is empty if it is looped to itself */
+    }
+
+    next = node->ll_next;
+    next->ll_prev = &head->node;
+    head->node.ll_next = next;
+
+    /* Make double-delete safe */
+    node->ll_next = node->ll_prev = node;
 
     return node;
 }
@@ -161,14 +168,19 @@ ll_pop_beg (ll_head *head)
 static inline ll_node*
 ll_pop_end (ll_head *head)
 {
-    ll_node *node;
-
-    if (ll_empty(head)) {
-        return NULL;
-    }
+    ll_node *node, *prev;
 
     node = head->node.ll_prev;
-    ll_del(node);
+    if (node == &head->node) {
+        return NULL; /* List is empty if it is looped to itself */
+    }
+
+    prev = node->ll_prev;
+    prev->ll_next = &head->node;
+    head->node.ll_prev = prev;
+
+    /* Make double-delete safe */
+    node->ll_next = node->ll_prev = node;
 
     return node;
 }
