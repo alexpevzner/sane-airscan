@@ -118,7 +118,7 @@ test_relative (const char *base, const char *ref, const char *expected)
 
     uri_rel = http_uri_new_relative(uri_base, ref, false, false);
     if (uri_rel == NULL) {
-        fail("URI base=%s ref=%s: failed", base, ref);
+        fail("URI base=%s ref=%s: ref parse failed", base, ref);
     }
 
     s = http_uri_str(uri_rel);
@@ -157,7 +157,13 @@ main (void)
 
     test_set_path("/xxx",                       "http://user@host:123/xxx?q#frag");
 
-    test_relative("http://host/", "//x/path",       "http://host/path");
+    test_relative("http://host/", "//x/path",   "http://x/path");
+    test_relative("http://host/", "/path",      "http://host/path");
+printf("=====\n");
+    test_relative("http://host/", "noroot",     "http://host/noroot");
+    test_relative("http://host/", "noroot/xxx", "http://host/noroot/xxx");
+    test_relative("http://host/xxx/", "noroot", "http://host/xxx/noroot");
+    test_relative("http://host/xxx", "noroot",  "http://host/noroot");
 
     return 0;
 }

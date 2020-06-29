@@ -233,19 +233,108 @@ http_uri_field_copy_basepath (const http_uri *uri, char *buf)
     return buf;
 }
 
+/* Check if sting has an scheme prefix, where scheme
+ * must be [a-zA-Z][a-zA-Z0-9+-.]*):
+ *
+ * If scheme is found, returns its length. 0 is returned otherwise
+ */
+static size_t
+http_uri_parse_scheme (const char *str)
+{
+    char   c = *str;
+    size_t i;
+
+    if (!(('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z'))) {
+        return 0;
+    }
+
+    i = 1;
+    for (;;) {
+        c = str[i ++];
+
+        if (('a' <= c && c <= 'z') ||
+            ('A' <= c && c <= 'Z') ||
+            ('0' <= c && c <= '9') ||
+            c == '+' ||
+            c == '-' ||
+            c == '.') {
+            continue;
+        }
+
+        break;
+    }
+
+    return c == ':' ? i : 0;
+}
+
 /* Parse URI in place. The parsed URI doesn't create
  * a copy of URI string, and uses supplied string directly
  */
 static error
 http_uri_parse (http_uri *uri, const char *str)
 {
+    size_t     scheme_len = http_uri_parse_scheme(str);
+    const char *normalized = str;
+    const char *prefix = NULL;
+    size_t     prefix_len = 0;
+    size_t     path_skip = 0;
+
+    /* Note, github.com/nodejs/http-parser fails to properly
+     * parse relative URLs (URLs without scheme), so prepend
+     * fake scheme, then remove it
+     */
+    if (scheme_len == 0) {
+        char *s;
+
+        if (str[0] == '/' && str[1] == '/') {
+            prefix = "s:";
+        } else if (str[0] == '/') {
+            prefix = "s://h";
+        } else {
+            prefix = "s://h/";
+            path_skip = 1;
+        }
+
+        prefix_len = strlen(prefix);
+        s = g_alloca(prefix_len + strlen(str) + 1);
+        memcpy(s, prefix, prefix_len);
+        strcpy(s + prefix_len, str);
+
+        normalized = s;
+    }
+
+printf("%s -> %s\n", str, normalized);
+
     /* Parse URI */
     memset(uri, 0, sizeof(*uri));
-    if (http_parser_parse_url(str, strlen(str), 0, &uri->parsed) != 0) {
+    if (http_parser_parse_url(normalized, strlen(normalized),
+            0, &uri->parsed) != 0) {
         return ERROR("Invalid URI");
     }
 
     uri->str = str;
+
+    /* Adjust offsets */
+    if (path_skip != 0) {
+        uri->parsed.field_data[UF_PATH].off ++;
+        uri->parsed.field_data[UF_PATH].len --;
+    }
+
+    if (prefix_len != 0) {
+        unsigned int i;
+
+        for (i = 0; i < UF_MAX; i ++) {
+            if ((uri->parsed.field_set & (1 << i)) != 0) {
+                if (uri->parsed.field_data[i].off >= (uint16_t) prefix_len) {
+                    uri->parsed.field_data[i].off -= (uint16_t) prefix_len;
+                } else {
+                    uri->parsed.field_data[i].off = 0;
+                    uri->parsed.field_data[i].len = 0;
+                    uri->parsed.field_set &= ~ (1 << i);
+                }
+            }
+        }
+    }
 
     /* Decode scheme */
     if (!strncasecmp(str, "http://", 7)) {
@@ -429,13 +518,18 @@ printf("PATH:   %s\n", http_uri_field_strdup(&ref, UF_PATH));
 
     /* Set schema, userinfo, host and port */
     if (path_only || !http_uri_field_present(&ref, UF_SCHEMA)) {
+        end = http_uri_field_copy(base, UF_SCHEMA, end);
+    } else {
+        end = http_uri_field_copy(&ref, UF_SCHEMA, end);
+    }
+
+    end = http_uri_field_append(http_uri_field_make("://"), end);
+
+    if (path_only || !http_uri_field_present(&ref, UF_HOST)) {
         uri = base;
     } else {
         uri = &ref;
     }
-
-    end = http_uri_field_copy(uri, UF_SCHEMA, end);
-    end = http_uri_field_append(http_uri_field_make("://"), end);
 
     if (http_uri_field_present(uri, UF_USERINFO)) {
         end = http_uri_field_copy(uri, UF_USERINFO, end);
@@ -449,7 +543,6 @@ printf("PATH:   %s\n", http_uri_field_strdup(&ref, UF_PATH));
     }
 
     /* Set path */
-    //path = end;
     if (!http_uri_field_nonempty(&ref, UF_PATH)) {
         end = http_uri_field_copy(base, UF_PATH, end);
     } else {
