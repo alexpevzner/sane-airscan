@@ -303,8 +303,6 @@ http_uri_parse (http_uri *uri, const char *str)
         normalized = s;
     }
 
-printf("%s -> %s\n", str, normalized);
-
     /* Parse URI */
     memset(uri, 0, sizeof(*uri));
     if (http_parser_parse_url(normalized, strlen(normalized),
@@ -495,6 +493,120 @@ http_uri_clone (const http_uri *old)
     return uri;
 }
 
+/* Check that string, defined by begin and end pointers,
+ * has a specified prefix
+ */
+static bool
+http_uri_str_prefix(const char *beg, const char *end, const char *pfx)
+{
+    size_t len = end - beg;
+    size_t pfx_len = strlen(pfx);
+
+    return len >= pfx_len && !memcmp(beg, pfx, pfx_len);
+}
+
+/* Check that string, defined by begin and end pointers,
+ * equal to the specified pattern
+ */
+static bool
+http_uri_str_equal(const char *beg, const char *end, const char *pattern)
+{
+    size_t len = end - beg;
+    size_t plen = strlen(pattern);
+
+    return len == plen && !memcmp(beg, pattern, len);
+}
+
+/* Find 1st occurrence of the character in the string,
+ * defined by begin and end pointers
+ */
+static char *
+http_uri_str_chr(const char *beg, const char *end, char c)
+{
+    return memchr(beg, c, end - beg);
+}
+
+/* Find last occurrence of the character in the string,
+ * defined by begin and end pointers
+ */
+static char *
+http_uri_str_rchr(const char *beg, const char *end, char c)
+{
+    return memrchr(beg, c, end - beg);
+}
+
+/* Remove last path segment. Returns pointer to the
+ * path end
+ */
+static char*
+http_uri_remove_last_segment (char *path, char *end)
+{
+    char *s = http_uri_str_rchr(path, end, '/');
+    return s == NULL ? end : s;
+}
+
+/* Remove path dot segments, per rfc3986, 5.2.4.
+ */
+static char*
+http_uri_remove_dot_segments (char *path, char *end)
+{
+    char *input = path;
+    char *path_end = path;
+
+    while (input != end) {
+        /* A.  If the input buffer begins with a prefix of "../" or "./",
+         *     then remove that prefix from the input buffer; otherwise,
+         */
+        if (http_uri_str_prefix(input, end, "../")) {
+            input += 3;
+        } else if (http_uri_str_prefix(input, end, "./")) {
+            input += 2;
+        /* B.  if the input buffer begins with a prefix of "/./" or "/.",
+         *     where "." is a complete path segment, then replace that
+         *     prefix with "/" in the input buffer; otherwise,
+         */
+        } else if (http_uri_str_prefix(input, end, "/./")) {
+            input += 2;
+        } else if (http_uri_str_equal(input, end, "/.")) {
+            input ++;
+            input[0] = '/';
+        /* C.  if the input buffer begins with a prefix of "/../" or "/..",
+         *     where ".." is a complete path segment, then replace that
+         *     prefix with "/" in the input buffer and remove the last
+         *     segment and its preceding "/" (if any) from the output
+         *     buffer; otherwise,
+         */
+        } else if (http_uri_str_prefix(input, end, "/../")) {
+            path_end = http_uri_remove_last_segment(path, path_end);
+            input += 3;
+        } else if (http_uri_str_equal(input, end, "/..")) {
+            path_end = http_uri_remove_last_segment(path, path_end);
+            input += 2;
+            input[0] = '/';
+        /* D.  if the input buffer consists only of "." or "..", then remove
+         *     that from the input buffer; otherwise,
+         */
+        } else if (http_uri_str_equal(input, end, ".") ||
+                   http_uri_str_equal(input, end, "..")) {
+            input = end;
+        /* E.  move the first path segment in the input buffer to the end of
+         *     the output buffer, including the initial "/" character (if
+         *     any) and any subsequent characters up to, but not including,
+         *     the next "/" character or the end of the input buffer.
+         */
+        } else {
+            char   *s = http_uri_str_chr(input + 1, end, '/');
+            size_t sz = s ? s - input : end - input;
+
+            memmove(path_end, input, sz);
+            path_end += sz;
+            input += sz;
+        }
+    }
+
+    return path_end;
+}
+
 /* Create URI, relative to base URI. If `path_only' is
  * true, scheme, host and port are taken from the
  * base URI
@@ -507,14 +619,11 @@ http_uri_new_relative (const http_uri *base, const char *path,
     char           *end = buf;
     http_uri       ref;
     const http_uri *uri;
+    char           *path_beg;
 
     if (http_uri_parse(&ref, path) != NULL) {
         return NULL;
     }
-
-printf("SCHEME: %s\n", http_uri_field_strdup(&ref, UF_SCHEMA));
-printf("HOST:   %s\n", http_uri_field_strdup(&ref, UF_HOST));
-printf("PATH:   %s\n", http_uri_field_strdup(&ref, UF_PATH));
 
     /* Set schema, userinfo, host and port */
     if (path_only || !http_uri_field_present(&ref, UF_SCHEMA)) {
@@ -543,6 +652,7 @@ printf("PATH:   %s\n", http_uri_field_strdup(&ref, UF_PATH));
     }
 
     /* Set path */
+    path_beg = end;
     if (!http_uri_field_nonempty(&ref, UF_PATH)) {
         end = http_uri_field_copy(base, UF_PATH, end);
     } else {
@@ -551,6 +661,8 @@ printf("PATH:   %s\n", http_uri_field_strdup(&ref, UF_PATH));
         }
         end = http_uri_field_copy(&ref, UF_PATH, end);
     }
+
+    end = http_uri_remove_dot_segments(path_beg, end);
 
     /* Query and fragment */
     if (http_uri_field_present(&ref, UF_QUERY)) {

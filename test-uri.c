@@ -159,11 +159,12 @@ main (void)
 
     test_relative("http://host/", "//x/path",   "http://x/path");
     test_relative("http://host/", "/path",      "http://host/path");
-printf("=====\n");
     test_relative("http://host/", "noroot",     "http://host/noroot");
     test_relative("http://host/", "noroot/xxx", "http://host/noroot/xxx");
     test_relative("http://host/xxx/", "noroot", "http://host/xxx/noroot");
     test_relative("http://host/xxx", "noroot",  "http://host/noroot");
+
+    test_relative("http://host/", "/a/b/c/./../../g", "http://host/a/g");
 
     return 0;
 }
