@@ -207,9 +207,8 @@ wsdd_xaddr_list_purge (ll_head *list)
 {
     ll_node    *node;
 
-    while ((node = ll_first(list)) != NULL) {
+    while ((node = ll_pop_beg(list)) != NULL) {
         wsdd_xaddr *xaddr = OUTER_STRUCT(node, wsdd_xaddr, list_node);
-        ll_del(&xaddr->list_node);
         wsdd_xaddr_free(xaddr);
     }
 }
