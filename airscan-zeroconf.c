@@ -1093,6 +1093,7 @@ zeroconf_device_list_get (void)
         ID_PROTO        proto;
         const char      *name, *model;
         unsigned int    protocols;
+        unsigned int    supported_protocols = 0;
 
         device = OUTER_STRUCT(node, zeroconf_device, node_list);
         zeroconf_device_name_model(device, &name, &model);
@@ -1108,14 +1109,23 @@ zeroconf_device_list_get (void)
                 SANE_Device            *info = g_new0(SANE_Device, 1);
                 const char             *proto_name = id_proto_name(proto);
 
+                log_debug(zeroconf_log, "zeroconf_device_list_get: The device \'%s\' "
+                    "supports %s, adding the device.",  name, proto_name);
+
                 dev_list = sane_device_array_append(dev_list, info);
                 dev_count ++;
+                supported_protocols ++;
 
                 info->name = zeroconf_ident_make(name, device->devid, proto);
                 info->vendor = g_strdup(proto_name);
                 info->model = g_strdup(conf.model_is_netname ? name : model);
                 info->type = g_strdup_printf("%s network scanner", proto_name);
             }
+        }
+
+        if (supported_protocols == 0) {
+            log_debug(zeroconf_log, "zeroconf_device_list_get: The device \'%s\' "
+                "doesn't implement any of supported protocols. Skipping.", name);
         }
     }
 
