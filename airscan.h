@@ -177,27 +177,27 @@ ll_pop_end (ll_head *head)
  * the list. Returns NULL, if end of list is reached
  */
 static inline ll_node*
-ll_next (ll_head *head, ll_node *node)
+ll_next (const ll_head *head, const ll_node *node)
 {
-    node = node->ll_next;
-    return node == &head->node ? NULL : node;
+    ll_node *next = node->ll_next;
+    return next == &head->node ? NULL : next;
 }
 
 /* Get previous (from the beginning to the end) node of
  * the list. Returns NULL, if end of list is reached
  */
 static inline ll_node*
-ll_prev (ll_head *head, ll_node *node)
+ll_prev (const ll_head *head, const ll_node *node)
 {
-    node = node->ll_prev;
-    return node == &head->node ? NULL : node;
+    ll_node *prev = node->ll_prev;
+    return prev == &head->node ? NULL : prev;
 }
 
 /* Get first node of the list.
  * Returns NULL if list is empty
  */
 static inline ll_node*
-ll_first (ll_head *head)
+ll_first (const ll_head *head)
 {
     return ll_next(head, &head->node);
 }
@@ -206,7 +206,7 @@ ll_first (ll_head *head)
  * Returns NULL if list is empty
  */
 static inline ll_node*
-ll_last (ll_head *head)
+ll_last (const ll_head *head)
 {
     return ll_prev(head, &head->node);
 }
@@ -1172,10 +1172,10 @@ http_client_cancel (http_client *client);
 void
 http_client_cancel_af_uintptr (http_client *client, int af, uintptr_t uintptr);
 
-/* Get count of pending queries
+/* Check if client has pending queries
  */
-int
-http_client_num_pending (const http_client *client);
+bool
+http_client_has_pending (const http_client *client);
 
 /* Type http_query represents HTTP query (both request and response)
  */

@@ -531,7 +531,7 @@ DONE:
     g_free(model);
     g_free(manufacturer);
 
-    if (http_client_num_pending(wsdd->http_client) == 0) {
+    if (!http_client_has_pending(wsdd->http_client) == 0) {
         zeroconf_endpoint *endpoint;
 
         wsdd->finding.endpoints = zeroconf_endpoint_list_sort_dedup(

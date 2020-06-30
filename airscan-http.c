@@ -13,12 +13,12 @@
 #include "airscan.h"
 #include "http_parser.h"
 
+#include <errno.h>
 #include <arpa/inet.h>
 #include <libsoup/soup.h>
 
 /******************** Static variables ********************/
 static SoupSession *http_session;
-static ll_head http_query_list;
 
 /******************** Forward declarations ********************/
 typedef struct http_multipart http_multipart;
@@ -31,6 +31,9 @@ http_data_new_internal(const void *bytes, size_t size,
 
 static void
 http_data_set_content_type (http_data *data, const char *content_type);
+
+static http_query*
+http_query_by_ll_node (ll_node *node);
 
 static void
 http_query_cancel (http_query *q);
@@ -826,6 +829,118 @@ http_uri_equal (const http_uri *uri1, const http_uri *uri2)
            http_uri_field_equal(uri1, uri2, UF_USERINFO, false);
 }
 
+/******************** HTTP header ********************/
+/* http_hdr represents HTTP header
+ */
+typedef struct {
+    ll_head fields;          /* List of http_hdr_field */
+} http_hdr;
+
+/* http_hdr_field represents a single HTTP header field
+ */
+typedef struct {
+    GString *name;           /* Header name */
+    GString *value;          /* Header value */
+    ll_node chain;           /* In http_hdr::fields */
+} http_hdr_field;
+
+/* Create http_hdr_field. Name can be NULL
+ */
+static http_hdr_field*
+http_hdr_field_new (const char *name)
+{
+    http_hdr_field *field = g_new0(http_hdr_field, 1);
+    field->name = g_string_new(name);
+    return field;
+}
+
+/* Destroy http_hdr_field
+ */
+static void
+http_hdr_field_free (http_hdr_field *field)
+{
+    g_string_free(field->name, TRUE);
+    if (field->value != NULL) {
+        g_string_free(field->value, TRUE);
+    }
+    g_free(field);
+}
+
+/* Initialize http_hdr in place
+ */
+static void
+http_hdr_init (http_hdr *hdr)
+{
+    ll_init(&hdr->fields);
+}
+
+/* Cleanup http_hdr in place
+ */
+static void
+http_hdr_cleanup (http_hdr *hdr)
+{
+    ll_node *node;
+
+    while ((node = ll_pop_beg(&hdr->fields)) != NULL) {
+        http_hdr_field *field = OUTER_STRUCT(node, http_hdr_field, chain);
+        http_hdr_field_free(field);
+    }
+}
+
+/* Lookup field in the header
+ */
+static http_hdr_field*
+http_hdr_lookup (const http_hdr *hdr, const char *name)
+{
+    ll_node *node;
+
+    for (LL_FOR_EACH(node, &hdr->fields)) {
+        http_hdr_field *field = OUTER_STRUCT(node, http_hdr_field, chain);
+        if (!strcasecmp(field->name->str, name)) {
+            return field;
+        }
+    }
+
+    return NULL;
+}
+
+/* Get header field
+ */
+static const char*
+http_hdr_get (const http_hdr *hdr, const char *name)
+{
+    http_hdr_field *field = http_hdr_lookup(hdr, name);
+
+    if (field == NULL) {
+        return NULL;
+    }
+
+    if (field->value == NULL) {
+        return "";
+    }
+
+    return field->value->str;
+}
+
+/* Set header field
+ */
+static void
+http_hdr_set (http_hdr *hdr, const char *name, const char *value)
+{
+    http_hdr_field *field = http_hdr_lookup(hdr, name);
+
+    if (field == NULL) {
+        field = http_hdr_field_new(name);
+        ll_push_end(&hdr->fields, &field->chain);
+    }
+
+    if (field->value == NULL) {
+        field->value = g_string_new(value);
+    } else {
+        g_string_assign(field->value, value);
+    }
+}
+
 /******************** HTTP multipart ********************/
 /* http_multipart represents a decoded multipart message
  */
@@ -1189,7 +1304,7 @@ http_data_queue_purge (http_data_queue *queue)
 struct http_client {
     void       *ptr;       /* Callback's user data */
     log_ctx    *log;       /* Logging context */
-    GPtrArray  *pending;   /* Pending queries */
+    ll_head    pending;    /* Pending queries */
     void       (*onerror)( /* Callback to be called on transport error */
             void *ptr, error err);
 };
@@ -1200,9 +1315,11 @@ http_client*
 http_client_new (log_ctx *log, void *ptr)
 {
     http_client *client = g_new0(http_client, 1);
+
     client->ptr = ptr;
     client->log = log;
-    client->pending = g_ptr_array_new();
+    ll_init(&client->pending);
+
     return client;
 }
 
@@ -1211,8 +1328,8 @@ http_client_new (log_ctx *log, void *ptr)
 void
 http_client_free (http_client *client)
 {
-    log_assert(client->log, client->pending->len == 0);
-    g_ptr_array_free(client->pending, TRUE);
+    log_assert(client->log, ll_empty(&client->pending));
+
     g_free(client);
 }
 
@@ -1232,8 +1349,12 @@ http_client_onerror (http_client *client,
 void
 http_client_cancel (http_client *client)
 {
-    while (client->pending->len != 0) {
-        http_query_cancel(client->pending->pdata[0]);
+    ll_node *node;
+
+    while ((node = ll_pop_beg(&client->pending)) != NULL) {
+         http_query *q;
+         q = http_query_by_ll_node(node);
+         http_query_cancel(q);
     }
 }
 
@@ -1242,50 +1363,31 @@ http_client_cancel (http_client *client)
 void
 http_client_cancel_af_uintptr (http_client *client, int af, uintptr_t uintptr)
 {
-    http_query **qlist = g_alloca(sizeof(*qlist) * client->pending->len);
-    int        i, cnt = 0;
+    ll_head leftover;
+    ll_node *node;
 
-    for (i = 0; i < (int) client->pending->len; i ++) {
-        http_query *q = client->pending->pdata[i];
+    ll_init(&leftover);
 
-        if (uintptr != http_query_get_uintptr(q)) {
-            continue;
+    while ((node = ll_pop_beg(&client->pending)) != NULL) {
+        http_query *q = http_query_by_ll_node(node);
+
+        if (uintptr == http_query_get_uintptr(q) &&
+            af == http_uri_af(http_query_uri(q))) {
+            http_query_cancel(q);
+        } else {
+            ll_push_end(&leftover, node);
         }
-
-        if (af != http_uri_af(http_query_uri(q))) {
-            continue;
-        }
-
-        qlist[cnt ++] = q;
     }
 
-    for (i = 0; i < cnt; i ++) {
-        http_query_cancel(qlist[i]);
-    }
+    ll_cat(&client->pending, &leftover);
 }
 
-/* Get count of pending queries
+/* Check if client has pending queries
  */
-int
-http_client_num_pending (const http_client *client)
+bool
+http_client_has_pending (const http_client *client)
 {
-    return client->pending->len;
-}
-
-/* Check if query is pending on a client
- */
-static bool
-http_client_is_pending (const http_client *client, const http_query *q)
-{
-    unsigned int i;
-
-    for (i = 0; i < client->pending->len; i ++) {
-        if (client->pending->pdata[i] == q) {
-            return true;
-        }
-    }
-
-    return false;
+    return !ll_empty(&client->pending);
 }
 
 /******************** HTTP request handling ********************/
@@ -1304,6 +1406,13 @@ typedef struct {
 struct http_query {
     http_client       *client;                  /* Client that owns the query */
     http_uri          *uri;                     /* Query URI */
+    const char        *method;                  /* Request method */
+    http_hdr          request_header;           /* Request header */
+    http_hdr          response_header;          /* Response header */
+    int               sock;                     /* HTTP socket */
+    GString           *iobuf;                   /* I/O buffer */
+    char              *rqbody;                  /* Request body, may be NULL */
+    int               status;                   /* < 0 - errno, >= 0 - HTTP */
     SoupMessage       *msg;                     /* Underlying SOUP message */
     timestamp         timestamp;                /* Submission timestamp */
     uintptr_t         uintptr;                  /* User-defined parameter */
@@ -1312,23 +1421,16 @@ struct http_query {
     void              (*callback) (void *ptr,   /* Completion callback */
                                 http_query *q);
     http_query_cached *cached;                  /* Cached data */
-    ll_node           list_node;                /* In http_query_list */
+    bool              queued;                   /* Query is queued */
+    ll_node           chain;                    /* In http_client::pending or
+                                                   http_client::queued */
 };
 
-/* Insert http_query into http_query_list
- */
-static inline void
-http_query_list_ins (http_query *q)
+/* Get http_query* by pointer to its http_query::chain */
+static http_query*
+http_query_by_ll_node (ll_node *node)
 {
-    ll_push_end(&http_query_list, &q->list_node);
-}
-
-/* Delete http_query from http_query_list
- */
-static inline void
-http_query_list_del (http_query *q)
-{
-    ll_del(&q->list_node);
+     return OUTER_STRUCT(node, http_query, chain);
 }
 
 /* Free http_query
@@ -1336,8 +1438,14 @@ http_query_list_del (http_query *q)
 static void
 http_query_free (http_query *q)
 {
-    http_query_list_del(q);
     http_uri_free(q->uri);
+    http_hdr_cleanup(&q->request_header);
+    http_hdr_cleanup(&q->response_header);
+    if (q->sock >= 0) {
+        close(q->sock);
+    }
+    g_string_free(q->iobuf, TRUE);
+    g_free(q->rqbody);
 
     http_data_unref(q->cached->request_data);
     http_data_unref(q->cached->response_data);
@@ -1362,15 +1470,14 @@ http_query_callback (SoupSession *session, SoupMessage *msg, gpointer userdata)
     if (msg->status_code != SOUP_STATUS_CANCELLED) {
         error  err = http_query_transport_error(q);
 
-        log_assert(client->log, http_client_is_pending(client, q));
-        g_ptr_array_remove(client->pending, q);
+        ll_del(&q->chain);
 
         if (err != NULL) {
-            log_debug(client->log, "HTTP %s %s: %s", q->msg->method,
+            log_debug(client->log, "HTTP %s %s: %s", q->method,
                     http_uri_str(q->uri),
                     soup_status_get_phrase(msg->status_code));
         } else {
-            log_debug(client->log, "HTTP %s %s: %d %s", q->msg->method,
+            log_debug(client->log, "HTTP %s %s: %d %s", q->method,
                     http_uri_str(q->uri),
                     msg->status_code,
                     soup_status_get_phrase(msg->status_code));
@@ -1416,7 +1523,7 @@ http_query_set_host (http_query *q)
         }
 
         s = ip_straddr_from_sockaddr_dport(addr, dport);
-        soup_message_headers_replace(q->msg->request_headers, "Host", s.text);
+        http_query_set_request_header(q, "Host", s.text);
 
         return;
     }
@@ -1430,7 +1537,7 @@ http_query_set_host (http_query *q)
 
     buf[len] = '\0';
 
-    soup_message_headers_replace(q->msg->request_headers, "Host", buf);
+    http_query_set_request_header(q, "Host", buf);
 }
 
 /* Create new http_query
@@ -1444,20 +1551,21 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
 {
     http_query *q = g_new0(http_query, 1);
 
-    g_ptr_array_add(client->pending, q);
-
     q->client = client;
     q->uri = uri;
+    q->method = method;
+
+    http_hdr_init(&q->request_header);
+    http_hdr_init(&q->response_header);
+
+    q->sock = -1;
+    q->iobuf = g_string_new(NULL);
+    q->rqbody = body;
+    q->status = -EINVAL;
+
     q->msg = soup_message_new(method, uri->str);
     q->cached = g_new0(http_query_cached, 1);
     q->onerror = client->onerror;
-
-    if (body != NULL) {
-        soup_message_set_request(q->msg, content_type, SOUP_MEMORY_TAKE,
-                body, strlen(body));
-    }
-
-    http_query_list_ins(q);
 
     /* Build and set Host: header */
     http_query_set_host(q);
@@ -1470,7 +1578,12 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
      * Looks like Kyocera firmware bug. Force connection to close
      * as a workaround
      */
-    soup_message_headers_replace(q->msg->request_headers, "Connection", "close");
+    http_query_set_request_header(q, "Connection", "close");
+
+    /* Set Content-Type */
+    if (content_type != NULL) {
+        http_query_set_request_header(q, "Content-Type", "content_type");
+    }
 
     return q;
 }
@@ -1512,9 +1625,15 @@ http_query_submit (http_query *q, void (*callback)(void *ptr, http_query *q))
 {
     q->callback = callback;
 
-    log_debug(q->client->log, "HTTP %s %s", q->msg->method, http_uri_str(q->uri));
+    /* Issue log message and set timestamp */
+    log_debug(q->client->log, "HTTP %s %s", q->method, http_uri_str(q->uri));
 
     q->timestamp = timestamp_now();
+
+    /* Submit the query */
+    log_assert(q->client->log, q->sock == -1);
+    ll_push_end(&q->client->pending, &q->chain);
+
     soup_session_queue_message(http_session, q->msg, http_query_callback, q);
 }
 
@@ -1524,10 +1643,7 @@ http_query_submit (http_query *q, void (*callback)(void *ptr, http_query *q))
 static void
 http_query_cancel (http_query *q)
 {
-    http_client *client = q->client;
-
-    log_assert(client->log, http_client_is_pending(client, q));
-    g_ptr_array_remove(client->pending, q);
+    ll_del(&q->chain);
 
     /* Note, if message processing already finished,
      * soup_session_cancel_message() will do literally nothing,
@@ -1540,7 +1656,7 @@ http_query_cancel (http_query *q)
     soup_message_set_status(q->msg, SOUP_STATUS_CANCELLED);
     g_object_unref(q->msg);
 
-    log_debug(q->client->log, "HTTP %s %s: %s", q->msg->method,
+    log_debug(q->client->log, "HTTP %s %s: %s", q->method,
             http_uri_str(q->uri),
             soup_status_get_phrase(SOUP_STATUS_CANCELLED));
 
@@ -1583,11 +1699,11 @@ http_query_get_uintptr (http_query *q)
 error
 http_query_error (const http_query *q)
 {
-    if (!SOUP_STATUS_IS_SUCCESSFUL(q->msg->status_code)) {
-        return ERROR(soup_status_get_phrase(q->msg->status_code));
+    if (200 <= q->status && q->status < 300) {
+        return NULL;
     }
 
-    return NULL;
+    return ERROR(http_query_status_string(q));
 }
 
 /* Get query transport error, if any
@@ -1597,8 +1713,8 @@ http_query_error (const http_query *q)
 error
 http_query_transport_error (const http_query *q)
 {
-    if (SOUP_STATUS_IS_TRANSPORT_ERROR(q->msg->status_code)) {
-        return ERROR(soup_status_get_phrase(q->msg->status_code));
+    if (q->status < 0) {
+        return ERROR(http_query_status_string(q));
     }
 
     return NULL;
@@ -1610,9 +1726,8 @@ http_query_transport_error (const http_query *q)
 int
 http_query_status (const http_query *q)
 {
-    log_assert(q->client->log, !SOUP_STATUS_IS_TRANSPORT_ERROR(q->msg->status_code));
-
-    return q->msg->status_code;
+    log_assert(q->client->log, q->status >= 0);
+    return q->status;
 }
 
 /* Get HTTP status string
@@ -1620,7 +1735,11 @@ http_query_status (const http_query *q)
 const char*
 http_query_status_string (const http_query *q)
 {
-    return soup_status_get_phrase(http_query_status(q));
+    if (q->status < 0) {
+        return strerror(-q->status);
+    }
+
+    return http_status_str (q->status);
 }
 
 /* Get query URI
@@ -1636,7 +1755,7 @@ http_query_uri (const http_query *q)
 const char*
 http_query_method (const http_query *q)
 {
-    return q->msg->method;
+    return q->method;
 }
 
 /* Set request header
@@ -1645,7 +1764,7 @@ void
 http_query_set_request_header (http_query *q, const char *name,
         const char *value)
 {
-    soup_message_headers_replace(q->msg->request_headers, name, value);
+    http_hdr_set(&q->request_header, name, value);
 }
 
 /* Get request header
@@ -1653,7 +1772,7 @@ http_query_set_request_header (http_query *q, const char *name,
 const char*
 http_query_get_request_header (const http_query *q, const char *name)
 {
-    return soup_message_headers_get_one(q->msg->request_headers, name);
+    return http_hdr_get(&q->request_header, name);
 }
 
 
@@ -1662,7 +1781,7 @@ http_query_get_request_header (const http_query *q, const char *name)
 const char*
 http_query_get_response_header(const http_query *q, const char *name)
 {
-    return soup_message_headers_get_one(q->msg->response_headers, name);
+    return http_hdr_get(&q->response_header, name);
 }
 
 /* Get request data
@@ -1778,16 +1897,6 @@ http_start_stop (bool start)
         soup_session_abort(http_session);
         g_object_unref(http_session);
         http_session = NULL;
-
-        /* Note, soup_session_abort() may leave some requests
-         * pending, so we must free them here explicitly
-         */
-        while (!ll_empty(&http_query_list)) {
-            ll_node    *node = ll_first(&http_query_list);
-            http_query *q = OUTER_STRUCT(node, http_query, list_node);
-
-            http_query_free(q);
-        }
     }
 }
 
@@ -1797,7 +1906,6 @@ SANE_Status
 http_init (void)
 {
     eloop_add_start_stop_callback(http_start_stop);
-    ll_init(&http_query_list);
     return SANE_STATUS_GOOD;
 }
 
