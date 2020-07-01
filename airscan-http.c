@@ -13,8 +13,12 @@
 #include "airscan.h"
 #include "http_parser.h"
 
-#include <errno.h>
 #include <arpa/inet.h>
+#include <errno.h>
+#include <netdb.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+
 #include <libsoup/soup.h>
 
 /******************** Static variables ********************/
@@ -34,6 +38,9 @@ http_data_set_content_type (http_data *data, const char *content_type);
 
 static http_query*
 http_query_by_ll_node (ll_node *node);
+
+static void
+http_query_connect (http_query *q, error err);
 
 static void
 http_query_cancel (http_query *q);
@@ -887,6 +894,24 @@ http_hdr_cleanup (http_hdr *hdr)
     }
 }
 
+/* Write header to string buffer in wire format
+ */
+static void
+http_hdr_write (const http_hdr *hdr, GString *out)
+{
+    ll_node *node;
+
+    for (LL_FOR_EACH(node, &hdr->fields)) {
+        http_hdr_field *field = OUTER_STRUCT(node, http_hdr_field, chain);
+        g_string_append(out, field->name->str);
+        g_string_append(out, ": ");
+        g_string_append(out, field->value->str);
+        g_string_append(out, "\r\n");
+    }
+
+    g_string_append(out, "\r\n");
+}
+
 /* Lookup field in the header
  */
 static http_hdr_field*
@@ -1409,10 +1434,16 @@ struct http_query {
     const char        *method;                  /* Request method */
     http_hdr          request_header;           /* Request header */
     http_hdr          response_header;          /* Response header */
+    error             err;                      /* Transport error */
+    int               status;                   /* HTTP status */
+    struct addrinfo   *addrs;                   /* Addresses to connect to */
+    struct addrinfo   *addr_next;               /* Next address to try */
     int               sock;                     /* HTTP socket */
+    eloop_fdpoll      *fdpoll;                  /* Polls q->sock */
+    ip_straddr        straddr;                  /* q->sock target addr */
     GString           *iobuf;                   /* I/O buffer */
+    size_t            iooff;                    /* Offset in I/O buffer */
     char              *rqbody;                  /* Request body, may be NULL */
-    int               status;                   /* < 0 - errno, >= 0 - HTTP */
     SoupMessage       *msg;                     /* Underlying SOUP message */
     timestamp         timestamp;                /* Submission timestamp */
     uintptr_t         uintptr;                  /* User-defined parameter */
@@ -1441,6 +1472,9 @@ http_query_free (http_query *q)
     http_uri_free(q->uri);
     http_hdr_cleanup(&q->request_header);
     http_hdr_cleanup(&q->response_header);
+    if (q->addrs != NULL) {
+        freeaddrinfo(q->addrs);
+    }
     if (q->sock >= 0) {
         close(q->sock);
     }
@@ -1455,44 +1489,6 @@ http_query_free (http_query *q)
 
     g_free(q->cached);
     g_free(q);
-}
-
-/* soup_session_queue_message callback
- */
-static void
-http_query_callback (SoupSession *session, SoupMessage *msg, gpointer userdata)
-{
-    http_query  *q = userdata;
-    http_client *client = q->client;
-
-    (void) session;
-
-    if (msg->status_code != SOUP_STATUS_CANCELLED) {
-        error  err = http_query_transport_error(q);
-
-        ll_del(&q->chain);
-
-        if (err != NULL) {
-            log_debug(client->log, "HTTP %s %s: %s", q->method,
-                    http_uri_str(q->uri),
-                    soup_status_get_phrase(msg->status_code));
-        } else {
-            log_debug(client->log, "HTTP %s %s: %d %s", q->method,
-                    http_uri_str(q->uri),
-                    msg->status_code,
-                    soup_status_get_phrase(msg->status_code));
-        }
-
-        trace_http_query_hook(log_ctx_trace(client->log), q);
-
-        if (err != NULL && q->onerror != NULL) {
-            q->onerror(client->ptr, err);
-        } else if (q->callback != NULL) {
-            q->callback(client->ptr, q);
-        }
-
-        http_query_free(q);
-    }
 }
 
 /* Set Host header in HTTP request
@@ -1561,7 +1557,6 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
     q->sock = -1;
     q->iobuf = g_string_new(NULL);
     q->rqbody = body;
-    q->status = -EINVAL;
 
     q->msg = soup_message_new(method, uri->str);
     q->cached = g_new0(http_query_cached, 1);
@@ -1581,8 +1576,8 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
     http_query_set_request_header(q, "Connection", "close");
 
     /* Set Content-Type */
-    if (content_type != NULL) {
-        http_query_set_request_header(q, "Content-Type", "content_type");
+    if (body != NULL && content_type != NULL) {
+        http_query_set_request_header(q, "Content-Type", content_type);
     }
 
     return q;
@@ -1615,6 +1610,212 @@ http_query_onerror (http_query *q, void (*onerror)(void *ptr, error err))
     q->onerror = onerror;
 }
 
+/* Complete query processing
+ */
+static void
+http_query_complete (http_query *q, error err, int status)
+{
+    http_client *client = q->client;
+
+    q->err = err;
+    q->status = status;
+    err = http_query_transport_error(q);
+
+    ll_del(&q->chain);
+
+    if (err != NULL) {
+        log_debug(client->log, "HTTP %s %s: %s", q->method,
+                http_uri_str(q->uri), http_query_status_string(q));
+    } else {
+        log_debug(client->log, "HTTP %s %s: %d %s", q->method,
+                http_uri_str(q->uri),
+                q->status, http_query_status_string(q));
+    }
+
+    trace_http_query_hook(log_ctx_trace(client->log), q);
+
+    if (err != NULL && q->onerror != NULL) {
+        q->onerror(client->ptr, err);
+    } else if (q->callback != NULL) {
+        q->callback(client->ptr, q);
+    }
+
+    http_query_free(q);
+}
+
+/* http_query::fdpoll callback
+ */
+static void
+http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
+{
+    http_query *q = data;
+    size_t     len = q->iobuf->len - q->iooff;
+    int        rc;
+
+    (void) fd;
+
+    if ((mask & ELOOP_FDPOLL_WRITE) != 0) {
+        rc = send(q->sock, q->iobuf->str + q->iooff, len, MSG_NOSIGNAL);
+        if (rc < 0 && (errno == EINTR || errno == EWOULDBLOCK)) {
+            return;
+        }
+
+        if (rc < 0) {
+            error err = ERROR(strerror(errno));
+
+            log_debug(q->client->log, "%s: send(): %s",
+                q->straddr.text, ESTRING(err));
+
+            eloop_fdpoll_free(q->fdpoll);
+            q->fdpoll = NULL;
+            close(q->sock);
+            q->sock = -1;
+
+            if (q->iooff == 0) {
+                q->addr_next = q->addr_next->ai_next;
+                http_query_connect(q, err);
+            } else {
+                http_query_complete(q, err, 0);
+            }
+            return;
+        }
+
+        q->iooff += rc;
+
+        if (q->iooff == q->iobuf->len) {
+            eloop_fdpoll_set_mask(q->fdpoll, ELOOP_FDPOLL_READ);
+        }
+    } else {
+        exit(0);
+    }
+}
+
+/* Try to connect to the next address. The err parameter is a query
+ * completion error in a case there are no more addresses to try
+ */
+static void
+http_query_connect (http_query *q, error err)
+{
+    int        rc;
+
+    /* Skip invalid addresses. Check that we have address to try */
+AGAIN:
+    while (q->addr_next != NULL &&
+           q->addr_next->ai_family != AF_INET &&
+           q->addr_next->ai_family != AF_INET6) {
+        q->addr_next = q->addr_next->ai_next;
+    }
+
+    if (q->addr_next == NULL) {
+        http_query_complete(q, err, 0);
+        return;
+    }
+
+    q->straddr = ip_straddr_from_sockaddr(q->addr_next->ai_addr);
+    log_debug(q->client->log, "trying %s", q->straddr.text);
+
+    /* Create socket and try to connect */
+    log_assert(q->client->log, q->sock < 0);
+    q->sock = socket(q->addr_next->ai_addr->sa_family,
+        SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, IPPROTO_TCP);
+
+    if (q->sock == -1) {
+        err = ERROR(strerror(errno));
+        log_debug(q->client->log, "%s: socket(): %s",
+            q->straddr.text, ESTRING(err));
+
+        q->addr_next = q->addr_next->ai_next;
+        goto AGAIN;
+    }
+
+    do {
+        rc = connect(q->sock, q->addr_next->ai_addr, q->addr_next->ai_addrlen);
+    } while (rc < 0 && errno == EINTR);
+
+    if (rc < 0 && errno != EINPROGRESS) {
+        err = ERROR(strerror(errno));
+        log_debug(q->client->log, "%s: connect(): %s",
+            q->straddr.text, ESTRING(err));
+
+        close(q->sock);
+        q->sock = -1;
+        q->addr_next = q->addr_next->ai_next;
+        goto AGAIN;
+    }
+
+    /* Create fdpoll, and we are done */
+    q->fdpoll = eloop_fdpoll_new(q->sock, http_query_fdpoll_callback, q);
+    eloop_fdpoll_set_mask(q->fdpoll, ELOOP_FDPOLL_WRITE);
+}
+
+/* Start query processing. Called via eloop_call()
+ */
+static gboolean
+http_query_start_processing (gpointer p)
+{
+    http_query      *q = (http_query*) p;
+    http_uri_field  field;
+    char            *host, *port;
+    struct addrinfo hints;
+    int             rc;
+
+    /* Get host name from the URI */
+    field = http_uri_field_get(q->uri, UF_HOST);
+    host = g_alloca(field.len + 1);
+    memcpy(host, field.str, field.len);
+    host[field.len] = '\0';
+
+    if (field.len > 2 && host[0] == '[' && host[field.len-1] == ']') {
+        host[field.len-1] = '\0';
+        host ++;
+    }
+
+    /* Get port name from the URI */
+    if (http_uri_field_nonempty(q->uri, UF_PORT)) {
+        field = http_uri_field_get(q->uri, UF_PORT);
+        port = g_alloca(field.len + 1);
+        memcpy(port, field.str, field.len);
+        port[field.len] = '\0';
+    } else {
+        port = q->uri->scheme == HTTP_SCHEME_HTTP ? "80" : "443";
+    }
+
+    /* Lookup target addresses */
+    log_debug(q->client->log, "resolving %s %s", host, port);
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_flags = AI_ADDRCONFIG;
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+
+    rc = getaddrinfo(host, port, &hints, &q->addrs);
+    if (rc != 0) {
+        http_query_complete(q, ERROR(gai_strerror(rc)), 0);
+    }
+
+    q->addr_next = q->addrs;
+
+    /* Format HTTP request */
+    g_string_printf(q->iobuf, "%s %s HTTP/1.1\r\n",
+        q->method, http_uri_get_path(q->uri));
+    if (q->rqbody != NULL) {
+        char buf[64];
+        sprintf(buf, "%zd", strlen(q->rqbody));
+        http_hdr_set(&q->request_header, "Content-Length", buf);
+    }
+
+    http_hdr_write(&q->request_header, q->iobuf);
+
+    if (q->rqbody != NULL) {
+        g_string_append(q->iobuf, q->rqbody);
+    }
+
+    /* Connect to the host */
+    http_query_connect(q, ERROR("no host addresses available"));
+
+    return FALSE;
+}
+
 /* Submit the query.
  *
  * When query is finished, callback will be called. After return from
@@ -1634,7 +1835,7 @@ http_query_submit (http_query *q, void (*callback)(void *ptr, http_query *q))
     log_assert(q->client->log, q->sock == -1);
     ll_push_end(&q->client->pending, &q->chain);
 
-    soup_session_queue_message(http_session, q->msg, http_query_callback, q);
+    eloop_call(http_query_start_processing, q);
 }
 
 /* Cancel unfinished http_query. Callback will not be called and
@@ -1713,11 +1914,7 @@ http_query_error (const http_query *q)
 error
 http_query_transport_error (const http_query *q)
 {
-    if (q->status < 0) {
-        return ERROR(http_query_status_string(q));
-    }
-
-    return NULL;
+    return q->err;
 }
 
 /* Get HTTP status code. Code not available, if query finished
@@ -1726,7 +1923,7 @@ http_query_transport_error (const http_query *q)
 int
 http_query_status (const http_query *q)
 {
-    log_assert(q->client->log, q->status >= 0);
+    log_assert(q->client->log, q->err == NULL);
     return q->status;
 }
 
@@ -1735,8 +1932,8 @@ http_query_status (const http_query *q)
 const char*
 http_query_status_string (const http_query *q)
 {
-    if (q->status < 0) {
-        return strerror(-q->status);
+    if (q->err != NULL) {
+        return ESTRING(q->err);
     }
 
     return http_status_str (q->status);
