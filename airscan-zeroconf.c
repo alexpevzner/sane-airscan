@@ -783,6 +783,25 @@ zeroconf_endpoint_list_sort_dedup (zeroconf_endpoint *list)
     return list;
 }
 
+/* Check if endpoints list contains a non-link-local address
+ * of the specified address family
+ */
+bool
+zeroconf_endpoint_list_has_non_link_local_addr (int af,
+        const zeroconf_endpoint *list)
+{
+    for (;list != NULL; list = list->next) {
+        const struct sockaddr *addr = http_uri_addr(list->uri);
+        if (addr != NULL && addr->sa_family == af) {
+            if (!ip_sockaddr_is_linklocal(addr)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 /******************** Static configuration *********************/
 /* Look for device's static configuration by device name
  */

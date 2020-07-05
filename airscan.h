@@ -714,6 +714,12 @@ typedef enum {
 NETIF_DISTANCE
 netif_distance_get (const struct sockaddr *addr);
 
+/* Check that interface has non-link-local address
+ * of particular address family
+ */
+bool
+netif_has_non_link_local_addr (int af, int ifindex);
+
 /* Compare addresses by distance. Returns:
  *   <0, if addr1 is closer that addr2
  *   >0, if addr2 is farther that addr2
@@ -2066,6 +2072,13 @@ zeroconf_endpoint_list_sort (zeroconf_endpoint *list);
  */
 zeroconf_endpoint*
 zeroconf_endpoint_list_sort_dedup (zeroconf_endpoint *list);
+
+/* Check if endpoints list contains a non-link-local address
+ * of the specified address family
+ */
+bool
+zeroconf_endpoint_list_has_non_link_local_addr (int af,
+        const zeroconf_endpoint *list);
 
 /******************** MDNS Discovery ********************/
 /* Called by zeroconf to notify MDNS about initial scan timer expiration
