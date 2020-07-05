@@ -864,7 +864,11 @@ wsdd_resolver_message_dispatch (wsdd_resolver *resolver,
          * At this case we can publish device now
          */
         if (http_client_num_pending(wsdd->http_client) == 0) {
-            wsdd_finding_publish_delay(wsdd);
+            if (msg->is_scanner) {
+                wsdd_finding_publish_delay(wsdd);
+            } else {
+                wsdd_finding_publish(wsdd);
+            }
         }
         break;
 
