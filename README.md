@@ -51,6 +51,7 @@ Legend:
 | Canon D570                         | Yes                       |                           |
 | Canon ImageCLASS MF743cdw          | Yes<sup>[1](#note1)</sup> |                           |
 | Canon imageRUNNER ADVANCE 4545/4551| Yes                       | Yes                       |
+| Canon imageRUNNER C3120L           | Yes                       | Yes                       |
 | Canon i-SENSYS MF641C              | No                        | Yes                       |
 | Canon Lide 400                     | Yes<sup>[2](#note1)</sup> |                           |
 | Canon MF745C/746C                  | Yes                       | Yes                       |
