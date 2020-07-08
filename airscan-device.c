@@ -853,8 +853,8 @@ device_geom;
  *   First of all, we use 3 different units to deal with geometrical
  *   parameters:
  *     1) we communicate with frontend in millimeters
- *     2) we communicate with scanner in pixels, assuming protoc-specific DPI
- *        (defined by devcaps::units)
+ *     2) we communicate with scanner in pixels, assuming
+ *        protocol-specific DPI (defined by devcaps::units)
  *     3) when we deal with image, sizes are in pixels in real resolution
  *
  *   Second, scanner returns minimal and maximal window size, but
@@ -1360,6 +1360,7 @@ device_read_next (device *dev)
         }
 
         line_capacity = math_max(dev->opt.params.bytes_per_line, wid * bpp);
+        line_capacity += dev->read_line_off;
     }
 
     /* Initialize image decoding */
@@ -1411,7 +1412,8 @@ device_read_decode_line (device *dev)
     }
 
     if (n < dev->read_skip_lines || n >= dev->read_line_end) {
-        memset(dev->read_line_buf, 0xff, dev->opt.params.bytes_per_line);
+        memset(dev->read_line_buf + dev->read_skip_bytes, 0xff,
+            dev->opt.params.bytes_per_line);
     } else {
         error err = image_decoder_read_line(decoder, dev->read_line_buf);
 
@@ -1421,7 +1423,7 @@ device_read_decode_line (device *dev)
         }
     }
 
-    dev->read_line_off = dev->read_skip_bytes;
+    dev->read_line_off = 0;
     dev->read_line_num ++;
 
     return SANE_STATUS_GOOD;
@@ -1484,12 +1486,14 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
     /* Read line by line */
     for (len = 0; status == SANE_STATUS_GOOD && len < max_len; ) {
         if (dev->read_line_off == dev->opt.params.bytes_per_line) {
-            status = device_read_decode_line (dev);
+            status = device_read_decode_line(dev);
         } else {
             SANE_Int sz = math_min(max_len - len,
                 dev->opt.params.bytes_per_line - dev->read_line_off);
 
-            memcpy(data, dev->read_line_buf + dev->read_line_off, sz);
+            memcpy(data, dev->read_line_buf + dev->read_skip_bytes +
+                dev->read_line_off, sz);
+
             data += sz;
             dev->read_line_off += sz;
             len += sz;
