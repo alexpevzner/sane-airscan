@@ -1360,7 +1360,7 @@ device_read_next (device *dev)
         }
 
         line_capacity = math_max(dev->opt.params.bytes_per_line, wid * bpp);
-        line_capacity += dev->read_line_off;
+        line_capacity += dev->read_skip_bytes;
     }
 
     /* Initialize image decoding */
