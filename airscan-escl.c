@@ -338,7 +338,7 @@ escl_devcaps_source_parse (xml_rd *xml, devcaps_source **out)
     if (src->max_wid_px != 0 && src->max_hei_px != 0)
     {
         /* Validate window size */
-        if (src->min_wid_px > src->max_wid_px )
+        if (src->min_wid_px > src->max_wid_px)
         {
             err = ERROR("Invalid scan:MinWidth or scan:MaxWidth");
             goto DONE;
