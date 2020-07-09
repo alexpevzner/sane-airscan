@@ -119,7 +119,6 @@ struct device {
     SANE_Int             read_line_end;      /* If read_line_num>read_line_end
                                                 no more lines left in image */
     SANE_Int             read_line_off;      /* Current offset in the line */
-    SANE_Int             read_skip_lines;    /* How many lines to skip */
     SANE_Int             read_skip_bytes;    /* How many bytes to skip at line
                                                 beginning */
 };
@@ -1291,6 +1290,7 @@ device_read_next (device *dev)
     SANE_Parameters params;
     image_decoder   *decoder = dev->decoders[dev->proto_ctx.params.format];
     int             wid, hei;
+    int             skip_lines = 0;
 
     log_assert(dev->log, decoder != NULL);
 
@@ -1332,7 +1332,7 @@ device_read_next (device *dev)
     /* Setup image clipping */
     if (dev->job_skip_x >= wid || dev->job_skip_y >= hei) {
         /* Trivial case - just skip everything */
-        dev->read_skip_lines = hei;
+        dev->read_line_end = 0;
         dev->read_skip_bytes = 0;
         line_capacity = dev->opt.params.bytes_per_line;
     } else {
@@ -1354,9 +1354,8 @@ device_read_next (device *dev)
             dev->read_skip_bytes = bpp * (dev->job_skip_x - win.x_off);
         }
 
-        dev->read_skip_lines = 0;
         if (win.y_off != dev->job_skip_y) {
-            dev->read_skip_lines = dev->job_skip_y - win.y_off;
+            skip_lines = dev->job_skip_y - win.y_off;
         }
 
         line_capacity = math_max(dev->opt.params.bytes_per_line, wid * bpp);
@@ -1369,7 +1368,14 @@ device_read_next (device *dev)
 
     dev->read_line_num = 0;
     dev->read_line_off = dev->opt.params.bytes_per_line;
-    dev->read_line_end = hei - dev->read_skip_lines;
+    dev->read_line_end = hei - skip_lines;
+
+    for (;skip_lines > 0; skip_lines --) {
+        err = image_decoder_read_line(decoder, dev->read_line_buf);
+        if (err != NULL) {
+            goto DONE;
+        }
+    }
 
     /* Wake up reader */
     pollable_signal(dev->read_pollable);
@@ -1411,7 +1417,7 @@ device_read_decode_line (device *dev)
         return SANE_STATUS_EOF;
     }
 
-    if (n < dev->read_skip_lines || n >= dev->read_line_end) {
+    if (n >= dev->read_line_end) {
         memset(dev->read_line_buf + dev->read_skip_bytes, 0xff,
             dev->opt.params.bytes_per_line);
     } else {
