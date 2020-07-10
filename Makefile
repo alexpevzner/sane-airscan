@@ -17,7 +17,7 @@
 
 CC	= gcc
 COMPRESS = gzip
-CFLAGS	= -O2 -g -W -Wall -Werror
+CFLAGS	+= -O2 -g -W -Wall -Werror $(CPPFLAGS)
 MANDIR	= /usr/share/man/
 PKG_CONFIG = /usr/bin/pkg-config
 STRIP 	= -s
@@ -121,7 +121,7 @@ $(MAN_BACKEND): $(MAN_BACKEND).md
 	ronn --roff --manual=$(MAN_BACKEND_TITLE) $(MAN_BACKEND).md
 
 test:	$(BACKEND) test.c
-	$(CC) -o test test.c $(BACKEND) -Wl,-rpath . ${airscan_CFLAGS}
+	$(CC) -o test test.c $(BACKEND) -Wl,-rpath . $(LDFLAGS) ${airscan_CFLAGS}
 
 test-decode: test-decode.c $(LIBAIRSCAN)
-	 $(CC) -o test-decode test-decode.c $(CPPFLAGS) $(airscan_CFLAGS) $(LIBAIRSCAN) $(airscan_LIBS)
+	 $(CC) -o test-decode test-decode.c $(CPPFLAGS) $(airscan_CFLAGS) $(LIBAIRSCAN) $(LDFLAGS) $(airscan_LIBS)
