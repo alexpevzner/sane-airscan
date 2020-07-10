@@ -82,14 +82,14 @@ To manually configure a device, add the following section to the configuration f
 [devices]
 "Kyocera eSCL" = http://192\.168\.1\.102:9095/eSCL, eSCL
 "Kyocera WSD" = http://192\.168\.1\.102:5358/WSDScanner, WSD
-"Device I don\'t want to see" = disable
+"Device I don't want to see" = disable
 .
 .fi
 .
 .IP "" 0
 .
 .P
-The \fB[devices]\fR section contains all manually configured devices, one line per device, and each line contains a device name on a left side of equation and device URL on a rights side, followed by protocol (eSCL or WSD)\. If protocol is ommited, eSCL is assumed\. You may also disable particular device by using the \fBdisable\fR keyword instead of URL\.
+The \fB[devices]\fR section contains all manually configured devices, one line per device, and each line contains a device name on a left side of equation and device URL on a rights side, followed by protocol (eSCL or WSD)\. If protocol is omitted, eSCL is assumed\. You may also disable particular device by using the \fBdisable\fR keyword instead of URL\.
 .
 .P
 To figure out URLs of available devices, the simplest way is to run a supplied \fBairscan\-discover\fR tool on a computer connected with scanner to the same LAN segment\. On success, this program will dump to its standard output a list of discovered devices in a format suitable for inclusion into the configuration file\.
@@ -146,7 +146,7 @@ Debuggung facilities can be controlled using the \fB[debug]\fR section of the co
 enable = false | true
 
 ; Enable protocol trace and configure output directory
-; for trace files\. To specify path relative to user\'s
+; for trace files\. To specify path relative to user's
 ; home directory, start it with tilda character, followed
 ; by slash, i\.e\., "~/airscan/trace"\. The directory will
 ; be created automatically\.
