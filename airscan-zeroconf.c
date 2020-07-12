@@ -129,11 +129,8 @@ zeroconf_device_add (zeroconf_finding *finding)
     }
 
     ll_init(&device->findings);
-
-    device->ifaces_cap = ZEROCONF_DEVICE_IFACES_INITIAL_LEN;
-    device->ifaces = g_malloc(device->ifaces_cap * sizeof(*device->ifaces));
-
     ll_push_end(&zeroconf_device_list, &device->node_list);
+
     return device;
 }
 
@@ -233,7 +230,12 @@ zeroconf_device_ifaces_add (zeroconf_device *device, int ifindex)
 {
     if (!zeroconf_device_ifaces_lookup(device, ifindex)) {
         if (device->ifaces_len == device->ifaces_cap) {
-            device->ifaces_cap *= 2;
+            if (device->ifaces_cap == 0) {
+                device->ifaces_cap = ZEROCONF_DEVICE_IFACES_INITIAL_LEN;
+            } else {
+                device->ifaces_cap *= 2;
+            }
+
             device->ifaces = g_realloc(device->ifaces,
                 device->ifaces_cap * sizeof(*device->ifaces));
         }
@@ -260,7 +262,7 @@ zeroconf_device_rebuild_sets (zeroconf_device *device)
         finding = OUTER_STRUCT(node, zeroconf_finding, list_node);
         proto = zeroconf_method_to_proto(finding->method);
 
-        zeroconf_device_ifaces_add(device, finding->ifindex );
+        zeroconf_device_ifaces_add(device, finding->ifindex);
         if (proto != ID_PROTO_UNKNOWN) {
             device->protocols |= 1 << proto;
         }
@@ -316,18 +318,25 @@ static void
 zeroconf_device_borrow_findings (zeroconf_device *device,
     int ifindex, ll_head *output)
 {
-    ll_node          *node, *next;
-    zeroconf_finding *finding;
+    ll_node          *node;
+    ll_head          leftover;
 
-    for (node = ll_first(&device->findings); node != NULL; node = next) {
-        next = ll_next(&device->findings, node);
+    ll_init(&leftover);
+
+    while ((node = ll_pop_beg(&device->findings)) != NULL) {
+        zeroconf_finding *finding;
 
         finding = OUTER_STRUCT(node, zeroconf_finding, list_node);
+
         if (finding->ifindex == ifindex) {
             finding->device = NULL;
             ll_push_end(output, node);
+        } else {
+            ll_push_end(&leftover, node);
         }
     }
+
+    ll_cat(&device->findings, &leftover);
 
     if (ll_empty(&device->findings)) {
         zeroconf_device_del(device);
@@ -556,7 +565,7 @@ zeroconf_ident_split (const char *ident, unsigned int *devid, ID_PROTO *proto)
 
     /* Decode proto and devid */
     *proto = zeroconf_ident_proto_decode(*ident);
-    if (*proto == NUM_ID_PROTO) {
+    if (*proto == ID_PROTO_UNKNOWN) {
         return NULL;
     }
 
@@ -774,6 +783,25 @@ zeroconf_endpoint_list_sort_dedup (zeroconf_endpoint *list)
     return list;
 }
 
+/* Check if endpoints list contains a non-link-local address
+ * of the specified address family
+ */
+bool
+zeroconf_endpoint_list_has_non_link_local_addr (int af,
+        const zeroconf_endpoint *list)
+{
+    for (;list != NULL; list = list->next) {
+        const struct sockaddr *addr = http_uri_addr(list->uri);
+        if (addr != NULL && addr->sa_family == af) {
+            if (!ip_sockaddr_is_linklocal(addr)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 /******************** Static configuration *********************/
 /* Look for device's static configuration by device name
  */
@@ -850,7 +878,7 @@ zeroconf_finding_publish (zeroconf_finding *finding)
      */
     device = zeroconf_device_find_by_uuid(finding->uuid);
     if (device != NULL && finding->name != NULL) {
-        if (device->ifaces_len == 1 && device->ifaces[0] == finding->ifindex ){
+        if (device->ifaces_len == 1 && device->ifaces[0] == finding->ifindex){
             /* Case 2: all findings belongs to the same network
              * interface; upgrade anonymous device to named
              */
@@ -1055,6 +1083,41 @@ zeroconf_device_list_qsort_cmp (const void *p1, const void *p2)
     return cmp;
 }
 
+/* Format list of protocols, for zeroconf_device_list_log
+ */
+static void
+zeroconf_device_list_fmt_protocols (char *buf, size_t buflen, unsigned int protocols)
+{
+    ID_PROTO proto;
+    size_t   off = 0;
+
+    buf[0] = '\0';
+    for (proto = 0; proto < NUM_ID_PROTO; proto ++) {
+        if ((protocols & (1 << proto)) != 0) {
+            off += snprintf(buf + off, buflen - off, " %s",
+                id_proto_name(proto));
+        }
+    }
+
+    if (buf[0] == '\0') {
+        strcpy(buf, " none");
+    }
+}
+
+/* Log device information in a context of zeroconf_device_list_get
+ */
+static void
+zeroconf_device_list_log (zeroconf_device *device, const char *name, unsigned int protocols)
+{
+    char     buf[64];
+
+    zeroconf_device_list_fmt_protocols(buf, sizeof(buf), device->protocols);
+    log_debug(zeroconf_log, "%s: supported protocols:%s", name, buf);
+
+    zeroconf_device_list_fmt_protocols(buf, sizeof(buf), protocols);
+    log_debug(zeroconf_log, "%s: chosen protocols:%s", name, buf);
+}
+
 /* Get list of devices, in SANE format
  */
 const SANE_Device**
@@ -1065,10 +1128,14 @@ zeroconf_device_list_get (void)
     const SANE_Device **dev_list = sane_device_array_new();
     ll_node     *node;
 
+    log_debug(zeroconf_log, "zeroconf_device_list_get: requested");
+
     /* Wait until device table is ready */
     zeroconf_initscan_wait();
 
     /* Build list of devices */
+    log_debug(zeroconf_log, "zeroconf_device_list_get: building list of devices");
+
     dev_count = 0;
 
     for (dev_conf = conf.devices; dev_conf != NULL; dev_conf = dev_conf->next) {
@@ -1097,8 +1164,18 @@ zeroconf_device_list_get (void)
         zeroconf_device_name_model(device, &name, &model);
         protocols = zeroconf_device_protocols(device);
 
+        zeroconf_device_list_log(device, name, protocols);
+
         if (zeroconf_find_static_by_name(name) != NULL) {
             /* Static configuration overrides discovery */
+            log_debug(zeroconf_log,
+                "%s: skipping, device clashes statically configured", name);
+            continue;
+        }
+
+        if (protocols == 0) {
+            log_debug(zeroconf_log,
+                "%s: skipping, no of supported protocols discovered", name);
             continue;
         }
 
@@ -1327,6 +1404,8 @@ zeroconf_init (void)
     log_trace(zeroconf_log, "  protocol     = %s", s);
 
     s = "?";
+    (void) s; /* Silence CLANG analyzer warning */
+
     switch (conf.wsdd_mode) {
     case WSDD_FAST: s = "fast"; break;
     case WSDD_FULL: s = "full"; break;

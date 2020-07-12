@@ -26,7 +26,7 @@ typedef struct {
 
 /* Print error message and exit
  */
-void
+void __attribute__((noreturn))
 die (const char *format, ...)
 {
     va_list ap;
@@ -218,6 +218,7 @@ main (int argc, char **argv)
         save_write(save, line);
     }
 
+    g_free(line);
     save_close(save);
 
     return 0;

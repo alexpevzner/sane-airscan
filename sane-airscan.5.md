@@ -46,7 +46,7 @@ file:
     [devices]
     "Kyocera eSCL" = http://192.168.1.102:9095/eSCL, eSCL
     "Kyocera WSD" = http://192.168.1.102:5358/WSDScanner, WSD
-    "Device I don't want to see" = disable
+    "Device I do not want to see" = disable
 
 The `[devices]` section contains all manually configured devices, one line per
 device, and each line contains a device name on a left side of equation and
@@ -109,8 +109,8 @@ of the configuration file:
     enable = false | true
 
     ; Enable protocol trace and configure output directory
-    ; for trace files. To specify path relative to user's
-    ; home directory, start it with tilda character, followed
+    ; for trace files. Like in shell, to specify path relative to
+    ; the home directory, start it with tilda character, followed
     ; by slash, i.e., "~/airscan/trace". The directory will
     ; be created automatically.
     trace = path

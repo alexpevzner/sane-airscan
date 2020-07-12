@@ -114,6 +114,7 @@ http_uri_new_relative (const http_uri *base, const char *path,
 
 /* Free the URI
  */
+#ifndef __clang_analyzer__
 void
 http_uri_free (http_uri *uri)
 {
@@ -123,6 +124,7 @@ http_uri_free (http_uri *uri)
         g_free(uri);
     }
 }
+#endif
 
 /* Get URI string
  */
@@ -689,9 +691,21 @@ http_client_onerror (http_client *client,
 void
 http_client_cancel (http_client *client)
 {
-    while (client->pending->len != 0) {
-        http_query_cancel(client->pending->pdata[0]);
+    size_t     i, len = client->pending->len;
+    size_t     sz = len * sizeof(http_query*);
+    http_query **qlist = g_alloca(len);
+
+    /* Note, without this stupid copying of client->pending->pdata,
+     * clang analyzer doesn't understand that http_query_cancel()
+     * has a side effect of removing http_query pointer from the
+     * array and erroneously claims that memory used after free
+     */
+    memcpy(qlist, client->pending->pdata, sz);
+    for (i = 0; i < len; i ++) {
+        http_query_cancel(qlist[i]);
     }
+
+    log_assert(client->log, client->pending->len == 0);
 }
 
 /* Cancel all pending queries with matching address family and uintptr
@@ -988,11 +1002,12 @@ http_query_cancel (http_query *q)
     g_object_ref(q->msg);
     soup_session_cancel_message(http_session, q->msg, SOUP_STATUS_CANCELLED);
     soup_message_set_status(q->msg, SOUP_STATUS_CANCELLED);
-    g_object_unref(q->msg);
 
     log_debug(q->client->log, "HTTP %s %s: %s", q->msg->method,
             http_uri_str(q->uri),
             soup_status_get_phrase(SOUP_STATUS_CANCELLED));
+
+    g_object_unref(q->msg);
 
     http_query_free(q);
 }
@@ -1225,6 +1240,8 @@ http_start_stop (bool start)
         g_object_set_property(G_OBJECT(http_session),
             SOUP_SESSION_SSL_STRICT, &val);
     } else {
+        ll_node *node;
+
         soup_session_abort(http_session);
         g_object_unref(http_session);
         http_session = NULL;
@@ -1232,10 +1249,8 @@ http_start_stop (bool start)
         /* Note, soup_session_abort() may leave some requests
          * pending, so we must free them here explicitly
          */
-        while (!ll_empty(&http_query_list)) {
-            ll_node    *node = ll_first(&http_query_list);
+        while ((node = ll_pop_beg(&http_query_list)) != NULL) {
             http_query *q = OUTER_STRUCT(node, http_query, list_node);
-
             http_query_free(q);
         }
     }
