@@ -89,7 +89,7 @@ To manually configure a device, add the following section to the configuration f
 .IP "" 0
 .
 .P
-The \fB[devices]\fR section contains all manually configured devices, one line per device, and each line contains a device name on a left side of equation and device URL on a rights side, followed by protocol (eSCL or WSD)\. If protocol is ommited, eSCL is assumed\. You may also disable particular device by using the \fBdisable\fR keyword instead of URL\.
+The \fB[devices]\fR section contains all manually configured devices, one line per device, and each line contains a device name on a left side of equation and device URL on a rights side, followed by protocol (eSCL or WSD)\. If protocol is omitted, eSCL is assumed\. You may also disable particular device by using the \fBdisable\fR keyword instead of URL\.
 .
 .P
 To figure out URLs of available devices, the simplest way is to run a supplied \fBairscan\-discover\fR tool on a computer connected with scanner to the same LAN segment\. On success, this program will dump to its standard output a list of discovered devices in a format suitable for inclusion into the configuration file\.
