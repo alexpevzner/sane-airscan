@@ -1287,9 +1287,17 @@ http_data_set_content_type (http_data *data, const char *content_type)
 
     if (content_type == NULL) {
         content_type = "text/plain";
+    } else {
+        char *s;
+
+        content_type = g_ascii_strdown(content_type, -1);
+        s = strchr(content_type, ';');
+        if (s != NULL) {
+            *s = '\0';
+        }
     }
 
-    data->content_type = g_ascii_strdown(content_type, -1);
+    data->content_type = content_type;
 }
 
 /* Ref http_data
@@ -1797,6 +1805,11 @@ static int
 http_query_on_message_complete (http_parser *parser)
 {
     http_query *q = OUTER_STRUCT(parser, http_query, http_parser);
+
+    if (q->response_data != NULL) {
+        http_data_set_content_type(q->response_data,
+            http_query_get_response_header(q, "Content-Type"));
+    }
 
     http_query_complete(q, NULL);
 
