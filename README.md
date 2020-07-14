@@ -124,6 +124,14 @@ device and needs to be enabled before use: Click [Configuration], click [Initial
 under [Scanner], and then set [Prohibit WSD Scan Command] to [Do not Prohibit] (from
 http://support.ricoh.com/bb_v1oi/pub_e/oi_view/0001047/0001047003/view/scanner/int/0095.htm)
 
+### Distros that come with sane-airscan
+
+The following distros (in alphabetical order) include `sane-airscan`
+officially:
+* ALT Linux Sisyphus
+* Arch Linux (in extra repository)
+* NixOS
+
 ### Installation from pre-build binaries
 
 If you use one of the following Linux distros:
@@ -146,13 +154,9 @@ enable automatic updates of the sane-airscan package.
 **Linux Mint** users may use Ubuntu packages:
 * Linux Mint 18.x - use packages for Ubuntu 16.04
 * Linux Mint 19.x - use packages for Ubuntu 18.04
+* Linux Mint 20.x - use packages for Ubuntu 20.04
 
-For **Arch Linux**, there are packages, maintained by
-Thomas Kiss <thomas.kiss001@stud.fh-dortmund.de>:
-* https://aur.archlinux.org/packages/sane-airscan/ - latest release
-* https://aur.archlinux.org/packages/sane-airscan-git/ - GIT snapshot
-
-Big thanks to [openSUSE Build Service](https://build.opensuse.org/), for
+Big thanks to [openSUSE Build Service](https://build.opensuse.org/) for
 providing package build infrastructure.
 
 If your distro is not listed, see
