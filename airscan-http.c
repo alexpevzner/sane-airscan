@@ -33,11 +33,8 @@ static SoupSession *http_session;
 /******************** Forward declarations ********************/
 typedef struct http_multipart http_multipart;
 
-/* http_data constructor, internal version
- */
 static http_data*
-http_data_new_internal(const void *bytes, size_t size,
-    SoupBuffer *buf, http_multipart *mp);
+http_data_new(http_data *parent, const char *bytes, size_t size);
 
 static void
 http_data_set_content_type (http_data *data, const char *content_type);
@@ -1145,7 +1142,7 @@ http_multipart_ref (http_multipart *mp)
 static void
 http_multipart_unref (http_multipart *mp)
 {
-    if (g_atomic_int_dec_and_test(&mp->refcnt)) {
+    if (mp != NULL && g_atomic_int_dec_and_test(&mp->refcnt)) {
         g_free(mp->bodies);
         http_data_unref(mp->data);
         g_free(mp);
@@ -1154,7 +1151,7 @@ http_multipart_unref (http_multipart *mp)
 
 /* Create http_multipart
  */
-static http_multipart*
+http_multipart*
 http_multipart_new (SoupMessageHeaders *headers, http_data *data)
 {
     http_multipart *mp;
@@ -1212,8 +1209,8 @@ http_multipart_new (SoupMessageHeaders *headers, http_data *data)
 
         if (part != NULL) {
             if (data_prev != NULL) {
-                http_data *body = http_data_new_internal(data_prev,
-                    part - data_prev, NULL, mp);
+                http_data *body = http_data_new(data,
+                        data_prev, part - data_prev);
                 http_multipart_add_body(mp, body);
 
                 if (!http_multipart_adjust_part(body)) {
@@ -1250,45 +1247,35 @@ ERROR:
 typedef struct {
     http_data      data;    /* HTTP data */
     volatile gint  refcnt;  /* Reference counter */
-    SoupBuffer     *buf;    /* Underlying SoupBuffer */
-    http_multipart *mp;
+    http_data      *parent; /* Parent data buffer */
 } http_data_ex;
 
-/* http_data constructor, internal version
+
+/* Create new http_data
+ *
+ * If parent != NULL, supplied bytes buffer must be owned by
+ * parent. Otherwise, newly created http_data takes ownership
+ * on the supplied data buffer
  */
 static http_data*
-http_data_new_internal(const void *bytes, size_t size,
-    SoupBuffer *buf, http_multipart *mp)
+http_data_new(http_data *parent, const char *bytes, size_t size)
 {
     http_data_ex *data_ex = g_new0(http_data_ex, 1);
 
-    data_ex->data.bytes = bytes;
-    data_ex->data.size = size;
-    data_ex->refcnt = 1;
-    data_ex->buf = buf;
-    data_ex->mp = mp ? http_multipart_ref(mp) : NULL;
-
-    return &data_ex->data;
-}
-
-/* Create http_data
- */
-static http_data*
-http_data_new (const char *content_type, SoupMessageBody *body)
-{
-    http_data  *data;
-    char       *s;
-    SoupBuffer *buf = soup_message_body_flatten(body);
-
-    data = http_data_new_internal(buf->data, buf->length, buf, NULL);
-    http_data_set_content_type(data, content_type);
-
-    s = strchr(data->content_type, ';');
-    if (s != NULL) {
-        *s = '\0';
+    if (parent != NULL) {
+        log_assert(NULL, bytes >= (char*) parent->bytes);
+        log_assert(NULL,
+            (bytes + size) <= ((char*) parent->bytes + parent->size));
     }
 
-    return data;
+    data_ex->data.content_type = g_strdup("");
+    data_ex->data.bytes = bytes;
+    data_ex->data.size = size;
+
+    data_ex->refcnt = 1;
+    data_ex->parent = parent ? http_data_ref(parent) : NULL;
+
+    return &data_ex->data;
 }
 
 /* Set Content-type
@@ -1322,17 +1309,33 @@ http_data_unref (http_data *data)
 {
     if (data != NULL) {
         http_data_ex *data_ex = OUTER_STRUCT(data, http_data_ex, data);
+
         if (g_atomic_int_dec_and_test(&data_ex->refcnt)) {
-            if (data_ex->mp != NULL) {
-                http_multipart_unref(data_ex->mp);
-            } else if (data_ex->buf != NULL) {
-                soup_buffer_free(data_ex->buf);
+            if (data_ex->parent != NULL) {
+                http_data_unref(data_ex->parent);
+            } else {
+                g_free((void*) data_ex->data.bytes);
             }
 
             g_free((char*) data_ex->data.content_type);
             g_free(data_ex);
         }
     }
+}
+
+/* Append bytes to data. http_data must be owner of its
+ * own buffer, i.e. it must have no parent
+ */
+static void
+http_data_append (http_data *data, const char *bytes, size_t size)
+{
+    http_data_ex *data_ex = OUTER_STRUCT(data, http_data_ex, data);
+
+    log_assert(NULL, data_ex->parent == NULL);
+
+    data->bytes = g_realloc((char*) data->bytes, data->size + size);
+    memcpy((char*) data->bytes + data->size, bytes, size);
+    data->size += size;
 }
 
 /******************** HTTP data queue ********************/
@@ -1495,16 +1498,6 @@ http_client_has_pending (const http_client *client)
 }
 
 /******************** HTTP request handling ********************/
-/* http_query_cached represents a cached data, computed
- * on demand and associated with the http_query. This cache
- * is mutable, even if http_query is not
- */
-typedef struct {
-    http_data      *request_data;        /* Request data */
-    http_data      *response_data;       /* Response data */
-    http_multipart *response_multipart;  /* Multipart response bodies */
-} http_query_cached;
-
 /* Type http_query represents HTTP query (both request and response)
  */
 struct http_query {
@@ -1524,7 +1517,6 @@ struct http_query {
     eloop_fdpoll      *fdpoll;                  /* Polls q->sock */
     ip_straddr        straddr;                  /* q->sock target addr */
 
-    char              *rq_body;                 /* Request body, may be NULL */
     GString           *rq_buf;                  /* Formatted request */
     size_t            rq_off;                   /* send() offset in request */
 
@@ -1533,6 +1525,11 @@ struct http_query {
     /* HTTP parser */
     http_parser       http_parser;              /* HTTP parser structure */
 
+    /* Data handling */
+    http_data         *request_data;            /* NULL if none */
+    http_data         *response_data;           /* NULL if none */
+    http_multipart    *response_multipart;      /* NULL if not multipart */
+
     /* Callbacks and context */
     timestamp         timestamp;                /* Submission timestamp */
     uintptr_t         uintptr;                  /* User-defined parameter */
@@ -1540,8 +1537,6 @@ struct http_query {
                                 error err);
     void              (*callback) (void *ptr,   /* Completion callback */
                                 http_query *q);
-
-    http_query_cached *cached;                  /* Cached data */
 
     /* Linkage to http_client */
     http_client       *client;                  /* Client that owns the query */
@@ -1565,23 +1560,25 @@ http_query_free (http_query *q)
     http_uri_free(q->uri);
     http_hdr_cleanup(&q->request_header);
     http_hdr_cleanup(&q->response_header);
+
     if (q->addrs != NULL) {
         freeaddrinfo(q->addrs);
     }
+
+    if (q->fdpoll != NULL) {
+        eloop_fdpoll_free(q->fdpoll);
+    }
+
     if (q->sock >= 0) {
         close(q->sock);
     }
 
-    g_free(q->rq_body);
     g_string_free(q->rq_buf, TRUE);
 
-    http_data_unref(q->cached->request_data);
-    http_data_unref(q->cached->response_data);
-    if (q->cached->response_multipart != NULL) {
-        http_multipart_unref(q->cached->response_multipart);
-    }
+    http_data_unref(q->request_data);
+    http_data_unref(q->response_data);
+    http_multipart_unref(q->response_multipart);
 
-    g_free(q->cached);
     g_free(q);
 }
 
@@ -1649,11 +1646,10 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
     http_hdr_init(&q->response_header);
 
     q->sock = -1;
-    q->rq_body = body;
+
     q->rq_buf = g_string_new(NULL);
 
     q->msg = soup_message_new(method, uri->str);
-    q->cached = g_new0(http_query_cached, 1);
     q->onerror = client->onerror;
 
     http_parser_init(&q->http_parser, HTTP_RESPONSE);
@@ -1671,9 +1667,13 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
      */
     http_query_set_request_header(q, "Connection", "close");
 
-    /* Set Content-Type */
-    if (body != NULL && content_type != NULL) {
-        http_query_set_request_header(q, "Content-Type", content_type);
+    /* Save request body and set Content-Type */
+    if (body != NULL) {
+        q->request_data = http_data_new(NULL, body, strlen(body));
+        if ( content_type != NULL) {
+            http_query_set_request_header(q, "Content-Type", content_type);
+            http_data_set_content_type(q->request_data, content_type);
+        }
     }
 
     return q;
@@ -1778,8 +1778,15 @@ http_query_on_body_callback (http_parser *parser,
 {
     http_query *q = OUTER_STRUCT(parser, http_query, http_parser);
 
-    (void) q;
-    printf("C: %.*s\n", (int) size, data);
+    if (size == 0) {
+        return 0; /* Just in case */
+    }
+
+    if (q->response_data == NULL) {
+        q->response_data = http_data_new(NULL, NULL, 0);
+    }
+
+    http_data_append(q->response_data, data, size);
 
     return 0;
 }
@@ -1975,16 +1982,18 @@ http_query_start_processing (gpointer p)
     /* Format HTTP request */
     g_string_printf(q->rq_buf, "%s %s HTTP/1.1\r\n",
         q->method, http_uri_get_path(q->uri));
-    if (q->rq_body != NULL) {
+
+    if (q->request_data != NULL) {
         char buf[64];
-        sprintf(buf, "%zd", strlen(q->rq_body));
+        sprintf(buf, "%zd", q->request_data->size);
         http_hdr_set(&q->request_header, "Content-Length", buf);
     }
 
     http_hdr_write(&q->request_header, q->rq_buf);
 
-    if (q->rq_body != NULL) {
-        g_string_append(q->rq_buf, q->rq_body);
+    if (q->request_data != NULL) {
+        g_string_append_len(q->rq_buf,
+            q->request_data->bytes, q->request_data->size);
     }
 
     /* Connect to the host */
@@ -2160,20 +2169,21 @@ http_query_get_response_header(const http_query *q, const char *name)
     return http_hdr_get(&q->response_header, name);
 }
 
+/* Dummy http_data in case no data is present
+ */
+static http_data
+http_query_no_data = {
+    .content_type = "",
+    .bytes = "",
+    .size = 0
+};
+
 /* Get request data
  */
 http_data*
 http_query_get_request_data (const http_query *q)
 {
-    if (q->cached->request_data == NULL) {
-        const char         *ct;
-        SoupMessageHeaders *hdr = q->msg->request_headers;
-
-        ct = soup_message_headers_get_content_type(hdr, NULL);
-        q->cached->request_data = http_data_new(ct, q->msg->request_body);
-    }
-
-    return q->cached->request_data;
+    return q->request_data ? q->request_data : &http_query_no_data;
 }
 
 /* Get request data
@@ -2181,15 +2191,7 @@ http_query_get_request_data (const http_query *q)
 http_data*
 http_query_get_response_data (const http_query *q)
 {
-    if (q->cached->response_data == NULL) {
-        const char         *ct;
-        SoupMessageHeaders *hdr = q->msg->response_headers;
-
-        ct = soup_message_headers_get_content_type(hdr, NULL);
-        q->cached->response_data = http_data_new(ct, q->msg->response_body);
-    }
-
-    return q->cached->response_data;
+    return q->response_data ? q->response_data : &http_query_no_data;
 }
 
 /* Get multipart response bodies. For non-multipart response
@@ -2198,13 +2200,7 @@ http_query_get_response_data (const http_query *q)
 static http_multipart*
 http_query_get_mp_response (const http_query *q)
 {
-    if (q->cached->response_multipart == NULL) {
-        q->cached->response_multipart = http_multipart_new(
-            q->msg->response_headers,
-            http_query_get_response_data(q));
-    }
-
-    return q->cached->response_multipart;
+    return q->response_multipart;
 }
 
 /* Get count of parts of multipart response
