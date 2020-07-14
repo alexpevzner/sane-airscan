@@ -21,6 +21,12 @@
 
 #include <libsoup/soup.h>
 
+/******************** Constants ********************/
+/* I/O buffer size
+ */
+#define HTTP_IOBUF_SIZE 65536
+
+
 /******************** Static variables ********************/
 static SoupSession *http_session;
 
@@ -847,7 +853,7 @@ typedef struct {
  */
 typedef struct {
     GString *name;           /* Header name */
-    GString *value;          /* Header value */
+    GString *value;          /* Header value, may be NULL */
     ll_node chain;           /* In http_hdr::fields */
 } http_hdr_field;
 
@@ -963,6 +969,79 @@ http_hdr_set (http_hdr *hdr, const char *name, const char *value)
         field->value = g_string_new(value);
     } else {
         g_string_assign(field->value, value);
+    }
+}
+
+/* Handle HTTP parser on_header_field callback
+ */
+static void
+http_hdr_on_header_field (http_hdr *hdr, const char *data, size_t size)
+{
+    ll_node        *node;
+    http_hdr_field *field = NULL;
+
+    /* Get last field */
+    node = ll_last(&hdr->fields);
+    if (node != NULL) {
+        field = OUTER_STRUCT(node, http_hdr_field, chain);
+    }
+
+    /* If there is no last field, or last field already
+     * has value, create a new field
+     */
+    if (field == NULL || field->value != NULL) {
+        field = http_hdr_field_new(NULL);
+        ll_push_end(&hdr->fields, &field->chain);
+    }
+
+    /* Append data to the field name */
+    g_string_append_len(field->name, (gchar*) data, size);
+}
+
+/* Handle HTTP parser on_header_value callback
+ */
+static void
+http_hdr_on_header_value (http_hdr *hdr, const char *data, size_t size)
+{
+    ll_node        *node;
+    http_hdr_field *field = NULL;
+
+    /* Get last field */
+    node = ll_last(&hdr->fields);
+    if (node != NULL) {
+        field = OUTER_STRUCT(node, http_hdr_field, chain);
+    }
+
+    /* If there is no last field, just ignore the data.
+     * Note, it actually should not happen
+     */
+    if (field == NULL) {
+        return;
+    }
+
+    /* Append data to field value */
+    if (field->value == NULL) {
+        field->value = g_string_new(NULL);
+    }
+
+    g_string_append_len(field->value, (gchar*) data, size);
+}
+
+/* Call callback for each header field
+ */
+static void
+hdr_for_each (const http_hdr *hdr,
+        void (*callback)(const char *name, const char *value, void *ptr),
+        void *ptr)
+{
+    ll_node *node;
+
+    for (LL_FOR_EACH(node, &hdr->fields)) {
+        http_hdr_field *field = OUTER_STRUCT(node, http_hdr_field, chain);
+
+        if (field->value != NULL) {
+            callback(field->name->str, field->value->str, ptr);
+        }
     }
 }
 
@@ -1439,20 +1518,23 @@ struct http_query {
 
     /* Low-level I/O */
     error             err;                      /* Transport error */
-    int               status;                   /* HTTP status */
     struct addrinfo   *addrs;                   /* Addresses to connect to */
     struct addrinfo   *addr_next;               /* Next address to try */
     int               sock;                     /* HTTP socket */
     eloop_fdpoll      *fdpoll;                  /* Polls q->sock */
     ip_straddr        straddr;                  /* q->sock target addr */
-    GString           *iobuf;                   /* I/O buffer */
-    size_t            iooff;                    /* Offset in I/O buffer */
-    char              *rqbody;                  /* Request body, may be NULL */
+
+    char              *rq_body;                 /* Request body, may be NULL */
+    GString           *rq_buf;                  /* Formatted request */
+    size_t            rq_off;                   /* send() offset in request */
 
     SoupMessage       *msg;                     /* Underlying SOUP message */
-    timestamp         timestamp;                /* Submission timestamp */
+
+    /* HTTP parser */
+    http_parser       http_parser;              /* HTTP parser structure */
 
     /* Callbacks and context */
+    timestamp         timestamp;                /* Submission timestamp */
     uintptr_t         uintptr;                  /* User-defined parameter */
     void              (*onerror) (void *ptr,    /* On-error callback */
                                 error err);
@@ -1489,8 +1571,9 @@ http_query_free (http_query *q)
     if (q->sock >= 0) {
         close(q->sock);
     }
-    g_string_free(q->iobuf, TRUE);
-    g_free(q->rqbody);
+
+    g_free(q->rq_body);
+    g_string_free(q->rq_buf, TRUE);
 
     http_data_unref(q->cached->request_data);
     http_data_unref(q->cached->response_data);
@@ -1566,12 +1649,14 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
     http_hdr_init(&q->response_header);
 
     q->sock = -1;
-    q->iobuf = g_string_new(NULL);
-    q->rqbody = body;
+    q->rq_body = body;
+    q->rq_buf = g_string_new(NULL);
 
     q->msg = soup_message_new(method, uri->str);
     q->cached = g_new0(http_query_cached, 1);
     q->onerror = client->onerror;
+
+    http_parser_init(&q->http_parser, HTTP_RESPONSE);
 
     /* Build and set Host: header */
     http_query_set_host(q);
@@ -1624,27 +1709,32 @@ http_query_onerror (http_query *q, void (*onerror)(void *ptr, error err))
 /* Complete query processing
  */
 static void
-http_query_complete (http_query *q, error err, int status)
+http_query_complete (http_query *q, error err)
 {
     http_client *client = q->client;
 
-    q->err = err;
-    q->status = status;
-    err = http_query_transport_error(q);
+    /* Make sure latest response header field is terminated */
+    http_hdr_on_header_value(&q->response_header, "", 0);
 
+    /* Save error */
+    q->err = err;
+
+    /* Unlink query from a client */
     ll_del(&q->chain);
 
+    /* Issue log messages */
     if (err != NULL) {
         log_debug(client->log, "HTTP %s %s: %s", q->method,
                 http_uri_str(q->uri), http_query_status_string(q));
     } else {
         log_debug(client->log, "HTTP %s %s: %d %s", q->method,
                 http_uri_str(q->uri),
-                q->status, http_query_status_string(q));
+                http_query_status(q), http_query_status_string(q));
     }
 
     trace_http_query_hook(log_ctx_trace(client->log), q);
 
+    /* Call user callback */
     if (err != NULL && q->onerror != NULL) {
         q->onerror(client->ptr, err);
     } else if (q->callback != NULL) {
@@ -1654,19 +1744,81 @@ http_query_complete (http_query *q, error err, int status)
     http_query_free(q);
 }
 
+/* HTTP parser on_header_field callback
+ */
+static int
+http_query_on_header_field_callback (http_parser *parser,
+        const char *data, size_t size)
+{
+    http_query *q = OUTER_STRUCT(parser, http_query, http_parser);
+
+    http_hdr_on_header_field(&q->response_header, data, size);
+
+    return 0;
+}
+
+/* HTTP parser on_header_value callback
+ */
+static int
+http_query_on_header_value_callback (http_parser *parser,
+        const char *data, size_t size)
+{
+    http_query *q = OUTER_STRUCT(parser, http_query, http_parser);
+
+    http_hdr_on_header_value(&q->response_header, data, size);
+
+    return 0;
+}
+
+/* HTTP parser on_body callback
+ */
+static int
+http_query_on_body_callback (http_parser *parser,
+        const char *data, size_t size)
+{
+    http_query *q = OUTER_STRUCT(parser, http_query, http_parser);
+
+    (void) q;
+    printf("C: %.*s\n", (int) size, data);
+
+    return 0;
+}
+
+/* HTTP parser on_message_complete callback
+ */
+static int
+http_query_on_message_complete (http_parser *parser)
+{
+    http_query *q = OUTER_STRUCT(parser, http_query, http_parser);
+
+    http_query_complete(q, NULL);
+
+    return 0;
+}
+
+/* HTTP parser callbacks
+ */
+static http_parser_settings
+http_query_callbacks = {
+    .on_header_field     = http_query_on_header_field_callback,
+    .on_header_value     = http_query_on_header_value_callback,
+    .on_body             = http_query_on_body_callback,
+    .on_message_complete = http_query_on_message_complete
+};
+
 /* http_query::fdpoll callback
  */
 static void
 http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
 {
     http_query *q = data;
-    size_t     len = q->iobuf->len - q->iooff;
+    size_t     len = q->rq_buf->len - q->rq_off;
     int        rc;
 
     (void) fd;
 
     if ((mask & ELOOP_FDPOLL_WRITE) != 0) {
-        rc = send(q->sock, q->iobuf->str + q->iooff, len, MSG_NOSIGNAL);
+        rc = send(q->sock, q->rq_buf->str + q->rq_off, len, MSG_NOSIGNAL);
         if (rc < 0 && (errno == EINTR || errno == EWOULDBLOCK)) {
             return;
         }
@@ -1682,22 +1834,36 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
             close(q->sock);
             q->sock = -1;
 
-            if (q->iooff == 0) {
+            if (q->rq_off == 0) {
+                /* None sent, try another address, if any */
                 q->addr_next = q->addr_next->ai_next;
                 http_query_connect(q, err);
             } else {
-                http_query_complete(q, err, 0);
+                /* Sending started and failed */
+                http_query_complete(q, err);
             }
             return;
         }
 
-        q->iooff += rc;
+        q->rq_off += rc;
 
-        if (q->iooff == q->iobuf->len) {
+        if (q->rq_off == q->rq_buf->len) {
             eloop_fdpoll_set_mask(q->fdpoll, ELOOP_FDPOLL_READ);
+
         }
     } else {
-        exit(0);
+        static char io_buf[HTTP_IOBUF_SIZE];
+
+        rc = recv(q->sock, io_buf, sizeof(io_buf), MSG_NOSIGNAL);
+
+        if (rc < 0) {
+            error err = ERROR(strerror(errno));
+            http_query_complete(q, err);
+            return;
+        }
+
+        http_parser_execute(&q->http_parser, &http_query_callbacks,
+                io_buf, rc);
     }
 }
 
@@ -1718,7 +1884,7 @@ AGAIN:
     }
 
     if (q->addr_next == NULL) {
-        http_query_complete(q, err, 0);
+        http_query_complete(q, err);
         return;
     }
 
@@ -1801,24 +1967,24 @@ http_query_start_processing (gpointer p)
 
     rc = getaddrinfo(host, port, &hints, &q->addrs);
     if (rc != 0) {
-        http_query_complete(q, ERROR(gai_strerror(rc)), 0);
+        http_query_complete(q, ERROR(gai_strerror(rc)));
     }
 
     q->addr_next = q->addrs;
 
     /* Format HTTP request */
-    g_string_printf(q->iobuf, "%s %s HTTP/1.1\r\n",
+    g_string_printf(q->rq_buf, "%s %s HTTP/1.1\r\n",
         q->method, http_uri_get_path(q->uri));
-    if (q->rqbody != NULL) {
+    if (q->rq_body != NULL) {
         char buf[64];
-        sprintf(buf, "%zd", strlen(q->rqbody));
+        sprintf(buf, "%zd", strlen(q->rq_body));
         http_hdr_set(&q->request_header, "Content-Length", buf);
     }
 
-    http_hdr_write(&q->request_header, q->iobuf);
+    http_hdr_write(&q->request_header, q->rq_buf);
 
-    if (q->rqbody != NULL) {
-        g_string_append(q->iobuf, q->rqbody);
+    if (q->rq_body != NULL) {
+        g_string_append(q->rq_buf, q->rq_body);
     }
 
     /* Connect to the host */
@@ -1911,7 +2077,9 @@ http_query_get_uintptr (http_query *q)
 error
 http_query_error (const http_query *q)
 {
-    if (200 <= q->status && q->status < 300) {
+    int status = http_query_status(q);
+
+    if (200 <= status && status < 300) {
         return NULL;
     }
 
@@ -1935,7 +2103,7 @@ int
 http_query_status (const http_query *q)
 {
     log_assert(q->client->log, q->err == NULL);
-    return q->status;
+    return q->http_parser.status_code;
 }
 
 /* Get HTTP status string
@@ -1947,7 +2115,7 @@ http_query_status_string (const http_query *q)
         return ESTRING(q->err);
     }
 
-    return http_status_str (q->status);
+    return http_status_str(q->http_parser.status_code);
 }
 
 /* Get query URI
@@ -2069,7 +2237,7 @@ http_query_foreach_request_header (const http_query *q,
         void (*callback)(const char *name, const char *value, void *ptr),
         void *ptr)
 {
-    soup_message_headers_foreach(q->msg->request_headers, callback, ptr);
+    hdr_for_each(&q->request_header, callback, ptr);
 }
 
 /* Call callback for each response header
@@ -2079,7 +2247,7 @@ http_query_foreach_response_header (const http_query *q,
         void (*callback)(const char *name, const char *value, void *ptr),
         void *ptr)
 {
-    soup_message_headers_foreach(q->msg->response_headers, callback, ptr);
+    hdr_for_each(&q->response_header, callback, ptr);
 }
 
 /******************** HTTP initialization & cleanup ********************/
