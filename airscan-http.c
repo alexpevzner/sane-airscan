@@ -1429,11 +1429,15 @@ typedef struct {
 /* Type http_query represents HTTP query (both request and response)
  */
 struct http_query {
-    http_client       *client;                  /* Client that owns the query */
+    /* URI and method */
     http_uri          *uri;                     /* Query URI */
     const char        *method;                  /* Request method */
+
+    /* Request and response headers */
     http_hdr          request_header;           /* Request header */
     http_hdr          response_header;          /* Response header */
+
+    /* Low-level I/O */
     error             err;                      /* Transport error */
     int               status;                   /* HTTP status */
     struct addrinfo   *addrs;                   /* Addresses to connect to */
@@ -1444,14 +1448,21 @@ struct http_query {
     GString           *iobuf;                   /* I/O buffer */
     size_t            iooff;                    /* Offset in I/O buffer */
     char              *rqbody;                  /* Request body, may be NULL */
+
     SoupMessage       *msg;                     /* Underlying SOUP message */
     timestamp         timestamp;                /* Submission timestamp */
+
+    /* Callbacks and context */
     uintptr_t         uintptr;                  /* User-defined parameter */
     void              (*onerror) (void *ptr,    /* On-error callback */
                                 error err);
     void              (*callback) (void *ptr,   /* Completion callback */
                                 http_query *q);
+
     http_query_cached *cached;                  /* Cached data */
+
+    /* Linkage to http_client */
+    http_client       *client;                  /* Client that owns the query */
     bool              queued;                   /* Query is queued */
     ll_node           chain;                    /* In http_client::pending or
                                                    http_client::queued */
