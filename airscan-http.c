@@ -1024,6 +1024,158 @@ http_hdr_on_header_value (http_hdr *hdr, const char *data, size_t size)
     g_string_append_len(field->value, (gchar*) data, size);
 }
 
+/* Check if character is special, for http_hdr_params_parse
+ */
+static bool
+http_hdr_params_chr_isspec (char c)
+{
+    if (0x20 < c && c < 0x7f) {
+        switch (c) {
+        case '(': case ')': case '<': case '>':
+        case '@': case ',': case ';': case ':':
+        case '\\': case '\"':
+        case '/': case '[': case ']': case '?':
+        case '=':
+            return true;
+
+        default:
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/* Check if character is space, for http_hdr_params_parse
+ */
+static bool
+http_hdr_params_chr_isspace (char c)
+{
+    switch ((unsigned char) c) {
+    case '\t': case '\n': case '\v': case '\f':
+    case '\r': case ' ': case 0x85: case 0xA0:
+        return true;
+    }
+
+    return false;
+}
+
+/* Parse HTTP header field with parameters.
+ * Result is saved into `params' as collection of name/value fields
+ */
+static error
+http_hdr_params_parse (http_hdr *params, const char *in)
+{
+    enum {
+    /*  params ::= param [';' params]
+     *  param  ::= SP1 NAME SP2 '=' SP3 value SP4
+     *  value  ::= TOKEN | STRING
+     */
+        SP1, NAME, SP2, EQ, SP3, VALUE, TOKEN, STRING, STRING_BSLASH, SP4, END
+    } state = SP1;
+    char           c;
+    http_hdr_field *field = NULL;
+
+    /* Parameters begin after ';' */
+    in = strchr(in, ';');
+    if (in == NULL) {
+        return NULL;
+    }
+
+    in ++;
+
+    while ((c = *in) != '\0') {
+        switch (state) {
+        case SP1: case SP2: case SP3: case SP4:
+            if (!http_hdr_params_chr_isspace(c)) {
+                state ++;
+                continue;
+            }
+            break;
+
+        case NAME:
+            if (!http_hdr_params_chr_isspec(c)) {
+                if (field == NULL) {
+                    field = http_hdr_field_new(NULL);
+                    field->value = g_string_new(NULL);
+                    ll_push_end(&params->fields, &field->chain);
+                }
+                g_string_append_c(field->name, c);
+            } else if (c == ';') {
+                state = SP1;
+                field = NULL;
+            } else {
+                state = SP2;
+                continue;
+            }
+            break;
+
+        case EQ:
+            if (c == '=') {
+                state = SP3;
+            } else if (c == ';') {
+                state = SP1;
+                field = NULL;
+            } else {
+                return ERROR("http: invalid parameter");
+            }
+            break;
+
+        case VALUE:
+            if (c == '"') {
+                state = STRING;
+            } else {
+                state = TOKEN;
+                continue;
+            }
+            break;
+
+        case STRING:
+            if (c == '\\') {
+                state = STRING_BSLASH;
+            } else if (c == '"') {
+                state = SP4;
+            } else {
+                g_string_append_c(field->value, c);
+            }
+            break;
+
+        case STRING_BSLASH:
+            http_hdr_on_header_value(params, in, 1);
+            state = STRING;
+            break;
+
+        case TOKEN:
+            if (!http_hdr_params_chr_isspec(c)) {
+                http_hdr_on_header_value(params, in, 1);
+            } else {
+                state = SP4;
+                continue;
+            }
+            break;
+
+        case END:
+            if (c != ';') {
+                return ERROR("http: invalid parameter");
+            }
+
+            state = SP1;
+            field = NULL;
+            break;
+        }
+
+        in ++;
+    }
+
+    if (state == STRING || state == STRING_BSLASH) {
+        return ERROR("http: invalid parameter");
+    }
+
+    /* Ensure last field is properly terminated */
+    http_hdr_on_header_value(params, "", 0);
+    return NULL;
+}
+
 /* Call callback for each header field
  */
 static void
@@ -1046,7 +1198,6 @@ hdr_for_each (const http_hdr *hdr,
 /* http_multipart represents a decoded multipart message
  */
 struct http_multipart {
-    volatile gint refcnt;   /* Reference counter */
     int           count;    /* Count of bodies */
     http_data     *data;    /* Response data */
     http_data     **bodies; /* Multipart bodies, var-size */
@@ -1128,42 +1279,30 @@ http_multipart_adjust_part (http_data *part)
     return true;
 }
 
-/* Ref http_multipart
- */
-static http_multipart*
-http_multipart_ref (http_multipart *mp)
-{
-    g_atomic_int_inc(&mp->refcnt);
-    return mp;
-}
-
-/* Unref http_multipart
+/* Free http_multipart
  */
 static void
-http_multipart_unref (http_multipart *mp)
+http_multipart_free (http_multipart *mp)
 {
-    if (mp != NULL && g_atomic_int_dec_and_test(&mp->refcnt)) {
-        g_free(mp->bodies);
-        http_data_unref(mp->data);
-        g_free(mp);
+    int i;
+
+    for (i = 0; i < mp->count; i ++) {
+        http_data_unref(mp->bodies[i]);
     }
+
+    g_free(mp);
 }
 
-/* Create http_multipart
+/* Parse MIME multipart message body
  */
-http_multipart*
-http_multipart_new (SoupMessageHeaders *headers, http_data *data)
+static http_multipart*
+http_multipart_parse (http_data *data, const char *content_type)
 {
     http_multipart *mp;
-    GHashTable     *params;
+    http_hdr       params;
     const char     *boundary;
     size_t         boundary_len = 0;
     const char     *data_beg, *data_end, *data_prev;
-    int            i;
-
-    /* Note, believe or not, but libsoup multipart parser is broken, so
-     * we have to parse by hand
-     */
 
     /* Check MIME type */
     if (strncmp(data->content_type, "multipart/", 10)) {
@@ -1171,11 +1310,13 @@ http_multipart_new (SoupMessageHeaders *headers, http_data *data)
     }
 
     /* Obtain boundary */
-    if (!soup_message_headers_get_content_type(headers, &params)) {
+    http_hdr_init(&params);
+    if (http_hdr_params_parse(&params, content_type) != NULL) {
+        http_hdr_cleanup(&params);
         return NULL;
     }
 
-    boundary = g_hash_table_lookup (params, "boundary");
+    boundary = http_hdr_get (&params, "boundary");
     if (boundary) {
         char *s;
 
@@ -1187,7 +1328,7 @@ http_multipart_new (SoupMessageHeaders *headers, http_data *data)
         strcpy(s + 2, boundary);
         boundary = s;
     }
-    g_hash_table_destroy(params);
+    http_hdr_cleanup(&params);
 
     if (!boundary) {
         return NULL;
@@ -1214,7 +1355,8 @@ http_multipart_new (SoupMessageHeaders *headers, http_data *data)
                 http_multipart_add_body(mp, body);
 
                 if (!http_multipart_adjust_part(body)) {
-                    goto ERROR;
+                    http_multipart_free(mp);
+                    return NULL;
                 }
             }
 
@@ -1230,15 +1372,6 @@ http_multipart_new (SoupMessageHeaders *headers, http_data *data)
     }
 
     return mp;
-
-    /* Error: cleanup and exit */
-ERROR:
-    http_multipart_ref(mp);
-    for (i = 0; i < mp->count; i ++) {
-        http_data_unref(mp->bodies[i]);
-    }
-    http_multipart_unref(mp);
-    return NULL;
 }
 
 /******************** HTTP data ********************/
@@ -1585,7 +1718,9 @@ http_query_free (http_query *q)
 
     http_data_unref(q->request_data);
     http_data_unref(q->response_data);
-    http_multipart_unref(q->response_multipart);
+    if (q->response_multipart != NULL) {
+        http_multipart_free(q->response_multipart);
+    }
 
     g_free(q);
 }
@@ -1807,8 +1942,14 @@ http_query_on_message_complete (http_parser *parser)
     http_query *q = OUTER_STRUCT(parser, http_query, http_parser);
 
     if (q->response_data != NULL) {
-        http_data_set_content_type(q->response_data,
-            http_query_get_response_header(q, "Content-Type"));
+        const char *content_type;
+
+        content_type = http_query_get_response_header(q, "Content-Type");
+        if (content_type != NULL) {
+            http_data_set_content_type(q->response_data, content_type);
+            q->response_multipart = http_multipart_parse(q->response_data,
+                    content_type);
+        }
     }
 
     http_query_complete(q, NULL);
