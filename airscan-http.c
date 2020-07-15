@@ -27,6 +27,9 @@
  */
 #define HTTP_IOBUF_SIZE 65536
 
+/******************** Static variables ********************/
+static gnutls_certificate_credentials_t gnutls_cred;
+
 /******************** Forward declarations ********************/
 typedef struct http_multipart http_multipart;
 
@@ -2041,6 +2044,7 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
         }
 
         q->handshake = false;
+        eloop_fdpoll_set_mask(q->fdpoll, ELOOP_FDPOLL_BOTH);
     } else if (q->sending) {
         rc = http_query_sock_send(q, q->rq_buf->str + q->rq_off, len);
 
@@ -2167,6 +2171,11 @@ AGAIN:
 
         if (rc == GNUTLS_E_SUCCESS) {
             rc = gnutls_set_default_priority(q->tls);
+        }
+
+        if (rc == GNUTLS_E_SUCCESS) {
+            rc = gnutls_credentials_set(q->tls, GNUTLS_CRD_CERTIFICATE,
+                    gnutls_cred);
         }
 
         if (rc != GNUTLS_E_SUCCESS) {
@@ -2604,7 +2613,8 @@ http_query_foreach_response_header (const http_query *q,
 SANE_Status
 http_init (void)
 {
-    return SANE_STATUS_GOOD;
+    int rc = gnutls_certificate_allocate_credentials(&gnutls_cred);
+    return rc == GNUTLS_E_SUCCESS ? SANE_STATUS_GOOD : SANE_STATUS_NO_MEM;
 }
 
 /* Initialize HTTP client
@@ -2612,6 +2622,10 @@ http_init (void)
 void
 http_cleanup (void)
 {
+    if (gnutls_cred != NULL) {
+        gnutls_certificate_free_credentials(gnutls_cred);
+        gnutls_cred = NULL;
+    }
 }
 
 /* vim:ts=8:sw=4:et
