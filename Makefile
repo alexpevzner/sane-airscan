@@ -32,7 +32,7 @@ MAN_DISCOVER = $(DISCOVER).1
 MAN_DISCOVER_TITLE = "SANE Scanner Access Now Easy"
 MAN_BACKEND = sane-airscan.5
 MAN_BACKEND_TITLE = "AirScan (eSCL) and WSD SANE backend"
-DEPENDS	:= avahi-client avahi-glib libjpeg libxml-2.0
+DEPENDS	:= avahi-client avahi-glib libjpeg libxml-2.0 gnutls
 DEPENDS += libpng
 
 # Sources and object files

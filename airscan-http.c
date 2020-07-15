@@ -20,6 +20,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <gnutls/gnutls.h>
+
 /******************** Constants ********************/
 /* I/O buffer size
  */
@@ -39,6 +41,18 @@ http_query_by_ll_node (ll_node *node);
 
 static void
 http_query_connect (http_query *q, error err);
+
+static void
+http_query_disconnect (http_query *q);
+
+static ssize_t
+http_query_sock_send (http_query *q, const void *data, size_t size);
+
+static ssize_t
+http_query_sock_recv (http_query *q, void *data, size_t size);
+
+static error
+http_query_sock_err (http_query *q, int rc);
 
 static void
 http_query_cancel (http_query *q);
@@ -1715,6 +1729,9 @@ struct http_query {
     struct addrinfo   *addrs;                   /* Addresses to connect to */
     struct addrinfo   *addr_next;               /* Next address to try */
     int               sock;                     /* HTTP socket */
+    gnutls_session_t  tls;                      /* NULL if not TLS */
+    bool              handshake;                /* TLS handshake in progress */
+    bool              sending;                  /* We are now sending */
     eloop_fdpoll      *fdpoll;                  /* Polls q->sock */
     ip_straddr        straddr;                  /* q->sock target addr */
 
@@ -1768,9 +1785,7 @@ http_query_free (http_query *q)
         eloop_fdpoll_free(q->fdpoll);
     }
 
-    if (q->sock >= 0) {
-        close(q->sock);
-    }
+    http_query_disconnect(q);
 
     g_string_free(q->rq_buf, TRUE);
 
@@ -2006,26 +2021,43 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
 {
     http_query *q = data;
     size_t     len = q->rq_buf->len - q->rq_off;
-    int        rc;
+    ssize_t    rc;
 
     (void) fd;
+    (void) mask;
 
-    if ((mask & ELOOP_FDPOLL_WRITE) != 0) {
-        rc = send(q->sock, q->rq_buf->str + q->rq_off, len, MSG_NOSIGNAL);
-        if (rc < 0 && (errno == EINTR || errno == EWOULDBLOCK)) {
+    if (q->handshake) {
+        rc = gnutls_handshake(q->tls);
+        if (rc < 0) {
+            error err = http_query_sock_err(q, rc);
+
+            /* TLS handshake failed, try another address, if any */
+            if (err != NULL) {
+                q->addr_next = q->addr_next->ai_next;
+                http_query_connect(q, err);
+            }
+
             return;
         }
 
+        q->handshake = false;
+    } else if (q->sending) {
+        rc = http_query_sock_send(q, q->rq_buf->str + q->rq_off, len);
+
         if (rc < 0) {
-            error err = ERROR(strerror(errno));
+            error err = http_query_sock_err(q, rc);
+
+            if (err == NULL) {
+                return;
+            }
 
             log_debug(q->client->log, "%s: send(): %s",
                 q->straddr.text, ESTRING(err));
 
             eloop_fdpoll_free(q->fdpoll);
             q->fdpoll = NULL;
-            close(q->sock);
-            q->sock = -1;
+
+            http_query_disconnect(q);
 
             if (q->rq_off == 0) {
                 /* None sent, try another address, if any */
@@ -2041,24 +2073,27 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
         q->rq_off += rc;
 
         if (q->rq_off == q->rq_buf->len) {
-            eloop_fdpoll_set_mask(q->fdpoll, ELOOP_FDPOLL_READ);
-
+            q->sending = false;
+            eloop_fdpoll_set_mask(q->fdpoll, ELOOP_FDPOLL_BOTH);
         }
     } else {
         static char io_buf[HTTP_IOBUF_SIZE];
 
-        rc = recv(q->sock, io_buf, sizeof(io_buf), MSG_NOSIGNAL);
+        rc = http_query_sock_recv(q, io_buf, sizeof(io_buf));
 
         if (rc <= 0) {
             error err;
 
             if (rc < 0) {
-                err = ERROR(strerror(errno));
+                err = http_query_sock_err(q, rc);
             } else {
                 err = ERROR("connection closed by device");
             }
 
-            http_query_complete(q, err);
+            if (err != NULL) {
+                http_query_complete(q, err);
+            }
+
             return;
         }
 
@@ -2119,15 +2154,143 @@ AGAIN:
         log_debug(q->client->log, "%s: connect(): %s",
             q->straddr.text, ESTRING(err));
 
-        close(q->sock);
-        q->sock = -1;
+        http_query_disconnect(q);
+
         q->addr_next = q->addr_next->ai_next;
         goto AGAIN;
     }
 
+    /* Setup TLS, if required */
+    if (q->uri->scheme == HTTP_SCHEME_HTTPS) {
+        int rc = gnutls_init(&q->tls,
+            GNUTLS_CLIENT | GNUTLS_NONBLOCK | GNUTLS_NO_SIGNAL);
+
+        if (rc == GNUTLS_E_SUCCESS) {
+            rc = gnutls_set_default_priority(q->tls);
+        }
+
+        if (rc != GNUTLS_E_SUCCESS) {
+            err = ERROR(gnutls_strerror(rc));
+            http_query_disconnect(q);
+            http_query_complete(q, err);
+            return;
+        }
+
+        gnutls_transport_set_int(q->tls, q->sock);
+    }
+
     /* Create fdpoll, and we are done */
     q->fdpoll = eloop_fdpoll_new(q->sock, http_query_fdpoll_callback, q);
+    if (q->tls != NULL) {
+        q->handshake = true;
+    }
+    q->sending = true;
     eloop_fdpoll_set_mask(q->fdpoll, ELOOP_FDPOLL_WRITE);
+}
+
+/* Close connection to the server, if any
+ */
+static void
+http_query_disconnect (http_query *q)
+{
+    if (q->tls != NULL) {
+        gnutls_deinit(q->tls);
+        q->tls = NULL;
+    }
+
+    if (q->sock >= 0) {
+        close(q->sock);
+        q->sock = -1;
+    }
+}
+
+/* Send data to socket (either via TCP or TLS)
+ * On a error, returns negative error code. Use
+ * http_query_sock_err() to decode it
+ */
+static ssize_t
+http_query_sock_send (http_query *q, const void *data, size_t size)
+{
+    ssize_t rc;
+
+    if (q->tls == NULL) {
+        rc = send(q->sock, data, size, MSG_NOSIGNAL);
+        if (rc < 0) {
+            rc = -errno;
+        }
+    } else {
+        rc = gnutls_record_send(q->tls, data, size);
+        if (rc < 0) {
+            gnutls_record_discard_queued(q->tls);
+        }
+    }
+
+    return rc;
+}
+
+/* Recv data from socket (either via TCP or TLS)
+ */
+static ssize_t
+http_query_sock_recv (http_query *q, void *data, size_t size)
+{
+    ssize_t rc;
+
+    if (q->tls == NULL) {
+        rc = recv(q->sock, data, size, MSG_NOSIGNAL);
+        if (rc < 0) {
+            rc = -errno;
+        }
+    } else {
+        rc = gnutls_record_recv(q->tls, data, size);
+    }
+
+    return rc;
+}
+
+/* Get socket error. May return NULL if last operation
+ * has failed in recoverable manner
+ */
+static error
+http_query_sock_err (http_query *q, int rc)
+{
+    ELOOP_FDPOLL_MASK mask = 0;
+    error             err = NULL;
+
+    if (q->tls == NULL) {
+        rc = -rc;
+        switch (rc) {
+        case EINTR:
+            break;
+
+        case EWOULDBLOCK:
+            mask = q->sending ? ELOOP_FDPOLL_WRITE : ELOOP_FDPOLL_READ;
+            break;
+
+        default:
+            err = ERROR(strerror(errno));
+        }
+
+    } else {
+        switch (rc) {
+        case GNUTLS_E_INTERRUPTED:
+        case GNUTLS_E_WARNING_ALERT_RECEIVED: /* Non-fatal handshake error */
+            break;
+
+        case GNUTLS_E_AGAIN:
+            mask = gnutls_record_get_direction(q->tls) ?
+                    ELOOP_FDPOLL_WRITE : ELOOP_FDPOLL_READ;
+            break;
+
+        default:
+            err = ERROR(gnutls_strerror(rc));
+        }
+    }
+
+    if (mask != 0) {
+        eloop_fdpoll_set_mask(q->fdpoll, mask);
+    }
+
+    return err;
 }
 
 /* Start query processing. Called via eloop_call()
