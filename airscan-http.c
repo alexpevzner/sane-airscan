@@ -18,17 +18,12 @@
 #include <netdb.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-
-#include <libsoup/soup.h>
+#include <unistd.h>
 
 /******************** Constants ********************/
 /* I/O buffer size
  */
 #define HTTP_IOBUF_SIZE 65536
-
-
-/******************** Static variables ********************/
-static SoupSession *http_session;
 
 /******************** Forward declarations ********************/
 typedef struct http_multipart http_multipart;
@@ -1726,8 +1721,6 @@ struct http_query {
     GString           *rq_buf;                  /* Formatted request */
     size_t            rq_off;                   /* send() offset in request */
 
-    SoupMessage       *msg;                     /* Underlying SOUP message */
-
     /* HTTP parser */
     http_parser       http_parser;              /* HTTP parser structure */
 
@@ -1857,7 +1850,6 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
 
     q->rq_buf = g_string_new(NULL);
 
-    q->msg = soup_message_new(method, uri->str);
     q->onerror = client->onerror;
 
     http_parser_init(&q->http_parser, HTTP_RESPONSE);
@@ -2224,22 +2216,10 @@ http_query_submit (http_query *q, void (*callback)(void *ptr, http_query *q))
 static void
 http_query_cancel (http_query *q)
 {
+    log_debug(q->client->log, "HTTP %s %s: Cancelled", q->method,
+            http_uri_str(q->uri));
+
     ll_del(&q->chain);
-
-    /* Note, if message processing already finished,
-     * soup_session_cancel_message() will do literally nothing,
-     * and in particular will not update message status,
-     * but we rely on a fact that status of cancelled
-     * messages is set properly
-     */
-    g_object_ref(q->msg);
-    soup_session_cancel_message(http_session, q->msg, SOUP_STATUS_CANCELLED);
-    soup_message_set_status(q->msg, SOUP_STATUS_CANCELLED);
-    g_object_unref(q->msg);
-
-    log_debug(q->client->log, "HTTP %s %s: %s", q->method,
-            http_uri_str(q->uri),
-            soup_status_get_phrase(SOUP_STATUS_CANCELLED));
 
     http_query_free(q);
 }
@@ -2441,37 +2421,11 @@ http_query_foreach_response_header (const http_query *q,
 }
 
 /******************** HTTP initialization & cleanup ********************/
-/* Start/stop HTTP client
- */
-static void
-http_start_stop (bool start)
-{
-    if (start) {
-        GValue val = G_VALUE_INIT;
-
-        http_session = soup_session_new();
-
-        g_value_init(&val, G_TYPE_BOOLEAN);
-        g_value_set_boolean(&val, false);
-
-        g_object_set_property(G_OBJECT(http_session),
-            SOUP_SESSION_SSL_USE_SYSTEM_CA_FILE, &val);
-
-        g_object_set_property(G_OBJECT(http_session),
-            SOUP_SESSION_SSL_STRICT, &val);
-    } else {
-        soup_session_abort(http_session);
-        g_object_unref(http_session);
-        http_session = NULL;
-    }
-}
-
 /* Initialize HTTP client
  */
 SANE_Status
 http_init (void)
 {
-    eloop_add_start_stop_callback(http_start_stop);
     return SANE_STATUS_GOOD;
 }
 

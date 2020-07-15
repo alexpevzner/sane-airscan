@@ -32,7 +32,7 @@ MAN_DISCOVER = $(DISCOVER).1
 MAN_DISCOVER_TITLE = "SANE Scanner Access Now Easy"
 MAN_BACKEND = sane-airscan.5
 MAN_BACKEND_TITLE = "AirScan (eSCL) and WSD SANE backend"
-DEPENDS	:= avahi-client avahi-glib libjpeg libsoup-2.4 libxml-2.0
+DEPENDS	:= avahi-client avahi-glib libjpeg libxml-2.0
 DEPENDS += libpng
 
 # Sources and object files
@@ -49,21 +49,6 @@ airscan_LIBS := $(foreach lib, $(DEPENDS), $(shell pkg-config --libs $(lib))) -l
 airscan_LDFLAGS = $(LDFLAGS)
 airscan_LDFLAGS += $(airscan_LIBS)
 airscan_LDFLAGS += -Wl,--version-script=airscan.sym
-
-# This magic is a workaround for libsoup bug.
-#
-# We are linked against libsoup. If SANE backend goes unloaded
-# from the memory, all libraries it is linked against also will
-# be unloaded (unless main program uses them directly).
-#
-# Libsoup, unfortunately, doesn't unload correctly, leaving its
-# types registered in GLIB. Which sooner or later leads program to
-# crash
-#
-# The workaround is to prevent our backend's shared object from being
-# unloaded when not longer in use, and these magical options do it
-# by adding NODELETE flag to the resulting ELF shared object
-airscan_LDFLAGS += -Wl,-z,nodelete
 
 $(OBJDIR)%.o: %.c Makefile airscan.h
 	mkdir -p $(OBJDIR)
