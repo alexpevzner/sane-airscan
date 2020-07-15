@@ -2273,7 +2273,6 @@ http_query_sock_err (http_query *q, int rc)
     } else {
         switch (rc) {
         case GNUTLS_E_INTERRUPTED:
-        case GNUTLS_E_WARNING_ALERT_RECEIVED: /* Non-fatal handshake error */
             break;
 
         case GNUTLS_E_AGAIN:
@@ -2282,7 +2281,9 @@ http_query_sock_err (http_query *q, int rc)
             break;
 
         default:
-            err = ERROR(gnutls_strerror(rc));
+            if (gnutls_error_is_fatal(rc)) {
+                err = ERROR(gnutls_strerror(rc));
+            }
         }
     }
 
