@@ -2049,14 +2049,26 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
 
         rc = recv(q->sock, io_buf, sizeof(io_buf), MSG_NOSIGNAL);
 
-        if (rc < 0) {
-            error err = ERROR(strerror(errno));
+        if (rc <= 0) {
+            error err;
+
+            if (rc < 0) {
+                err = ERROR(strerror(errno));
+            } else {
+                err = ERROR("connection closed by device");
+            }
+
             http_query_complete(q, err);
             return;
         }
 
         http_parser_execute(&q->http_parser, &http_query_callbacks,
                 io_buf, rc);
+
+        if (q->http_parser.http_errno != HPE_OK) {
+            error err = ERROR(http_errno_description(q->http_parser.http_errno));
+            http_query_complete(q, err);
+        }
     }
 }
 
@@ -2260,10 +2272,12 @@ http_query_get_uintptr (http_query *q)
 error
 http_query_error (const http_query *q)
 {
-    int status = http_query_status(q);
+    if (q->err == NULL) {
+        int status = http_query_status(q);
 
-    if (200 <= status && status < 300) {
-        return NULL;
+        if (200 <= status && status < 300) {
+            return NULL;
+        }
     }
 
     return ERROR(http_query_status_string(q));
