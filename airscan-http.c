@@ -970,10 +970,13 @@ http_hdr_set (http_hdr *hdr, const char *name, const char *value)
 }
 
 /* Handle HTTP parser on_header_field callback
+ * parser->data must point to the header being parsed
  */
-static void
-http_hdr_on_header_field (http_hdr *hdr, const char *data, size_t size)
+static int
+http_hdr_on_header_field (http_parser *parser,
+        const char *data, size_t size)
 {
+    http_hdr       *hdr = parser->data;
     ll_node        *node;
     http_hdr_field *field = NULL;
 
@@ -993,13 +996,18 @@ http_hdr_on_header_field (http_hdr *hdr, const char *data, size_t size)
 
     /* Append data to the field name */
     g_string_append_len(field->name, (gchar*) data, size);
+
+    return 0;
 }
 
 /* Handle HTTP parser on_header_value callback
+ * parser->data must point to the header being parsed
  */
-static void
-http_hdr_on_header_value (http_hdr *hdr, const char *data, size_t size)
+static int
+http_hdr_on_header_value (http_parser *parser,
+        const char *data, size_t size)
 {
+    http_hdr       *hdr = parser->data;
     ll_node        *node;
     http_hdr_field *field = NULL;
 
@@ -1013,7 +1021,7 @@ http_hdr_on_header_value (http_hdr *hdr, const char *data, size_t size)
      * Note, it actually should not happen
      */
     if (field == NULL) {
-        return;
+        return 0;
     }
 
     /* Append data to field value */
@@ -1022,6 +1030,65 @@ http_hdr_on_header_value (http_hdr *hdr, const char *data, size_t size)
     }
 
     g_string_append_len(field->value, (gchar*) data, size);
+
+    return 0;
+}
+
+/* Handle HTTP parser on_headers_complete callback
+ * This is used http_hdr_parse only and returns 1 to
+ * tell parser to don't attempt to parse message body
+ */
+static int
+http_hdr_on_headers_complete (http_parser *parser)
+{
+    (void) parser;
+    return 1;
+}
+
+
+/* Parse http_hdr from memory buffer
+ *
+ * If `skip_line' is true, first line is skipped, which
+ * is useful if first line contains HTTP request/status
+ * or a multipart boundary
+ */
+static error
+http_hdr_parse (http_hdr *hdr, const char *data, size_t size, bool skip_line)
+{
+    static http_parser_settings callbacks = {
+        .on_header_field     = http_hdr_on_header_field,
+        .on_header_value     = http_hdr_on_header_value,
+        .on_headers_complete = http_hdr_on_headers_complete
+    };
+    http_parser parser;
+    static char prefix[] = "HTTP/1.1 200 OK\r\n";
+
+    /* Skip first line, if requested */
+    if (skip_line) {
+        const char *s = memchr(data, '\n', size);
+        if (s) {
+            size_t skip = (s - data) + 1;
+            data += skip;
+            size -= skip;
+        }
+    }
+
+    /* Initialize HTTP parser */
+    http_parser_init(&parser, HTTP_RESPONSE);
+    parser.data = hdr;
+
+    /* Note, http_parser unable to parse bare HTTP
+     * header, without request or status line, so
+     * we insert fake status line to make it happy
+     */
+    http_parser_execute(&parser, &callbacks, prefix, sizeof(prefix) - 1);
+    http_parser_execute(&parser, &callbacks, data, size);
+
+    if (parser.http_errno != HPE_OK) {
+        return ERROR(http_errno_description(parser.http_errno));
+    }
+
+    return NULL;
 }
 
 /* Check if character is special, for http_hdr_params_parse
@@ -1141,13 +1208,13 @@ http_hdr_params_parse (http_hdr *params, const char *in)
             break;
 
         case STRING_BSLASH:
-            http_hdr_on_header_value(params, in, 1);
+            g_string_append_c(field->value, c);
             state = STRING;
             break;
 
         case TOKEN:
             if (!http_hdr_params_chr_isspec(c)) {
-                http_hdr_on_header_value(params, in, 1);
+                g_string_append_c(field->value, c);
             } else {
                 state = SP4;
                 continue;
@@ -1171,8 +1238,6 @@ http_hdr_params_parse (http_hdr *params, const char *in)
         return ERROR("http: invalid parameter");
     }
 
-    /* Ensure last field is properly terminated */
-    http_hdr_on_header_value(params, "", 0);
     return NULL;
 }
 
@@ -1243,10 +1308,10 @@ http_multipart_find_boundary (const char *boundary, size_t boundary_len,
 static bool
 http_multipart_adjust_part (http_data *part)
 {
-    const char         *split;
-    SoupMessageHeaders *hdr;
-    size_t              hdr_len;
-    bool                hdr_ok;
+    const char *split;
+    http_hdr   hdr;
+    size_t     hdr_len;
+    error      err;
 
     /* Locate end of headers */
     split = memmem(part->bytes, part->size, "\r\n\r\n", 4);
@@ -1255,17 +1320,17 @@ http_multipart_adjust_part (http_data *part)
     }
 
     /* Parse headers and obtain content-type */
-    hdr = soup_message_headers_new (SOUP_MESSAGE_HEADERS_MULTIPART);
+    http_hdr_init(&hdr);
     hdr_len = 4 + split - (char*) part->bytes;
-    hdr_ok = soup_headers_parse(part->bytes, hdr_len - 2, hdr);
+    err = http_hdr_parse(&hdr, part->bytes, hdr_len - 2, true);
 
-    if (hdr_ok) {
-        const char *ct = soup_message_headers_get_content_type(hdr, NULL);
+    if (err == NULL) {
+        const char *ct = http_hdr_get(&hdr, "Content-Type");
         http_data_set_content_type(part, ct);
     }
 
-    soup_message_headers_free(hdr);
-    if (!hdr_ok) {
+    http_hdr_cleanup(&hdr);
+    if (err != NULL) {
         return false;
     }
 
@@ -1796,6 +1861,7 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
     q->onerror = client->onerror;
 
     http_parser_init(&q->http_parser, HTTP_RESPONSE);
+    q->http_parser.data = &q->response_header;
 
     /* Build and set Host: header */
     http_query_set_host(q);
@@ -1857,7 +1923,7 @@ http_query_complete (http_query *q, error err)
     http_client *client = q->client;
 
     /* Make sure latest response header field is terminated */
-    http_hdr_on_header_value(&q->response_header, "", 0);
+    http_hdr_on_header_value(&q->http_parser, "", 0);
 
     /* Save error */
     q->err = err;
@@ -1885,32 +1951,6 @@ http_query_complete (http_query *q, error err)
     }
 
     http_query_free(q);
-}
-
-/* HTTP parser on_header_field callback
- */
-static int
-http_query_on_header_field_callback (http_parser *parser,
-        const char *data, size_t size)
-{
-    http_query *q = OUTER_STRUCT(parser, http_query, http_parser);
-
-    http_hdr_on_header_field(&q->response_header, data, size);
-
-    return 0;
-}
-
-/* HTTP parser on_header_value callback
- */
-static int
-http_query_on_header_value_callback (http_parser *parser,
-        const char *data, size_t size)
-{
-    http_query *q = OUTER_STRUCT(parser, http_query, http_parser);
-
-    http_hdr_on_header_value(&q->response_header, data, size);
-
-    return 0;
 }
 
 /* HTTP parser on_body callback
@@ -1961,8 +2001,8 @@ http_query_on_message_complete (http_parser *parser)
  */
 static http_parser_settings
 http_query_callbacks = {
-    .on_header_field     = http_query_on_header_field_callback,
-    .on_header_value     = http_query_on_header_value_callback,
+    .on_header_field     = http_hdr_on_header_field,
+    .on_header_value     = http_hdr_on_header_value,
     .on_body             = http_query_on_body_callback,
     .on_message_complete = http_query_on_message_complete
 };
