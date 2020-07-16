@@ -87,7 +87,7 @@ struct device {
 
     /* State machinery */
     DEVICE_STM_STATE     stm_state;         /* Device state */
-    GCond                stm_cond;          /* Signalled when state changes */
+    pthread_cond_t       stm_cond;          /* Signalled when state changes */
     eloop_event          *stm_cancel_event; /* Signalled to initiate cancel */
     http_query           *stm_cancel_query; /* CANCEL query */
     bool                 stm_cancel_sent;   /* Cancel was sent to device */
@@ -193,7 +193,7 @@ device_new (zeroconf_devinfo *devinfo)
 
     dev->proto_ctx.http = http_client_new(dev->log, dev);
 
-    g_cond_init(&dev->stm_cond);
+    pthread_cond_init(&dev->stm_cond, NULL);
 
     dev->read_pollable = pollable_new();
     dev->read_queue = http_data_queue_new();
@@ -235,7 +235,7 @@ device_free (device *dev)
     http_uri_free(dev->proto_ctx.base_uri_nozone);
     g_free((char*) dev->proto_ctx.location);
 
-    g_cond_clear(&dev->stm_cond);
+    pthread_cond_destroy(&dev->stm_cond);
 
     for (i = 0; i < NUM_ID_FORMAT; i ++) {
         image_decoder *decoder = dev->decoders[i];
@@ -266,8 +266,7 @@ device_start_probing (gpointer data)
     return FALSE;
 }
 
-/* Start device I/O. Called via eloop_call
- * device_start_do
+/* Start device I/O.
  */
 static SANE_Status
 device_io_start (device *dev)
@@ -635,7 +634,7 @@ device_stm_state_set (device *dev, DEVICE_STM_STATE state)
             device_stm_state_name(old_state), device_stm_state_name(state));
 
         __atomic_store_n(&dev->stm_state, state, __ATOMIC_SEQ_CST);
-        g_cond_broadcast(&dev->stm_cond);
+        pthread_cond_broadcast(&dev->stm_cond);
 
         if (!device_stm_state_working(dev)) {
             pollable_signal(dev->read_pollable);
@@ -752,7 +751,7 @@ device_stm_op_callback (void *ptr, http_query *q)
             g_free((char*) dev->proto_ctx.location); /* Just in case */
             dev->proto_ctx.location = result.data.location;
             dev->proto_ctx.failed_attempt = 0;
-            g_cond_broadcast(&dev->stm_cond);
+            pthread_cond_broadcast(&dev->stm_cond);
         }
     } else if (dev->proto_op_current == PROTO_OP_LOAD) {
         if (result.data.image != NULL) {
@@ -761,7 +760,7 @@ device_stm_op_callback (void *ptr, http_query *q)
             pollable_signal(dev->read_pollable);
 
             dev->proto_ctx.failed_attempt = 0;
-            g_cond_broadcast(&dev->stm_cond);
+            pthread_cond_broadcast(&dev->stm_cond);
         }
     }
 

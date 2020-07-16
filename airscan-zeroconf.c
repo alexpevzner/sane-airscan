@@ -58,7 +58,7 @@ log_ctx *zeroconf_log;
 /* Static variables
  */
 static ll_head zeroconf_device_list;
-static GCond zeroconf_initscan_cond;
+static pthread_cond_t zeroconf_initscan_cond;
 static int zeroconf_initscan_bits;
 static eloop_timer *zeroconf_initscan_timer;
 
@@ -945,7 +945,7 @@ zeroconf_finding_publish (zeroconf_finding *finding)
         zeroconf_device_add_finding(device, finding);
     }
 
-    g_cond_broadcast(&zeroconf_initscan_cond);
+    pthread_cond_broadcast(&zeroconf_initscan_cond);
 }
 
 /* Withdraw the finding
@@ -974,7 +974,7 @@ zeroconf_finding_done (ZEROCONF_METHOD method)
         zeroconf_method_name(method));
 
     zeroconf_initscan_bits &= ~(1 << method);
-    g_cond_broadcast(&zeroconf_initscan_cond);
+    pthread_cond_broadcast(&zeroconf_initscan_cond);
 }
 
 /******************** Support for SANE API *********************/
@@ -991,7 +991,7 @@ zeroconf_initscan_timer_callback (void *unused)
     wsdd_initscan_timer_expired();
 
     zeroconf_initscan_timer = NULL;
-    g_cond_broadcast(&zeroconf_initscan_cond);
+    pthread_cond_broadcast(&zeroconf_initscan_cond);
 }
 
 /* Check if initial scan is done
@@ -1383,7 +1383,7 @@ zeroconf_start_stop_callback (bool start)
             zeroconf_initscan_timer = NULL;
         }
 
-        g_cond_broadcast(&zeroconf_initscan_cond);
+        pthread_cond_broadcast(&zeroconf_initscan_cond);
     }
 }
 
@@ -1399,6 +1399,7 @@ zeroconf_init (void)
     zeroconf_log = log_ctx_new("zeroconf", NULL);
 
     ll_init(&zeroconf_device_list);
+    pthread_cond_init(&zeroconf_initscan_cond, NULL);
 
     if (conf.discovery) {
         zeroconf_initscan_bits = (1 << ZEROCONF_MDNS_HINT) |
@@ -1454,6 +1455,7 @@ zeroconf_cleanup (void)
 {
     log_ctx_free(zeroconf_log);
     zeroconf_log = NULL;
+    pthread_cond_destroy(&zeroconf_initscan_cond);
 }
 
 /* vim:ts=8:sw=4:et

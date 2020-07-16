@@ -8,37 +8,83 @@
 
 #include "airscan.h"
 
-#include <glib-unix.h>
+#include <avahi-common/simple-watch.h>
+#include <avahi-common/timeval.h>
 
-/* Limits */
+#include <errno.h>
+
+/******************** Constants *********************/
 #define ELOOP_START_STOP_CALLBACKS_MAX  8
 
-/* Static variables
- */
-static GThread *eloop_thread;
-static GMainContext *eloop_glib_main_context;
-static GMainLoop *eloop_glib_main_loop;
+/******************** Static variables *********************/
+static AvahiSimplePoll *eloop_poll;
+static pthread_t eloop_thread;
+static pthread_mutex_t eloop_mutex;
+static bool eloop_thread_running;
+static ll_head eloop_call_pending_list;
+static bool eloop_poll_restart;
+
 static char *eloop_estring = NULL;
 static void (*eloop_start_stop_callbacks[ELOOP_START_STOP_CALLBACKS_MAX]) (bool);
 static int eloop_start_stop_callbacks_count;
-G_LOCK_DEFINE_STATIC(eloop_mutex);
 
-/* Forward declarations
- */
-static gint
-glib_poll_hook (GPollFD *ufds, guint nfsd, gint timeout);
+/******************** Forward declarations *********************/
+static int
+eloop_poll_func (struct pollfd *ufds, unsigned int nfds, int timeout, void *p);
+
+static void
+eloop_call_execute (void);
 
 /* Initialize event loop
  */
 SANE_Status
 eloop_init (void)
 {
-    eloop_glib_main_context = g_main_context_new();
-    eloop_glib_main_loop = g_main_loop_new(eloop_glib_main_context, FALSE);
-    g_main_context_set_poll_func(eloop_glib_main_context, glib_poll_hook);
-    eloop_start_stop_callbacks_count = 0;
+    pthread_mutexattr_t attr;
+    bool                attr_initialized = false;
+    bool                mutex_initialized = false;
+    SANE_Status         status = SANE_STATUS_NO_MEM;
 
-    return SANE_STATUS_GOOD;
+    ll_init(&eloop_call_pending_list);
+
+    /* Initialize eloop_mutex */
+    if (pthread_mutexattr_init(&attr)) {
+        goto DONE;
+    }
+
+    attr_initialized = true;
+    if (pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE)) {
+        goto DONE;
+    }
+
+    if (pthread_mutex_init(&eloop_mutex, &attr)) {
+        goto DONE;
+    }
+
+    mutex_initialized = true;
+
+    /* Create AvahiSimplePoll */
+    eloop_poll = avahi_simple_poll_new();
+    if (eloop_poll == NULL) {
+        goto DONE;
+    }
+
+    avahi_simple_poll_set_func(eloop_poll, eloop_poll_func, NULL);
+
+    /* Update status */
+    status = SANE_STATUS_GOOD;
+
+    /* Cleanup and exit */
+DONE:
+    if (attr_initialized) {
+        pthread_mutexattr_destroy(&attr);
+    }
+
+    if (status != SANE_STATUS_GOOD && mutex_initialized) {
+        pthread_mutex_destroy(&eloop_mutex);
+    }
+
+    return status;
 }
 
 /* Cleanup event loop
@@ -46,13 +92,10 @@ eloop_init (void)
 void
 eloop_cleanup (void)
 {
-    if (eloop_glib_main_context != NULL) {
-        g_main_loop_unref(eloop_glib_main_loop);
-        eloop_glib_main_loop = NULL;
-        g_main_context_unref(eloop_glib_main_context);
-        eloop_glib_main_context = NULL;
-        g_free(eloop_estring);
-        eloop_estring = NULL;
+    if (eloop_poll != NULL) {
+        avahi_simple_poll_free(eloop_poll);
+        pthread_mutex_destroy(&eloop_mutex);
+        eloop_poll = NULL;
     }
 }
 
@@ -76,40 +119,53 @@ eloop_add_start_stop_callback (void (*callback) (bool start))
 
 /* Poll function hook
  */
-static gint
-glib_poll_hook (GPollFD *ufds, guint nfds, gint timeout)
+static int
+eloop_poll_func (struct pollfd *ufds, unsigned int nfds, int timeout,
+        void *userdata)
 {
-    G_UNLOCK(eloop_mutex);
-    gint ret = g_poll(ufds, nfds, timeout);
-    G_LOCK(eloop_mutex);
+    int     rc;
 
-    return ret;
+    (void) userdata;
+
+    eloop_poll_restart = false;
+
+    pthread_mutex_unlock(&eloop_mutex);
+    rc = poll(ufds, nfds, timeout);
+    pthread_mutex_lock(&eloop_mutex);
+
+    if (eloop_poll_restart) {
+        errno = ERESTART;
+        return -1;
+    }
+
+    return rc;
 }
 
 /* Event loop thread main function
  */
-static gpointer
-eloop_thread_func (gpointer data)
+static void*
+eloop_thread_func (void *data)
 {
     int i;
 
     (void) data;
 
-    G_LOCK(eloop_mutex);
-
-    g_main_context_push_thread_default(eloop_glib_main_context);
+    pthread_mutex_lock(&eloop_mutex);
 
     for (i = 0; i < eloop_start_stop_callbacks_count; i ++) {
         eloop_start_stop_callbacks[i](true);
     }
 
-    g_main_loop_run(eloop_glib_main_loop);
+    do {
+        eloop_call_execute();
+        i = avahi_simple_poll_iterate(eloop_poll, -1);
+    } while (i == 0 || (i < 0 && (errno == EINTR || errno == ERESTART)));
 
     for (i = eloop_start_stop_callbacks_count - 1; i >= 0; i --) {
         eloop_start_stop_callbacks[i](false);
     }
 
-    G_UNLOCK(eloop_mutex);
+    pthread_mutex_unlock(&eloop_mutex);
 
     return NULL;
 }
@@ -123,16 +179,13 @@ eloop_thread_func (gpointer data)
 void
 eloop_thread_start (void)
 {
-    eloop_thread = g_thread_new("airscan", eloop_thread_func, NULL);
+    int rc = pthread_create(&eloop_thread, NULL, eloop_thread_func, NULL);
 
-    /* Wait until thread is started. Otherwise, g_main_loop_quit()
-     * might not terminate the thread
-     */
-    gulong usec = 100;
-    while (!g_main_loop_is_running(eloop_glib_main_loop)) {
-        g_usleep(usec);
-        usec += usec;
+    if (rc < 0) {
+        log_panic(NULL, "pthread_create: %s", strerror(-rc));
     }
+
+    eloop_thread_running = true;
 }
 
 /* Stop event loop thread and wait until its termination
@@ -140,10 +193,10 @@ eloop_thread_start (void)
 void
 eloop_thread_stop (void)
 {
-    if (eloop_thread != NULL) {
-        g_main_loop_quit(eloop_glib_main_loop);
-        g_thread_join(eloop_thread);
-        eloop_thread = NULL;
+    if (eloop_thread_running) {
+        avahi_simple_poll_quit(eloop_poll);
+        pthread_join(eloop_thread, NULL);
+        eloop_thread_running = false;
     }
 }
 
@@ -152,7 +205,7 @@ eloop_thread_stop (void)
 void
 eloop_mutex_lock (void)
 {
-    G_LOCK(eloop_mutex);
+    pthread_mutex_lock(&eloop_mutex);
 }
 
 /* Release event loop mutex
@@ -160,31 +213,47 @@ eloop_mutex_lock (void)
 void
 eloop_mutex_unlock (void)
 {
-    G_UNLOCK(eloop_mutex);
+    pthread_mutex_unlock(&eloop_mutex);
 }
 
 /* Wait on conditional variable under the event loop mutex
  */
 void
-eloop_cond_wait (GCond *cond)
+eloop_cond_wait (pthread_cond_t *cond)
 {
-    return g_cond_wait(cond, &G_LOCK_NAME(eloop_mutex));
+    pthread_cond_wait(cond, &eloop_mutex);
 }
 
-/* eloop_cond_wait() with timeout
+/* Get AvahiPoll that runs in event loop thread
  */
-bool
-eloop_cond_wait_until (GCond *cond, gint64 timeout)
+const AvahiPoll*
+eloop_poll_get (void)
 {
-    return g_cond_wait_until(cond, &G_LOCK_NAME(eloop_mutex), timeout);
+    return avahi_simple_poll_get(eloop_poll);
 }
 
-/* Create AvahiGLibPoll that runs in context of the event loop
+/* eloop_call_pending represents a pending eloop_call
  */
-AvahiGLibPoll*
-eloop_new_avahi_poll (void)
+typedef struct {
+    GSourceFunc func; /* Function to be called */
+    gpointer    data; /* It's argument */
+    ll_node     node; /* In eloop_call_pending_list */
+} eloop_call_pending;
+
+/* Execute function calls deferred by eloop_call()
+ */
+static void
+eloop_call_execute (void)
 {
-    return avahi_glib_poll_new(eloop_glib_main_context, G_PRIORITY_DEFAULT);
+    ll_node *node;
+
+    while ((node = ll_pop_beg(&eloop_call_pending_list)) != NULL) {
+        eloop_call_pending *pending;
+
+        pending = OUTER_STRUCT(node, eloop_call_pending, node);
+        pending->func(pending->data);
+        g_free(pending);
+    }
 }
 
 /* Call function on a context of event loop thread
@@ -192,11 +261,16 @@ eloop_new_avahi_poll (void)
 void
 eloop_call (GSourceFunc func, gpointer data)
 {
-    GSource *source = g_idle_source_new ();
-    g_source_set_priority(source, G_PRIORITY_DEFAULT);
-    g_source_set_callback(source, func, data, NULL);
-    g_source_attach(source, eloop_glib_main_context);
-    g_source_unref(source);
+    eloop_call_pending *p = g_new0(eloop_call_pending, 1);
+
+    p->func = func;
+    p->data = data;
+
+    pthread_mutex_lock(&eloop_mutex);
+    ll_push_end(&eloop_call_pending_list, &p->node);
+    pthread_mutex_unlock(&eloop_mutex);
+
+    avahi_simple_poll_wakeup(eloop_poll);
 }
 
 /* Event notifier. Calls user-defined function on a context
@@ -205,33 +279,24 @@ eloop_call (GSourceFunc func, gpointer data)
  * or even from a signal handler
  */
 struct eloop_event {
-    GSource  source;            /* Underlying GSource */
-    pollable *p;                /* Underlying pollable event */
-    void    (*callback)(void*); /* user-defined callback */
-    void    *data;              /* callback's argument */
+    pollable     *p;                 /* Underlying pollable event */
+    eloop_fdpoll *fdpoll;            /* Underlying fdpoll */
+    void         (*callback)(void*); /* user-defined callback */
+    void         *data;              /* callback's argument */
 };
 
-/* eloop_event GSource callback
+/* eloop_event eloop_fdpoll callback
  */
-gboolean
-eloop_event_callback (gpointer data)
+static void
+eloop_event_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
 {
     eloop_event *event = data;
 
+    (void) fd;
+    (void) mask;
+
     pollable_reset(event->p);
     event->callback(event->data);
-
-    return G_SOURCE_CONTINUE;
-}
-
-/* eloop_event source dispatch function
- */
-static gboolean
-eloop_event_source_dispatch (GSource *source, GSourceFunc callback,
-    gpointer data)
-{
-    (void) source;
-    return callback(data);
 }
 
 /* Create new event notifier. May return NULL
@@ -241,23 +306,19 @@ eloop_event_new (void (*callback)(void *), void *data)
 {
     eloop_event         *event;
     pollable            *p;
-    static GSourceFuncs funcs = {
-        .dispatch = eloop_event_source_dispatch,
-    };
 
     p = pollable_new();
     if (p == NULL) {
         return NULL;
     }
 
-    event = (eloop_event*) g_source_new(&funcs, sizeof(eloop_event));
+    event = g_new0(eloop_event, 1);
     event->p = p;
     event->callback = callback;
     event->data = data;
 
-    g_source_add_unix_fd(&event->source, pollable_get_fd(event->p), G_IO_IN);
-    g_source_set_callback(&event->source, eloop_event_callback, event, NULL);
-    g_source_attach(&event->source, eloop_glib_main_context);
+    event->fdpoll = eloop_fdpoll_new(pollable_get_fd(p),
+        eloop_event_callback, event);
 
     return event;
 }
@@ -267,9 +328,8 @@ eloop_event_new (void (*callback)(void *), void *data)
 void
 eloop_event_free (eloop_event *event)
 {
-    g_source_destroy(&event->source);
+    eloop_fdpoll_free(event->fdpoll);
     pollable_free(event->p);
-    g_source_unref(&event->source);
 }
 
 /* Trigger an event
@@ -284,22 +344,22 @@ eloop_event_trigger (eloop_event *event)
  * interval
  */
 struct eloop_timer {
-    GSource *source;             /* Underlying GSource */
-    void    (*callback)(void *); /* User callback */
-    void    *data;               /* User data */
+    AvahiTimeout *timeout;            /* Underlying AvahiTimeout */
+    void         (*callback)(void *); /* User callback */
+    void         *data;               /* User data */
 };
 
-/* eloop_timer callback for GSource
+/* eloop_timer callback for AvahiTimeout
  */
-static gboolean
-eloop_timer_callback (gpointer data)
+static void
+eloop_timer_callback (AvahiTimeout *t, void *data)
 {
     eloop_timer *timer = data;
 
+    (void) t;
+
     timer->callback(timer->data);
     eloop_timer_cancel(timer);
-
-    return G_SOURCE_REMOVE;
 }
 
 /* Create new timer. Timeout is in milliseconds
@@ -307,15 +367,15 @@ eloop_timer_callback (gpointer data)
 eloop_timer*
 eloop_timer_new (int timeout, void (*callback)(void *), void *data)
 {
-    eloop_timer *timer = g_new0(eloop_timer, 1);
+    const AvahiPoll *poll = eloop_poll_get();
+    eloop_timer     *timer = g_new0(eloop_timer, 1);
+    struct timeval  end;
 
-    timer->source = g_timeout_source_new(timeout);
+    avahi_elapse_time(&end, timeout, 0);
+
+    timer->timeout = poll->timeout_new(poll, &end, eloop_timer_callback, timer);
     timer->callback = callback;
     timer->data = data;
-
-    g_source_set_priority(timer->source, G_PRIORITY_DEFAULT);
-    g_source_set_callback(timer->source, eloop_timer_callback, timer, NULL);
-    g_source_attach(timer->source, eloop_glib_main_context);
 
     return timer;
 }
@@ -328,8 +388,9 @@ eloop_timer_new (int timeout, void (*callback)(void *), void *data)
 void
 eloop_timer_cancel (eloop_timer *timer)
 {
-    g_source_destroy(timer->source);
-    g_source_unref(timer->source);
+    const AvahiPoll *poll = eloop_poll_get();
+
+    poll->timeout_free(timer->timeout);
     g_free(timer);
 }
 
@@ -338,42 +399,34 @@ eloop_timer_cancel (eloop_timer *timer)
  * event mask
  */
 struct eloop_fdpoll {
-    GSource           source;   /* Underlying GSource */
-    int               fd;       /* Underlying file descriptor */
-    gpointer          fd_tag;   /* Returned by g_source_add_unix_fd() */
-    ELOOP_FDPOLL_MASK mask;     /* Mask of active events */
-    void     (*callback)(       /* User-defined callback */
-        int, void*, ELOOP_FDPOLL_MASK);
-    void              *data;    /* Callback's data */
+    AvahiWatch        *watch;      /* Underlying AvahiWatch */
+    int               fd;          /* Underlying file descriptor */
+    ELOOP_FDPOLL_MASK mask;        /* Mask of active events */
+    void              (*callback)( /* User-defined callback */
+            int, void*, ELOOP_FDPOLL_MASK);
+    void              *data;       /* Callback's data */
 };
 
-/* eloop_fdpoll GSource dispatch function
+/* eloop_fdpoll callback for AvahiWatch
  */
-static gboolean
-eloop_fdpoll_source_dispatch (GSource *source, GSourceFunc callback,
-    gpointer data)
+static void
+eloop_fdpoll_callback (AvahiWatch *w, int fd, AvahiWatchEvent event,
+        void *data)
 {
-    eloop_fdpoll      *fdpoll = (eloop_fdpoll*) source;
-    guint             events = g_source_query_unix_fd(source, fdpoll->fd_tag);
+    eloop_fdpoll      *fdpoll = data;
     ELOOP_FDPOLL_MASK mask = 0;
 
-    (void) callback;
-    (void) data;
+    (void) w;
 
-    if ((events & G_IO_IN) != 0) {
+    if ((event & AVAHI_WATCH_IN) != 0) {
         mask |= ELOOP_FDPOLL_READ;
     }
 
-    if ((events & G_IO_OUT) != 0) {
+    if ((event & AVAHI_WATCH_OUT) != 0) {
         mask |= ELOOP_FDPOLL_WRITE;
     }
 
-    mask &= fdpoll->mask;
-    if (mask != 0) {
-        fdpoll->callback(fdpoll->fd, fdpoll->data, mask);
-    }
-
-    return G_SOURCE_CONTINUE;
+    fdpoll->callback(fd, fdpoll->data, mask);
 }
 
 /* Create eloop_fdpoll
@@ -388,18 +441,15 @@ eloop_fdpoll*
 eloop_fdpoll_new (int fd,
         void (*callback) (int, void*, ELOOP_FDPOLL_MASK), void *data)
 {
-    eloop_fdpoll *fdpoll;
-    static GSourceFuncs funcs = {
-        .dispatch = eloop_fdpoll_source_dispatch
-    };
+    const AvahiPoll *poll = eloop_poll_get();
+    eloop_fdpoll    *fdpoll = g_new0(eloop_fdpoll, 1);
 
-    fdpoll = (eloop_fdpoll*) g_source_new(&funcs, sizeof(eloop_fdpoll));
     fdpoll->fd = fd;
     fdpoll->callback = callback;
     fdpoll->data = data;
 
-    fdpoll->fd_tag = g_source_add_unix_fd(&fdpoll->source, fd, 0);
-    g_source_attach(&fdpoll->source, eloop_glib_main_context);
+    eloop_poll_restart = true;
+    fdpoll->watch = poll->watch_new(poll, fd, 0, eloop_fdpoll_callback, fdpoll);
 
     return fdpoll;
 }
@@ -409,8 +459,10 @@ eloop_fdpoll_new (int fd,
 void
 eloop_fdpoll_free (eloop_fdpoll *fdpoll)
 {
-    g_source_destroy(&fdpoll->source);
-    g_source_unref(&fdpoll->source);
+    const AvahiPoll *poll = eloop_poll_get();
+
+    poll->watch_free(fdpoll->watch);
+    g_free(fdpoll);
 }
 
 /* Set eloop_fdpoll event mask
@@ -419,18 +471,19 @@ void
 eloop_fdpoll_set_mask (eloop_fdpoll *fdpoll, ELOOP_FDPOLL_MASK mask)
 {
     if (fdpoll->mask != mask) {
-        guint events = 0;
+        const AvahiPoll *poll = eloop_poll_get();
+        AvahiWatchEvent events = 0;
 
         if ((mask & ELOOP_FDPOLL_READ) != 0) {
-            events |= G_IO_IN;
+            events |= AVAHI_WATCH_IN;
         }
 
         if ((mask & ELOOP_FDPOLL_WRITE) != 0) {
-            events |= G_IO_OUT;
+            events |= AVAHI_WATCH_OUT;
         }
 
         fdpoll->mask = mask;
-        g_source_modify_unix_fd(&fdpoll->source, fdpoll->fd_tag, events);
+        poll->watch_update(fdpoll->watch, events);
     }
 }
 
@@ -454,7 +507,7 @@ eloop_eprintf(const char *fmt, ...)
     gchar *estring;
     va_list ap;
 
-    log_assert(NULL, g_thread_self() == eloop_thread);
+    log_assert(NULL, pthread_equal(pthread_self(), eloop_thread));
 
     va_start(ap, fmt);
     estring = g_strdup_vprintf(fmt, ap);

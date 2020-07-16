@@ -15,6 +15,7 @@
 #include <sane/saneopts.h>
 
 #include <math.h>
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -911,17 +912,12 @@ eloop_mutex_unlock (void);
 /* Wait on conditional variable under the event loop mutex
  */
 void
-eloop_cond_wait (GCond *cond);
+eloop_cond_wait (pthread_cond_t *cond);
 
-/* eloop_cond_wait() with timeout in seconds
+/* Get AvahiPoll that runs in event loop thread
  */
-bool
-eloop_cond_wait_until (GCond *cond, gint64 timeout);
-
-/* Create AvahiGLibPoll that runs in context of the event loop
- */
-AvahiGLibPoll*
-eloop_new_avahi_poll (void);
+const AvahiPoll*
+eloop_poll_get (void);
 
 /* Call function on a context of event loop thread
  */

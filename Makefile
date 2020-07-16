@@ -17,7 +17,7 @@
 
 CC	= gcc
 COMPRESS = gzip
-CFLAGS	+= -O2 -g -W -Wall -Werror $(CPPFLAGS)
+CFLAGS	+= -O2 -g -W -Wall -Werror -pthread $(CPPFLAGS)
 MANDIR	= /usr/share/man/
 PKG_CONFIG = /usr/bin/pkg-config
 STRIP 	= -s

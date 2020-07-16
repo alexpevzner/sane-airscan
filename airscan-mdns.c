@@ -60,7 +60,6 @@ typedef struct {
  */
 static log_ctx *mdns_log;
 static ll_head mdns_finding_list;
-static AvahiGLibPoll *mdns_avahi_glib_poll;
 static const AvahiPoll *mdns_avahi_poll;
 static AvahiTimeout *mdns_avahi_restart_timer;
 static AvahiClient *mdns_avahi_client;
@@ -867,12 +866,7 @@ mdns_init (void)
         mdns_initscan_count[i] = 0;
     }
 
-    mdns_avahi_glib_poll = eloop_new_avahi_poll();
-    if (mdns_avahi_glib_poll == NULL) {
-        return SANE_STATUS_NO_MEM;
-    }
-
-    mdns_avahi_poll = avahi_glib_poll_get(mdns_avahi_glib_poll);
+    mdns_avahi_poll = eloop_poll_get();
 
     mdns_avahi_restart_timer =
             mdns_avahi_poll->timeout_new(mdns_avahi_poll, NULL,
@@ -895,7 +889,7 @@ mdns_init (void)
 void
 mdns_cleanup (void)
 {
-    if (mdns_avahi_glib_poll != NULL) {
+    if (mdns_avahi_poll != NULL) {
         mdns_avahi_browser_stop();
         mdns_avahi_client_stop();
         mdns_finding_del_all();
@@ -905,9 +899,7 @@ mdns_cleanup (void)
             mdns_avahi_restart_timer = NULL;
         }
 
-        avahi_glib_poll_free(mdns_avahi_glib_poll);
         mdns_avahi_poll = NULL;
-        mdns_avahi_glib_poll = NULL;
     }
 
     log_ctx_free(mdns_log);
