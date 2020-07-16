@@ -1075,8 +1075,11 @@ zeroconf_device_list_qsort_cmp (const void *p1, const void *p2)
     const SANE_Device *d1 = *(SANE_Device**) p1;
     const SANE_Device *d2 = *(SANE_Device**) p2;
 
-    cmp = strcmp(d1->model, d2->model);
-    if (cmp != 0) {
+    cmp = strcasecmp(d1->model, d2->model);
+    if (cmp == 0) {
+        cmp = strcasecmp(d1->vendor, d2->vendor);
+    }
+    if (cmp == 0) {
         cmp = strcmp(d1->name, d2->name);
     }
 
@@ -1107,15 +1110,16 @@ zeroconf_device_list_fmt_protocols (char *buf, size_t buflen, unsigned int proto
 /* Log device information in a context of zeroconf_device_list_get
  */
 static void
-zeroconf_device_list_log (zeroconf_device *device, const char *name, unsigned int protocols)
+zeroconf_device_list_log (zeroconf_device *device, const char *name,
+    unsigned int protocols)
 {
-    char     buf[64];
+    char     can[64];
+    char     use[64];
 
-    zeroconf_device_list_fmt_protocols(buf, sizeof(buf), device->protocols);
-    log_debug(zeroconf_log, "%s: supported protocols:%s", name, buf);
+    zeroconf_device_list_fmt_protocols(can, sizeof(can), device->protocols);
+    zeroconf_device_list_fmt_protocols(use, sizeof(use), protocols);
 
-    zeroconf_device_list_fmt_protocols(buf, sizeof(buf), protocols);
-    log_debug(zeroconf_log, "%s: chosen protocols:%s", name, buf);
+    log_debug(zeroconf_log, "%s: can:%s, use:%s", name, can, use);
 }
 
 /* Get list of devices, in SANE format
@@ -1127,6 +1131,7 @@ zeroconf_device_list_get (void)
     conf_device *dev_conf;
     const SANE_Device **dev_list = sane_device_array_new();
     ll_node     *node;
+    int         i;
 
     log_debug(zeroconf_log, "zeroconf_device_list_get: requested");
 
@@ -1204,6 +1209,12 @@ zeroconf_device_list_get (void)
 
     qsort(dev_list + dev_count_static, dev_count - dev_count_static,
         sizeof(*dev_list), zeroconf_device_list_qsort_cmp);
+
+    log_debug(zeroconf_log, "zeroconf_device_list_get: resulting list:");
+    for (i = 0; dev_list[i] != NULL; i ++) {
+        log_debug(zeroconf_log,
+            "  %-4s  \"%s\"", dev_list[i]->vendor, dev_list[i]->model);
+    }
 
     return dev_list;
 }
