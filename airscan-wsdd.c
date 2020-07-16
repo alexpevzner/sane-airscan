@@ -26,6 +26,12 @@
 #define WSDD_RETRANSMIT_MAX     250     /* Max retransmit time */
 #define WSDD_DISCOVERY_TIME     2500    /* Overall discovery time */
 
+/* This delay is taken, if we have discovered, say, device's IPv6
+ * addresses and have a strong suspicion that device has not yet
+ * discovered IPv4 addresses as well
+ */
+#define WSDD_PUBLISH_DELAY      1000
+
 /* WS-Discovery stable endpoint path
  */
 #define WSDD_STABLE_ENDPOINT    \
@@ -49,12 +55,13 @@ typedef struct {
  * device discovery
  */
 typedef struct {
-    zeroconf_finding  finding;      /* Base class */
-    const char        *address;     /* Device "address" in WS-SD sense */
-    ll_head           xaddrs;       /* List of wsdd_xaddr */
-    http_client       *http_client; /* HTTP client */
-    ll_node           list_node;    /* In wsdd_finding_list */
-    bool              published;    /* This finding is published */
+    zeroconf_finding  finding;        /* Base class */
+    const char        *address;       /* Device "address" in WS-SD sense */
+    ll_head           xaddrs;         /* List of wsdd_xaddr */
+    http_client       *http_client;   /* HTTP client */
+    ll_node           list_node;      /* In wsdd_finding_list */
+    eloop_timer       *publish_timer; /* WSDD_PUBLISH_DELAY timer */
+    bool              published;      /* This finding is published */
 } wsdd_finding;
 
 /* wsdd_xaddr represents device transport address
@@ -207,9 +214,8 @@ wsdd_xaddr_list_purge (ll_head *list)
 {
     ll_node    *node;
 
-    while ((node = ll_first(list)) != NULL) {
+    while ((node = ll_pop_beg(list)) != NULL) {
         wsdd_xaddr *xaddr = OUTER_STRUCT(node, wsdd_xaddr, list_node);
-        ll_del(&xaddr->list_node);
         wsdd_xaddr_free(xaddr);
     }
 }
@@ -269,6 +275,10 @@ wsdd_finding_free (wsdd_finding *wsdd)
     http_client_cancel(wsdd->http_client);
     http_client_free(wsdd->http_client);
 
+    if (wsdd->publish_timer != NULL) {
+        eloop_timer_cancel(wsdd->publish_timer);
+    }
+
     zeroconf_endpoint_list_free(wsdd->finding.endpoints);
     g_free((char*) wsdd->address);
     wsdd_xaddr_list_purge(&wsdd->xaddrs);
@@ -282,17 +292,100 @@ wsdd_finding_free (wsdd_finding *wsdd)
 static void
 wsdd_finding_publish (wsdd_finding *wsdd)
 {
-    if (!wsdd->published) {
-        wsdd->published = true;
-        zeroconf_finding_publish(&wsdd->finding);
+    if (wsdd->published) {
+        return;
     }
+
+    wsdd->published = true;
+    wsdd->finding.endpoints = zeroconf_endpoint_list_sort_dedup(
+            wsdd->finding.endpoints);
+
+    if (wsdd->publish_timer != NULL) {
+        log_debug(wsdd_log, "\"%s\": publish-delay timer canceled",
+                wsdd->finding.model);
+
+        eloop_timer_cancel(wsdd->publish_timer);
+        wsdd->publish_timer = NULL;
+    }
+
+    zeroconf_finding_publish(&wsdd->finding);
 }
 
-/* Add wsdd_finding to the wsdd_finding_list.
- * If finding already present, does nothing and returns NULL
+/* WSDD_PUBLISH_DELAY timer callback
+ */
+static void
+wsdd_finding_publish_delay_timer_callback (void *data)
+{
+    wsdd_finding *wsdd = data;
+
+    wsdd->publish_timer = NULL;
+    log_debug(wsdd_log, "\"%s\": publish-delay timer expired",
+            wsdd->finding.model);
+
+    wsdd_finding_publish(wsdd);
+}
+
+/* Publish wsdd_finding with optional delay
+ */
+static void
+wsdd_finding_publish_delay (wsdd_finding *wsdd)
+{
+    bool delay = false;
+
+    if (wsdd->published) {
+        return;
+    }
+
+    /* Continue discovery, if interface has IPv4/IPv6 address,
+     * and we have not yet discovered address of the same address
+     * family of device
+     *
+     * Some devices doesn't return their IPv4 endpoints, if
+     * metadata is queried via IPv6, and visa versa. This is
+     * possible that we will finish discovery of the particular
+     * address family, before we'll ever know that the device
+     * may have address of another address family, so part
+     * of addresses will be never discovered (see #44 for details).
+     *
+     * To prevent this situation, we continue discovery with
+     * some reasonable delay, if network interface has IPv4/IPv6
+     * address, but device is not yet.
+     */
+
+    if (netif_has_non_link_local_addr(AF_INET, wsdd->finding.ifindex) &&
+        !zeroconf_endpoint_list_has_non_link_local_addr(AF_INET,
+            wsdd->finding.endpoints)) {
+        log_debug(wsdd_log,
+                "\"%s\": IPv4 address expected but not yet discovered",
+                wsdd->finding.model);
+        delay = true;
+    }
+
+    if (netif_has_non_link_local_addr(AF_INET6, wsdd->finding.ifindex) &&
+        !zeroconf_endpoint_list_has_non_link_local_addr(AF_INET6,
+            wsdd->finding.endpoints)) {
+        log_debug(wsdd_log,
+                "\"%s\": IPv6 address expected but not yet discovered",
+                wsdd->finding.model);
+        delay = true;
+    }
+
+    if (delay) {
+        if (wsdd->publish_timer == NULL) {
+            wsdd->publish_timer = eloop_timer_new(WSDD_PUBLISH_DELAY,
+                wsdd_finding_publish_delay_timer_callback, wsdd);
+        }
+
+        return;
+    }
+
+    wsdd_finding_publish(wsdd);
+}
+
+/* Get existent finding or add a new one
  */
 static wsdd_finding*
-wsdd_finding_add (int ifindex, const char *address)
+wsdd_finding_get (int ifindex, const char *address)
 {
     ll_node      *node;
     wsdd_finding *wsdd;
@@ -302,7 +395,7 @@ wsdd_finding_add (int ifindex, const char *address)
         wsdd = OUTER_STRUCT(node, wsdd_finding, list_node);
         if (wsdd->finding.ifindex == ifindex &&
             !strcmp(wsdd->address, address)) {
-            return NULL;
+            return wsdd;
         }
     }
 
@@ -341,6 +434,25 @@ wsdd_finding_by_address (ip_addr addr)
     }
 
     return NULL;
+}
+
+/* Check if finding already has particular xaddr
+ */
+static bool
+wsdd_finding_has_xaddr (wsdd_finding *wsdd, const wsdd_xaddr *xaddr)
+{
+    ll_node    *node;
+    wsdd_xaddr *xaddr2;
+
+    for (LL_FOR_EACH(node, &wsdd->xaddrs)) {
+        xaddr2 = OUTER_STRUCT(node, wsdd_xaddr, list_node);
+
+        if (http_uri_equal(xaddr->uri, xaddr2->uri)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /* Delete wsdd_finding from the wsdd_finding_list
@@ -531,25 +643,8 @@ DONE:
     g_free(model);
     g_free(manufacturer);
 
-    if (!http_client_has_pending(wsdd->http_client) == 0) {
-        zeroconf_endpoint *endpoint;
-
-        wsdd->finding.endpoints = zeroconf_endpoint_list_sort_dedup(
-                wsdd->finding.endpoints);
-
-        log_debug(wsdd_log, "\"%s\": address: %s",
-                wsdd->finding.model, wsdd->address);
-        log_debug(wsdd_log, "\"%s\": uuid: %s",
-                wsdd->finding.model, wsdd->finding.uuid.text);
-        log_debug(wsdd_log, "\"%s\": discovered endpoints:",
-                wsdd->finding.model);
-
-        for (endpoint = wsdd->finding.endpoints; endpoint != NULL;
-            endpoint = endpoint->next) {
-            log_debug(wsdd_log, "  %s", http_uri_str(endpoint->uri));
-        }
-
-        wsdd_finding_publish(wsdd);
+    if (http_client_has_pending(wsdd->http_client) == 0) {
+        wsdd_finding_publish_delay(wsdd);
     }
 }
 
@@ -738,28 +833,42 @@ wsdd_resolver_message_dispatch (wsdd_resolver *resolver,
             goto DONE;
         }
 
-        /* Add a finding. Do nothing if device already exist */
-        wsdd = wsdd_finding_add(resolver->ifindex, msg->address);
-        if (wsdd == NULL) {
-            goto DONE;
-        }
+        /* Add a finding or get existent one */
+        wsdd = wsdd_finding_get(resolver->ifindex, msg->address);
 
-        /* If device is not scanner or (which is very unlikely)
-         * has no xaddrs, just publish it without endpoints,
-         * so zeroconf stuff will know that there is no need to
-         * wait anymore for a device with this UUID, and we
-         * are done
+        /* Import newly discovered xaddrs and initiate metadata
+         * query
          */
-        if (!msg->is_scanner || ll_empty(&msg->xaddrs)) {
-            wsdd_finding_publish(wsdd);
-            goto DONE;
+        while ((node = ll_pop_beg(&msg->xaddrs)) != NULL) {
+            xaddr = OUTER_STRUCT(node, wsdd_xaddr, list_node);
+
+            if (wsdd_finding_has_xaddr(wsdd, xaddr)) {
+                wsdd_xaddr_free(xaddr);
+                continue;
+            }
+
+            ll_push_end(&wsdd->xaddrs, &xaddr->list_node);
+            if (msg->is_scanner) {
+                wsdd_finding_get_metadata(wsdd, resolver->ifindex, xaddr);
+            }
         }
 
-        /* Initiate metadata query */
-        ll_cat(&wsdd->xaddrs, &msg->xaddrs);
-        for (LL_FOR_EACH(node, &wsdd->xaddrs)) {
-            xaddr = OUTER_STRUCT(node, wsdd_xaddr, list_node);
-            wsdd_finding_get_metadata(wsdd, resolver->ifindex, xaddr);
+        /* If there is no pending metadata queries, it may mean
+         * one of the following:
+         *   1) device is not scanner, metadata won't be requested
+         *   2) there is no xaddrs (which is very unlikely, but
+         *      just in case...)
+         *   3) device already known and all metadata queries
+         *      already finished
+         *
+         * At this case we can publish device now
+         */
+        if (http_client_has_pending(wsdd->http_client) == 0) {
+            if (msg->is_scanner) {
+                wsdd_finding_publish_delay(wsdd);
+            } else {
+                wsdd_finding_publish(wsdd);
+            }
         }
         break;
 
@@ -774,6 +883,7 @@ wsdd_resolver_message_dispatch (wsdd_resolver *resolver,
     /* Cleanup and exit */
 DONE:
     wsdd_message_free(msg);
+    log_trace(wsdd_log, "");
 }
 
 

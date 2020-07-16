@@ -99,7 +99,6 @@ math_range_merge (SANE_Range *out, const SANE_Range *r1, const SANE_Range *r2)
     SANE_Word quant = math_lcm(r1->quant, r2->quant);
     SANE_Word min, max, bounds_min, bounds_max;
 
-    min = math_min(r1->min, r2->min);
     bounds_min = math_max(r1->min, r2->min);
     bounds_max = math_min(r1->max, r2->max);
 

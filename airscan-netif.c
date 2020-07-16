@@ -92,6 +92,41 @@ netif_distance_get (const struct sockaddr *addr)
     return distance;
 }
 
+/* Check that interface has non-link-local address
+ * of particular address family
+ */
+bool
+netif_has_non_link_local_addr (int af, int ifindex)
+{
+    struct ifaddrs *ifa;
+
+    for (ifa = netif_ifaddrs; ifa != NULL; ifa = ifa->ifa_next) {
+        struct sockaddr *addr;
+
+        /* Skip interface without address */
+        if ((addr = ifa->ifa_addr) == NULL) {
+            continue;
+        }
+
+        /* Check address family against requested */
+        if (addr->sa_family != af) {
+            continue;
+        }
+
+        /* Skip link-local addresses */
+        if (ip_sockaddr_is_linklocal(addr)) {
+            continue;
+        }
+
+        /* Check interface index */
+        if (ifindex == (int) if_nametoindex(ifa->ifa_name)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 /* Get list of network interfaces addresses
  */
 netif_addr*

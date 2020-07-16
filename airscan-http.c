@@ -730,6 +730,7 @@ http_uri_new_relative (const http_uri *base, const char *path,
 
 /* Free the URI
  */
+#ifndef __clang_analyzer__
 void
 http_uri_free (http_uri *uri)
 {
@@ -739,6 +740,7 @@ http_uri_free (http_uri *uri)
         g_free(uri);
     }
 }
+#endif
 
 /* Get URI string
  */

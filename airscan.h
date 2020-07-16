@@ -130,8 +130,10 @@ ll_push_beg (ll_head *head, ll_node *node)
 static inline void
 ll_del (ll_node *node)
 {
-    node->ll_prev->ll_next = node->ll_next;
-    node->ll_next->ll_prev = node->ll_prev;
+    ll_node *p = node->ll_prev, *n = node->ll_next;
+
+    p->ll_next = n;
+    n->ll_prev = p;
 
     /* Make double-delete safe */
     node->ll_next = node->ll_prev = node;
@@ -143,14 +145,19 @@ ll_del (ll_node *node)
 static inline ll_node*
 ll_pop_beg (ll_head *head)
 {
-    ll_node *node;
-
-    if (ll_empty(head)) {
-        return NULL;
-    }
+    ll_node *node, *next;
 
     node = head->node.ll_next;
-    ll_del(node);
+    if (node == &head->node) {
+        return NULL; /* List is empty if it is looped to itself */
+    }
+
+    next = node->ll_next;
+    next->ll_prev = &head->node;
+    head->node.ll_next = next;
+
+    /* Make double-delete safe */
+    node->ll_next = node->ll_prev = node;
 
     return node;
 }
@@ -161,14 +168,19 @@ ll_pop_beg (ll_head *head)
 static inline ll_node*
 ll_pop_end (ll_head *head)
 {
-    ll_node *node;
-
-    if (ll_empty(head)) {
-        return NULL;
-    }
+    ll_node *node, *prev;
 
     node = head->node.ll_prev;
-    ll_del(node);
+    if (node == &head->node) {
+        return NULL; /* List is empty if it is looped to itself */
+    }
+
+    prev = node->ll_prev;
+    prev->ll_next = &head->node;
+    head->node.ll_prev = prev;
+
+    /* Make double-delete safe */
+    node->ll_next = node->ll_prev = node;
 
     return node;
 }
@@ -701,6 +713,12 @@ typedef enum {
  */
 NETIF_DISTANCE
 netif_distance_get (const struct sockaddr *addr);
+
+/* Check that interface has non-link-local address
+ * of particular address family
+ */
+bool
+netif_has_non_link_local_addr (int af, int ifindex);
 
 /* Compare addresses by distance. Returns:
  *   <0, if addr1 is closer that addr2
@@ -2065,6 +2083,13 @@ zeroconf_endpoint_list_sort (zeroconf_endpoint *list);
 zeroconf_endpoint*
 zeroconf_endpoint_list_sort_dedup (zeroconf_endpoint *list);
 
+/* Check if endpoints list contains a non-link-local address
+ * of the specified address family
+ */
+bool
+zeroconf_endpoint_list_has_non_link_local_addr (int af,
+        const zeroconf_endpoint *list);
+
 /******************** MDNS Discovery ********************/
 /* Called by zeroconf to notify MDNS about initial scan timer expiration
  */
@@ -2604,6 +2629,7 @@ log_panic (log_ctx *log, const char *fmt, ...);
          if (!(expr)) {                                                 \
              log_panic(log,"file %s: line %d (%s): assertion failed: (%s)",\
                      __FILE__, __LINE__, __PRETTY_FUNCTION__, #expr);   \
+             __builtin_unreachable();                                   \
          }                                                              \
      } while (0)
 
@@ -2613,6 +2639,7 @@ log_panic (log_ctx *log, const char *fmt, ...);
      do {                                                               \
          log_panic(log,"file %s: line %d (%s): internal error",         \
                  __FILE__, __LINE__, __PRETTY_FUNCTION__);              \
+         __builtin_unreachable();                                       \
      } while (0)
 
 #endif
