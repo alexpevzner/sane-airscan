@@ -1139,8 +1139,15 @@ zeroconf_device_list_get (void)
     dev_count = 0;
 
     for (dev_conf = conf.devices; dev_conf != NULL; dev_conf = dev_conf->next) {
-        SANE_Device *info = g_new0(SANE_Device, 1);
-        const char  *proto = id_proto_name(dev_conf->proto);
+        SANE_Device *info;
+        const char  *proto;
+
+        if (dev_conf->uri == NULL) {
+            continue;
+        }
+
+        info = g_new0(SANE_Device, 1);
+        proto = id_proto_name(dev_conf->proto);
 
         dev_list = sane_device_array_append(dev_list, info);
         dev_count ++;
@@ -1417,8 +1424,12 @@ zeroconf_init (void)
         log_trace(zeroconf_log, "statically configured devices:");
 
         for (dev = conf.devices; dev != NULL; dev = dev->next) {
-            log_debug(zeroconf_log, "  %s = %s, %s", dev->name,
-                http_uri_str(dev->uri), id_proto_name(dev->proto));
+            if (dev->uri != NULL) {
+                log_debug(zeroconf_log, "  %s = %s, %s", dev->name,
+                    http_uri_str(dev->uri), id_proto_name(dev->proto));
+            } else {
+                log_debug(zeroconf_log, "  %s = disable", dev->name);
+            }
         }
     }
 
