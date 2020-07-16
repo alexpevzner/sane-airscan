@@ -166,6 +166,8 @@ main (void)
 
     test_relative("http://host/", "/a/b/c/./../../g", "http://host/a/g");
 
+    test_relative("http://[::1]:8080/eSCL/", "XXX", "http://[::1]:8080/eSCL/XXX");
+
     return 0;
 }
 

@@ -215,12 +215,26 @@ http_uri_field_replace (http_uri *uri, int num, const char *val)
         }
 
         if (field.len != 0) {
+            bool ip6_host = false;
+
+            if (fields[i].num == UF_HOST) {
+                ip6_host = memchr(field.str, ':', field.len) != NULL;
+            }
+
             if (fields[i].pfx != NULL) {
                 http_uri_field pfx = http_uri_field_make(fields[i].pfx);
                 end = http_uri_field_append(pfx, end);
             }
 
+            if (ip6_host) {
+                *end ++ = '[';
+            }
+
             end = http_uri_field_append(field, end);
+
+            if (ip6_host) {
+                *end ++ = ']';
+            }
 
             if (fields[i].sfx != NULL) {
                 http_uri_field sfx = http_uri_field_make(fields[i].sfx);
@@ -644,6 +658,7 @@ http_uri_new_relative (const http_uri *base, const char *path,
     char           *end = buf;
     http_uri       ref;
     const http_uri *uri;
+    http_uri_field field;
     char           *path_beg;
 
     if (http_uri_parse(&ref, path) != NULL) {
@@ -670,7 +685,15 @@ http_uri_new_relative (const http_uri *base, const char *path,
         end = http_uri_field_append(http_uri_field_make("@"), end);
     }
 
-    end = http_uri_field_copy(uri, UF_HOST, end);
+    field = http_uri_field_get(uri, UF_HOST);
+    if (memchr(field.str, ':', field.len) != NULL) {
+        *end ++ = '[';
+        end = http_uri_field_append(field, end);
+        *end ++ = ']';
+    } else {
+        end = http_uri_field_append(field, end);
+    }
+
     if (http_uri_field_present(uri, UF_PORT)) {
         end = http_uri_field_append(http_uri_field_make(":"), end);
         end = http_uri_field_copy(uri, UF_PORT, end);
@@ -1909,6 +1932,7 @@ http_query_new_relative(http_client *client,
         const char *method, char *body, const char *content_type)
 {
     http_uri *uri = http_uri_new_relative(base_uri, path, true, false);
+    log_assert(client->log, uri != NULL);
     return http_query_new(client, uri, method, body, content_type);
 }
 
