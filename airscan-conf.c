@@ -811,38 +811,39 @@ conf_load_from_file (const char *name)
  *
  * This function uses its path parameter as its temporary
  * buffer and doesn't guarantee to preserve its content
+ *
+ * The `path' can be reallocated by this function; old
+ * value is consumed and new is returned
  */
-static void
-conf_load_from_dir (GString *path)
+static char*
+conf_load_from_dir (char *path)
 {
-    if (path->len != 0 && path->str[path->len - 1] != '/') {
-        g_string_append_c(path, '/');
-    }
+    path = str_terminate(path, '/');
 
     /* Load from CONFIG_AIRSCAN_CONF file */
-    size_t len = path->len;
-    g_string_append(path, CONFIG_AIRSCAN_CONF);
-    conf_load_from_file(path->str);
+    size_t len = mem_len(path);
+    path = str_append(path, CONFIG_AIRSCAN_CONF);
+    conf_load_from_file(path);
 
     /* Scan CONFIG_AIRSCAN_D directory */
-    g_string_truncate(path, len);
-    g_string_append(path, CONFIG_AIRSCAN_D);
-    if (path->str[path->len - 1] != '/') {
-        g_string_append_c(path, '/');
-    }
-    len = path->len;
+    path = str_resize(path, len);
+    path = str_append(path, CONFIG_AIRSCAN_D);
+    path = str_terminate(path, '/');
+    len = mem_len(path);
 
-    GDir *dir = g_dir_open(path->str, 0, NULL);
+    GDir *dir = g_dir_open(path, 0, NULL);
     if (dir) {
         const char *name;
         while ((name = g_dir_read_name(dir)) != NULL) {
-            g_string_truncate(path, len);
-            g_string_append(path, name);
-            conf_load_from_file(path->str);
+            path = str_resize(path, len);
+            path = str_append(path, name);
+            conf_load_from_file(path);
         }
 
         g_dir_close(dir);
     }
+
+    return path;
 }
 
 /* Load configuration from environment
@@ -879,9 +880,9 @@ conf_load_from_env (void)
 void
 conf_load (void)
 {
-    GString   *dir_list = g_string_new(NULL);
-    GString   *path = g_string_new(NULL);
-    char      *s;
+    char    *dir_list = str_new();
+    char    *path = str_new();
+    char    *s;
 
     /* Reset the configuration */
     conf = conf_init;
@@ -889,23 +890,20 @@ conf_load (void)
     /* Look to configuration path in environment */
     s = getenv(CONFIG_PATH_ENV);
     if (s != NULL) {
-        g_string_assign(dir_list, s);
+        dir_list = str_assign(dir_list, s);
     }
 
     /* Append default directories */
-    if (dir_list->len && dir_list->str[dir_list->len - 1] != ':') {
-        g_string_append_c(dir_list, ':');
-    }
-
-    g_string_append(dir_list, CONFIG_SANE_CONFIG_DIR);
+    dir_list = str_terminate(dir_list, ':');
+    dir_list = str_append(dir_list, CONFIG_SANE_CONFIG_DIR);
 
     /* Iterate over the dir_list */
-    for (s = dir_list->str; ; s ++) {
+    for (s = dir_list; ; s ++) {
         if (*s == ':' || *s == '\0') {
             conf_load_from_dir(path);
-            g_string_truncate(path, 0);
+            str_trunc(path);
         } else {
-            g_string_append_c(path, *s);
+            path = str_append_c(path, *s);
         }
 
         if (*s == '\0') {
@@ -919,8 +917,8 @@ conf_load (void)
     /* Cleanup and exit */
     conf_device_list_revert();
 
-    g_string_free(dir_list, TRUE);
-    g_string_free(path, TRUE);
+    mem_free(dir_list);
+    mem_free(path);
 }
 
 /* Free resources, allocated by conf_load, and reset configuration

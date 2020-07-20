@@ -255,7 +255,7 @@ ll_cat (ll_head *list1, ll_head *list2)
 /******************** Memory allocation ********************/
 /* Allocate `len' elements of type T
  */
-#define mem_new(T,len)  ((t*) __mem_alloc(NULL, len, sizeof(t)))
+#define mem_new(T,len)  ((T*) __mem_alloc(len, 0, sizeof(T), true))
 
 /* Resize memory. The returned memory block has length of `len' and
  * capacity at least of `len' + `extra'
@@ -302,6 +302,109 @@ __mem_alloc (size_t len, size_t extra, size_t elsize, bool must);
 
 void*
 __mem_resize (void *p, size_t len, size_t cap, size_t elsize, bool must);
+
+/******************** Strings ********************/
+/* Create new string
+ */
+static inline char*
+str_new (void) {
+    char *s = mem_resize((char*) 0, 0, 1);
+    *s = '\0';
+    return s;
+}
+
+/* Truncate the string
+ */
+static inline void
+str_trunc (char *s)
+{
+    mem_trunc(s);
+    *s = '\0';
+}
+
+/* Resize the string
+ *
+ * s1 must be previously created by some of str_XXX functions,
+ * s1 will be consumed and the new pointer will be returned
+ */
+static inline char*
+str_resize (char *s, size_t len)
+{
+    s = mem_resize(s, len, 1);
+    *s = '\0';
+    return s;
+}
+
+/* Append memory to string:
+ *     s1 += s2[:l2]
+ *
+ * s1 must be previously created by some of str_XXX functions,
+ * s1 will be consumed and the new pointer will be returned
+ */
+static inline char*
+str_append_mem (char *s1, const char *s2, size_t l2)
+{
+    size_t l1 = mem_len(s1);
+
+    s1 = mem_resize(s1, l1 + l2, 1);
+    memcpy(s1 + l1, s2, l2);
+    s1[l1+l2] = '\0';
+
+    return s1;
+}
+
+/* Append string to string:
+ *     s1 += s2
+ *
+ * s1 must be previously created by some of str_XXX functions,
+ * s1 will be consumed and the new pointer will be returned
+ */
+static inline char*
+str_append (char *s1, const char *s2)
+{
+    return str_append_mem(s1, s2, strlen(s2));
+}
+
+/* Append character to string:
+ *     s1 += c
+ *
+ * `s' must be previously created by some of str_XXX functions,
+ * `s' will be consumed and the new pointer will be returned
+ */
+static inline char*
+str_append_c (char *s, char c)
+{
+    return str_append_mem(s, &c, 1);
+}
+
+/* Assign value to string
+ *
+ * `s1' must be previously created by some of str_XXX functions,
+ * `s1' will be consumed and the new pointer will be returned
+ */
+static inline char*
+str_assign (char *s1, const char *s2)
+{
+    mem_trunc(s1);
+    return str_append(s1, s2);
+}
+
+/* Make sure that string is terminated with the `c' character:
+ * if string is not empty and the last character is not `c`,
+ * append `c' to the string
+ *
+ * `s' must be previously created by some of str_XXX functions,
+ * `s' will be consumed and the new pointer will be returned
+ */
+static inline char*
+str_terminate (char *s, char c)
+{
+    if (s[0] != '\0' && s[mem_len(s) - 1] != c) {
+        s = str_append_c(s, c);
+    }
+
+    return s;
+}
 
 /******************** Error handling ********************/
 /* Type error represents an error. Its value either NULL,
