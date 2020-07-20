@@ -308,8 +308,19 @@ __mem_resize (void *p, size_t len, size_t cap, size_t elsize, bool must);
  */
 static inline char*
 str_new (void) {
-    char *s = mem_resize((char*) 0, 0, 1);
+    char *s = mem_resize((char*) NULL, 0, 1);
     *s = '\0';
+    return s;
+}
+
+/* Create new string as a copy of existent string
+ */
+static inline char*
+str_dup (const char *s1)
+{
+    size_t len = strlen(s1);
+    char   *s = mem_resize((char*) NULL, len, 1);
+    memcpy(s, s1, len + 1);
     return s;
 }
 

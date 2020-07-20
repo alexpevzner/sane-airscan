@@ -886,8 +886,8 @@ typedef struct {
 /* http_hdr_field represents a single HTTP header field
  */
 typedef struct {
-    GString *name;           /* Header name */
-    GString *value;          /* Header value, may be NULL */
+    char    *name;           /* Header name */
+    char    *value;          /* Header value, may be NULL */
     ll_node chain;           /* In http_hdr::fields */
 } http_hdr_field;
 
@@ -897,7 +897,7 @@ static http_hdr_field*
 http_hdr_field_new (const char *name)
 {
     http_hdr_field *field = g_new0(http_hdr_field, 1);
-    field->name = g_string_new(name);
+    field->name = name ? str_dup(name) : str_new();
     return field;
 }
 
@@ -906,10 +906,8 @@ http_hdr_field_new (const char *name)
 static void
 http_hdr_field_free (http_hdr_field *field)
 {
-    g_string_free(field->name, TRUE);
-    if (field->value != NULL) {
-        g_string_free(field->value, TRUE);
-    }
+    mem_free(field->name);
+    mem_free(field->value);
     g_free(field);
 }
 
@@ -936,20 +934,20 @@ http_hdr_cleanup (http_hdr *hdr)
 
 /* Write header to string buffer in wire format
  */
-static void
-http_hdr_write (const http_hdr *hdr, GString *out)
+static char*
+http_hdr_write (const http_hdr *hdr, char *out)
 {
     ll_node *node;
 
     for (LL_FOR_EACH(node, &hdr->fields)) {
         http_hdr_field *field = OUTER_STRUCT(node, http_hdr_field, chain);
-        g_string_append(out, field->name->str);
-        g_string_append(out, ": ");
-        g_string_append(out, field->value->str);
-        g_string_append(out, "\r\n");
+        out = str_append(out, field->name);
+        out = str_append(out, ": ");
+        out = str_append(out, field->value);
+        out = str_append(out, "\r\n");
     }
 
-    g_string_append(out, "\r\n");
+    return str_append(out, "\r\n");
 }
 
 /* Lookup field in the header
@@ -961,7 +959,7 @@ http_hdr_lookup (const http_hdr *hdr, const char *name)
 
     for (LL_FOR_EACH(node, &hdr->fields)) {
         http_hdr_field *field = OUTER_STRUCT(node, http_hdr_field, chain);
-        if (!strcasecmp(field->name->str, name)) {
+        if (!strcasecmp(field->name, name)) {
             return field;
         }
     }
@@ -984,7 +982,7 @@ http_hdr_get (const http_hdr *hdr, const char *name)
         return "";
     }
 
-    return field->value->str;
+    return field->value;
 }
 
 /* Set header field
@@ -1000,9 +998,9 @@ http_hdr_set (http_hdr *hdr, const char *name, const char *value)
     }
 
     if (field->value == NULL) {
-        field->value = g_string_new(value);
+        field->value = str_dup(value);
     } else {
-        g_string_assign(field->value, value);
+        field->value = str_assign(field->value, value);
     }
 }
 
@@ -1032,7 +1030,7 @@ http_hdr_on_header_field (http_parser *parser,
     }
 
     /* Append data to the field name */
-    g_string_append_len(field->name, (gchar*) data, size);
+    field->name = str_append_mem(field->name, (gchar*) data, size);
 
     return 0;
 }
@@ -1063,10 +1061,10 @@ http_hdr_on_header_value (http_parser *parser,
 
     /* Append data to field value */
     if (field->value == NULL) {
-        field->value = g_string_new(NULL);
+        field->value = str_new();
     }
 
-    g_string_append_len(field->value, (gchar*) data, size);
+    field->value = str_append_mem(field->value, (gchar*) data, size);
 
     return 0;
 }
@@ -1201,10 +1199,10 @@ http_hdr_params_parse (http_hdr *params, const char *in)
             if (!http_hdr_params_chr_isspec(c)) {
                 if (field == NULL) {
                     field = http_hdr_field_new(NULL);
-                    field->value = g_string_new(NULL);
+                    field->value = str_new();
                     ll_push_end(&params->fields, &field->chain);
                 }
-                g_string_append_c(field->name, c);
+                field->name = str_append_c(field->name, c);
             } else if (c == ';') {
                 state = SP1;
                 field = NULL;
@@ -1240,18 +1238,18 @@ http_hdr_params_parse (http_hdr *params, const char *in)
             } else if (c == '"') {
                 state = SP4;
             } else {
-                g_string_append_c(field->value, c);
+                field->value = str_append_c(field->value, c);
             }
             break;
 
         case STRING_BSLASH:
-            g_string_append_c(field->value, c);
+            field->value = str_append_c(field->value, c);
             state = STRING;
             break;
 
         case TOKEN:
             if (!http_hdr_params_chr_isspec(c)) {
-                g_string_append_c(field->value, c);
+                field->value = str_append_c(field->value, c);
             } else {
                 state = SP4;
                 continue;
@@ -1291,7 +1289,7 @@ hdr_for_each (const http_hdr *hdr,
         http_hdr_field *field = OUTER_STRUCT(node, http_hdr_field, chain);
 
         if (field->value != NULL) {
-            callback(field->name->str, field->value->str, ptr);
+            callback(field->name, field->value, ptr);
         }
     }
 }
@@ -1763,7 +1761,7 @@ struct http_query {
     eloop_fdpoll      *fdpoll;                  /* Polls q->sock */
     ip_straddr        straddr;                  /* q->sock target addr */
 
-    GString           *rq_buf;                  /* Formatted request */
+    char              *rq_buf;                  /* Formatted request */
     size_t            rq_off;                   /* send() offset in request */
 
     /* HTTP parser */
@@ -1816,7 +1814,7 @@ http_query_free (http_query *q)
 
     http_query_disconnect(q);
 
-    g_string_free(q->rq_buf, TRUE);
+    mem_free(q->rq_buf);
 
     http_data_unref(q->request_data);
     http_data_unref(q->response_data);
@@ -1892,7 +1890,7 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
 
     q->sock = -1;
 
-    q->rq_buf = g_string_new(NULL);
+    q->rq_buf = str_new();
 
     q->onerror = client->onerror;
 
@@ -2050,7 +2048,7 @@ static void
 http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
 {
     http_query *q = data;
-    size_t     len = q->rq_buf->len - q->rq_off;
+    size_t     len = mem_len(q->rq_buf) - q->rq_off;
     ssize_t    rc;
 
     (void) fd;
@@ -2073,7 +2071,7 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
         q->handshake = false;
         eloop_fdpoll_set_mask(q->fdpoll, ELOOP_FDPOLL_BOTH);
     } else if (q->sending) {
-        rc = http_query_sock_send(q, q->rq_buf->str + q->rq_off, len);
+        rc = http_query_sock_send(q, q->rq_buf + q->rq_off, len);
 
         if (rc < 0) {
             error err = http_query_sock_err(q, rc);
@@ -2103,7 +2101,7 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
 
         q->rq_off += rc;
 
-        if (q->rq_off == q->rq_buf->len) {
+        if (q->rq_off == mem_len(q->rq_buf)) {
             q->sending = false;
             eloop_fdpoll_set_mask(q->fdpoll, ELOOP_FDPOLL_BOTH);
         }
@@ -2376,7 +2374,8 @@ http_query_start_processing (gpointer p)
     q->addr_next = q->addrs;
 
     /* Format HTTP request */
-    g_string_printf(q->rq_buf, "%s %s HTTP/1.1\r\n",
+    str_trunc(q->rq_buf);
+    q->rq_buf = str_append_printf(q->rq_buf, "%s %s HTTP/1.1\r\n",
         q->method, http_uri_get_path(q->uri));
 
     if (q->request_data != NULL) {
@@ -2385,10 +2384,10 @@ http_query_start_processing (gpointer p)
         http_hdr_set(&q->request_header, "Content-Length", buf);
     }
 
-    http_hdr_write(&q->request_header, q->rq_buf);
+    q->rq_buf = http_hdr_write(&q->request_header, q->rq_buf);
 
     if (q->request_data != NULL) {
-        g_string_append_len(q->rq_buf,
+        q->rq_buf = str_append_mem(q->rq_buf,
             q->request_data->bytes, q->request_data->size);
     }
 
