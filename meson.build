@@ -16,6 +16,7 @@ sources = [
   'airscan-jpeg.c',
   'airscan-log.c',
   'airscan-math.c',
+  'airscan-memstr.c',
   'airscan-mdns.c',
   'airscan-netif.c',
   'airscan-png.c',

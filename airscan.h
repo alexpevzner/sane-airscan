@@ -252,6 +252,57 @@ ll_cat (ll_head *list1, ll_head *list2)
 #define LL_FOR_EACH(node,list)                          \
     node = ll_first(list); node != NULL; node = ll_next(list, node)
 
+/******************** Memory allocation ********************/
+/* Allocate `len' elements of type T
+ */
+#define mem_new(T,len)  ((t*) __mem_alloc(NULL, len, sizeof(t)))
+
+/* Resize memory. The returned memory block has length of `len' and
+ * capacity at least of `len' + `extra'
+ *
+ * If p is NULL, new memory block will be allocated. Otherwise,
+ * existent memory block will be resized, new pointer is returned,
+ * while old becomes invalid (similar to how realloc() works).
+ *
+ * This function never returns NULL, it panics in a case of
+ * memory allocation error.
+ */
+#define mem_resize(p,len,extra) __mem_resize(p,len,extra,sizeof(*p),true)
+
+/* Try to resize memory. It works like mem_resize() but may
+ * return NULL if memory allocation failed.
+ */
+#define mem_try_resize(p,len,extra) __mem_resize(p,len,extra,sizeof(*p),false)
+
+/* Truncate the memory block length, preserving its capacity
+ */
+void
+mem_trunc (void *p);
+
+/* Free memory block, obtained from mem_new() or mem_resize()
+ * `p' can be NULL
+ */
+void
+mem_free (void *p);
+
+/* Get memory block length/capacity, in bytes
+ */
+size_t mem_len_bytes (const void *p);
+size_t mem_cap_bytes (const void *p);
+
+/* Get memory block length/capacity, in elements
+ */
+#define mem_len(v)  (mem_len_bytes(v) / sizeof(*v))
+#define mem_cap(v)  (mem_cap_bytes(v) / sizeof(*v))
+
+/* Helper functions for memory allocation, don't use directly
+ */
+void*
+__mem_alloc (size_t len, size_t extra, size_t elsize, bool must);
+
+void*
+__mem_resize (void *p, size_t len, size_t cap, size_t elsize, bool must);
+
 /******************** Error handling ********************/
 /* Type error represents an error. Its value either NULL,
  * which indicates "no error" condition, or some opaque
