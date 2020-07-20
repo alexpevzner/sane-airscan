@@ -42,16 +42,16 @@ typedef struct {
     FILE                *fp;                    /* File pointer */
 
     bool                tk_open;                /* Token is currently open */
-    GString             *tk_buffer;             /* Parser buffer, tokenized */
+    char                *tk_buffer;             /* Parser buffer, tokenized */
     unsigned int        *tk_offsets;            /* Tokens offsets */
     unsigned int        tk_count;               /* Tokens count */
     unsigned int        tk_count_max;           /* Max ever allocated tokens
                                                    count */
 
-    GString             *buffer;                /* Parser buffer */
-    GString             *section;               /* Section name string */
-    GString             *variable;              /* Variable name string */
-    GString             *value;                 /* Value string */
+    char                *buffer;                /* Parser buffer */
+    char                *section;               /* Section name string */
+    char                *variable;              /* Variable name string */
+    char                *value;                 /* Value string */
     inifile_record      record;                 /* Record buffer */
 } inifile;
 
@@ -75,11 +75,11 @@ inifile_open (const char *name)
     file->fp = fp;
     file->file = g_strdup(name);
     file->line = 1;
-    file->tk_buffer = g_string_new(NULL);
-    file->buffer = g_string_new(NULL);
-    file->section = g_string_new(NULL);
-    file->variable = g_string_new(NULL);
-    file->value = g_string_new(NULL);
+    file->tk_buffer = str_new();
+    file->buffer = str_new();
+    file->section = str_new();
+    file->variable = str_new();
+    file->value = str_new();
 
     return file;
 }
@@ -91,12 +91,12 @@ inifile_close (inifile *file)
 {
     fclose(file->fp);
     g_free((char*) file->file);
-    g_string_free(file->tk_buffer, TRUE);
+    mem_free(file->tk_buffer);
     g_free(file->tk_offsets);
-    g_string_free(file->buffer, TRUE);
-    g_string_free(file->section, TRUE);
-    g_string_free(file->variable, TRUE);
-    g_string_free(file->value, TRUE);
+    mem_free(file->buffer);
+    mem_free(file->section);
+    mem_free(file->variable);
+    mem_free(file->value);
     g_free(file->record.tokv);
     g_free(file);
 }
@@ -192,7 +192,7 @@ static inline void
 inifile_tk_reset (inifile *file)
 {
     file->tk_open = false;
-    g_string_truncate(file->tk_buffer, 0);
+    str_trunc(file->tk_buffer);
     file->tk_count = 0;
 }
 
@@ -209,7 +209,7 @@ inifile_tk_array_push (inifile *file)
     }
 
     /* Push token offset into array */
-    file->tk_offsets[file->tk_count ++] = file->tk_buffer->len;
+    file->tk_offsets[file->tk_count ++] = mem_len(file->tk_buffer);
 }
 
 /* Export token array to file->record
@@ -226,7 +226,7 @@ inifile_tk_array_export (inifile *file)
     for (i = 0; i < file->tk_count; i ++) {
         const char      *token;
 
-        token = file->tk_buffer->str + file->tk_offsets[i];
+        token = file->tk_buffer + file->tk_offsets[i];
         file->record.tokv[i] = token;
     }
 }
@@ -248,7 +248,7 @@ static void
 inifile_tk_close (inifile *file)
 {
     if (file->tk_open) {
-        g_string_append_c(file->tk_buffer, '\0');
+        file->tk_buffer = str_append_c(file->tk_buffer, '\0');
         file->tk_open = false;
     }
 }
@@ -259,7 +259,7 @@ static inline void
 inifile_tk_append (inifile *file, int c)
 {
     inifile_tk_open(file);
-    g_string_append_c(file->tk_buffer, c);
+    file->tk_buffer = str_append_c(file->tk_buffer, c);
 }
 
 /* Strip trailing space in line currently being read
@@ -267,7 +267,8 @@ inifile_tk_append (inifile *file, int c)
 static inline void
 inifile_strip_trailing_space (inifile *file, unsigned int *trailing_space)
 {
-    g_string_truncate(file->buffer, file->buffer->len - *trailing_space);
+    size_t len = mem_len(file->buffer) - *trailing_space;
+    file->buffer = str_resize(file->buffer, len);
     *trailing_space = 0;
 }
 
@@ -295,7 +296,7 @@ inifile_gets (inifile *file, char delimiter, bool linecont, bool *syntax)
         PRS_COMMENT
     } state = PRS_SKIP_SPACE;
 
-    g_string_truncate(file->buffer, 0);
+    str_trunc(file->buffer);
     inifile_tk_reset(file);
 
     /* Parse the string */
@@ -335,7 +336,7 @@ inifile_gets (inifile *file, char delimiter, bool linecont, bool *syntax)
                     inifile_ungetc(file, c);
                 }
             } else {
-                g_string_append_c(file->buffer, c);
+                file->buffer = str_append_c(file->buffer, c);
             }
 
             if (state == PRS_BODY) {
@@ -362,7 +363,7 @@ inifile_gets (inifile *file, char delimiter, bool linecont, bool *syntax)
             } else if (c == '"') {
                 state = PRS_BODY;
             } else {
-                g_string_append_c(file->buffer, c);
+                file->buffer = str_append_c(file->buffer, c);
                 inifile_tk_append(file, c);
             }
             break;
@@ -387,7 +388,7 @@ inifile_gets (inifile *file, char delimiter, bool linecont, bool *syntax)
                 case 'v': c = '\v'; break;
                 }
 
-                g_string_append_c(file->buffer, c);
+                file->buffer = str_append_c(file->buffer, c);
                 inifile_tk_append(file, c);
                 state = PRS_STRING;
             }
@@ -405,7 +406,7 @@ inifile_gets (inifile *file, char delimiter, bool linecont, bool *syntax)
             }
 
             if (state != PRS_STRING_HEX) {
-                g_string_append_c(file->buffer, accumulator);
+                file->buffer = str_append_c(file->buffer, accumulator);
                 inifile_tk_append(file, accumulator);
             }
             break;
@@ -423,7 +424,7 @@ inifile_gets (inifile *file, char delimiter, bool linecont, bool *syntax)
             }
 
             if (state != PRS_STRING_OCTAL) {
-                g_string_append_c(file->buffer, accumulator);
+                file->buffer = str_append_c(file->buffer, accumulator);
                 inifile_tk_append(file, accumulator);
             }
             break;
@@ -453,14 +454,14 @@ inifile_read_finish (inifile *file, int last_char, INIFILE_RECORD rec_type)
 {
     file->record.type = rec_type;
     file->record.file = file->file;
-    file->record.section = file->section->str;
+    file->record.section = file->section;
     file->record.variable = file->record.value = NULL;
 
     if (rec_type == INIFILE_VARIABLE || rec_type == INIFILE_COMMAND) {
         inifile_tk_array_export(file);
         if (rec_type == INIFILE_VARIABLE) {
-            file->record.variable = file->variable->str;
-            file->record.value = file->value->str;
+            file->record.variable = file->variable;
+            file->record.value = file->value;
         } else {
             log_assert(NULL, file->record.tokc);
             file->record.variable = file->record.tokv[0];
@@ -509,7 +510,7 @@ inifile_read (inifile *file)
 
         if (c == ']' && !syntax)
         {
-            g_string_assign(file->section, file->buffer->str);
+            file->section = str_assign(file->section, file->buffer);
             return inifile_read_finish(file, c, INIFILE_SECTION);
         }
     } else if (c != '=') {
@@ -517,10 +518,10 @@ inifile_read (inifile *file)
 
         c = inifile_gets(file, '=', false, &syntax);
         if(c == '=' && !syntax) {
-            g_string_assign(file->variable, file->buffer->str);
+            file->variable = str_assign(file->variable, file->buffer);
             c = inifile_gets(file, EOF, true, &syntax);
             if(!syntax) {
-                g_string_assign(file->value, file->buffer->str);
+                file->value = str_assign(file->value, file->buffer);
                 return inifile_read_finish(file, c, INIFILE_VARIABLE);
             }
         }
@@ -900,7 +901,7 @@ conf_load (void)
     /* Iterate over the dir_list */
     for (s = dir_list; ; s ++) {
         if (*s == ':' || *s == '\0') {
-            conf_load_from_dir(path);
+            path = conf_load_from_dir(path);
             str_trunc(path);
         } else {
             path = str_append_c(path, *s);
