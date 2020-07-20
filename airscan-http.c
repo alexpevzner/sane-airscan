@@ -1768,6 +1768,7 @@ struct http_query {
 
     /* HTTP parser */
     http_parser       http_parser;              /* HTTP parser structure */
+    bool              http_parser_done;         /* Message parsing done */
 
     /* Data handling */
     http_data         *request_data;            /* NULL if none */
@@ -2028,7 +2029,7 @@ http_query_on_message_complete (http_parser *parser)
         }
     }
 
-    http_query_complete(q, NULL);
+    q->http_parser_done = true;
 
     return 0;
 }
@@ -2111,15 +2112,8 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
 
         rc = http_query_sock_recv(q, io_buf, sizeof(io_buf));
 
-        if (rc <= 0) {
-            error err;
-
-            if (rc < 0) {
-                err = http_query_sock_err(q, rc);
-            } else {
-                err = ERROR("connection closed by device");
-            }
-
+        if (rc < 0) {
+            error err = http_query_sock_err(q, rc);
             if (err != NULL) {
                 http_query_complete(q, err);
             }
@@ -2132,6 +2126,11 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
 
         if (q->http_parser.http_errno != HPE_OK) {
             error err = ERROR(http_errno_description(q->http_parser.http_errno));
+            http_query_complete(q, err);
+        } else if (q->http_parser_done) {
+            http_query_complete(q, NULL);
+        } else if (rc == 0) {
+            error err = ERROR("connection closed by device");
             http_query_complete(q, err);
         }
     }
