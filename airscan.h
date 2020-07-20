@@ -331,7 +331,7 @@ static inline char*
 str_resize (char *s, size_t len)
 {
     s = mem_resize(s, len, 1);
-    *s = '\0';
+    s[len] = '\0';
     return s;
 }
 

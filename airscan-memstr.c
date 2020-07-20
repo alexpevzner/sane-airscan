@@ -77,7 +77,7 @@ mem_cap_bytes (const void *p)
 static inline int
 mem_alloc_size(size_t len, size_t extra, size_t elsize)
 {
-    size_t sz = sizeof(mem_head) * elsize * (len + extra);
+    size_t sz = sizeof(mem_head) + elsize * (len + extra);
 
     if (sz < MEM_CAP_BLOCK) {
         /* Round up to the next power of 2 */
@@ -90,7 +90,7 @@ mem_alloc_size(size_t len, size_t extra, size_t elsize)
         sz ++;
     } else {
         /* Round up to the next block boundary */
-        sz ++;
+        sz += MEM_CAP_BLOCK - 1;
         sz &= ~(MEM_CAP_BLOCK - 1);
     }
 
@@ -143,12 +143,13 @@ __mem_resize (void *p, size_t len, size_t extra, size_t elsize, bool must)
     }
 
     /* Zero-fill newly added elements */
+    len *= elsize;
     if (len > h->len) {
-        memset(((char*) h + 1) + h->len * elsize, 0, (len - h->len) * elsize);
+        memset((char*) (h + 1) + h->len, 0, len - h->len);
     }
 
     /* Update control header and return a block */
-    h->len = len * elsize;
+    h->len = len;
     h->cap = sz - (sizeof(mem_head));
 
     return h + 1;
