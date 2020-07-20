@@ -19,7 +19,7 @@ struct xml_rd {
     xmlNode       *node;          /* Current node */
     xmlNode       *parent;        /* Parent node */
     const char    *name;          /* Name of current node */
-    GString       *path;          /* Path to current node, /-separated */
+    char          *path;          /* Path to current node, /-separated */
     size_t        *pathlen;       /* Stack of path lengths */
     size_t        pathlen_cap;    /* pathlen capacity */
     const xmlChar *text;          /* Textual value of current node */
@@ -71,7 +71,7 @@ xml_rd_node_switched (xml_rd *xml)
 
     /* Update node name */
     pathlen = xml->depth ? xml->pathlen[xml->depth - 1] : 0;
-    g_string_truncate(xml->path, pathlen);
+    xml->path = str_resize(xml->path, pathlen);
 
     if (xml->node == NULL) {
         xml->name = NULL;
@@ -85,13 +85,13 @@ xml_rd_node_switched (xml_rd *xml)
         }
 
         if (prefix != NULL) {
-            g_string_append(xml->path, prefix);
-            g_string_append_c(xml->path, ':');
+            xml->path = str_append(xml->path, prefix);
+            xml->path = str_append_c(xml->path, ':');
         }
 
-        g_string_append(xml->path, (const char*) xml->node->name);
+        xml->path = str_append(xml->path, (const char*) xml->node->name);
 
-        xml->name = xml->path->str + pathlen;
+        xml->name = xml->path + pathlen;
     }
 }
 
@@ -121,7 +121,7 @@ xml_rd_begin (xml_rd **xml, const char *xml_text, size_t xml_len,
     *xml = g_new0(xml_rd, 1);
     (*xml)->doc = doc;
     (*xml)->node = xmlDocGetRootElement((*xml)->doc);
-    (*xml)->path = g_string_new(NULL);
+    (*xml)->path = str_new();
     (*xml)->pathlen_cap = 8;
     (*xml)->pathlen = g_malloc(sizeof(*(*xml)->pathlen) * (*xml)->pathlen_cap);
     (*xml)->subst_rules = ns;
@@ -152,7 +152,7 @@ xml_rd_finish (xml_rd **xml)
         }
 
         g_free((*xml)->pathlen);
-        g_string_free((*xml)->path, TRUE);
+        mem_free((*xml)->path);
         g_free(*xml);
         *xml = NULL;
     }
@@ -265,9 +265,9 @@ xml_rd_enter (xml_rd *xml)
                 sizeof(*xml->pathlen) * xml->pathlen_cap);
         }
 
-        g_string_append_c(xml->path, '/');
+        xml->path = str_append_c(xml->path, '/');
 
-        xml->pathlen[xml->depth] = xml->path->len;
+        xml->pathlen[xml->depth] = mem_len(xml->path);
 
         /* Enter the node */
         xml->parent = xml->node;
@@ -314,7 +314,7 @@ xml_rd_node_name (xml_rd *xml)
 const char*
 xml_rd_node_path (xml_rd *xml)
 {
-    return xml->node ? xml->path->str : NULL;
+    return xml->node ? xml->path : NULL;
 }
 
 /* Match name of the current node against the pattern
@@ -435,92 +435,98 @@ xml_wr_begin (const char *root, const xml_ns *ns)
 
 /* Format indentation space
  */
-static void
-xml_wr_format_indent (GString *buf, unsigned int level)
+static char*
+xml_wr_format_indent (char *buf, unsigned int level)
 {
         unsigned int i;
 
         for (i = 0; i < level; i ++) {
-            g_string_append_c(buf, ' ');
-            g_string_append_c(buf, ' ');
+            buf = str_append_c(buf, ' ');
+            buf = str_append_c(buf, ' ');
         }
+
+        return buf;
 }
 
 /* Format node's value
  */
-static void
-xml_wr_format_value (GString *buf, const char *value)
+static char*
+xml_wr_format_value (char *buf, const char *value)
 {
     for (;;) {
         char c = *value ++;
         switch (c) {
-        case '&':  g_string_append(buf, "&amp;"); break;
-        case '<':  g_string_append(buf, "&lt;"); break;
-        case '>':  g_string_append(buf, "&gt;"); break;
-        case '"':  g_string_append(buf, "&quot;"); break;
-        case '\'': g_string_append(buf, "&apos;"); break;
-        case '\0': return;
-        default:   g_string_append_c(buf, c);
+        case '&':  buf = str_append(buf, "&amp;"); break;
+        case '<':  buf = str_append(buf, "&lt;"); break;
+        case '>':  buf = str_append(buf, "&gt;"); break;
+        case '"':  buf = str_append(buf, "&quot;"); break;
+        case '\'': buf = str_append(buf, "&apos;"); break;
+        case '\0': return buf;
+        default:   buf = str_append_c(buf, c);
         }
     }
+
+    return buf;
 }
 
 /* Format node with its children, recursively
  */
-static void
-xml_wr_format_node (xml_wr *xml, GString *buf,
+static char*
+xml_wr_format_node (xml_wr *xml, char *buf,
         xml_wr_node *node, unsigned int level, bool compact)
 {
+    if (!compact) {
+        buf = xml_wr_format_indent(buf, level);
+    }
+
+    buf = str_append_printf(buf, "<%s", node->name);
+    if (level == 0) {
+        /* Root node defines namespaces */
+        int i;
+        for (i = 0; xml->ns[i].uri != NULL; i ++) {
+            buf = str_append_printf(buf, " xmlns:%s=\"%s\"",
+                xml->ns[i].prefix, xml->ns[i].uri);
+        }
+    }
+    if (node->attrs != NULL) {
+        int i;
+        for (i = 0; node->attrs[i].name != NULL; i ++) {
+            buf = str_append_printf(buf, " %s=\"%s\"",
+                node->attrs[i].name, node->attrs[i].value);
+        }
+    }
+    buf = str_append_c(buf, '>');
+
+    if (node->children) {
+        xml_wr_node *node2;
+
         if (!compact) {
-            xml_wr_format_indent(buf, level);
+            buf = str_append_c(buf, '\n');
         }
 
-        g_string_append_printf(buf, "<%s", node->name);
-        if (level == 0) {
-            /* Root node defines namespaces */
-            int i;
-            for (i = 0; xml->ns[i].uri != NULL; i ++) {
-                g_string_append_printf(buf, " xmlns:%s=\"%s\"",
-                    xml->ns[i].prefix, xml->ns[i].uri);
-            }
+        for (node2 = node->children; node2 != NULL; node2 = node2->next) {
+            buf = xml_wr_format_node(xml, buf, node2, level + 1, compact);
         }
-        if (node->attrs != NULL) {
-            int i;
-            for (i = 0; node->attrs[i].name != NULL; i ++) {
-                g_string_append_printf(buf, " %s=\"%s\"",
-                    node->attrs[i].name, node->attrs[i].value);
-            }
+
+        if (!compact) {
+            buf = xml_wr_format_indent(buf, level);
         }
-        g_string_append_c(buf, '>');
 
-        if (node->children) {
-            xml_wr_node *node2;
-
-            if (!compact) {
-                g_string_append_c(buf, '\n');
-            }
-
-            for (node2 = node->children; node2 != NULL; node2 = node2->next) {
-                xml_wr_format_node(xml, buf, node2, level + 1, compact);
-            }
-
-            if (!compact) {
-                xml_wr_format_indent(buf, level);
-            }
-
-            g_string_append_printf(buf, "</%s>", node->name);
-            if (!compact && level != 0) {
-                g_string_append_c(buf, '\n');
-            }
-        } else {
-            if (node->value != NULL) {
-                xml_wr_format_value(buf, node->value);
-            }
-            g_string_append_printf(buf,"</%s>", node->name);
-            if (!compact) {
-                g_string_append_c(buf, '\n');
-            }
+        buf = str_append_printf(buf, "</%s>", node->name);
+        if (!compact && level != 0) {
+            buf = str_append_c(buf, '\n');
         }
+    } else {
+        if (node->value != NULL) {
+            buf = xml_wr_format_value(buf, node->value);
+        }
+        buf = str_append_printf(buf,"</%s>", node->name);
+        if (!compact) {
+            buf = str_append_c(buf, '\n');
+        }
+    }
+
+    return buf;
 }
 
 /* Revert list of node's children, recursively
@@ -545,20 +551,22 @@ xml_wr_revert_children (xml_wr_node *node)
 static char*
 xml_wr_finish_internal (xml_wr *xml, bool compact)
 {
-    GString    *buf;
+    char *buf;
 
-    buf = g_string_new("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+    buf = str_dup("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
     if (!compact) {
-        g_string_append_c(buf, '\n');
+        buf = str_append_c(buf, '\n');
     }
 
     xml_wr_revert_children(xml->root);
-    xml_wr_format_node(xml, buf, xml->root, 0, compact);
+    buf = xml_wr_format_node(xml, buf, xml->root, 0, compact);
 
     xml_wr_node_free_recursive(xml->root);
     g_free(xml);
 
-    return g_string_free(buf, false);
+    char *s = strdup(buf); // FIXME
+    mem_free(buf);
+    return s;
 }
 
 /* Finish writing, generate document string.
