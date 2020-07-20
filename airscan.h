@@ -377,6 +377,14 @@ str_append_c (char *s, char c)
     return str_append_mem(s, &c, 1);
 }
 
+/* Append formatted string to string
+ *
+ * `s' must be previously created by some of str_XXX functions,
+ * `s' will be consumed and the new pointer will be returned
+ */
+char*
+str_append_printf (char *s, const char *format, ...);
+
 /* Assign value to string
  *
  * `s1' must be previously created by some of str_XXX functions,

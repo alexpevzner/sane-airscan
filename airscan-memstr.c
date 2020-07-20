@@ -3,7 +3,7 @@
  * Copyright (C) 2019 and up by Alexander Pevzner (pzz@apevzner.com)
  * See LICENSE for license terms and conditions
  *
- * Memory allocation
+ * Memory allocation and strings
  */
 
 #include "airscan.h"
@@ -14,6 +14,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+
+/******************** Memory allocation ********************/
 
 /* While memory block grows, its size is doubled until
  * MEM_CAP_BLOCK is reached, then it grows linearly,
@@ -153,6 +155,37 @@ __mem_resize (void *p, size_t len, size_t extra, size_t elsize, bool must)
     h->cap = sz - (sizeof(mem_head));
 
     return h + 1;
+}
+
+/******************** Strings ********************/
+/* Append formatted string to string
+ *
+ * `s' must be previously created by some of str_XXX functions,
+ * `s' will be consumed and the new pointer will be returned
+ */
+char*
+str_append_printf (char *s, const char *format, ...)
+{
+    char    buf[4096];
+    va_list ap;
+    size_t  len, oldlen;
+
+    va_start(ap, format);
+    len = vsnprintf(buf, sizeof(buf), format, ap);
+    va_end(ap);
+
+    if (len < sizeof(buf)) {
+        return str_append_mem(s, buf, len);
+    }
+
+    oldlen = mem_len(s);
+    s = mem_resize(s, oldlen + len, 1);
+
+    va_start(ap, format);
+    vsnprintf(s + oldlen, len + 1, format, ap);
+    va_end(ap);
+
+    return s;
 }
 
 /* vim:ts=8:sw=4:et
