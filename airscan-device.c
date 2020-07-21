@@ -1330,7 +1330,33 @@ device_read_next (device *dev)
     wid = params.pixels_per_line;
     hei = params.lines;
 
-    /* Setup image clipping */
+    /* Setup image clipping
+     *
+     * The following variants are possible:
+     *
+     *  <------real image size------><--fill-->
+     *  <---skip---><---returned image size--->
+     *  <------------line capacity------------>
+     *
+     *  <------------real image size------------>
+     *  <---skip---><--returned image size-->
+     *  <-------------line capacity------------->
+     *
+     * Real image size is a size of image after decoder.
+     * Returned image size is a size of image that we
+     * return to the client
+     *
+     * If device for some reasons unable to handle X/Y
+     * offset in hardware, we need to skip some bytes (horizontally)
+     * or lines (vertically)
+     *
+     * If real image is smaller that expected, we need to
+     * fill some bytes/lines with 0xff
+     *
+     * Line buffer capacity must be big enough to fit
+     * real image size (we promised it do decoder) and
+     * returned image size, whatever is large
+     */
     if (dev->job_skip_x >= wid || dev->job_skip_y >= hei) {
         /* Trivial case - just skip everything */
         dev->read_line_end = 0;
