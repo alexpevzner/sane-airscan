@@ -1307,8 +1307,20 @@ device_read_next (device *dev)
         goto DONE;
     }
 
-    /* Obtain and validate image parameters */
+    /* Obtain and dump image parameters */
     image_decoder_get_params(decoder, &params);
+
+    log_trace(dev->log, "==============================");
+    log_trace(dev->log, "Image received with the following parameters:");
+    log_trace(dev->log, "  content type:   %s", image_content_type(decoder));
+    log_trace(dev->log, "  frame format:   %s",
+            params.format == SANE_FRAME_GRAY ? "Gray" : "RGB" );
+    log_trace(dev->log, "  image size:     %dx%d", params.pixels_per_line,
+            params.lines);
+    log_trace(dev->log, "  color depth:    %d", params.depth);
+    log_trace(dev->log, "");
+
+    /* Validate image parameters */
     if (params.format != dev->opt.params.format) {
         /* This is what we cannot handle */
         err = ERROR("Unexpected image format");
@@ -1317,17 +1329,6 @@ device_read_next (device *dev)
 
     wid = params.pixels_per_line;
     hei = params.lines;
-
-    /* Dump parameters */
-    log_trace(dev->log, "==============================");
-    log_trace(dev->log, "Starting image decoding, image parameters are:");
-    log_trace(dev->log, "  content type:   %s", image_content_type(decoder));
-    log_trace(dev->log, "  frame format:   %s",
-            params.format == SANE_FRAME_GRAY ? "Gray" : "RGB" );
-    log_trace(dev->log, "  image size:     %dx%d", params.pixels_per_line,
-            params.lines);
-    log_trace(dev->log, "  color depth:    %d", params.depth);
-    log_trace(dev->log, "");
 
     /* Setup image clipping */
     if (dev->job_skip_x >= wid || dev->job_skip_y >= hei) {
