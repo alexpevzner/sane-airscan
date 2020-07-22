@@ -47,14 +47,17 @@ Legend:
 | Device                             | eSCL mode                 | WSD mode                  |
 | ---------------------------------- | :-----------------------: | :-----------------------: |
 | Brother MFC-L2710DW                | Yes                       | Yes                       |
+| Brother MFC-L2720DW                | No                        | Yes                       |
 | Brother MFC-L2750DW                | Yes                       | Yes                       |
 | Canon D570                         | Yes                       |                           |
 | Canon ImageCLASS MF743cdw          | Yes<sup>[1](#note1)</sup> |                           |
 | Canon imageRUNNER ADVANCE 4545/4551| Yes                       | Yes                       |
 | Canon imageRUNNER C3120L           | Yes                       | Yes                       |
 | Canon i-SENSYS MF641C              | No                        | Yes                       |
-| Canon Lide 400                     | Yes<sup>[2](#note1)</sup> |                           |
+| Canon Lide 400                     | Yes<sup>[2](#note2)</sup> |                           |
+| Canon MF240 Series                 | No                        | Yes<sup>[3](#note3)</sup> |
 | Canon MF745C/746C                  | Yes                       | Yes                       |
+| Canon PIXMA MG3600 series          | Yes                       |                           |
 | Canon PIXMA MG5500 Series          | No                        | Yes                       |
 | Canon PIXMA MG7700 Series          | Yes                       |                           |
 | Canon PIXMA TS5000 Series          | Yes                       |                           |
@@ -92,10 +95,10 @@ Legend:
 | HP OfficeJet Pro 8730              | Yes                       | Yes                       |
 | HP OfficeJet Pro 9010 series       | Yes                       |                           |
 | HP Smart Tank Plus 550 series      | Yes                       |                           |
-| Kyocera ECOSYS M2040dn             | Yes                       | Yes<sup>[3](#note2)</sup> |
-| Lexmark CX317dn                    | Yes<sup>[4](#note3)</sup> | Yes<sup>[4](#note3)</sup> |
+| Kyocera ECOSYS M2040dn             | Yes                       | Yes<sup>[4](#note4)</sup> |
+| Lexmark CX317dn                    | Yes<sup>[5](#note5)</sup> | Yes<sup>[5](#note5)</sup> |
 | Lexmark MC2535adwe                 | Yes                       |                           |
-| Ricoh MP C3003                     | No                        | Yes<sup>[5](#note3)</sup> |
+| Ricoh MP C3003                     | No                        | Yes<sup>[6](#note6)</sup> |
 | Samsung M288x Series               | No                        | Yes                       |
 | Xerox VersaLink B405               | Yes                       |                           |
 | TODO                               |                           |                           |
@@ -105,23 +108,28 @@ Legend:
 scanning on its web console: Home->Menu->Preferences->Network->TCP/IP
 Settings->Network Link Scan Settings->On.
 
-<a name="note3"><sup>[2]</sup></a>: this USB device supports IPP over USB protocol, which
+<a name="note2"><sup>[2]</sup></a>: this USB device supports IPP over USB protocol, which
 allows it to be used with network protocols like eSCL. To enable IPP over USB, you need
 to install additional program: either [ippusbxd](https://github.com/OpenPrinting/ippusbxd), which
 comes with some distros, or [ipp-usb](https://github.com/OpenPrinting/ipp-usb). 'ipp-usb`
 works better, binary packages available for many popular distros.
 
-<a name="note3"><sup>[3]</sup></a>: this device requires manual action on its front
+<a name="note3"><sup>[3]</sup></a>: by default, WS-Scan is disabled on this
+device and needs to be enabled before use: open web console, Click `[Settings/Registration]`,
+Click `[Network Settings]`->`[TCP/IP Settings]`, Click `[Edit]` in `[WSD Settings]`,
+enable `[Use WSD Scanning]` checkbox, Click `[OK]`
+
+<a name="note4"><sup>[4]</sup></a>: this device requires manual action on its front
 panel to initiate WSD scan: Send->WSD Scan->From Computer
 
-<a name="note4"><sup>[4]</sup></a>: when low in memory, this device may scan at 400 DPI
+<a name="note5"><sup>[5]</sup></a>: when low in memory, this device may scan at 400 DPI
 instead of requested 600 DPI. As sane-airscan reports image parameters to SANE before actual
 image is received, and then adjust actual image to reported parameters, image will
 be scaled down by the factor 2/3 at this case. Lower resolutions works well.
 
-<a name="note5"><sup>[5]</sup></a>: by default, WSD scan command is disabled on this
-device and needs to be enabled before use: Click [Configuration], click [Initial Settings]
-under [Scanner], and then set [Prohibit WSD Scan Command] to [Do not Prohibit] (from
+<a name="note6"><sup>[6]</sup></a>: by default, WS-Scan is disabled on this
+device and needs to be enabled before use: open web console, Click `[Configuration]`, click `[Initial Settings]`
+under `[Scanner]`, and then set `[Prohibit WSD Scan Command]` to `[Do not Prohibit]` (from
 http://support.ricoh.com/bb_v1oi/pub_e/oi_view/0001047/0001047003/view/scanner/int/0095.htm)
 
 ### Distros that come with sane-airscan
