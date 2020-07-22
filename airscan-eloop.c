@@ -12,6 +12,7 @@
 #include <avahi-common/timeval.h>
 
 #include <errno.h>
+#include <unistd.h>
 
 /******************** Constants *********************/
 #define ELOOP_START_STOP_CALLBACKS_MAX  8
@@ -156,6 +157,8 @@ eloop_thread_func (void *data)
         eloop_start_stop_callbacks[i](true);
     }
 
+    __atomic_store_n(&eloop_thread_running, true, __ATOMIC_SEQ_CST);
+
     do {
         eloop_call_execute();
         i = avahi_simple_poll_iterate(eloop_poll, -1);
@@ -176,12 +179,17 @@ void
 eloop_thread_start (void)
 {
     int rc = pthread_create(&eloop_thread, NULL, eloop_thread_func, NULL);
+    useconds_t usec = 100;
 
     if (rc < 0) {
         log_panic(NULL, "pthread_create: %s", strerror(-rc));
     }
 
-    eloop_thread_running = true;
+    /* Wait until thread is started and all start callbacks are executed */
+    while (!__atomic_load_n(&eloop_thread_running, __ATOMIC_SEQ_CST)) {
+        usleep(usec);
+        usec += usec;
+    }
 }
 
 /* Stop event loop thread and wait until its termination
@@ -189,10 +197,10 @@ eloop_thread_start (void)
 void
 eloop_thread_stop (void)
 {
-    if (eloop_thread_running) {
+    if (__atomic_load_n(&eloop_thread_running, __ATOMIC_SEQ_CST)) {
         avahi_simple_poll_quit(eloop_poll);
         pthread_join(eloop_thread, NULL);
-        eloop_thread_running = false;
+        __atomic_store_n(&eloop_thread_running, false, __ATOMIC_SEQ_CST);
     }
 }
 
