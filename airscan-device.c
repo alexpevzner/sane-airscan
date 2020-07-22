@@ -948,18 +948,26 @@ device_stm_start_scan (device *dev)
     params->x_res = x_resolution;
     params->y_res = y_resolution;
     params->src = dev->opt.src;
-    params->colormode = dev->opt.colormode;
+    params->colormode = dev->opt.colormode_real;
     params->format = device_choose_format(dev, src);
 
     /* Dump parameters */
     log_trace(dev->log, "==============================");
     log_trace(dev->log, "Starting scan, using the following parameters:");
-    log_trace(dev->log, "  source:         %s", id_source_sane_name(params->src));
-    log_trace(dev->log, "  colormode:      %s", id_colormode_sane_name(params->colormode));
-    log_trace(dev->log, "  tl_x:           %s mm", math_fmt_mm(dev->opt.tl_x, buf));
-    log_trace(dev->log, "  tl_y:           %s mm", math_fmt_mm(dev->opt.tl_y, buf));
-    log_trace(dev->log, "  br_x:           %s mm", math_fmt_mm(dev->opt.br_x, buf));
-    log_trace(dev->log, "  br_y:           %s mm", math_fmt_mm(dev->opt.br_y, buf));
+    log_trace(dev->log, "  source:         %s",
+            id_source_sane_name(params->src));
+    log_trace(dev->log, "  colormode_emul: %s",
+            id_colormode_sane_name(dev->opt.colormode_emul));
+    log_trace(dev->log, "  colormode_real: %s",
+            id_colormode_sane_name(params->colormode));
+    log_trace(dev->log, "  tl_x:           %s mm",
+            math_fmt_mm(dev->opt.tl_x, buf));
+    log_trace(dev->log, "  tl_y:           %s mm",
+            math_fmt_mm(dev->opt.tl_y, buf));
+    log_trace(dev->log, "  br_x:           %s mm",
+            math_fmt_mm(dev->opt.br_x, buf));
+    log_trace(dev->log, "  br_y:           %s mm",
+            math_fmt_mm(dev->opt.br_y, buf));
     log_trace(dev->log, "  image size:     %dx%d", params->wid, params->hei);
     log_trace(dev->log, "  image X offset: %d", params->x_off);
     log_trace(dev->log, "  image Y offset: %d", params->y_off);

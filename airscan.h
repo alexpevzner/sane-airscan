@@ -1877,7 +1877,8 @@ typedef struct {
     devcaps                caps;              /* Device capabilities */
     SANE_Option_Descriptor desc[NUM_OPTIONS]; /* Option descriptors */
     ID_SOURCE              src;               /* Current source */
-    ID_COLORMODE           colormode;         /* Current color mode */
+    ID_COLORMODE           colormode_emul;    /* Current "emulated" color mode*/
+    ID_COLORMODE           colormode_real;    /* Current real color mode*/
     SANE_Word              resolution;        /* Current resolution */
     SANE_Fixed             tl_x, tl_y;        /* Top-left x/y */
     SANE_Fixed             br_x, br_y;        /* Bottom-right x/y */
