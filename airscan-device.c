@@ -118,9 +118,11 @@ struct device {
     SANE_Int             read_line_num;      /* Current image line 0-based */
     SANE_Int             read_line_end;      /* If read_line_num>read_line_end
                                                 no more lines left in image */
+    SANE_Int             read_line_real_wid; /* Real line width */
     SANE_Int             read_line_off;      /* Current offset in the line */
     SANE_Int             read_skip_bytes;    /* How many bytes to skip at line
                                                 beginning */
+    bool                 read_24_to_8;       /* Resample 24 to 8 bits */
 };
 
 /* Static variables
@@ -1321,7 +1323,12 @@ device_read_next (device *dev)
     log_trace(dev->log, "");
 
     /* Validate image parameters */
-    if (params.format != dev->opt.params.format) {
+    dev->read_24_to_8 = false;
+    if (params.format == SANE_FRAME_RGB &&
+        dev->opt.params.format == SANE_FRAME_GRAY) {
+        dev->read_24_to_8 = true;
+        log_trace(dev->log, "resampling: RGB24->Grayscale8");
+    } else if (params.format != dev->opt.params.format) {
         /* This is what we cannot handle */
         err = ERROR("Unexpected image format");
         goto DONE;
@@ -1361,10 +1368,12 @@ device_read_next (device *dev)
         /* Trivial case - just skip everything */
         dev->read_line_end = 0;
         dev->read_skip_bytes = 0;
+        dev->read_line_real_wid = 0;
         line_capacity = dev->opt.params.bytes_per_line;
     } else {
         image_window win;
-        int          bpp = image_decoder_get_bytes_per_pixel(decoder);
+        int          bpp = dev->opt.params.format == SANE_FRAME_RGB ? 3 : 1;
+        int          returned_width;
 
         win.x_off = dev->job_skip_x;
         win.y_off = dev->job_skip_y;
@@ -1385,8 +1394,15 @@ device_read_next (device *dev)
             skip_lines = dev->job_skip_y - win.y_off;
         }
 
-        line_capacity = math_max(dev->opt.params.bytes_per_line, wid * bpp);
-        line_capacity += dev->read_skip_bytes;
+        line_capacity = win.wid;
+        if (dev->read_24_to_8) {
+            line_capacity *= 3;
+        }
+
+        returned_width = dev->read_skip_bytes + dev->opt.params.bytes_per_line;
+
+        line_capacity = math_max(line_capacity, returned_width);
+        dev->read_line_real_wid = win.wid;
     }
 
     /* Initialize image decoding */
@@ -1416,6 +1432,39 @@ DONE:
     }
 
     return SANE_STATUS_GOOD;
+}
+
+/* Perform 24 to 8 bit image resampling for a single line
+ */
+static void
+device_read_24_to_8_resample (device *dev)
+{
+    int i, len = dev->read_line_real_wid;
+    uint8_t *in = dev->read_line_buf;
+    uint8_t *out = dev->read_line_buf;
+
+    for (i = 0; i < len; i ++) {
+        /* Y = R * 0.299 + G * 0.587 + B * 0.114
+         *
+         * 16777216 == 1 << 24
+         * 16777216 * 0.299 == 5016387.584 ~= 5016387
+         * 16777216 * 0.587 == 9848225.792 ~= 9848226
+         * 16777216 * 0.114 == 1912602.624 ~= 1912603
+         *
+         * 5016387 + 9848226 + 1912603 == 16777216
+         */
+        unsigned long Y;
+
+        Y = 5016387 * (unsigned long) *in ++;
+        Y += 9848226 * (unsigned long) *in ++;
+        Y += 1912603 * (unsigned long) *in ++;
+        *out ++ = (Y + (1 << 23)) >> 24;
+    }
+
+    if (len < dev->opt.params.bytes_per_line) {
+        memset(dev->read_line_buf + len, 0xff,
+            dev->opt.params.bytes_per_line - len);
+    }
 }
 
 /* Decode next image line
@@ -1453,6 +1502,10 @@ device_read_decode_line (device *dev)
         if (err != NULL) {
             log_debug(dev->log, ESTRING(err));
             return SANE_STATUS_IO_ERROR;
+        }
+
+        if (dev->read_24_to_8) {
+            device_read_24_to_8_resample(dev);
         }
     }
 
