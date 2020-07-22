@@ -171,10 +171,6 @@ eloop_thread_func (void *data)
 }
 
 /* Start event loop thread.
- *
- * Callback is called from the thread context twice:
- *     callback(true)  - when thread is started
- *     callback(false) - when thread is about to exit
  */
 void
 eloop_thread_start (void)
