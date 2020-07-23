@@ -295,6 +295,24 @@ size_t mem_cap_bytes (const void *p);
 #define mem_len(v)  (mem_len_bytes(v) / sizeof(*v))
 #define mem_cap(v)  (mem_cap_bytes(v) / sizeof(*v))
 
+/* Create NULL-terminated array of pointers of type *T
+ */
+#define mem_ptr_array_new(T)            mem_resize((T*) NULL, 0, 1)
+
+/* Append pointer to the NULL-terminated array of pointers.
+ * Returns new, potentially reallocated array
+ */
+#define mem_ptr_array_append(a,p)       \
+        ((__typeof__(a)) __mem_ptr_array_append((void**)a, p))
+
+/* Truncate NULL-terminated array of pointers
+ */
+#define mem_ptr_array_trunc(a)          \
+    do {                                \
+        mem_trunc(a);                   \
+        a[0] = NULL;                    \
+    } while(0)
+
 /* Helper functions for memory allocation, don't use directly
  */
 void*
@@ -302,6 +320,18 @@ __mem_alloc (size_t len, size_t extra, size_t elsize, bool must);
 
 void*
 __mem_resize (void *p, size_t len, size_t cap, size_t elsize, bool must);
+
+/* Helper function for mem_ptr_array_append, don't use directly
+ */
+static inline void**
+__mem_ptr_array_append (void **a, void *p)
+{
+    size_t len = mem_len(a) + 1;
+    a = mem_resize(a, len, 1);
+    a[len - 1] = p;
+    a[len] = NULL;
+    return a;
+}
 
 /******************** Strings ********************/
 /* Create new string
@@ -1598,28 +1628,47 @@ trace_dump_body (trace *t, http_data *data);
 /******************** SANE_Word/SANE_String arrays ********************/
 /* Create array of SANE_Word
  */
-SANE_Word*
-sane_word_array_new (void);
+static inline SANE_Word*
+sane_word_array_new (void)
+{
+    return mem_new(SANE_Word,1);
+}
 
 /* Free array of SANE_Word
  */
-void
-sane_word_array_free (SANE_Word *a);
+static inline void
+sane_word_array_free (SANE_Word *a)
+{
+    mem_free(a);
+}
 
 /* Reset array of SANE_Word
  */
-void
-sane_word_array_reset (SANE_Word **a);
+static inline void
+sane_word_array_reset (SANE_Word **a)
+{
+    (*a)[0] = 0;
+}
 
 /* Get length of the SANE_Word array
  */
-size_t
-sane_word_array_len (const SANE_Word *a);
+static inline size_t
+sane_word_array_len (const SANE_Word *a)
+{
+    return (size_t) a[0];
+}
 
 /* Append word to array. Returns new array (old becomes invalid)
  */
-SANE_Word*
-sane_word_array_append (SANE_Word *a, SANE_Word w);
+static inline SANE_Word*
+sane_word_array_append (SANE_Word *a, SANE_Word w)
+{
+    size_t len = sane_word_array_len(a) + 1;
+    a = mem_resize(a, len + 1, 0);
+    a[0] = len;
+    a[len] = w;
+    return a;
+}
 
 /* Sort array of SANE_Word in increasing order
  */
@@ -1633,28 +1682,43 @@ sane_word_array_intersect_sorted ( const SANE_Word *a1, const SANE_Word *a2);
 
 /* Create array of SANE_String
  */
-SANE_String*
-sane_string_array_new (void);
+static inline SANE_String*
+sane_string_array_new (void)
+{
+    return mem_ptr_array_new(SANE_String);
+}
 
 /* Free array of SANE_String
  */
-void
-sane_string_array_free (SANE_String *a);
+static inline void
+sane_string_array_free (SANE_String *a)
+{
+    mem_free(a);
+}
 
 /* Reset array of SANE_String
  */
-void
-sane_string_array_reset (SANE_String *a);
+static inline void
+sane_string_array_reset (SANE_String *a)
+{
+    mem_ptr_array_trunc(a);
+}
 
 /* Get length of the SANE_String array
  */
-size_t
-sane_string_array_len (const SANE_String *a);
+static inline size_t
+sane_string_array_len (const SANE_String *a)
+{
+    return mem_len(a);
+}
 
 /* Append string to array Returns new array (old becomes invalid)
  */
-SANE_String*
-sane_string_array_append(SANE_String *a, SANE_String s);
+static inline SANE_String*
+sane_string_array_append(SANE_String *a, SANE_String s)
+{
+    return mem_ptr_array_append(a, s);
+}
 
 /* Compute max string length in array of strings
  */
@@ -1663,23 +1727,35 @@ sane_string_array_max_strlen(const SANE_String *a);
 
 /* Create array of SANE_Device
  */
-const SANE_Device**
-sane_device_array_new (void);
+static inline const SANE_Device**
+sane_device_array_new (void)
+{
+    return mem_ptr_array_new(SANE_Device*);
+}
 
 /* Free array of SANE_Device
  */
-void
-sane_device_array_free (const SANE_Device **a);
+static inline void
+sane_device_array_free (const SANE_Device **a)
+{
+    mem_free(a);
+}
 
 /* Get length of the SANE_Device array
  */
-size_t
-sane_device_array_len (const SANE_Device * const *a);
+static inline size_t
+sane_device_array_len (const SANE_Device * const *a)
+{
+    return mem_len(a);
+}
 
 /* Append device to array. Returns new array (old becomes invalid)
  */
-const SANE_Device**
-sane_device_array_append(const SANE_Device **a, SANE_Device *d);
+static inline const SANE_Device**
+sane_device_array_append(const SANE_Device **a, SANE_Device *d)
+{
+    return mem_ptr_array_append(a, d);
+}
 
 /******************** XML utilities ********************/
 /* xml_ns defines XML namespace.
