@@ -100,6 +100,7 @@ Legend:
 | Lexmark MC2535adwe                 | Yes                       |                           |
 | Ricoh MP C3003                     | No                        | Yes<sup>[6](#note6)</sup> |
 | Samsung M288x Series               | No                        | Yes                       |
+| Samsung M337x 387x 407x Series     | No                        | Yes                       |
 | Xerox VersaLink B405               | Yes                       |                           |
 | TODO                               |                           |                           |
 
