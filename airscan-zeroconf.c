@@ -30,10 +30,6 @@
  */
 #define ZEROCONF_READY_TIMEOUT                  5
 
-/* Initial size of zeroconf_device::ifaces
- */
-#define ZEROCONF_DEVICE_IFACES_INITIAL_LEN      4
-
 /******************** Local Types *********************/
 /* zeroconf_device represents a single device
  */
@@ -47,8 +43,6 @@ struct zeroconf_device {
     ll_node      node_list;  /* In zeroconf_device_list */
     ll_head      findings;   /* zeroconf_finding, by method */
     int          *ifaces;    /* Set of interfaces the device is visible from */
-    size_t       ifaces_len; /* Length of ifaces array */
-    size_t       ifaces_cap; /* Capacity of ifaces array */
 };
 
 /* Global variables
@@ -127,6 +121,7 @@ zeroconf_device_add (zeroconf_finding *finding)
     if (finding->name != NULL) {
         device->name = g_strdup(finding->name);
     }
+    device->ifaces = mem_new(int, 0);
 
     ll_init(&device->findings);
     ll_push_end(&zeroconf_device_list, &device->node_list);
@@ -139,7 +134,7 @@ zeroconf_device_add (zeroconf_finding *finding)
 static void
 zeroconf_device_del (zeroconf_device *device)
 {
-    g_free(device->ifaces);
+    mem_free(device->ifaces);
     ll_del(&device->node_list);
     g_free((char*) device->name);
     devid_free(device->devid);
@@ -212,9 +207,9 @@ zeroconf_device_find_by_uuid_and_ifindex (uuid uuid, int ifindex)
 static bool
 zeroconf_device_ifaces_lookup (zeroconf_device *device, int ifindex)
 {
-    size_t i;
+    size_t i, len = mem_len(device->ifaces);
 
-    for (i = 0; i < device->ifaces_len; i ++ ) {
+    for (i = 0; i < len; i ++ ) {
         if (ifindex == device->ifaces[i]) {
             return true;
         }
@@ -229,18 +224,9 @@ static void
 zeroconf_device_ifaces_add (zeroconf_device *device, int ifindex)
 {
     if (!zeroconf_device_ifaces_lookup(device, ifindex)) {
-        if (device->ifaces_len == device->ifaces_cap) {
-            if (device->ifaces_cap == 0) {
-                device->ifaces_cap = ZEROCONF_DEVICE_IFACES_INITIAL_LEN;
-            } else {
-                device->ifaces_cap *= 2;
-            }
-
-            device->ifaces = g_realloc(device->ifaces,
-                device->ifaces_cap * sizeof(*device->ifaces));
-        }
-
-        device->ifaces[device->ifaces_len ++] = ifindex;
+        size_t len = mem_len(device->ifaces);
+        device->ifaces = mem_resize(device->ifaces, len + 1, 0);
+        device->ifaces[len] = ifindex;
     }
 }
 
@@ -253,7 +239,7 @@ zeroconf_device_rebuild_sets (zeroconf_device *device)
 
     device->protocols = 0;
     device->methods = 0;
-    device->ifaces_len = 0;
+    mem_trunc(device->ifaces);
 
     for (LL_FOR_EACH(node, &device->findings)) {
         zeroconf_finding *finding;
@@ -878,7 +864,8 @@ zeroconf_finding_publish (zeroconf_finding *finding)
      */
     device = zeroconf_device_find_by_uuid(finding->uuid);
     if (device != NULL && finding->name != NULL) {
-        if (device->ifaces_len == 1 && device->ifaces[0] == finding->ifindex){
+        if (mem_len(device->ifaces) == 1 &&
+            device->ifaces[0] == finding->ifindex){
             /* Case 2: all findings belongs to the same network
              * interface; upgrade anonymous device to named
              */
