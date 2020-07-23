@@ -188,6 +188,26 @@ str_append_printf (char *s, const char *format, ...)
     return s;
 }
 
+/* Check if string has a specified prefix
+ */
+bool
+str_has_prefix (const char *s, const char *prefix)
+{
+    size_t l1 = strlen(s);
+    size_t l2 = strlen(prefix);
+    return l1 >= l2 && !memcmp(s, prefix, l2);
+}
+
+/* Check if string has a specified suffix
+ */
+bool
+str_has_suffix (const char *s, const char *suffix)
+{
+    size_t l1 = strlen(s);
+    size_t l2 = strlen(suffix);
+    return l1 >= l2 && !memcmp(s + (l1 - l2), suffix, l2);
+}
+
 /* vim:ts=8:sw=4:et
  */
 

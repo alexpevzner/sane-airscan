@@ -270,10 +270,10 @@ trace_dump_body (trace *t, http_data *data)
         return;
     }
 
-    if (g_str_has_prefix(data->content_type, "text/") ||
-        g_str_has_prefix(data->content_type, "application/xml") ||
-        g_str_has_prefix(data->content_type, "application/soap+xml") ||
-        g_str_has_prefix(data->content_type, "application/xop+xml"))
+    if (str_has_prefix(data->content_type, "text/") ||
+        str_has_prefix(data->content_type, "application/xml") ||
+        str_has_prefix(data->content_type, "application/soap+xml") ||
+        str_has_prefix(data->content_type, "application/xop+xml"))
     {
         trace_dump_text(t, data, strstr(data->content_type, "xml") != NULL);
     } else {

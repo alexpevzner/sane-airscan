@@ -456,6 +456,16 @@ str_terminate (char *s, char c)
     return s;
 }
 
+/* Check if string has a specified prefix
+ */
+bool
+str_has_prefix (const char *s, const char *prefix);
+
+/* Check if string has a specified suffix
+ */
+bool
+str_has_suffix (const char *s, const char *suffix);
+
 /******************** Safe ctype macros ********************/
 #define safe_isspace(c)         isspace((unsigned char) c)
 #define safe_isxdigit(c)        isxdigit((unsigned char) c)

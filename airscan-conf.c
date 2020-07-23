@@ -659,7 +659,7 @@ conf_expand_path (const char *path)
     }
 
     end = path[0] ? path : prefix;
-    suffix = g_str_has_suffix(end, "/") ? "" : "/";
+    suffix = str_has_suffix(end, "/") ? "" : "/";
     path = str_append(str_append(str_dup(home), path), suffix);
 
     return path;

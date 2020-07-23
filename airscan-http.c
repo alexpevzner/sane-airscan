@@ -852,7 +852,7 @@ void
 http_uri_fix_end_slash (http_uri *uri)
 {
     const char *path = http_uri_get_path(uri);
-    if (!g_str_has_suffix(path, "/")) {
+    if (!str_has_suffix(path, "/")) {
         size_t len = strlen(path);
         char *path2 = g_alloca(len + 2);
         memcpy(path2, path, len);

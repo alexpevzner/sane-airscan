@@ -654,7 +654,7 @@ escl_load_query (const proto_ctx *ctx)
     char *url, *sep;
     http_query *q;
 
-    sep = g_str_has_suffix(ctx->location, "/") ? "" : "/";
+    sep = str_has_suffix(ctx->location, "/") ? "" : "/";
     url = g_strconcat(ctx->location, sep, "NextDocument", NULL);
 
     q = escl_http_get(ctx, url);
