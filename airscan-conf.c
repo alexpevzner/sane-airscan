@@ -45,8 +45,6 @@ typedef struct {
     char                *tk_buffer;             /* Parser buffer, tokenized */
     unsigned int        *tk_offsets;            /* Tokens offsets */
     unsigned int        tk_count;               /* Tokens count */
-    unsigned int        tk_count_max;           /* Max ever allocated tokens
-                                                   count */
 
     char                *buffer;                /* Parser buffer */
     char                *section;               /* Section name string */
@@ -54,8 +52,6 @@ typedef struct {
     char                *value;                 /* Value string */
     inifile_record      record;                 /* Record buffer */
 } inifile;
-
-#define INIFILE_TOKEN_ARRAY_INCREMENT   32
 
 /***** Functions *****/
 /* Open the .INI file
@@ -71,9 +67,9 @@ inifile_open (const char *name)
         return NULL;
     }
 
-    file = g_new0(inifile, 1);
+    file = mem_new(inifile, 1);
     file->fp = fp;
-    file->file = g_strdup(name);
+    file->file = str_dup(name);
     file->line = 1;
     file->tk_buffer = str_new();
     file->buffer = str_new();
@@ -90,15 +86,15 @@ static void
 inifile_close (inifile *file)
 {
     fclose(file->fp);
-    g_free((char*) file->file);
+    mem_free((char*) file->file);
     mem_free(file->tk_buffer);
-    g_free(file->tk_offsets);
+    mem_free(file->tk_offsets);
     mem_free(file->buffer);
     mem_free(file->section);
     mem_free(file->variable);
     mem_free(file->value);
-    g_free(file->record.tokv);
-    g_free(file);
+    mem_free(file->record.tokv);
+    mem_free(file);
 }
 
 /* Get next character from the file
@@ -201,14 +197,7 @@ inifile_tk_reset (inifile *file)
 static void
 inifile_tk_array_push (inifile *file)
 {
-    /* Grow array on demand */
-    if (file->tk_count == file->tk_count_max) {
-        file->tk_count_max += INIFILE_TOKEN_ARRAY_INCREMENT;
-        file->tk_offsets = g_realloc(file->tk_offsets,
-            sizeof(*file->tk_offsets) * file->tk_count_max);
-    }
-
-    /* Push token offset into array */
+    file->tk_offsets = mem_resize(file->tk_offsets, file->tk_count + 1, 0);
     file->tk_offsets[file->tk_count ++] = mem_len(file->tk_buffer);
 }
 
@@ -219,8 +208,8 @@ inifile_tk_array_export (inifile *file)
 {
     unsigned int        i;
 
-    file->record.tokv = g_realloc(file->record.tokv,
-            sizeof(*file->record.tokv) * file->tk_count_max);
+    file->record.tokv = mem_resize(file->record.tokv,
+            sizeof(*file->record.tokv) * file->tk_count, 0);
 
     file->record.tokc = file->tk_count;
     for (i = 0; i < file->tk_count; i ++) {
@@ -617,10 +606,10 @@ conf_device_list_free (void)
 
     while (list != NULL) {
         next = list->next;
-        g_free((char*) list->name);
-        g_free((char*) list->uri);
+        mem_free((char*) list->name);
+        mem_free((char*) list->uri);
         devid_free(list->devid);
-        g_free(list);
+        mem_free(list);
         list = next;
     }
 }
@@ -630,8 +619,8 @@ conf_device_list_free (void)
 static void
 conf_device_list_prepend (const char *name, http_uri *uri, ID_PROTO proto)
 {
-    conf_device *dev = g_new0(conf_device, 1);
-    dev->name = g_strdup(name);
+    conf_device *dev = mem_new(conf_device, 1);
+    dev->name = str_dup(name);
     dev->devid = devid_alloc();
     dev->proto = proto;
     dev->uri = uri;
@@ -651,7 +640,7 @@ conf_device_list_lookup (const char *name) {
 }
 
 /* Expand path name. The returned string must be eventually
- * released with g_free()
+ * released with mem_free()
  */
 static const char*
 conf_expand_path (const char *path)
@@ -670,7 +659,7 @@ conf_expand_path (const char *path)
 
     end = path[0] ? path : prefix;
     suffix = g_str_has_suffix(end, "/") ? "" : "/";
-    path = g_strconcat(home, path, suffix, NULL);
+    path = str_append(str_append(str_dup(home), path), suffix);
 
     return path;
 }
@@ -771,7 +760,7 @@ conf_load_from_ini (inifile *ini)
                 }
             } else if (inifile_match_name(rec->section, "debug")) {
                 if (inifile_match_name(rec->variable, "trace")) {
-                    g_free((char*) conf.dbg_trace);
+                    mem_free((char*) conf.dbg_trace);
                     conf.dbg_trace = conf_expand_path(rec->value);
                     if (conf.dbg_trace == NULL) {
                         conf_perror(rec, "failed to expand path");
@@ -929,7 +918,7 @@ void
 conf_unload (void)
 {
     conf_device_list_free();
-    g_free((char*) conf.dbg_trace);
+    mem_free((char*) conf.dbg_trace);
     conf = conf_init;
 }
 
