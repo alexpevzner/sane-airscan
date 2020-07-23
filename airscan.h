@@ -14,6 +14,7 @@
 #include <sane/sane.h>
 #include <sane/saneopts.h>
 
+#include <ctype.h>
 #include <math.h>
 #include <pthread.h>
 #include <stdbool.h>
@@ -454,6 +455,11 @@ str_terminate (char *s, char c)
 
     return s;
 }
+
+/******************** Safe ctype macros ********************/
+#define safe_isspace(c)         isspace((unsigned char) c)
+#define safe_isxdigit(c)        isxdigit((unsigned char) c)
+#define safe_toupper(c)         toupper((unsigned char) c)
 
 /******************** Error handling ********************/
 /* Type error represents an error. Its value either NULL,

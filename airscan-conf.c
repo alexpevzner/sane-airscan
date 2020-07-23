@@ -8,6 +8,7 @@
 
 #include "airscan.h"
 
+#include <dirent.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -127,7 +128,7 @@ inifile_getc_nonspace (inifile *file)
 {
     int c;
 
-    while ((c = inifile_getc(file)) != EOF && g_ascii_isspace(c))
+    while ((c = inifile_getc(file)) != EOF && safe_isspace(c))
         ;
 
     return c;
@@ -175,10 +176,10 @@ inifile_istkbreaker (int c)
 static inline unsigned int
 inifile_hex2int (int c)
 {
-    if (g_ascii_isdigit(c)) {
+    if (isdigit(c)) {
         return c - '0';
     } else {
-        return g_ascii_toupper(c) - 'A' + 10;
+        return safe_toupper(c) - 'A' + 10;
     }
 }
 
@@ -303,7 +304,7 @@ inifile_gets (inifile *file, char delimiter, bool linecont, bool *syntax)
 
         switch(state) {
         case PRS_SKIP_SPACE:
-            if (g_ascii_isspace(c)) {
+            if (safe_isspace(c)) {
                 break;
             }
 
@@ -329,7 +330,7 @@ inifile_gets (inifile *file, char delimiter, bool linecont, bool *syntax)
             }
 
             if (state == PRS_BODY) {
-                if (g_ascii_isspace(c)) {
+                if (safe_isspace(c)) {
                     trailing_space ++;
                     inifile_tk_close(file);
                 } else {
@@ -384,7 +385,7 @@ inifile_gets (inifile *file, char delimiter, bool linecont, bool *syntax)
             break;
 
         case PRS_STRING_HEX:
-            if (g_ascii_isxdigit(c)) {
+            if (safe_isxdigit(c)) {
                 if (count != 2) {
                     accumulator = accumulator * 16 + inifile_hex2int(c);
                     count ++;
@@ -531,30 +532,30 @@ static bool
 inifile_match_name (const char *n1, const char *n2)
 {
     /* Skip leading space */
-    while (g_ascii_isspace(*n1)) {
+    while (safe_isspace(*n1)) {
         n1 ++;
     }
 
-    while (g_ascii_isspace(*n2)) {
+    while (safe_isspace(*n2)) {
         n2 ++;
     }
 
     /* Perform the match */
     while (*n1 && *n2) {
-        if (g_ascii_isspace(*n1)) {
-            if (!g_ascii_isspace(*n2)) {
+        if (safe_isspace(*n1)) {
+            if (!safe_isspace(*n2)) {
                 break;
             }
 
             do {
                 n1 ++;
-            } while (g_ascii_isspace(*n1));
+            } while (safe_isspace(*n1));
 
             do {
                 n2 ++;
-            } while (g_ascii_isspace(*n2));
+            } while (safe_isspace(*n2));
         }
-        else if (g_ascii_toupper(*n1) == g_ascii_toupper(*n2)) {
+        else if (safe_toupper(*n1) == safe_toupper(*n2)) {
             n1 ++, n2 ++;
         } else {
             break;
@@ -562,11 +563,11 @@ inifile_match_name (const char *n1, const char *n2)
     }
 
     /* Skip trailing space */
-    while (g_ascii_isspace(*n1)) {
+    while (safe_isspace(*n1)) {
         n1 ++;
     }
 
-    while (g_ascii_isspace(*n2)) {
+    while (safe_isspace(*n2)) {
         n2 ++;
     }
 
@@ -821,16 +822,16 @@ conf_load_from_dir (char *path)
     path = str_terminate(path, '/');
     len = mem_len(path);
 
-    GDir *dir = g_dir_open(path, 0, NULL);
+    DIR *dir = opendir(path);
     if (dir) {
-        const char *name;
-        while ((name = g_dir_read_name(dir)) != NULL) {
+        struct dirent *ent;
+        while ((ent = readdir(dir)) != NULL) {
             path = str_resize(path, len);
-            path = str_append(path, name);
+            path = str_append(path, ent->d_name);
             conf_load_from_file(path);
         }
 
-        g_dir_close(dir);
+        closedir(dir);
     }
 
     return path;
