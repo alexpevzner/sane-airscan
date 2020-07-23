@@ -12,6 +12,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <gnutls/crypto.h>
+
 #pragma GCC diagnostic ignored "-Wunused-result"
 
 /* Invalid uuid
@@ -107,14 +109,11 @@ uuid_parse (const char *in)
 uuid
 uuid_hash (const char *s)
 {
-    GChecksum *checksum = g_checksum_new(G_CHECKSUM_SHA256);
     uint8_t   buf[32];
-    gsize     len = sizeof(buf);
+    int       rc;
 
-    log_assert(NULL, checksum != NULL);
-    g_checksum_update(checksum, (const void*) s, strlen(s));
-    g_checksum_get_digest(checksum, buf, &len);
-    g_checksum_free(checksum);
+    rc = gnutls_hash_fast(GNUTLS_DIG_SHA256, s, strlen(s), buf);
+    log_assert(NULL, rc == 0);
 
     return uuid_format(buf);
 }
