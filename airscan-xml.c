@@ -322,7 +322,7 @@ xml_rd_node_path (xml_rd *xml)
 bool
 xml_rd_node_name_match (xml_rd *xml, const char *pattern)
 {
-    return !g_strcmp0(xml_rd_node_name(xml), pattern);
+    return xml->name != NULL && !strcmp(xml->name, pattern);
 }
 
 /* Get value of the current node as text
