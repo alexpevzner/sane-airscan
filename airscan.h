@@ -297,29 +297,6 @@ size_t mem_cap_bytes (const void *p);
 #define mem_len(v)  (mem_len_bytes(v) / sizeof(*v))
 #define mem_cap(v)  (mem_cap_bytes(v) / sizeof(*v))
 
-/* Create NULL-terminated array of pointers of type *T
- */
-#define mem_ptr_array_new(T)            mem_resize((T*) NULL, 0, 1)
-
-/* Append pointer to the NULL-terminated array of pointers.
- * Returns new, potentially reallocated array
- */
-#define mem_ptr_array_append(a,p)       \
-        ((__typeof__(a)) __mem_ptr_array_append((void**)a, p))
-
-/* Truncate NULL-terminated array of pointers
- */
-#define mem_ptr_array_trunc(a)          \
-    do {                                \
-        mem_trunc(a);                   \
-        a[0] = NULL;                    \
-    } while(0)
-
-/* Find pointer within array of pointers.
- * Return non-negative index if pointer was found, -1 otherwise
- */
-#define mem_ptr_array_find(a,p)         __mem_ptr_array_find((void**) a, p)
-
 /* Helper functions for memory allocation, don't use directly
  */
 void*
@@ -327,34 +304,6 @@ __mem_alloc (size_t len, size_t extra, size_t elsize, bool must);
 
 void*
 __mem_resize (void *p, size_t len, size_t cap, size_t elsize, bool must);
-
-/* Helper function for mem_ptr_array_append, don't use directly
- */
-static inline void**
-__mem_ptr_array_append (void **a, void *p)
-{
-    size_t len = mem_len(a) + 1;
-    a = mem_resize(a, len, 1);
-    a[len - 1] = p;
-    a[len] = NULL;
-    return a;
-}
-
-/* Helper function for mem_ptr_array_find, don't use directly
- */
-static inline int
-__mem_ptr_array_find (const void **a, void *p)
-{
-    size_t len = mem_len(a), i;
-
-    for (i = 0; i < len; i ++) {
-        if (a[i] == p) {
-            return (int) i;
-        }
-    }
-
-    return -1;
-}
 
 /******************** Strings ********************/
 /* Create new string
@@ -494,6 +443,58 @@ str_has_suffix (const char *s, const char *suffix);
  */
 char*
 str_trim (char *s);
+
+/******************** NULL-terminated pointer arrays  ********************/
+/* Create NULL-terminated array of pointers of type *T
+ */
+#define ptr_array_new(T)                mem_resize((T*) NULL, 0, 1)
+
+/* Append pointer to the NULL-terminated array of pointers.
+ * Returns new, potentially reallocated array
+ */
+#define ptr_array_append(a,p)           \
+        ((__typeof__(a)) __ptr_array_append((void**)a, p))
+
+/* Truncate NULL-terminated array of pointers
+ */
+#define ptr_array_trunc(a)              \
+    do {                                \
+        mem_trunc(a);                   \
+        a[0] = NULL;                    \
+    } while(0)
+
+/* Find pointer within array of pointers.
+ * Return non-negative index if pointer was found, -1 otherwise
+ */
+#define ptr_array_find(a,p)             __ptr_array_find((void**) a, p)
+
+/* Helper function for ptr_array_append, don't use directly
+ */
+static inline void**
+__ptr_array_append (void **a, void *p)
+{
+    size_t len = mem_len(a) + 1;
+    a = mem_resize(a, len, 1);
+    a[len - 1] = p;
+    a[len] = NULL;
+    return a;
+}
+
+/* Helper function for ptr_array_find, don't use directly
+ */
+static inline int
+__ptr_array_find (const void **a, void *p)
+{
+    size_t len = mem_len(a), i;
+
+    for (i = 0; i < len; i ++) {
+        if (a[i] == p) {
+            return (int) i;
+        }
+    }
+
+    return -1;
+}
 
 /******************** Safe ctype macros ********************/
 #define safe_isspace(c)         isspace((unsigned char) c)
@@ -1744,7 +1745,7 @@ sane_word_array_intersect_sorted ( const SANE_Word *a1, const SANE_Word *a2);
 static inline SANE_String*
 sane_string_array_new (void)
 {
-    return mem_ptr_array_new(SANE_String);
+    return ptr_array_new(SANE_String);
 }
 
 /* Free array of SANE_String
@@ -1760,7 +1761,7 @@ sane_string_array_free (SANE_String *a)
 static inline void
 sane_string_array_reset (SANE_String *a)
 {
-    mem_ptr_array_trunc(a);
+    ptr_array_trunc(a);
 }
 
 /* Get length of the SANE_String array
@@ -1776,7 +1777,7 @@ sane_string_array_len (const SANE_String *a)
 static inline SANE_String*
 sane_string_array_append(SANE_String *a, SANE_String s)
 {
-    return mem_ptr_array_append(a, s);
+    return ptr_array_append(a, s);
 }
 
 /* Compute max string length in array of strings
@@ -1789,7 +1790,7 @@ sane_string_array_max_strlen(const SANE_String *a);
 static inline const SANE_Device**
 sane_device_array_new (void)
 {
-    return mem_ptr_array_new(SANE_Device*);
+    return ptr_array_new(SANE_Device*);
 }
 
 /* Free array of SANE_Device
@@ -1813,7 +1814,7 @@ sane_device_array_len (const SANE_Device * const *a)
 static inline const SANE_Device**
 sane_device_array_append(const SANE_Device **a, SANE_Device *d)
 {
-    return mem_ptr_array_append(a, d);
+    return ptr_array_append(a, d);
 }
 
 /******************** XML utilities ********************/
