@@ -281,6 +281,10 @@ ll_cat (ll_head *list1, ll_head *list2)
 void
 mem_trunc (void *p);
 
+/* Shrink the memory block length, preserving its capasity
+ */
+#define mem_shrink(p,len)       __mem_shrink(p,len, sizeof(*p))
+
 /* Free memory block, obtained from mem_new() or mem_resize()
  * `p' can be NULL
  */
@@ -299,11 +303,14 @@ size_t mem_cap_bytes (const void *p);
 
 /* Helper functions for memory allocation, don't use directly
  */
-void*
+void* __attribute__ ((__warn_unused_result__))
 __mem_alloc (size_t len, size_t extra, size_t elsize, bool must);
 
-void*
+void* __attribute__ ((__warn_unused_result__))
 __mem_resize (void *p, size_t len, size_t cap, size_t elsize, bool must);
+
+void
+__mem_shrink (void *p, size_t len, size_t elsize);
 
 /******************** Strings ********************/
 /* Create new string
@@ -523,7 +530,7 @@ __ptr_array_del (void **a, int i)
     len --;
     p = a[i];
     memmove(&a[i], &a[i + 1], sizeof(void*) * len);
-    mem_resize(a, len, 1);
+    mem_shrink(a, len);
     a[len] = NULL;
 
     return p;

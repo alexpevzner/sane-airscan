@@ -158,6 +158,19 @@ __mem_resize (void *p, size_t len, size_t extra, size_t elsize, bool must)
     return h + 1;
 }
 
+/* Helper function for memory allocation.
+ * Shrinks memory block
+ */
+void
+__mem_shrink (void *p, size_t len, size_t elsize)
+{
+    mem_head *h = ((mem_head*) p) - 1;
+
+    len *= elsize;
+    log_assert(NULL, len <= h->len);
+    h->len = len;
+}
+
 /******************** Strings ********************/
 /* Append formatted string to string
  *
