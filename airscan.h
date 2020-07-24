@@ -315,6 +315,11 @@ size_t mem_cap_bytes (const void *p);
         a[0] = NULL;                    \
     } while(0)
 
+/* Find pointer within array of pointers.
+ * Return non-negative index if pointer was found, -1 otherwise
+ */
+#define mem_ptr_array_find(a,p)         __mem_ptr_array_find((void**) a, p)
+
 /* Helper functions for memory allocation, don't use directly
  */
 void*
@@ -333,6 +338,22 @@ __mem_ptr_array_append (void **a, void *p)
     a[len - 1] = p;
     a[len] = NULL;
     return a;
+}
+
+/* Helper function for mem_ptr_array_find, don't use directly
+ */
+static inline int
+__mem_ptr_array_find (const void **a, void *p)
+{
+    size_t len = mem_len(a), i;
+
+    for (i = 0; i < len; i ++) {
+        if (a[i] == p) {
+            return (int) i;
+        }
+    }
+
+    return -1;
 }
 
 /******************** Strings ********************/
