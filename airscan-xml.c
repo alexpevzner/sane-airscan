@@ -776,7 +776,7 @@ xml_format_node (FILE *fp, xmlNode *node, int indent)
 
     if (!with_children) {
         xmlChar *val = xmlNodeGetContent(node);
-        g_strstrip((char*) val);
+        str_trim((char*) val);
 
         if (*val != '\0') {
             putc('>', fp);
