@@ -9,6 +9,7 @@
 #include "airscan.h"
 
 #include <assert.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -186,6 +187,24 @@ str_append_printf (char *s, const char *format, ...)
     va_end(ap);
 
     return s;
+}
+
+/* Concatenate several strings. Last pointer must be NULL.
+ * The returned pointer must be eventually freed by mem_free
+ */
+char*
+str_concat (const char *s, ...)
+{
+    va_list ap;
+    char    *ret = str_dup(s);
+
+    va_start(ap, s);
+    while ((s = va_arg(ap, const char*)) != NULL) {
+        ret = str_append(ret, s);
+    }
+    va_end(ap);
+
+    return ret;
 }
 
 /* Check if string has a specified prefix

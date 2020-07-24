@@ -410,6 +410,12 @@ str_assign (char *s1, const char *s2)
     return str_append(s1, s2);
 }
 
+/* Concatenate several strings. Last pointer must be NULL.
+ * The returned pointer must be eventually freed by mem_free
+ */
+char*
+str_concat (const char *s, ...);
+
 /* Make sure that string is terminated with the `c' character:
  * if string is not empty and the last character is not `c`,
  * append `c' to the string
