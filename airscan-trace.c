@@ -90,7 +90,7 @@ trace_open (const char *device_name)
         return NULL;
     }
 
-    g_mkdir_with_parents (conf.dbg_trace, 0755);
+    os_mkdir(conf.dbg_trace, 0755);
     t = g_new0(trace, 1);
     t->refcnt = 1;
 

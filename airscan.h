@@ -24,6 +24,7 @@
 
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 
 /******************** Static configuration ********************/
 /* Configuration path in environment
@@ -470,6 +471,20 @@ str_has_suffix (const char *s, const char *suffix);
 #define safe_isspace(c)         isspace((unsigned char) c)
 #define safe_isxdigit(c)        isxdigit((unsigned char) c)
 #define safe_toupper(c)         toupper((unsigned char) c)
+
+/******************** OS Facilities ********************/
+/* Get user's home directory. There is no need to
+ * free the returned string
+ *
+ * May return NULL in a case of error
+ */
+const char *
+os_homedir (void);
+
+/* Make directory with parents
+ */
+int
+os_mkdir (const char *path, mode_t mode);
 
 /******************** Error handling ********************/
 /* Type error represents an error. Its value either NULL,

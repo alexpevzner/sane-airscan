@@ -19,6 +19,7 @@ sources = [
   'airscan-memstr.c',
   'airscan-mdns.c',
   'airscan-netif.c',
+  'airscan-os.c',
   'airscan-png.c',
   'airscan-pollable.c',
   'airscan-rand.c',

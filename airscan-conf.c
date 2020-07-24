@@ -649,7 +649,7 @@ conf_expand_path (const char *path)
     const char *prefix = "", *suffix = "", *home = NULL, *end;
 
     if (path[0] == '~' && (path[1] == '\0' || path[1] == '/')) {
-        home = g_get_home_dir();
+        home = os_homedir();
         if (home != NULL) {
             prefix = home;
             path ++;
