@@ -468,6 +468,12 @@ str_trim (char *s);
  */
 #define ptr_array_find(a,p)             __ptr_array_find((void**) a, p)
 
+/* Delete element at given index.
+ * Returns value of deleted pointer or NULL, if index is out of range
+ */
+#define ptr_array_del(a,i)              \
+        ((__typeof__(*a) __ptr_array_del((void**) a, p))
+
 /* Helper function for ptr_array_append, don't use directly
  */
 static inline void**
@@ -494,6 +500,27 @@ __ptr_array_find (const void **a, void *p)
     }
 
     return -1;
+}
+
+/* Helper function for ptr_array_del, don't use directly
+ */
+static inline void*
+__ptr_array_del (void **a, int i)
+{
+    size_t len = mem_len(a);
+    void   *p;
+
+    if (i < 0 || i >= (int) len) {
+        return NULL;
+    }
+
+    len --;
+    p = a[i];
+    memmove(&a[i], &a[i + 1], sizeof(void*) * len);
+    mem_resize(a, len, 1);
+    a[len] = NULL;
+
+    return p;
 }
 
 /******************** Safe ctype macros ********************/
