@@ -13,6 +13,7 @@
 #include "airscan.h"
 #include "http_parser.h"
 
+#include <alloca.h>
 #include <arpa/inet.h>
 #include <errno.h>
 #include <netdb.h>
@@ -200,7 +201,7 @@ http_uri_field_replace (http_uri *uri, int num, const char *val)
     };
 
     int      i;
-    char     *buf = g_alloca(strlen(uri->str) + strlen(val) + 4);
+    char     *buf = alloca(strlen(uri->str) + strlen(val) + 4);
     char     *end = buf;
     http_uri *uri2;
 
@@ -335,7 +336,7 @@ http_uri_parse (http_uri *uri, const char *str)
         }
 
         prefix_len = strlen(prefix);
-        s = g_alloca(prefix_len + strlen(str) + 1);
+        s = alloca(prefix_len + strlen(str) + 1);
         memcpy(s, prefix, prefix_len);
         strcpy(s + prefix_len, str);
 
@@ -401,14 +402,14 @@ http_uri_parse_addr (http_uri *uri)
     /* Get host and port */
     field = http_uri_field_get(uri, UF_HOST);
     if (field.len != 0) {
-        host = g_alloca(field.len + 1);
+        host = alloca(field.len + 1);
         memcpy(host, field.str, field.len);
         host[field.len] = '\0';
     }
 
     field = http_uri_field_get(uri, UF_PORT);
     if (field.len != 0) {
-        port = g_alloca(field.len + 1);
+        port = alloca(field.len + 1);
         memcpy(port, field.str, field.len);
         port[field.len] = '\0';
     }
@@ -654,7 +655,7 @@ http_uri*
 http_uri_new_relative (const http_uri *base, const char *path,
         bool strip_fragment, bool path_only)
 {
-    char           *buf = g_alloca(strlen(base->str) + strlen(path) + 1);
+    char           *buf = alloca(strlen(base->str) + strlen(path) + 1);
     char           *end = buf;
     http_uri       ref;
     const http_uri *uri;
@@ -802,7 +803,7 @@ http_uri_fix_ipv6_zone (http_uri *uri, int ifindex)
 
     /* Obtain writable copy of host name */
     /* Append zone suffix */
-    host = g_alloca(field.len + 64);
+    host = alloca(field.len + 64);
     memcpy(host, field.str, field.len);
 
     end = host + field.len;
@@ -840,7 +841,7 @@ http_uri_strip_zone_suffux (http_uri *uri)
     len = suffix - field.str;
 
     /* Update host */
-    host = g_alloca(len + 1);
+    host = alloca(len + 1);
     host[len] = '\0';
 
     http_uri_field_replace(uri, UF_HOST, host);
@@ -854,7 +855,7 @@ http_uri_fix_end_slash (http_uri *uri)
     const char *path = http_uri_get_path(uri);
     if (!str_has_suffix(path, "/")) {
         size_t len = strlen(path);
-        char *path2 = g_alloca(len + 2);
+        char *path2 = alloca(len + 2);
         memcpy(path2, path, len);
         path2[len] = '/';
         path2[len+1] = '\0';
@@ -1421,7 +1422,7 @@ http_multipart_parse (http_data *data, const char *content_type)
         char *s;
 
         boundary_len = strlen(boundary) + 2;
-        s = g_alloca(boundary_len + 1);
+        s = alloca(boundary_len + 1);
 
         s[0] = '-';
         s[1] = '-';
@@ -1862,7 +1863,7 @@ http_query_set_host (http_query *q)
     end = strchr(host, '/');
 
     len = end - host;
-    buf = g_alloca(len + 1);
+    buf = alloca(len + 1);
     memcpy(buf, host, len);
 
     buf[len] = '\0';
@@ -2339,7 +2340,7 @@ http_query_start_processing (gpointer p)
 
     /* Get host name from the URI */
     field = http_uri_field_get(q->uri, UF_HOST);
-    host = g_alloca(field.len + 1);
+    host = alloca(field.len + 1);
     memcpy(host, field.str, field.len);
     host[field.len] = '\0';
 
@@ -2351,7 +2352,7 @@ http_query_start_processing (gpointer p)
     /* Get port name from the URI */
     if (http_uri_field_nonempty(q->uri, UF_PORT)) {
         field = http_uri_field_get(q->uri, UF_PORT);
-        port = g_alloca(field.len + 1);
+        port = alloca(field.len + 1);
         memcpy(port, field.str, field.len);
         port[field.len] = '\0';
     } else {

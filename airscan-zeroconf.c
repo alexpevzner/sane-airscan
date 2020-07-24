@@ -11,6 +11,7 @@
 #include <arpa/inet.h>
 #include <net/if.h>
 
+#include <alloca.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -1251,7 +1252,7 @@ zeroconf_parse_devinfo_from_ident(const char *ident)
 
     /* Copy the string so we can modify it in place while parsing. */
     buf_size = strlen(ident) + 1;
-    buf = g_alloca(buf_size);
+    buf = alloca(buf_size);
     memcpy(buf, ident, buf_size);
 
     name = strchr(buf, ':');

@@ -8,6 +8,8 @@
 
 #include "airscan.h"
 
+#include <alloca.h>
+
 /* Protocol constants */
 #define WSD_ADDR_ANONYMOUS              \
         "http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous"
@@ -836,7 +838,7 @@ wsd_load_query (const proto_ctx *ctx)
     char   *job_id, *job_token;
 
     /* Split location into JobId and JobToken */
-    job_id = g_alloca(strlen(ctx->location) + 1);
+    job_id = alloca(strlen(ctx->location) + 1);
     strcpy(job_id, ctx->location);
     job_token = strchr(job_id, ':');
     *job_token ++ = '\0';
@@ -934,7 +936,7 @@ wsd_cancel_query (const proto_ctx *ctx)
     char   *job_id, *job_token;
 
     /* Split location into JobId and JobToken */
-    job_id = g_alloca(strlen(ctx->location) + 1);
+    job_id = alloca(strlen(ctx->location) + 1);
     strcpy(job_id, ctx->location);
     job_token = strchr(job_id, ':');
     *job_token ++ = '\0';
