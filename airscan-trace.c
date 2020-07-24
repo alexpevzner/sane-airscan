@@ -16,10 +16,10 @@
 /* Trace file handle
  */
 struct  trace {
-    volatile gint refcnt;    /* Reference count */
-    FILE          *log;      /* Log file */
-    FILE          *data;     /* Data file */
-    unsigned int  index;     /* Message index */
+    volatile unsigned int refcnt;  /* Reference count */
+    FILE                  *log;    /* Log file */
+    FILE                  *data;   /* Data file */
+    unsigned int          index;   /* Message index */
 };
 
 /* TAR file hader
@@ -129,7 +129,7 @@ trace*
 trace_ref (trace *t)
 {
     if (t != NULL) {
-        g_atomic_int_inc(&t->refcnt);
+        __sync_fetch_and_add(&t->refcnt, 1);
     }
     return t;
 }
@@ -139,7 +139,7 @@ trace_ref (trace *t)
 void
 trace_unref (trace *t)
 {
-    if (t != NULL && g_atomic_int_dec_and_test(&t->refcnt)) {
+    if (t != NULL && (__sync_fetch_and_sub(&t->refcnt, 1) == 1)) {
         if (t->log != NULL) {
             fclose(t->log);
         }
@@ -160,7 +160,7 @@ trace_unref (trace *t)
  */
 static void
 trace_message_headers_foreach_callback (const char *name, const char *value,
-        gpointer ptr)
+        void *ptr)
 {
     trace *t = ptr;
     fprintf(t->log, "%s: %s\n", name, value);
@@ -173,8 +173,8 @@ static void
 trace_dump_data (trace *t, http_data *data)
 {
     tar_header hdr;
-    guint32 chsum;
-    size_t i;
+    uint32_t   chsum;
+    size_t     i;
     const char *ext;
 
     log_assert(NULL, sizeof(hdr) == 512);

@@ -258,14 +258,12 @@ device_free (device *dev)
 
 /* Start probing. Called via eloop_call
  */
-static gboolean
-device_start_probing (gpointer data)
+static void
+device_start_probing (void *data)
 {
     device      *dev = data;
 
     device_probe_endpoint(dev, dev->devinfo->endpoints);
-
-    return FALSE;
 }
 
 /* Start device I/O.
@@ -1158,14 +1156,12 @@ device_get_parameters (device *dev, SANE_Parameters *params)
 
 /* Start scanning operation - runs on a context of event loop thread
  */
-static gboolean
-device_start_do (gpointer data)
+static void
+device_start_do (void *data)
 {
     device      *dev = data;
 
     device_stm_start_scan(dev);
-
-    return FALSE;
 }
 
 /* Start new scanning job

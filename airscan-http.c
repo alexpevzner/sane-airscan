@@ -17,6 +17,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <netdb.h>
+#include <stdlib.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -1031,7 +1032,7 @@ http_hdr_on_header_field (http_parser *parser,
     }
 
     /* Append data to the field name */
-    field->name = str_append_mem(field->name, (gchar*) data, size);
+    field->name = str_append_mem(field->name, data, size);
 
     return 0;
 }
@@ -1065,7 +1066,7 @@ http_hdr_on_header_value (http_parser *parser,
         field->value = str_new();
     }
 
-    field->value = str_append_mem(field->value, (gchar*) data, size);
+    field->value = str_append_mem(field->value, data, size);
 
     return 0;
 }
@@ -1474,9 +1475,9 @@ http_multipart_parse (http_data *data, const char *content_type)
 /* http_data + SoupBuffer
  */
 typedef struct {
-    http_data      data;    /* HTTP data */
-    volatile gint  refcnt;  /* Reference counter */
-    http_data      *parent; /* Parent data buffer */
+    http_data              data;    /* HTTP data */
+    volatile unsigned int  refcnt;  /* Reference counter */
+    http_data              *parent; /* Parent data buffer */
 } http_data_ex;
 
 
@@ -1535,7 +1536,7 @@ http_data*
 http_data_ref (http_data *data)
 {
     http_data_ex *data_ex = OUTER_STRUCT(data, http_data_ex, data);
-    g_atomic_int_inc(&data_ex->refcnt);
+    __sync_fetch_and_add(&data_ex->refcnt, 1);
     return data;
 }
 
@@ -1547,7 +1548,7 @@ http_data_unref (http_data *data)
     if (data != NULL) {
         http_data_ex *data_ex = OUTER_STRUCT(data, http_data_ex, data);
 
-        if (g_atomic_int_dec_and_test(&data_ex->refcnt)) {
+        if (__sync_fetch_and_sub(&data_ex->refcnt, 1) == 1) {
             if (data_ex->parent != NULL) {
                 http_data_unref(data_ex->parent);
             } else {
@@ -2320,8 +2321,8 @@ http_query_sock_err (http_query *q, int rc)
 
 /* Start query processing. Called via eloop_call()
  */
-static gboolean
-http_query_start_processing (gpointer p)
+static void
+http_query_start_processing (void *p)
 {
     http_query      *q = (http_query*) p;
     http_uri_field  field;
@@ -2385,8 +2386,6 @@ http_query_start_processing (gpointer p)
 
     /* Connect to the host */
     http_query_connect(q, ERROR("no host addresses available"));
-
-    return FALSE;
 }
 
 /* Submit the query.

@@ -10,6 +10,7 @@
 
 #include <alloca.h>
 #include <errno.h>
+#include <limits.h>
 #include <pthread.h>
 #include <pwd.h>
 #include <stdlib.h>

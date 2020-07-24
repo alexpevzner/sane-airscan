@@ -9,7 +9,7 @@
 
 #include <avahi-common/address.h>
 #include <avahi-common/strlst.h>
-#include <avahi-glib/glib-watch.h>
+#include <avahi-common/watch.h>
 
 #include <sane/sane.h>
 #include <sane/saneopts.h>
@@ -18,6 +18,7 @@
 #include <math.h>
 #include <pthread.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -63,7 +64,6 @@ typedef struct http_uri http_uri;
  */
 #define OUTER_STRUCT(member_p,struct_t,field)                            \
     ((struct_t*)((char*)(member_p) - ((ptrdiff_t) &(((struct_t*) 0)->field))))
-
 
 /******************** Circular Linked Lists ********************/
 /* ll_node represents a linked data node.
@@ -1244,7 +1244,7 @@ eloop_poll_get (void);
 /* Call function on a context of event loop thread
  */
 void
-eloop_call (GSourceFunc func, gpointer data);
+eloop_call (void (*func)(void*), void *data);
 
 /* Event notifier. Calls user-defined function on a context
  * of event loop thread, when event is triggered. This is

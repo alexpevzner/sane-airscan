@@ -239,9 +239,9 @@ eloop_poll_get (void)
 /* eloop_call_pending represents a pending eloop_call
  */
 typedef struct {
-    GSourceFunc func; /* Function to be called */
-    gpointer    data; /* It's argument */
-    ll_node     node; /* In eloop_call_pending_list */
+    void     (*func)(void*); /* Function to be called */
+    void     *data;          /* It's argument */
+    ll_node  node;           /* In eloop_call_pending_list */
 } eloop_call_pending;
 
 /* Execute function calls deferred by eloop_call()
@@ -263,7 +263,7 @@ eloop_call_execute (void)
 /* Call function on a context of event loop thread
  */
 void
-eloop_call (GSourceFunc func, gpointer data)
+eloop_call (void (*func)(void*), void *data)
 {
     eloop_call_pending *p = mem_new(eloop_call_pending, 1);
 
@@ -508,7 +508,7 @@ eloop_fdpoll_set_mask (eloop_fdpoll *fdpoll, ELOOP_FDPOLL_MASK mask)
 error
 eloop_eprintf(const char *fmt, ...)
 {
-    gchar *estring;
+    char    *estring;
     va_list ap;
 
     log_assert(NULL, pthread_equal(pthread_self(), eloop_thread));
