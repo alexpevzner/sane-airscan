@@ -467,6 +467,13 @@ str_has_prefix (const char *s, const char *prefix);
 bool
 str_has_suffix (const char *s, const char *suffix);
 
+/* Remove leading and trailing white space.
+ * This function modifies string in place, and returns pointer
+ * to original string, for convenience
+ */
+char*
+str_trim (char *s);
+
 /******************** Safe ctype macros ********************/
 #define safe_isspace(c)         isspace((unsigned char) c)
 #define safe_isxdigit(c)        isxdigit((unsigned char) c)

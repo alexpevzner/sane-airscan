@@ -116,7 +116,7 @@ log_ctx_new (const char *name, log_ctx *parent)
 {
     log_ctx *log = g_new0(log_ctx, 1);
 
-    log->name = g_strstrip(g_strdup(name));
+    log->name = str_trim(g_strdup(name));
 
     if (parent != NULL) {
         log->trace = trace_ref(parent->trace);

@@ -208,6 +208,32 @@ str_has_suffix (const char *s, const char *suffix)
     return l1 >= l2 && !memcmp(s + (l1 - l2), suffix, l2);
 }
 
+/* Remove leading and trailing white space.
+ * This function modifies string in place, and returns pointer
+ * to original string, for convenience
+ */
+char*
+str_trim (char *s)
+{
+    size_t len = strlen(s), skip;
+
+    while (len > 0 && safe_isspace(s[len - 1])) {
+        len --;
+    }
+
+    for (skip = 0; skip < len && safe_isspace(s[skip]); skip ++) {
+        ;
+    }
+
+    len -= skip;
+    if (len != 0 && skip != 0) {
+        memmove(s, s + skip, len);
+    }
+    s[len] = '\0';
+
+    return s;
+}
+
 /* vim:ts=8:sw=4:et
  */
 

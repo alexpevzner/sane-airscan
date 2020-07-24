@@ -336,7 +336,7 @@ xml_rd_node_value (xml_rd *xml)
 {
     if (xml->text == NULL && xml->node != NULL) {
         xml->text = xmlNodeGetContent(xml->node);
-        g_strstrip((char*) xml->text);
+        str_trim((char*) xml->text);
     }
 
     return (const char*) xml->text;
