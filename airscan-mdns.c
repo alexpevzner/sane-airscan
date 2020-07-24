@@ -244,11 +244,11 @@ static mdns_finding*
 mdns_finding_new (ZEROCONF_METHOD method, int ifindex, const char *name,
         bool initscan)
 {
-    mdns_finding *mdns = g_new0(mdns_finding, 1);
+    mdns_finding *mdns = mem_new(mdns_finding, 1);
 
     mdns->finding.method = method;
     mdns->finding.ifindex = ifindex;
-    mdns->finding.name = g_strdup(name);
+    mdns->finding.name = str_dup(name);
 
     mdns->resolvers = ptr_array_new(AvahiServiceResolver*);
 
@@ -265,8 +265,8 @@ mdns_finding_new (ZEROCONF_METHOD method, int ifindex, const char *name,
 static void
 mdns_finding_free (mdns_finding *mdns)
 {
-    g_free((char*) mdns->finding.name);
-    g_free((char*) mdns->finding.model);
+    mem_free((char*) mdns->finding.name);
+    mem_free((char*) mdns->finding.model);
     zeroconf_endpoint_list_free(mdns->finding.endpoints);
 
     if (mdns->initscan) {
@@ -274,7 +274,7 @@ mdns_finding_free (mdns_finding *mdns)
     }
 
     mem_free(mdns->resolvers);
-    g_free(mdns);
+    mem_free(mdns);
 }
 
 /* Find mdns_finding
@@ -416,18 +416,17 @@ mdns_make_escl_endpoint (ZEROCONF_METHOD method, const AvahiAddress *addr,
     /* Make eSCL URL */
     if (rs == NULL) {
         /* Assume /eSCL by default */
-        u = g_strdup_printf("%s://%s:%d/eSCL/", scheme, str_addr, port);
+        u = str_printf("%s://%s:%d/eSCL/", scheme, str_addr, port);
     } else if (rs_len == 0) {
         /* Empty rs, avoid double '/' */
-        u = g_strdup_printf("%s://%s:%d/", scheme, str_addr, port);
+        u = str_printf("%s://%s:%d/", scheme, str_addr, port);
     } else {
-        u = g_strdup_printf("%s://%s:%d/%.*s/", scheme, str_addr, port,
-                rs_len, rs);
+        u = str_printf("%s://%s:%d/%.*s/", scheme, str_addr, port, rs_len, rs);
     }
 
     uri = http_uri_new(u, true);
     log_assert(mdns_log, uri != NULL);
-    g_free(u);
+    mem_free(u);
 
     return zeroconf_endpoint_new(ID_PROTO_ESCL, uri);
 }
@@ -486,7 +485,7 @@ mdns_avahi_resolver_found (mdns_finding *mdns, MDNS_SERVICE service,
 
     /* Update finding */
     if (mdns->finding.model == NULL && txt_ty != NULL) {
-        mdns->finding.model = g_strdup(txt_ty);
+        mdns->finding.model = str_dup(txt_ty);
     }
 
     if (!uuid_valid(mdns->finding.uuid) && txt_uuid != NULL) {
@@ -580,7 +579,7 @@ mdns_avahi_resolver_callback (AvahiServiceResolver *r,
         /* Fixup model and UUID */
         if (mdns->finding.model == NULL) {
             /* Very unlikely, just paranoia */
-            mdns->finding.model = g_strdup(mdns->finding.name);
+            mdns->finding.model = str_dup(mdns->finding.name);
         }
 
         if (!uuid_valid(mdns->finding.uuid)) {

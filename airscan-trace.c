@@ -91,7 +91,7 @@ trace_open (const char *device_name)
     }
 
     os_mkdir(conf.dbg_trace, 0755);
-    t = g_new0(trace, 1);
+    t = mem_new(trace, 1);
     t->refcnt = 1;
 
     strcpy(path, conf.dbg_trace);
@@ -151,7 +151,7 @@ trace_unref (trace *t)
             }
             fclose(t->data);
         }
-        g_free(t);
+        mem_free(t);
     }
 }
 

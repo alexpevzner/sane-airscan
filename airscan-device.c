@@ -181,7 +181,7 @@ device_new (zeroconf_devinfo *devinfo)
     device            *dev;
 
     /* Create device */
-    dev = g_new0(device, 1);
+    dev = mem_new(device, 1);
 
     dev->devinfo = devinfo;
     dev->log = log_ctx_new(dev->devinfo->name, NULL);
@@ -235,7 +235,7 @@ device_free (device *dev)
 
     http_client_free(dev->proto_ctx.http);
     http_uri_free(dev->proto_ctx.base_uri_nozone);
-    g_free((char*) dev->proto_ctx.location);
+    mem_free((char*) dev->proto_ctx.location);
 
     pthread_cond_destroy(&dev->stm_cond);
 
@@ -253,7 +253,7 @@ device_free (device *dev)
     log_debug(dev->log, "device destroyed");
     log_ctx_free(dev->log);
     zeroconf_devinfo_free(dev->devinfo);
-    g_free(dev);
+    mem_free(dev);
 }
 
 /* Start probing. Called via eloop_call
@@ -750,7 +750,7 @@ device_stm_op_callback (void *ptr, http_query *q)
     /* Save useful result, if any */
     if (dev->proto_op_current == PROTO_OP_SCAN) {
         if (result.data.location != NULL) {
-            g_free((char*) dev->proto_ctx.location); /* Just in case */
+            mem_free((char*) dev->proto_ctx.location); /* Just in case */
             dev->proto_ctx.location = result.data.location;
             dev->proto_ctx.failed_attempt = 0;
             pthread_cond_broadcast(&dev->stm_cond);
@@ -1175,7 +1175,7 @@ device_start_new_job (device *dev)
 {
     dev->stm_cancel_sent = false;
     dev->job_status = SANE_STATUS_GOOD;
-    g_free((char*) dev->proto_ctx.location);
+    mem_free((char*) dev->proto_ctx.location);
     dev->proto_ctx.location = NULL;
     dev->proto_ctx.failed_op = PROTO_OP_NONE;
     dev->proto_ctx.failed_attempt = 0;
@@ -1413,7 +1413,7 @@ device_read_next (device *dev)
     }
 
     /* Initialize image decoding */
-    dev->read_line_buf = g_malloc(line_capacity);
+    dev->read_line_buf = mem_new(SANE_Byte, line_capacity);
     memset(dev->read_line_buf, 0xff, line_capacity);
 
     dev->read_line_num = 0;
@@ -1616,7 +1616,7 @@ DONE:
         http_data_unref(dev->read_image);
         dev->read_image = NULL;
     }
-    g_free(dev->read_line_buf);
+    mem_free(dev->read_line_buf);
     dev->read_line_buf = NULL;
 
     if (device_stm_state_get(dev) == DEVICE_STM_DONE &&

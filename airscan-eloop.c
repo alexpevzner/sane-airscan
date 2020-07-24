@@ -256,7 +256,7 @@ eloop_call_execute (void)
 
         pending = OUTER_STRUCT(node, eloop_call_pending, node);
         pending->func(pending->data);
-        g_free(pending);
+        mem_free(pending);
     }
 }
 
@@ -265,7 +265,7 @@ eloop_call_execute (void)
 void
 eloop_call (GSourceFunc func, gpointer data)
 {
-    eloop_call_pending *p = g_new0(eloop_call_pending, 1);
+    eloop_call_pending *p = mem_new(eloop_call_pending, 1);
 
     p->func = func;
     p->data = data;
@@ -316,7 +316,7 @@ eloop_event_new (void (*callback)(void *), void *data)
         return NULL;
     }
 
-    event = g_new0(eloop_event, 1);
+    event = mem_new(eloop_event, 1);
     event->p = p;
     event->callback = callback;
     event->data = data;
@@ -372,7 +372,7 @@ eloop_timer*
 eloop_timer_new (int timeout, void (*callback)(void *), void *data)
 {
     const AvahiPoll *poll = eloop_poll_get();
-    eloop_timer     *timer = g_new0(eloop_timer, 1);
+    eloop_timer     *timer = mem_new(eloop_timer, 1);
     struct timeval  end;
 
     avahi_elapse_time(&end, timeout, 0);
@@ -395,7 +395,7 @@ eloop_timer_cancel (eloop_timer *timer)
     const AvahiPoll *poll = eloop_poll_get();
 
     poll->timeout_free(timer->timeout);
-    g_free(timer);
+    mem_free(timer);
 }
 
 /* eloop_fdpoll notifies user when file becomes
@@ -446,7 +446,7 @@ eloop_fdpoll_new (int fd,
         void (*callback) (int, void*, ELOOP_FDPOLL_MASK), void *data)
 {
     const AvahiPoll *poll = eloop_poll_get();
-    eloop_fdpoll    *fdpoll = g_new0(eloop_fdpoll, 1);
+    eloop_fdpoll    *fdpoll = mem_new(eloop_fdpoll, 1);
 
     fdpoll->fd = fd;
     fdpoll->callback = callback;
@@ -466,7 +466,7 @@ eloop_fdpoll_free (eloop_fdpoll *fdpoll)
     const AvahiPoll *poll = eloop_poll_get();
 
     poll->watch_free(fdpoll->watch);
-    g_free(fdpoll);
+    mem_free(fdpoll);
 }
 
 /* Set eloop_fdpoll event mask
@@ -514,10 +514,10 @@ eloop_eprintf(const char *fmt, ...)
     log_assert(NULL, pthread_equal(pthread_self(), eloop_thread));
 
     va_start(ap, fmt);
-    estring = g_strdup_vprintf(fmt, ap);
+    estring = str_vprintf(fmt, ap);
     va_end(ap);
 
-    g_free(eloop_estring);
+    mem_free(eloop_estring);
     eloop_estring = estring;
 
     return ERROR(estring);

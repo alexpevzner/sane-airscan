@@ -170,7 +170,7 @@ static const xml_ns wsdd_ns_rules[] = {
 static wsdd_xaddr*
 wsdd_xaddr_new (http_uri *uri)
 {
-    wsdd_xaddr *xaddr = g_new0(wsdd_xaddr, 1);
+    wsdd_xaddr *xaddr = mem_new(wsdd_xaddr, 1);
     xaddr->uri = uri;
     return xaddr;
 }
@@ -181,7 +181,7 @@ static void
 wsdd_xaddr_free (wsdd_xaddr *xaddr)
 {
     http_uri_free(xaddr->uri);
-    g_free(xaddr);
+    mem_free(xaddr);
 }
 
 /* Add wsdd_xaddr to the list.
@@ -247,7 +247,7 @@ wsdd_initscan_count_dec (void)
 static wsdd_finding*
 wsdd_finding_new (int ifindex, const char *address)
 {
-    wsdd_finding *wsdd = g_new0(wsdd_finding, 1);
+    wsdd_finding *wsdd = mem_new(wsdd_finding, 1);
 
     wsdd->finding.method = ZEROCONF_WSD;
     wsdd->finding.uuid = uuid_parse(address);
@@ -256,7 +256,7 @@ wsdd_finding_new (int ifindex, const char *address)
     }
     wsdd->finding.ifindex = ifindex;
 
-    wsdd->address = g_strdup(address);
+    wsdd->address = str_dup(address);
     ll_init(&wsdd->xaddrs);
     wsdd->http_client = http_client_new(wsdd_log, wsdd);
 
@@ -280,11 +280,11 @@ wsdd_finding_free (wsdd_finding *wsdd)
     }
 
     zeroconf_endpoint_list_free(wsdd->finding.endpoints);
-    g_free((char*) wsdd->address);
+    mem_free((char*) wsdd->address);
     wsdd_xaddr_list_purge(&wsdd->xaddrs);
-    g_free((char*) wsdd->finding.model);
-    g_free((char*) wsdd->finding.name);
-    g_free(wsdd);
+    mem_free((char*) wsdd->finding.model);
+    mem_free((char*) wsdd->finding.name);
+    mem_free(wsdd);
 }
 
 /* Publish wsdd_finding
@@ -600,12 +600,12 @@ wsdd_finding_get_metadata_callback (void *ptr, http_query *q)
         } else if (!strcmp(path, "s:Envelope/s:Body/mex:Metadata/mex:MetadataSection"
                 "/devprof:ThisModel/devprof:Manufacturer")) {
             if (manufacturer == NULL) {
-                manufacturer = g_strdup(xml_rd_node_value(xml));
+                manufacturer = str_dup(xml_rd_node_value(xml));
             }
         } else if (!strcmp(path, "s:Envelope/s:Body/mex:Metadata/mex:MetadataSection"
                 "/devprof:ThisModel/devprof:ModelName")) {
             if (model == NULL) {
-                model = g_strdup(xml_rd_node_value(xml));
+                model = str_dup(xml_rd_node_value(xml));
             }
         }
 
@@ -614,7 +614,7 @@ wsdd_finding_get_metadata_callback (void *ptr, http_query *q)
 
     if (wsdd->finding.model == NULL) {
         if (model != NULL && manufacturer != NULL) {
-            wsdd->finding.model = g_strdup_printf("%s %s", manufacturer, model);
+            wsdd->finding.model = str_printf("%s %s", manufacturer, model);
         } else if (model != NULL) {
             wsdd->finding.model = model;
             model = NULL;
@@ -622,7 +622,7 @@ wsdd_finding_get_metadata_callback (void *ptr, http_query *q)
             wsdd->finding.model = manufacturer;
             manufacturer = NULL;
         } else {
-            wsdd->finding.model = g_strdup(wsdd->address);
+            wsdd->finding.model = str_dup(wsdd->address);
         }
     }
 
@@ -640,8 +640,8 @@ wsdd_finding_get_metadata_callback (void *ptr, http_query *q)
     /* Cleanup and exit */
 DONE:
     xml_rd_finish(&xml);
-    g_free(model);
-    g_free(manufacturer);
+    mem_free(model);
+    mem_free(manufacturer);
 
     if (http_client_has_pending(wsdd->http_client) == 0) {
         wsdd_finding_publish_delay(wsdd);
@@ -660,7 +660,7 @@ wsdd_finding_get_metadata (wsdd_finding *wsdd, int ifindex, wsdd_xaddr *xaddr)
 
     sprintf(wsdd_buf, wsdd_get_metadata_template, u.text, wsdd->address);
     q = http_query_new(wsdd->http_client, http_uri_clone(xaddr->uri),
-        "POST", g_strdup(wsdd_buf), "application/soap+xml; charset=utf-8");
+        "POST", str_dup(wsdd_buf), "application/soap+xml; charset=utf-8");
 
     http_query_set_uintptr(q, ifindex);
     http_query_submit(q, wsdd_finding_get_metadata_callback);
@@ -686,11 +686,11 @@ wsdd_message_parse_endpoint (wsdd_message *msg, xml_rd *xml)
             msg->is_scanner = !!strstr(val, "ScanDeviceType");
             msg->is_printer = !!strstr(val, "PrintDeviceType");
         } else if (!strcmp(path, "/d:XAddrs")) {
-            g_free(xaddrs_text);
-            xaddrs_text = g_strdup(xml_rd_node_value(xml));
+            mem_free(xaddrs_text);
+            xaddrs_text = str_dup(xml_rd_node_value(xml));
         } else if (!strcmp(path, "/a:EndpointReference/a:Address")) {
-            g_free((char*) msg->address);
-            msg->address = g_strdup(xml_rd_node_value(xml));
+            mem_free((char*) msg->address);
+            msg->address = str_dup(xml_rd_node_value(xml));
         }
 
         xml_rd_deep_next(xml, level);
@@ -711,7 +711,7 @@ wsdd_message_parse_endpoint (wsdd_message *msg, xml_rd *xml)
         }
     }
 
-    g_free(xaddrs_text);
+    mem_free(xaddrs_text);
 }
 
 /* Parse WSDD message
@@ -719,7 +719,7 @@ wsdd_message_parse_endpoint (wsdd_message *msg, xml_rd *xml)
 static wsdd_message*
 wsdd_message_parse (const char *xml_text, size_t xml_len)
 {
-    wsdd_message *msg = g_new0(wsdd_message, 1);
+    wsdd_message *msg = mem_new(wsdd_message, 1);
     xml_rd       *xml;
     error        err;
 
@@ -771,9 +771,9 @@ static void
 wsdd_message_free (wsdd_message *msg)
 {
     if (msg != NULL) {
-        g_free((char*) msg->address);
+        mem_free((char*) msg->address);
         wsdd_xaddr_list_purge(&msg->xaddrs);
-        g_free(msg);
+        mem_free(msg);
     }
 }
 
@@ -1038,7 +1038,7 @@ wsdd_resolver_send_probe (wsdd_resolver *resolver)
 static wsdd_resolver*
 wsdd_resolver_new (const netif_addr *addr, bool initscan)
 {
-    wsdd_resolver *resolver = g_new0(wsdd_resolver, 1);
+    wsdd_resolver *resolver = mem_new(wsdd_resolver, 1);
     int           af = addr->ipv6 ? AF_INET6 : AF_INET;
     const char    *af_name = addr->ipv6 ? "AF_INET6" : "AF_INET";
     int           rc;
@@ -1187,7 +1187,7 @@ wsdd_resolver_free (wsdd_resolver *resolver)
         eloop_timer_cancel(resolver->timer);
     }
 
-    g_free(resolver);
+    mem_free(resolver);
 }
 
 /******************** Miscellaneous events ********************/
@@ -1341,7 +1341,7 @@ wsdd_send_directed_probe (int ifindex, int af, const void *addr)
 
     /* Send prove request */
     q = http_query_new(wsdd_http_client, uri,
-        "POST", g_strdup(wsdd_buf), "application/soap+xml; charset=utf-8");
+        "POST", str_dup(wsdd_buf), "application/soap+xml; charset=utf-8");
     http_query_set_uintptr(q, ifindex);
     http_query_submit(q, wsdd_send_directed_probe_callback);
 }

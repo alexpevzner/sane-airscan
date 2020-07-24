@@ -21,14 +21,11 @@ struct xml_rd {
     const char    *name;          /* Name of current node */
     char          *path;          /* Path to current node, /-separated */
     size_t        *pathlen;       /* Stack of path lengths */
-    size_t        pathlen_cap;    /* pathlen capacity */
     const xmlChar *text;          /* Textual value of current node */
     unsigned int  depth;          /* Depth of current node, 0 for root */
     const xml_ns  *subst_rules;   /* Substitution rules */
     xml_ns        *subst_cache;   /* In the cache, glob-style patterns are
-                                     replaced by exact-matching strings */
-    size_t        subst_cache_len;/* Count of subst_cache elements */
-    size_t        subst_cache_cap;/* subst_cache capacity */
+                                     replaced by exact-matching strings. */
 };
 
 /* Forward declarations */
@@ -118,12 +115,11 @@ xml_rd_begin (xml_rd **xml, const char *xml_text, size_t xml_len,
         return ERROR("Failed to parse XML");
     }
 
-    *xml = g_new0(xml_rd, 1);
+    *xml = mem_new(xml_rd, 1);
     (*xml)->doc = doc;
     (*xml)->node = xmlDocGetRootElement((*xml)->doc);
     (*xml)->path = str_new();
-    (*xml)->pathlen_cap = 8;
-    (*xml)->pathlen = g_malloc(sizeof(*(*xml)->pathlen) * (*xml)->pathlen_cap);
+    (*xml)->pathlen = mem_new(size_t, 0);
     (*xml)->subst_rules = ns;
 
     xml_rd_skip_dummy(*xml);
@@ -144,16 +140,16 @@ xml_rd_finish (xml_rd **xml)
         xml_rd_node_invalidate_value(*xml);
 
         if ((*xml)->subst_cache != NULL) {
-            size_t i;
-            for (i = 0; i < (*xml)->subst_cache_len; i ++) {
-                g_free((char*) (*xml)->subst_cache[i].uri);
+            size_t i, len = mem_len((*xml)->subst_cache);
+            for (i = 0; i < len; i ++) {
+                mem_free((char*) (*xml)->subst_cache[i].uri);
             }
-            g_free((*xml)->subst_cache);
+            mem_free((*xml)->subst_cache);
         }
 
-        g_free((*xml)->pathlen);
+        mem_free((*xml)->pathlen);
         mem_free((*xml)->path);
-        g_free(*xml);
+        mem_free(*xml);
         *xml = NULL;
     }
 }
@@ -165,7 +161,7 @@ xml_rd_finish (xml_rd **xml)
 static const char*
 xml_rd_ns_subst_lookup(xml_rd *xml, const char *prefix, const char *href)
 {
-    size_t i;
+    size_t i, len = mem_len(xml->subst_cache);
 
     /* Substitution enabled? */
     if (xml->subst_rules == NULL) {
@@ -173,7 +169,7 @@ xml_rd_ns_subst_lookup(xml_rd *xml, const char *prefix, const char *href)
     }
 
     /* Lookup cache first */
-    for (i = 0; i < xml->subst_cache_len; i ++) {
+    for (i = 0; i < len; i ++) {
         if (!strcmp(href, xml->subst_cache[i].uri)) {
             return xml->subst_cache[i].prefix;
         }
@@ -185,20 +181,9 @@ xml_rd_ns_subst_lookup(xml_rd *xml, const char *prefix, const char *href)
             prefix = xml->subst_rules[i].prefix;
 
             /* Update cache. Grow it if required */
-            if (xml->subst_cache_len == xml->subst_cache_cap) {
-                if (xml->subst_cache_cap == 0) {
-                    xml->subst_cache_cap = 4; /* Initial size */
-                } else {
-                    xml->subst_cache_cap *= 2;
-                }
-            }
-
-            xml->subst_cache = g_realloc(xml->subst_cache,
-                sizeof(*xml->subst_cache) * xml->subst_cache_cap);
-
-            xml->subst_cache[xml->subst_cache_len].prefix = prefix;
-            xml->subst_cache[xml->subst_cache_len].uri = g_strdup(href);
-            xml->subst_cache_len ++;
+            xml->subst_cache = mem_resize(xml->subst_cache, len + 1, 0);
+            xml->subst_cache[len].prefix = prefix;
+            xml->subst_cache[len].uri = str_dup(href);
 
             /* Break out of loop */
             break;
@@ -259,14 +244,9 @@ xml_rd_enter (xml_rd *xml)
 {
     if (xml->node) {
         /* Save current path length into pathlen stack */
-        if (xml->depth == xml->pathlen_cap) {
-            xml->pathlen_cap *= 2;
-            xml->pathlen = g_realloc(xml->pathlen,
-                sizeof(*xml->pathlen) * xml->pathlen_cap);
-        }
-
         xml->path = str_append_c(xml->path, '/');
 
+        xml->pathlen = mem_resize(xml->pathlen, xml->depth, 0);
         xml->pathlen[xml->depth] = mem_len(xml->path);
 
         /* Enter the node */
@@ -389,11 +369,11 @@ struct xml_wr {
 static xml_wr_node*
 xml_wr_node_new (const char *name, const char *value, const xml_attr *attrs)
 {
-    xml_wr_node *node = g_new0(xml_wr_node, 1);
-    node->name = g_strdup(name);
+    xml_wr_node *node = mem_new(xml_wr_node, 1);
+    node->name = str_dup(name);
     node->attrs = attrs;
     if (value != NULL) {
-        node->value = g_strdup(value);
+        node->value = str_dup(value);
     }
     return node;
 }
@@ -403,9 +383,9 @@ xml_wr_node_new (const char *name, const char *value, const xml_attr *attrs)
 static void
 xml_wr_node_free (xml_wr_node *node)
 {
-    g_free((char*) node->name);
-    g_free((char*) node->value);
-    g_free(node);
+    mem_free((char*) node->name);
+    mem_free((char*) node->value);
+    mem_free(node);
 }
 
 /* Free XML writer node with its children
@@ -426,7 +406,7 @@ xml_wr_node_free_recursive (xml_wr_node *node)
 xml_wr*
 xml_wr_begin (const char *root, const xml_ns *ns)
 {
-    xml_wr *xml = g_new0(xml_wr, 1);
+    xml_wr *xml = mem_new(xml_wr, 1);
     xml->root = xml_wr_node_new(root, NULL, NULL);
     xml->current = xml->root;
     xml->ns = ns;
@@ -562,15 +542,13 @@ xml_wr_finish_internal (xml_wr *xml, bool compact)
     buf = xml_wr_format_node(xml, buf, xml->root, 0, compact);
 
     xml_wr_node_free_recursive(xml->root);
-    g_free(xml);
+    mem_free(xml);
 
-    char *s = strdup(buf); // FIXME
-    mem_free(buf);
-    return s;
+    return buf;
 }
 
 /* Finish writing, generate document string.
- * Caller must g_free() this string after use
+ * Caller must mem_free() this string after use
  */
 char*
 xml_wr_finish (xml_wr *xml)

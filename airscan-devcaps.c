@@ -15,7 +15,7 @@
 devcaps_source*
 devcaps_source_new (void)
 {
-    devcaps_source *src = g_new0(devcaps_source, 1);
+    devcaps_source *src = mem_new(devcaps_source, 1);
     src->resolutions = sane_word_array_new();
     return src;
 }
@@ -27,7 +27,7 @@ devcaps_source_free (devcaps_source *src)
 {
     if (src != NULL) {
         sane_word_array_free(src->resolutions);
-        g_free(src);
+        mem_free(src);
     }
 }
 
@@ -36,7 +36,7 @@ devcaps_source_free (devcaps_source *src)
 devcaps_source*
 devcaps_source_clone (const devcaps_source *src)
 {
-    devcaps_source *src2 = g_new0(devcaps_source, 1);
+    devcaps_source *src2 = mem_new(devcaps_source, 1);
     unsigned int   i, len;
 
     *src2 = *src;

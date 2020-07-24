@@ -114,9 +114,9 @@ struct log_ctx {
 log_ctx*
 log_ctx_new (const char *name, log_ctx *parent)
 {
-    log_ctx *log = g_new0(log_ctx, 1);
+    log_ctx *log = mem_new(log_ctx, 1);
 
-    log->name = str_trim(g_strdup(name));
+    log->name = str_trim(str_dup(name));
 
     if (parent != NULL) {
         log->trace = trace_ref(parent->trace);
@@ -133,8 +133,8 @@ void
 log_ctx_free (log_ctx *log)
 {
     trace_unref(log->trace);
-    g_free((char*) log->name);
-    g_free(log);
+    mem_free((char*) log->name);
+    mem_free(log);
 }
 
 /* Get protocol trace associated with logging context

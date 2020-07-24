@@ -64,7 +64,7 @@ mem_free (void *p)
 size_t
 mem_len_bytes (const void *p)
 {
-    return ((mem_head*) p)[-1].len;
+    return p ? ((mem_head*) p)[-1].len : 0;
 }
 
 /* Get memory block capacity, in bytes
@@ -72,7 +72,7 @@ mem_len_bytes (const void *p)
 size_t
 mem_cap_bytes (const void *p)
 {
-    return ((mem_head*) p)[-1].cap;
+    return p ? ((mem_head*) p)[-1].cap : 0;
 }
 
 /* Compute allocation size, including mem_head header, in bytes
@@ -172,6 +172,44 @@ __mem_shrink (void *p, size_t len, size_t elsize)
 }
 
 /******************** Strings ********************/
+/* Create new string as a lowercase copy of existent string
+ */
+char*
+str_dup_tolower (const char *s1)
+{
+    char   *s = str_dup(s1);
+    size_t i;
+
+    for (i = 0; s[i]; i ++) {
+        s[i] = safe_tolower(s[i]);
+    }
+
+    return s;
+}
+
+/* Create new string and print to it
+ */
+char*
+str_printf (const char *format, ...)
+{
+    va_list ap;
+    char    *s;
+
+    va_start(ap, format);
+    s = str_append_vprintf(NULL, format, ap);
+    va_end(ap);
+
+    return s;
+}
+
+/* Create new string and print to it, va_list version
+ */
+char*
+str_vprintf (const char *format, va_list ap)
+{
+    return str_append_vprintf(NULL, format, ap);
+}
+
 /* Append formatted string to string
  *
  * `s' must be previously created by some of str_XXX functions,
@@ -180,13 +218,27 @@ __mem_shrink (void *p, size_t len, size_t elsize)
 char*
 str_append_printf (char *s, const char *format, ...)
 {
-    char    buf[4096];
     va_list ap;
-    size_t  len, oldlen;
 
     va_start(ap, format);
-    len = vsnprintf(buf, sizeof(buf), format, ap);
+    s = str_append_vprintf(s, format, ap);
     va_end(ap);
+
+    return s;
+}
+
+/* Append formatted string to string -- va_list version
+ */
+char*
+str_append_vprintf (char *s, const char *format, va_list ap)
+{
+    char    buf[4096];
+    size_t  len, oldlen;
+    va_list ap2;
+
+    va_copy(ap2, ap);
+    len = vsnprintf(buf, sizeof(buf), format, ap2);
+    va_end(ap2);
 
     if (len < sizeof(buf)) {
         return str_append_mem(s, buf, len);
@@ -195,9 +247,9 @@ str_append_printf (char *s, const char *format, ...)
     oldlen = mem_len(s);
     s = mem_resize(s, oldlen + len, 1);
 
-    va_start(ap, format);
-    vsnprintf(s + oldlen, len + 1, format, ap);
-    va_end(ap);
+    va_copy(ap2, ap);
+    vsnprintf(s + oldlen, len + 1, format, ap2);
+    va_end(ap2);
 
     return s;
 }

@@ -292,11 +292,13 @@ void
 mem_free (void *p);
 
 /* Get memory block length/capacity, in bytes
+ * For NULL pointer return 0
  */
 size_t mem_len_bytes (const void *p);
 size_t mem_cap_bytes (const void *p);
 
 /* Get memory block length/capacity, in elements
+ * For NULL pointer return 0
  */
 #define mem_len(v)  (mem_len_bytes(v) / sizeof(*v))
 #define mem_cap(v)  (mem_cap_bytes(v) / sizeof(*v))
@@ -332,6 +334,21 @@ str_dup (const char *s1)
     memcpy(s, s1, len + 1);
     return s;
 }
+
+/* Create new string as a lowercase copy of existent string
+ */
+char*
+str_dup_tolower (const char *s1);
+
+/* Create new string and print to it
+ */
+char*
+str_printf (const char *format, ...);
+
+/* Create new string and print to it, va_list version
+ */
+char*
+str_vprintf (const char *format, va_list ap);
 
 /* Truncate the string
  */
@@ -404,6 +421,11 @@ str_append_c (char *s, char c)
  */
 char*
 str_append_printf (char *s, const char *format, ...);
+
+/* Append formatted string to string -- va_list version
+ */
+char*
+str_append_vprintf (char *s, const char *format, va_list ap);
 
 /* Assign value to string
  *
@@ -540,6 +562,7 @@ __ptr_array_del (void **a, int i)
 #define safe_isspace(c)         isspace((unsigned char) c)
 #define safe_isxdigit(c)        isxdigit((unsigned char) c)
 #define safe_toupper(c)         toupper((unsigned char) c)
+#define safe_tolower(c)         tolower((unsigned char) c)
 
 /******************** OS Facilities ********************/
 /* Get user's home directory. There is no need to

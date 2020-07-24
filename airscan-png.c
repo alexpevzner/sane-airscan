@@ -36,7 +36,7 @@ image_decoder_png_free (image_decoder *decoder)
     image_decoder_png *png = (image_decoder_png*) decoder;
 
     image_decoder_reset(decoder);
-    g_free(png);
+    mem_free(png);
 }
 
 /* libpng error callback
@@ -64,7 +64,7 @@ static void*
 image_decoder_png_malloc_fn (png_struct *png_ptr, size_t size)
 {
     (void) png_ptr;
-    return g_malloc(size);
+    return mem_new(char, size);
 }
 
 /* libpng free callback
@@ -73,7 +73,7 @@ static void
 image_decoder_png_free_fn (png_struct *png_ptr, void *p)
 {
     (void) png_ptr;
-    g_free(p);
+    mem_free(p);
 }
 
 /* libpng read callback
@@ -246,7 +246,7 @@ image_decoder_png_read_line (image_decoder *decoder, void *buffer)
 image_decoder*
 image_decoder_png_new (void)
 {
-    image_decoder_png *png = g_new0(image_decoder_png, 1);
+    image_decoder_png *png = mem_new(image_decoder_png, 1);
 
     png->decoder.content_type = "image/png";
     png->decoder.free = image_decoder_png_free;

@@ -156,7 +156,7 @@ static char*
 http_uri_field_strdup (const http_uri *uri, int num)
 {
     http_uri_field field = http_uri_field_get(uri, num);
-    char           *s = g_malloc(field.len + 1);
+    char           *s = mem_new(char, field.len + 1);
 
     memcpy(s, field.str, field.len);
     s[field.len] = '\0';
@@ -250,10 +250,10 @@ http_uri_field_replace (http_uri *uri, int num, const char *val)
     uri2 = http_uri_new(buf, false);
     log_assert(NULL, uri2 != NULL);
 
-    g_free((char*) uri->str);
-    g_free((char*) uri->path);
+    mem_free((char*) uri->str);
+    mem_free((char*) uri->path);
     *uri = *uri2;
-    g_free(uri2);
+    mem_free(uri2);
 }
 
 /* Append UF_PATH part of URI to buffer up to the final '/'
@@ -479,7 +479,7 @@ http_uri_parse_addr (http_uri *uri)
 http_uri*
 http_uri_new (const char *str, bool strip_fragment)
 {
-    http_uri       *uri = g_new0(http_uri, 1);
+    http_uri       *uri = mem_new(http_uri, 1);
     char           *buf;
 
     /* Parse URI */
@@ -497,7 +497,7 @@ http_uri_new (const char *str, bool strip_fragment)
         goto FAIL;
     }
 
-    uri->str = buf = g_strdup(str);
+    uri->str = buf = str_dup(str);
 
     /* Honor strip_fragment flag */
     if (strip_fragment && http_uri_field_present(uri, UF_FRAGMENT)) {
@@ -515,7 +515,7 @@ http_uri_new (const char *str, bool strip_fragment)
 
     /* Error: cleanup and exit */
 FAIL:
-    g_free(uri);
+    mem_free(uri);
     return NULL;
 }
 
@@ -524,11 +524,11 @@ FAIL:
 http_uri*
 http_uri_clone (const http_uri *old)
 {
-    http_uri *uri = g_new0(http_uri, 1);
+    http_uri *uri = mem_new(http_uri, 1);
 
     *uri = *old;
-    uri->str = g_strdup(uri->str);
-    uri->path = g_strdup(uri->path);
+    uri->str = str_dup(uri->str);
+    uri->path = str_dup(uri->path);
 
     return uri;
 }
@@ -736,9 +736,9 @@ void
 http_uri_free (http_uri *uri)
 {
     if (uri != NULL) {
-        g_free((char*) uri->str);
-        g_free((char*) uri->path);
-        g_free(uri);
+        mem_free((char*) uri->str);
+        mem_free((char*) uri->path);
+        mem_free(uri);
     }
 }
 #endif
@@ -897,7 +897,7 @@ typedef struct {
 static http_hdr_field*
 http_hdr_field_new (const char *name)
 {
-    http_hdr_field *field = g_new0(http_hdr_field, 1);
+    http_hdr_field *field = mem_new(http_hdr_field, 1);
     field->name = name ? str_dup(name) : str_new();
     return field;
 }
@@ -909,7 +909,7 @@ http_hdr_field_free (http_hdr_field *field)
 {
     mem_free(field->name);
     mem_free(field->value);
-    g_free(field);
+    mem_free(field);
 }
 
 /* Initialize http_hdr in place
@@ -1307,14 +1307,9 @@ struct http_multipart {
 /* Add multipart body
  */
 static void
-http_multipart_add_body (http_multipart *mp, http_data *body) {
-    /* Expand bodies array, if size is zero or reached power of two */
-    if (!(mp->count & (mp->count - 1))) {
-        int cap = mp->count ? mp->count * 2 : 4;
-        mp->bodies = g_renew(http_data*, mp->bodies, cap);
-    }
-
-    /* Append new body */
+http_multipart_add_body (http_multipart *mp, http_data *body)
+{
+    mp->bodies = mem_resize(mp->bodies, mp->count + 1, 0);
     mp->bodies[mp->count ++] = body;
 }
 
@@ -1391,7 +1386,7 @@ http_multipart_free (http_multipart *mp)
         http_data_unref(mp->bodies[i]);
     }
 
-    g_free(mp);
+    mem_free(mp);
 }
 
 /* Parse MIME multipart message body
@@ -1436,7 +1431,7 @@ http_multipart_parse (http_data *data, const char *content_type)
     }
 
     /* Create http_multipart structure */
-    mp = g_new0(http_multipart, 1);
+    mp = mem_new(http_multipart, 1);
     mp->data = http_data_ref(data);
 
     /* Split data into parts */
@@ -1494,7 +1489,7 @@ typedef struct {
 static http_data*
 http_data_new(http_data *parent, const char *bytes, size_t size)
 {
-    http_data_ex *data_ex = g_new0(http_data_ex, 1);
+    http_data_ex *data_ex = mem_new(http_data_ex, 1);
 
     if (parent != NULL) {
         log_assert(NULL, bytes >= (char*) parent->bytes);
@@ -1502,7 +1497,7 @@ http_data_new(http_data *parent, const char *bytes, size_t size)
             (bytes + size) <= ((char*) parent->bytes + parent->size));
     }
 
-    data_ex->data.content_type = g_strdup("");
+    data_ex->data.content_type = str_new();
     data_ex->data.bytes = bytes;
     data_ex->data.size = size;
 
@@ -1517,14 +1512,14 @@ http_data_new(http_data *parent, const char *bytes, size_t size)
 static void
 http_data_set_content_type (http_data *data, const char *content_type)
 {
-    g_free((char*) data->content_type);
+    mem_free((char*) data->content_type);
 
     if (content_type == NULL) {
         content_type = "text/plain";
     } else {
         char *s;
 
-        content_type = g_ascii_strdown(content_type, -1);
+        content_type = str_dup_tolower(content_type);
         s = strchr(content_type, ';');
         if (s != NULL) {
             *s = '\0';
@@ -1556,11 +1551,11 @@ http_data_unref (http_data *data)
             if (data_ex->parent != NULL) {
                 http_data_unref(data_ex->parent);
             } else {
-                g_free((void*) data_ex->data.bytes);
+                mem_free((void*) data_ex->data.bytes);
             }
 
-            g_free((char*) data_ex->data.content_type);
-            g_free(data_ex);
+            mem_free((char*) data_ex->data.content_type);
+            mem_free(data_ex);
         }
     }
 }
@@ -1575,7 +1570,7 @@ http_data_append (http_data *data, const char *bytes, size_t size)
 
     log_assert(NULL, data_ex->parent == NULL);
 
-    data->bytes = g_realloc((char*) data->bytes, data->size + size);
+    data->bytes = mem_resize((char*) data->bytes, data->size + size, 0);
     memcpy((char*) data->bytes + data->size, bytes, size);
     data->size += size;
 }
@@ -1659,7 +1654,7 @@ struct http_client {
 http_client*
 http_client_new (log_ctx *log, void *ptr)
 {
-    http_client *client = g_new0(http_client, 1);
+    http_client *client = mem_new(http_client, 1);
 
     client->ptr = ptr;
     client->log = log;
@@ -1675,7 +1670,7 @@ http_client_free (http_client *client)
 {
     log_assert(client->log, ll_empty(&client->pending));
 
-    g_free(client);
+    mem_free(client);
 }
 
 /* Set on-error callback. If this callback is not NULL,
@@ -1819,7 +1814,7 @@ http_query_free (http_query *q)
         http_multipart_free(q->response_multipart);
     }
 
-    g_free(q);
+    mem_free(q);
 }
 
 /* Set Host header in HTTP request
@@ -1876,7 +1871,7 @@ http_query*
 http_query_new (http_client *client, http_uri *uri, const char *method,
         char *body, const char *content_type)
 {
-    http_query *q = g_new0(http_query, 1);
+    http_query *q = mem_new(http_query, 1);
 
     q->client = client;
     q->uri = uri;

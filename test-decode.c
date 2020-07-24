@@ -65,10 +65,10 @@ png_error_fn (png_struct *png_ptr, const char *message)
 save_file*
 save_open (const char *name, const SANE_Parameters *params)
 {
-    save_file *save = g_new0(save_file, 1);
+    save_file *save = mem_new(save_file, 1);
     int       color_type;
 
-    save->name = g_strdup(name);
+    save->name = str_dup(name);
     save->fp = fopen(name, "wb");
     if (save->fp == NULL) {
         die("%s: %s", name, strerror(errno));
@@ -114,8 +114,8 @@ save_close (save_file *save)
     png_write_end(save->png_ptr, NULL);
     png_destroy_write_struct(&save->png_ptr, &save->info_ptr);
     fclose(save->fp);
-    g_free((char*) save->name);
-    g_free(save);
+    mem_free((char*) save->name);
+    mem_free(save);
 }
 
 /* Write a row of image data
@@ -185,7 +185,7 @@ main (int argc, char **argv)
         die("%s: %s", file, strerror(errno));
     }
 
-    data = g_malloc(size);
+    data = mem_new(char, size);
     if ((size_t) size != fread(data, 1, size, fp)) {
         die("%s: read error", file);
     }
@@ -208,7 +208,7 @@ main (int argc, char **argv)
 
     save = save_open("decoded.png", &params);
 
-    line = g_malloc(params.bytes_per_line);
+    line = mem_new(char, params.bytes_per_line);
     for (i = 0; i < params.lines; i ++) {
         err = image_decoder_read_line(decoder, line);
         if (err != NULL) {
@@ -218,7 +218,7 @@ main (int argc, char **argv)
         save_write(save, line);
     }
 
-    g_free(line);
+    mem_free(line);
     save_close(save);
 
     return 0;

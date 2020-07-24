@@ -30,7 +30,7 @@ pollable_new (void)
         return NULL;
     }
 
-    pollable *p = g_new0(pollable, 1);
+    pollable *p = mem_new(pollable, 1);
     p->efd = efd;
 
     return p;
@@ -42,7 +42,7 @@ void
 pollable_free (pollable *p)
 {
     close(p->efd);
-    g_free(p);
+    mem_free(p);
 }
 
 /* Get file descriptor for poll()/select().
