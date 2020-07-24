@@ -246,7 +246,7 @@ xml_rd_enter (xml_rd *xml)
         /* Save current path length into pathlen stack */
         xml->path = str_append_c(xml->path, '/');
 
-        xml->pathlen = mem_resize(xml->pathlen, xml->depth, 0);
+        xml->pathlen = mem_resize(xml->pathlen, xml->depth + 1, 0);
         xml->pathlen[xml->depth] = mem_len(xml->path);
 
         /* Enter the node */
