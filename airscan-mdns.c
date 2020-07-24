@@ -48,12 +48,12 @@ typedef enum {
  * device discovery
  */
 typedef struct {
-    zeroconf_finding finding;        /* Base class */
-    GPtrArray        *resolvers;     /* Array of pending AvahiServiceResolver */
-    ll_node          node_list;      /* In mdns_finding_list */
-    bool             should_publish; /* Should we publish this finding */
-    bool             is_published;   /* Finding actually published */
-    bool             initscan;       /* Device discovered during initial scan */
+    zeroconf_finding     finding;        /* Base class */
+    AvahiServiceResolver **resolvers;    /* Array of pending resolvers */
+    ll_node              node_list;      /* In mdns_finding_list */
+    bool                 should_publish; /* Should we publish this finding */
+    bool                 is_published;   /* Finding actually published */
+    bool                 initscan;       /* Device discovered during initial scan */
 } mdns_finding;
 
 /* Static variables
@@ -250,7 +250,7 @@ mdns_finding_new (ZEROCONF_METHOD method, int ifindex, const char *name,
     mdns->finding.ifindex = ifindex;
     mdns->finding.name = g_strdup(name);
 
-    mdns->resolvers = g_ptr_array_new();
+    mdns->resolvers = ptr_array_new(AvahiServiceResolver*);
 
     mdns->initscan = initscan;
     if (mdns->initscan) {
@@ -273,7 +273,7 @@ mdns_finding_free (mdns_finding *mdns)
         mdns_initscan_count_dec(mdns->finding.method);
     }
 
-    g_ptr_array_free(mdns->resolvers, TRUE);
+    mem_free(mdns->resolvers);
     g_free(mdns);
 }
 
@@ -324,10 +324,13 @@ mdns_finding_get (ZEROCONF_METHOD method, int ifindex, const char *name,
 static void
 mdns_finding_kill_resolvers (mdns_finding *mdns)
 {
-    while (mdns->resolvers->len > 0) {
-        avahi_service_resolver_free(mdns->resolvers->pdata[0]);
-        g_ptr_array_remove_index(mdns->resolvers, 0);
+    size_t i, len = mem_len(mdns->resolvers);
+
+    for (i = 0; i < len; i ++) {
+        avahi_service_resolver_free(mdns->resolvers[i]);
     }
+
+    ptr_array_trunc(mdns->resolvers);
 }
 
 /* Del the mdns_finding
@@ -551,7 +554,7 @@ mdns_avahi_resolver_callback (AvahiServiceResolver *r,
     }
 
     /* Remove resolver from list of pending ones */
-    if (!g_ptr_array_remove(mdns->resolvers, r)) {
+    if (!ptr_array_del(mdns->resolvers, ptr_array_find(mdns->resolvers, r))) {
         mdns_debug(name, protocol, "resolve", "spurious avahi callback");
         return;
     }
@@ -569,7 +572,7 @@ mdns_avahi_resolver_callback (AvahiServiceResolver *r,
     }
 
     /* Perform appropriate actions, if resolving is done */
-    if (mdns->resolvers->len == 0) {
+    if (mdns->resolvers[0] == NULL) {
         /* Fixup endpoints */
         mdns->finding.endpoints = zeroconf_endpoint_list_sort_dedup(
                 mdns->finding.endpoints);
@@ -652,7 +655,7 @@ mdns_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
         }
 
         /* Attach resolver to device state */
-        g_ptr_array_add(mdns->resolvers, r);
+        mdns->resolvers = ptr_array_append(mdns->resolvers, r);
         break;
 
     case AVAHI_BROWSER_REMOVE:

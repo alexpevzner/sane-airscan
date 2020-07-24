@@ -472,7 +472,7 @@ str_trim (char *s);
  * Returns value of deleted pointer or NULL, if index is out of range
  */
 #define ptr_array_del(a,i)              \
-        ((__typeof__(*a) __ptr_array_del((void**) a, p))
+        ((__typeof__(*a)) __ptr_array_del((void**) a, i))
 
 /* Helper function for ptr_array_append, don't use directly
  */
@@ -489,7 +489,7 @@ __ptr_array_append (void **a, void *p)
 /* Helper function for ptr_array_find, don't use directly
  */
 static inline int
-__ptr_array_find (const void **a, void *p)
+__ptr_array_find (void **a, void *p)
 {
     size_t len = mem_len(a), i;
 

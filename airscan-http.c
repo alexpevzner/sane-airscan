@@ -1584,7 +1584,7 @@ http_data_append (http_data *data, const char *bytes, size_t size)
 /* http_data_queue represents a queue of http_data items
  */
 struct http_data_queue {
-    GPtrArray *items; /* Underlying array of pointers */
+    http_data **items; /* Array of http_data items */
 };
 
 /* Create new http_data_queue
@@ -1592,8 +1592,8 @@ struct http_data_queue {
 http_data_queue*
 http_data_queue_new (void)
 {
-    http_data_queue *queue = g_new0(http_data_queue, 1);
-    queue->items = g_ptr_array_new();
+    http_data_queue *queue = mem_new(http_data_queue, 1);
+    queue->items = ptr_array_new(http_data*);
     return queue;
 }
 
@@ -1603,8 +1603,8 @@ void
 http_data_queue_free (http_data_queue *queue)
 {
     http_data_queue_purge(queue);
-    g_ptr_array_free(queue->items, TRUE);
-    g_free(queue);
+    mem_free(queue->items);
+    mem_free(queue);
 }
 
 /* Push item into the http_data_queue.
@@ -1612,7 +1612,7 @@ http_data_queue_free (http_data_queue *queue)
 void
 http_data_queue_push (http_data_queue *queue, http_data *data)
 {
-    g_ptr_array_add(queue->items, data);
+    queue->items = ptr_array_append(queue->items, data);
 }
 
 /* Pull an item from the http_data_queue. Returns NULL if queue is empty
@@ -1620,11 +1620,7 @@ http_data_queue_push (http_data_queue *queue, http_data *data)
 http_data*
 http_data_queue_pull (http_data_queue *queue)
 {
-    if (queue->items->len > 0) {
-        return g_ptr_array_remove_index(queue->items, 0);
-    }
-
-    return NULL;
+    return ptr_array_del(queue->items, 0);
 }
 
 /* Get queue length
@@ -1632,7 +1628,7 @@ http_data_queue_pull (http_data_queue *queue)
 int
 http_data_queue_len (const http_data_queue *queue)
 {
-    return (int) queue->items->len;
+    return (int) mem_len(queue->items);
 }
 
 /* Purge the queue

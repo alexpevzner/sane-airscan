@@ -127,7 +127,7 @@ struct device {
 
 /* Static variables
  */
-static GPtrArray *device_table;
+static device **device_table;
 
 /* Forward declarations
  */
@@ -201,7 +201,7 @@ device_new (zeroconf_devinfo *devinfo)
     dev->read_queue = http_data_queue_new();
 
     /* Add to the table */
-    g_ptr_array_add(device_table, dev);
+    device_table = ptr_array_append(device_table, dev);
 
     return dev;
 }
@@ -215,7 +215,7 @@ device_free (device *dev)
 
     /* Remove device from table */
     log_debug(dev->log, "removed from device table");
-    g_ptr_array_remove(device_table, dev);
+    ptr_array_del(device_table, ptr_array_find(device_table, dev));
 
     /* Stop all pending I/O activity */
     device_http_cancel(dev);
@@ -290,10 +290,10 @@ device_io_start (device *dev)
 static device*
 device_find_by_ident (const char *ident)
 {
-    unsigned int i;
+    size_t i, len = mem_len(device_table);
 
-    for (i = 0; i < device_table->len; i ++) {
-        device *dev = g_ptr_array_index(device_table, i);
+    for (i = 0; i < len; i ++) {
+        device *dev = device_table[i];
         if (!strcmp(dev->devinfo->ident, ident)) {
             return dev;
         }
@@ -307,8 +307,8 @@ device_find_by_ident (const char *ident)
 static void
 device_table_purge (void)
 {
-    while (device_table->len > 0) {
-        device_free(g_ptr_array_index(device_table, 0));
+    while (mem_len(device_table) > 0) {
+        device_free(device_table[0]);
     }
 }
 
@@ -1633,7 +1633,7 @@ DONE:
 SANE_Status
 device_management_init (void)
 {
-    device_table = g_ptr_array_new();
+    device_table = ptr_array_new(device*);
     eloop_add_start_stop_callback(device_management_start_stop);
 
     return SANE_STATUS_GOOD;
@@ -1645,8 +1645,8 @@ void
 device_management_cleanup (void)
 {
     if (device_table != NULL) {
-        log_assert(NULL, device_table->len == 0);
-        g_ptr_array_unref(device_table);
+        log_assert(NULL, mem_len(device_table) == 0);
+        mem_free(device_table);
         device_table = NULL;
     }
 }
