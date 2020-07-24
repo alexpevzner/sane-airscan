@@ -334,6 +334,7 @@ eloop_event_free (eloop_event *event)
 {
     eloop_fdpoll_free(event->fdpoll);
     pollable_free(event->p);
+    mem_free(event);
 }
 
 /* Trigger an event
