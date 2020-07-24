@@ -646,10 +646,11 @@ conf_device_list_lookup (const char *name) {
 static const char*
 conf_expand_path (const char *path)
 {
-    const char *prefix = "", *suffix = "", *home = NULL, *end;
+    const char *prefix = "";
+    char       *ret;
 
     if (path[0] == '~' && (path[1] == '\0' || path[1] == '/')) {
-        home = os_homedir();
+        const char *home = os_homedir();
         if (home != NULL) {
             prefix = home;
             path ++;
@@ -658,11 +659,10 @@ conf_expand_path (const char *path)
         }
     }
 
-    end = path[0] ? path : prefix;
-    suffix = str_has_suffix(end, "/") ? "" : "/";
-    path = str_append(str_append(str_dup(home), path), suffix);
+    ret = str_concat(prefix, path, NULL);
+    ret = str_terminate(ret, '/');
 
-    return path;
+    return ret;
 }
 
 /* Report configuration file error
