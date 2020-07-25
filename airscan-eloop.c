@@ -302,6 +302,7 @@ eloop_call_cancel (uint64_t callid)
         if (p->callid == callid) {
             ll_del(&p->node);
             mem_free(p);
+            return;
         }
     }
 }
