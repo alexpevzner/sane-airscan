@@ -178,11 +178,12 @@ eloop_thread_func (void *data)
 void
 eloop_thread_start (void)
 {
-    int rc = pthread_create(&eloop_thread, NULL, eloop_thread_func, NULL);
+    int        rc;
     useconds_t usec = 100;
 
-    if (rc < 0) {
-        log_panic(NULL, "pthread_create: %s", strerror(-rc));
+    rc = pthread_create(&eloop_thread, NULL, eloop_thread_func, NULL);
+    if (rc != 0) {
+        log_panic(NULL, "pthread_create: %s", strerror(rc));
     }
 
     /* Wait until thread is started and all start callbacks are executed */

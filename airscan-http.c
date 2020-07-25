@@ -450,7 +450,7 @@ http_uri_parse_addr (http_uri *uri)
         /* Strip zone suffix */
         char *s = strchr(host, '%');
         if (s != NULL) {
-            s = '\0';
+            *s = '\0';
         }
 
         rc = inet_pton(AF_INET6, host, &in6);
@@ -870,11 +870,11 @@ bool
 http_uri_equal (const http_uri *uri1, const http_uri *uri2)
 {
     return uri1->scheme == uri2->scheme &&
-           http_uri_field_equal(uri1, uri2, UF_HOST, true);
-           http_uri_field_equal(uri1, uri2, UF_PORT, true);
-           http_uri_field_equal(uri1, uri2, UF_PATH, false);
-           http_uri_field_equal(uri1, uri2, UF_QUERY, false);
-           http_uri_field_equal(uri1, uri2, UF_FRAGMENT, false);
+           http_uri_field_equal(uri1, uri2, UF_HOST, true) &&
+           http_uri_field_equal(uri1, uri2, UF_PORT, true) &&
+           http_uri_field_equal(uri1, uri2, UF_PATH, false) &&
+           http_uri_field_equal(uri1, uri2, UF_QUERY, false) &&
+           http_uri_field_equal(uri1, uri2, UF_FRAGMENT, false) &&
            http_uri_field_equal(uri1, uri2, UF_USERINFO, false);
 }
 
