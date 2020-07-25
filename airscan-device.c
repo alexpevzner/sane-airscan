@@ -49,11 +49,12 @@ enum {
  *     |    |     finished |     | finished         |          |
  *     |    |              V     V                  |          |
  *     |    |  CANCEL_JOB_DONE  CANCEL_REQ_DONE     |          |
- *     |    |              |            |           |          |
- *     |    V              |            |           |          |
- *     |  CLEANUP          |            |           |          |
- *     |    |              |            |           |          |
- *     |    V              V            V           V          |
+ *     |    |   cancel req |     | job              |          |
+ *     |    |   finished   |     | finished         |          |
+ *     |    V              |     |                  |          |
+ *     |  CLEANUP          |     |                  |          |
+ *     |    |              |     |                  |          |
+ *     |    V              V     V                  V          |
  *     ---DONE<--------------------------------------          |
  *          |                                                  |
  *          V                                                  |
@@ -468,13 +469,19 @@ device_http_cancel (device *dev)
 /* http_client onerror callback
  */
 static void
-device_http_onerror (void *ptr, error err) {
+device_http_onerror (void *ptr, error err)
+{
     device *dev = ptr;
 
-    log_debug(dev->log, ESTRING(err));
+    log_debug(dev->log, "cancelling job due to error: %s", ESTRING(err));
 
     if (!device_stm_cancel_perform(dev, SANE_STATUS_IO_ERROR)) {
         device_stm_state_set(dev, DEVICE_STM_DONE);
+    } else {
+        /* Scan job known to be done, now waiting for cancel
+         * completion
+         */
+        device_stm_state_set(dev, DEVICE_STM_CANCEL_JOB_DONE);
     }
 }
 
