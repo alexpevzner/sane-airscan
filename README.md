@@ -100,6 +100,7 @@ Legend:
 | Lexmark MC2535adwe                 | Yes                       |                           |
 | Ricoh MP C3003                     | No                        | Yes<sup>[6](#note6)</sup> |
 | Samsung M288x Series               | No                        | Yes                       |
+| Samsung M337x 387x 407x Series     | No                        | Yes<sup>[7](#note7)</sup> |
 | Xerox VersaLink B405               | Yes                       |                           |
 | TODO                               |                           |                           |
 
@@ -131,6 +132,10 @@ be scaled down by the factor 2/3 at this case. Lower resolutions works well.
 device and needs to be enabled before use: open web console, Click `[Configuration]`, click `[Initial Settings]`
 under `[Scanner]`, and then set `[Prohibit WSD Scan Command]` to `[Do not Prohibit]` (from
 http://support.ricoh.com/bb_v1oi/pub_e/oi_view/0001047/0001047003/view/scanner/int/0095.htm)
+
+<a name="note7"><sup>[7]</sup></a>: with old firmware (tested with
+V4.00.01.04 APR-09-2013) ADF scan causes device reboot. Firmware update
+helps, version V4.00.02.20 MAY-27-2020 known to work.
 
 ### Distros that come with sane-airscan
 
