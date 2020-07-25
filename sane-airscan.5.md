@@ -51,7 +51,7 @@ file:
 The `[devices]` section contains all manually configured devices, one line per
 device, and each line contains a device name on a left side of equation and
 device URL on a rights side, followed by protocol (eSCL or WSD). If protocol
-is ommited, eSCL is assumed.  You may also disable particular device by
+is omitted, eSCL is assumed.  You may also disable particular device by
 using the `disable` keyword instead of URL.
 
 To figure out URLs of available devices, the simplest way is to
