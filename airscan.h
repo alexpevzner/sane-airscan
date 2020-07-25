@@ -1565,8 +1565,8 @@ void
 http_query_submit (http_query *q, void (*callback)(void *ptr, http_query *q));
 
 /* Get http_query timestamp. Timestamp is set when query is
- * submitted. Getting timestamp before query is submited,
- * and this function should not be called before http_query_submit()
+ * submitted. And this function should not be called before
+ * http_query_submit()
  */
 timestamp
 http_query_timestamp (const http_query *q);
