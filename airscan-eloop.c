@@ -241,6 +241,7 @@ eloop_poll_get (void)
 typedef struct {
     void     (*func)(void*); /* Function to be called */
     void     *data;          /* It's argument */
+    uint64_t callid;         /* For eloop_call_cancel() */
     ll_node  node;           /* In eloop_call_pending_list */
 } eloop_call_pending;
 
@@ -261,20 +262,48 @@ eloop_call_execute (void)
 }
 
 /* Call function on a context of event loop thread
+ * The returned value can be supplied as a `callid'
+ * parameter for the eloop_call_cancel() function
  */
-void
+uint64_t
 eloop_call (void (*func)(void*), void *data)
 {
     eloop_call_pending *p = mem_new(eloop_call_pending, 1);
+    static uint64_t    callid;
+    uint64_t           ret;
 
     p->func = func;
     p->data = data;
 
     pthread_mutex_lock(&eloop_mutex);
+    ret = ++ callid;
+    p->callid = ret;
     ll_push_end(&eloop_call_pending_list, &p->node);
     pthread_mutex_unlock(&eloop_mutex);
 
     avahi_simple_poll_wakeup(eloop_poll);
+
+    return ret;
+}
+
+/* Cancel pending eloop_call
+ *
+ * This is safe to cancel already finished call (at this
+ * case nothing will happen)
+ */
+void
+eloop_call_cancel (uint64_t callid)
+{
+    ll_node *node;
+
+    for (LL_FOR_EACH(node, &eloop_call_pending_list)) {
+        eloop_call_pending *p = OUTER_STRUCT(node, eloop_call_pending, node);
+
+        if (p->callid == callid) {
+            ll_del(&p->node);
+            mem_free(p);
+        }
+    }
 }
 
 /* Event notifier. Calls user-defined function on a context

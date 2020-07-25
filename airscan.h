@@ -1242,9 +1242,19 @@ const AvahiPoll*
 eloop_poll_get (void);
 
 /* Call function on a context of event loop thread
+ * The returned value can be supplied as a `callid'
+ * parameter for the eloop_call_cancel() function
+ */
+uint64_t
+eloop_call (void (*func)(void*), void *data);
+
+/* Cancel pending eloop_call
+ *
+ * This is safe to cancel already finished call (at this
+ * case nothing will happen)
  */
 void
-eloop_call (void (*func)(void*), void *data);
+eloop_call_cancel (uint64_t callid);
 
 /* Event notifier. Calls user-defined function on a context
  * of event loop thread, when event is triggered. This is
