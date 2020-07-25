@@ -17,7 +17,7 @@
 
 CC	= gcc
 COMPRESS = gzip
-CFLAGS	+= -O2 -g -W -Wall -Werror $(CPPFLAGS)
+CFLAGS	+= -O2 -g -W -Wall -Werror -pthread $(CPPFLAGS)
 MANDIR	= /usr/share/man/
 PKG_CONFIG = /usr/bin/pkg-config
 STRIP 	= -s
@@ -34,11 +34,11 @@ MAN_DISCOVER = $(DISCOVER).1
 MAN_DISCOVER_TITLE = "SANE Scanner Access Now Easy"
 MAN_BACKEND = sane-airscan.5
 MAN_BACKEND_TITLE = "AirScan (eSCL) and WSD SANE backend"
-DEPS_COMMON := avahi-client avahi-glib libsoup-2.4 libxml-2.0
+DEPS_COMMON := avahi-client libxml-2.0 gnutls
 DEPS_CODECS := libjpeg libpng
 
 # Sources and object files
-SRC	= $(wildcard airscan-*.c) sane_strstatus.c
+SRC	= $(wildcard airscan-*.c) sane_strstatus.c http_parser.c
 OBJ	= $(addprefix $(OBJDIR), $(SRC:.c=.o))
 
 # Obtain CFLAGS and LDFLAGS for dependencies
@@ -65,30 +65,15 @@ tools_LDFLAGS 		+= -fPIE
 
 tests_LDFLAGS		:= $(tools_LDFLAGS) $(deps_LIBS_CODECS)
 
-# This magic is a workaround for libsoup bug.
-#
-# We are linked against libsoup. If SANE backend goes unloaded
-# from the memory, all libraries it is linked against also will
-# be unloaded (unless main program uses them directly).
-#
-# Libsoup, unfortunately, doesn't unload correctly, leaving its
-# types registered in GLIB. Which sooner or later leads program to
-# crash
-#
-# The workaround is to prevent our backend's shared object from being
-# unloaded when not longer in use, and these magical options do it
-# by adding NODELETE flag to the resulting ELF shared object
-backend_LDFLAGS += -Wl,-z,nodelete
-
 $(OBJDIR)%.o: %.c Makefile airscan.h
 	mkdir -p $(OBJDIR)
 	$(CC) -c -o $@ $< $(CPPFLAGS) $(common_CFLAGS)
 
 .PHONY: all clean install man
 
-all:	tags $(BACKEND) $(DISCOVER) test test-decode
+all:	tags $(BACKEND) $(DISCOVER) test test-decode test-uri
 
-tags: $(SRC) airscan.h test.c test-decode.c
+tags: $(SRC) airscan.h test.c test-decode.c test-uri.c
 	-ctags -R .
 
 $(BACKEND): $(OBJDIR)airscan.o $(LIBAIRSCAN) airscan.sym
@@ -115,7 +100,7 @@ install: all
 	[ "$(COMPRESS)" = "" ] || $(COMPRESS) -f $(DESTDIR)$(PREFIX)$(MANDIR)/man5/$(MAN_BACKEND)
 
 clean:
-	rm -f test $(BACKEND) tags
+	rm -f test test-decode test-uri $(BACKEND) tags
 	rm -rf $(OBJDIR)
 
 uninstall:
@@ -138,3 +123,6 @@ test:	$(BACKEND) test.c
 
 test-decode: test-decode.c $(LIBAIRSCAN)
 	 $(CC) -o test-decode test-decode.c $(CPPFLAGS) $(common_CFLAGS) $(LIBAIRSCAN) $(tests_LDFLAGS)
+
+test-uri: test-uri.c $(LIBAIRSCAN)
+	 $(CC) -o test-uri test-uri.c $(CPPFLAGS) $(common_CFLAGS) $(LIBAIRSCAN) $(tests_LDFLAGS)

@@ -153,7 +153,7 @@ netif_addr_list_get (void)
         }
 
         /* Translate struct ifaddrs to netif_addr */
-        addr = g_new0(netif_addr, 1);
+        addr = mem_new(netif_addr, 1);
         addr->next = list;
         addr->ifindex = idx;
         strncpy(addr->ifname.text, ifa->ifa_name,
@@ -175,7 +175,7 @@ netif_addr_list_get (void)
 
         default:
             /* Paranoia; should not actually happen */
-            g_free(addr);
+            mem_free(addr);
             addr = NULL;
             break;
         }
@@ -194,7 +194,7 @@ netif_addr_list_get (void)
 static void
 netif_addr_free_single (netif_addr *addr)
 {
-    g_free(addr);
+    mem_free(addr);
 }
 
 /* Free list of network interfaces addresses
@@ -478,7 +478,7 @@ netif_notifier_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
 netif_notifier*
 netif_notifier_create (void (*callback) (void*), void *data)
 {
-    netif_notifier *notifier = g_new0(netif_notifier, 1);
+    netif_notifier *notifier = mem_new(netif_notifier, 1);
 
     notifier->callback = callback;
     notifier->data = data;
@@ -494,7 +494,7 @@ void
 netif_notifier_free (netif_notifier *notifier)
 {
     ll_del(&notifier->list_node);
-    g_free(notifier);
+    mem_free(notifier);
 }
 
 /* Start/stop callback

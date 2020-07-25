@@ -59,7 +59,7 @@ static void
 image_decoder_bmp_free (image_decoder *decoder)
 {
     image_decoder_bmp *bmp = (image_decoder_bmp*) decoder;
-    g_free(bmp);
+    mem_free(bmp);
 }
 
 /* Begin BMP decoding
@@ -275,7 +275,7 @@ image_decoder_bmp_read_line (image_decoder *decoder, void *buffer)
 image_decoder*
 image_decoder_bmp_new (void)
 {
-    image_decoder_bmp *bmp = g_new0(image_decoder_bmp, 1);
+    image_decoder_bmp *bmp = mem_new(image_decoder_bmp, 1);
 
     bmp->decoder.content_type = "image/bmp";
     bmp->decoder.free = image_decoder_bmp_free;

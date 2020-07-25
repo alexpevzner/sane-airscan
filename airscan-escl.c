@@ -632,7 +632,7 @@ escl_scan_decode (const proto_ctx *ctx)
         goto ERROR;
     }
 
-    result.data.location = g_strdup(http_uri_get_path(uri));
+    result.data.location = str_dup(http_uri_get_path(uri));
     http_uri_free(uri);
 
     result.next = PROTO_OP_LOAD;
@@ -654,11 +654,11 @@ escl_load_query (const proto_ctx *ctx)
     char *url, *sep;
     http_query *q;
 
-    sep = g_str_has_suffix(ctx->location, "/") ? "" : "/";
-    url = g_strconcat(ctx->location, sep, "NextDocument", NULL);
+    sep = str_has_suffix(ctx->location, "/") ? "" : "/";
+    url = str_concat(ctx->location, sep, "NextDocument", NULL);
 
     q = escl_http_get(ctx, url);
-    g_free(url);
+    mem_free(url);
 
     return q;
 }
@@ -907,7 +907,7 @@ escl_cancel_query (const proto_ctx *ctx)
 static void
 escl_free (proto_handler *proto)
 {
-    g_free(proto);
+    mem_free(proto);
 }
 
 /* proto_handler_escl_new creates new eSCL protocol handler
@@ -915,7 +915,7 @@ escl_free (proto_handler *proto)
 proto_handler*
 proto_handler_escl_new (void)
 {
-    proto_handler_escl *escl = g_new0(proto_handler_escl, 1);
+    proto_handler_escl *escl = mem_new(proto_handler_escl, 1);
 
     escl->proto.name = "eSCL";
     escl->proto.free = escl_free;

@@ -16,8 +16,10 @@ sources = [
   'airscan-jpeg.c',
   'airscan-log.c',
   'airscan-math.c',
+  'airscan-memstr.c',
   'airscan-mdns.c',
   'airscan-netif.c',
+  'airscan-os.c',
   'airscan-png.c',
   'airscan-pollable.c',
   'airscan-rand.c',
@@ -28,6 +30,7 @@ sources = [
   'airscan-xml.c',
   'airscan-zeroconf.c',
   'airscan.c',
+  'http_parser.c',
   'sane_strstatus.c',
 ]
 
@@ -37,11 +40,11 @@ m_dep = cc.find_library('m', required : false)
 shared_deps = [
   m_dep,
   dependency('avahi-client'),
-  dependency('avahi-glib'),
+  dependency('gnutls'),
   dependency('libjpeg'),
   dependency('libpng'),
-  dependency('libsoup-2.4'),
   dependency('libxml-2.0'),
+  dependency('threads'),
 ]
 
 shared_library(

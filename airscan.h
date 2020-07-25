@@ -9,19 +9,23 @@
 
 #include <avahi-common/address.h>
 #include <avahi-common/strlst.h>
-#include <avahi-glib/glib-watch.h>
+#include <avahi-common/watch.h>
 
 #include <sane/sane.h>
 #include <sane/saneopts.h>
 
+#include <ctype.h>
 #include <math.h>
+#include <pthread.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
 
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 
 /******************** Static configuration ********************/
 /* Configuration path in environment
@@ -60,7 +64,6 @@ typedef struct http_uri http_uri;
  */
 #define OUTER_STRUCT(member_p,struct_t,field)                            \
     ((struct_t*)((char*)(member_p) - ((ptrdiff_t) &(((struct_t*) 0)->field))))
-
 
 /******************** Circular Linked Lists ********************/
 /* ll_node represents a linked data node.
@@ -189,27 +192,27 @@ ll_pop_end (ll_head *head)
  * the list. Returns NULL, if end of list is reached
  */
 static inline ll_node*
-ll_next (ll_head *head, ll_node *node)
+ll_next (const ll_head *head, const ll_node *node)
 {
-    node = node->ll_next;
-    return node == &head->node ? NULL : node;
+    ll_node *next = node->ll_next;
+    return next == &head->node ? NULL : next;
 }
 
 /* Get previous (from the beginning to the end) node of
  * the list. Returns NULL, if end of list is reached
  */
 static inline ll_node*
-ll_prev (ll_head *head, ll_node *node)
+ll_prev (const ll_head *head, const ll_node *node)
 {
-    node = node->ll_prev;
-    return node == &head->node ? NULL : node;
+    ll_node *prev = node->ll_prev;
+    return prev == &head->node ? NULL : prev;
 }
 
 /* Get first node of the list.
  * Returns NULL if list is empty
  */
 static inline ll_node*
-ll_first (ll_head *head)
+ll_first (const ll_head *head)
 {
     return ll_next(head, &head->node);
 }
@@ -218,7 +221,7 @@ ll_first (ll_head *head)
  * Returns NULL if list is empty
  */
 static inline ll_node*
-ll_last (ll_head *head)
+ll_last (const ll_head *head)
 {
     return ll_prev(head, &head->node);
 }
@@ -251,6 +254,330 @@ ll_cat (ll_head *list1, ll_head *list2)
 #define LL_FOR_EACH(node,list)                          \
     node = ll_first(list); node != NULL; node = ll_next(list, node)
 
+/******************** Memory allocation ********************/
+/* Allocate `len' elements of type T
+ */
+#define mem_new(T,len)  ((T*) __mem_alloc(len, 0, sizeof(T), true))
+
+/* Resize memory. The returned memory block has length of `len' and
+ * capacity at least of `len' + `extra'
+ *
+ * If p is NULL, new memory block will be allocated. Otherwise,
+ * existent memory block will be resized, new pointer is returned,
+ * while old becomes invalid (similar to how realloc() works).
+ *
+ * This function never returns NULL, it panics in a case of
+ * memory allocation error.
+ */
+#define mem_resize(p,len,extra) __mem_resize(p,len,extra,sizeof(*p),true)
+
+/* Try to resize memory. It works like mem_resize() but may
+ * return NULL if memory allocation failed.
+ */
+#define mem_try_resize(p,len,extra) __mem_resize(p,len,extra,sizeof(*p),false)
+
+/* Truncate the memory block length, preserving its capacity
+ */
+void
+mem_trunc (void *p);
+
+/* Shrink the memory block length, preserving its capasity
+ */
+#define mem_shrink(p,len)       __mem_shrink(p,len, sizeof(*p))
+
+/* Free memory block, obtained from mem_new() or mem_resize()
+ * `p' can be NULL
+ */
+void
+mem_free (void *p);
+
+/* Get memory block length/capacity, in bytes
+ * For NULL pointer return 0
+ */
+size_t mem_len_bytes (const void *p);
+size_t mem_cap_bytes (const void *p);
+
+/* Get memory block length/capacity, in elements
+ * For NULL pointer return 0
+ */
+#define mem_len(v)  (mem_len_bytes(v) / sizeof(*v))
+#define mem_cap(v)  (mem_cap_bytes(v) / sizeof(*v))
+
+/* Helper functions for memory allocation, don't use directly
+ */
+void* __attribute__ ((__warn_unused_result__))
+__mem_alloc (size_t len, size_t extra, size_t elsize, bool must);
+
+void* __attribute__ ((__warn_unused_result__))
+__mem_resize (void *p, size_t len, size_t cap, size_t elsize, bool must);
+
+void
+__mem_shrink (void *p, size_t len, size_t elsize);
+
+/******************** Strings ********************/
+/* Create new string
+ */
+static inline char*
+str_new (void) {
+    char *s = mem_resize((char*) NULL, 0, 1);
+    *s = '\0';
+    return s;
+}
+
+/* Create new string as a copy of existent string
+ */
+static inline char*
+str_dup (const char *s1)
+{
+    size_t len = strlen(s1);
+    char   *s = mem_resize((char*) NULL, len, 1);
+    memcpy(s, s1, len + 1);
+    return s;
+}
+
+/* Create new string as a lowercase copy of existent string
+ */
+char*
+str_dup_tolower (const char *s1);
+
+/* Create new string and print to it
+ */
+char*
+str_printf (const char *format, ...);
+
+/* Create new string and print to it, va_list version
+ */
+char*
+str_vprintf (const char *format, va_list ap);
+
+/* Truncate the string
+ */
+static inline void
+str_trunc (char *s)
+{
+    mem_trunc(s);
+    *s = '\0';
+}
+
+/* Resize the string
+ *
+ * s1 must be previously created by some of str_XXX functions,
+ * s1 will be consumed and the new pointer will be returned
+ */
+static inline char*
+str_resize (char *s, size_t len)
+{
+    s = mem_resize(s, len, 1);
+    s[len] = '\0';
+    return s;
+}
+
+/* Append memory to string:
+ *     s1 += s2[:l2]
+ *
+ * s1 must be previously created by some of str_XXX functions,
+ * s1 will be consumed and the new pointer will be returned
+ */
+static inline char*
+str_append_mem (char *s1, const char *s2, size_t l2)
+{
+    size_t l1 = mem_len(s1);
+
+    s1 = mem_resize(s1, l1 + l2, 1);
+    memcpy(s1 + l1, s2, l2);
+    s1[l1+l2] = '\0';
+
+    return s1;
+}
+
+/* Append string to string:
+ *     s1 += s2
+ *
+ * s1 must be previously created by some of str_XXX functions,
+ * s1 will be consumed and the new pointer will be returned
+ */
+static inline char*
+str_append (char *s1, const char *s2)
+{
+    return str_append_mem(s1, s2, strlen(s2));
+}
+
+/* Append character to string:
+ *     s1 += c
+ *
+ * `s' must be previously created by some of str_XXX functions,
+ * `s' will be consumed and the new pointer will be returned
+ */
+static inline char*
+str_append_c (char *s, char c)
+{
+    return str_append_mem(s, &c, 1);
+}
+
+/* Append formatted string to string
+ *
+ * `s' must be previously created by some of str_XXX functions,
+ * `s' will be consumed and the new pointer will be returned
+ */
+char*
+str_append_printf (char *s, const char *format, ...);
+
+/* Append formatted string to string -- va_list version
+ */
+char*
+str_append_vprintf (char *s, const char *format, va_list ap);
+
+/* Assign value to string
+ *
+ * `s1' must be previously created by some of str_XXX functions,
+ * `s1' will be consumed and the new pointer will be returned
+ */
+static inline char*
+str_assign (char *s1, const char *s2)
+{
+    mem_trunc(s1);
+    return str_append(s1, s2);
+}
+
+/* Concatenate several strings. Last pointer must be NULL.
+ * The returned pointer must be eventually freed by mem_free
+ */
+char*
+str_concat (const char *s, ...);
+
+/* Make sure that string is terminated with the `c' character:
+ * if string is not empty and the last character is not `c`,
+ * append `c' to the string
+ *
+ * `s' must be previously created by some of str_XXX functions,
+ * `s' will be consumed and the new pointer will be returned
+ */
+static inline char*
+str_terminate (char *s, char c)
+{
+    if (s[0] != '\0' && s[mem_len(s) - 1] != c) {
+        s = str_append_c(s, c);
+    }
+
+    return s;
+}
+
+/* Check if string has a specified prefix
+ */
+bool
+str_has_prefix (const char *s, const char *prefix);
+
+/* Check if string has a specified suffix
+ */
+bool
+str_has_suffix (const char *s, const char *suffix);
+
+/* Remove leading and trailing white space.
+ * This function modifies string in place, and returns pointer
+ * to original string, for convenience
+ */
+char*
+str_trim (char *s);
+
+/******************** NULL-terminated pointer arrays  ********************/
+/* Create NULL-terminated array of pointers of type *T
+ */
+#define ptr_array_new(T)                mem_resize((T*) NULL, 0, 1)
+
+/* Append pointer to the NULL-terminated array of pointers.
+ * Returns new, potentially reallocated array
+ */
+#define ptr_array_append(a,p)           \
+        ((__typeof__(a)) __ptr_array_append((void**)a, p))
+
+/* Truncate NULL-terminated array of pointers
+ */
+#define ptr_array_trunc(a)              \
+    do {                                \
+        mem_trunc(a);                   \
+        a[0] = NULL;                    \
+    } while(0)
+
+/* Find pointer within array of pointers.
+ * Return non-negative index if pointer was found, -1 otherwise
+ */
+#define ptr_array_find(a,p)             __ptr_array_find((void**) a, p)
+
+/* Delete element at given index.
+ * Returns value of deleted pointer or NULL, if index is out of range
+ */
+#define ptr_array_del(a,i)              \
+        ((__typeof__(*a)) __ptr_array_del((void**) a, i))
+
+/* Helper function for ptr_array_append, don't use directly
+ */
+static inline void**
+__ptr_array_append (void **a, void *p)
+{
+    size_t len = mem_len(a) + 1;
+    a = mem_resize(a, len, 1);
+    a[len - 1] = p;
+    a[len] = NULL;
+    return a;
+}
+
+/* Helper function for ptr_array_find, don't use directly
+ */
+static inline int
+__ptr_array_find (void **a, void *p)
+{
+    size_t len = mem_len(a), i;
+
+    for (i = 0; i < len; i ++) {
+        if (a[i] == p) {
+            return (int) i;
+        }
+    }
+
+    return -1;
+}
+
+/* Helper function for ptr_array_del, don't use directly
+ */
+static inline void*
+__ptr_array_del (void **a, int i)
+{
+    size_t len = mem_len(a);
+    void   *p;
+
+    if (i < 0 || i >= (int) len) {
+        return NULL;
+    }
+
+    len --;
+    p = a[i];
+    memmove(&a[i], &a[i + 1], sizeof(void*) * len);
+    mem_shrink(a, len);
+    a[len] = NULL;
+
+    return p;
+}
+
+/******************** Safe ctype macros ********************/
+#define safe_isspace(c)         isspace((unsigned char) c)
+#define safe_isxdigit(c)        isxdigit((unsigned char) c)
+#define safe_toupper(c)         toupper((unsigned char) c)
+#define safe_tolower(c)         tolower((unsigned char) c)
+
+/******************** OS Facilities ********************/
+/* Get user's home directory. There is no need to
+ * free the returned string
+ *
+ * May return NULL in a case of error
+ */
+const char *
+os_homedir (void);
+
+/* Make directory with parents
+ */
+int
+os_mkdir (const char *path, mode_t mode);
+
 /******************** Error handling ********************/
 /* Type error represents an error. Its value either NULL,
  * which indicates "no error" condition, or some opaque
@@ -263,6 +590,10 @@ ll_cat (ll_head *list1, ll_head *list2)
  * ESTRING() function
  */
 typedef struct {} *error;
+
+/* Standard errors
+ */
+extern error ERROR_ENOMEM;
 
 /* Construct error from a string
  */
@@ -885,10 +1216,6 @@ void
 eloop_add_start_stop_callback (void (*callback) (bool start));
 
 /* Start event loop thread.
- *
- * Callback is called from the thread context twice:
- *     callback(true)  - when thread is started
- *     callback(false) - when thread is about to exit
  */
 void
 eloop_thread_start (void);
@@ -911,22 +1238,27 @@ eloop_mutex_unlock (void);
 /* Wait on conditional variable under the event loop mutex
  */
 void
-eloop_cond_wait (GCond *cond);
+eloop_cond_wait (pthread_cond_t *cond);
 
-/* eloop_cond_wait() with timeout in seconds
+/* Get AvahiPoll that runs in event loop thread
  */
-bool
-eloop_cond_wait_until (GCond *cond, gint64 timeout);
-
-/* Create AvahiGLibPoll that runs in context of the event loop
- */
-AvahiGLibPoll*
-eloop_new_avahi_poll (void);
+const AvahiPoll*
+eloop_poll_get (void);
 
 /* Call function on a context of event loop thread
+ * The returned value can be supplied as a `callid'
+ * parameter for the eloop_call_cancel() function
+ */
+uint64_t
+eloop_call (void (*func)(void*), void *data);
+
+/* Cancel pending eloop_call
+ *
+ * This is safe to cancel already finished call (at this
+ * case nothing will happen)
  */
 void
-eloop_call (GSourceFunc func, gpointer data);
+eloop_call_cancel (uint64_t callid);
 
 /* Event notifier. Calls user-defined function on a context
  * of event loop thread, when event is triggered. This is
@@ -1190,10 +1522,10 @@ http_client_cancel (http_client *client);
 void
 http_client_cancel_af_uintptr (http_client *client, int af, uintptr_t uintptr);
 
-/* Get count of pending queries
+/* Check if client has pending queries
  */
-int
-http_client_num_pending (const http_client *client);
+bool
+http_client_has_pending (const http_client *client);
 
 /* Type http_query represents HTTP query (both request and response)
  */
@@ -1237,8 +1569,8 @@ void
 http_query_submit (http_query *q, void (*callback)(void *ptr, http_query *q));
 
 /* Get http_query timestamp. Timestamp is set when query is
- * submitted. Getting timestamp before query is submited,
- * and this function should not be called before http_query_submit()
+ * submitted. And this function should not be called before
+ * http_query_submit()
  */
 timestamp
 http_query_timestamp (const http_query *q);
@@ -1350,14 +1682,24 @@ http_query_foreach_response_header (const http_query *q,
         void (*callback)(const char *name, const char *value, void *ptr),
         void *ptr);
 
+/* HTTP schemes
+ */
+typedef enum {
+    HTTP_SCHEME_UNSET = -1,
+    HTTP_SCHEME_HTTP,
+    HTTP_SCHEME_HTTPS
+} HTTP_SCHEME;
+
 /* Some HTTP status codes
  */
+#ifndef NO_HTTP_STATUS
 enum {
     HTTP_STATUS_OK                  = 200,
     HTTP_STATUS_CREATED             = 201,
     HTTP_STATUS_NOT_FOUND           = 404,
     HTTP_STATUS_SERVICE_UNAVAILABLE = 503
 };
+#endif
 
 /* Initialize HTTP client
  */
@@ -1423,28 +1765,47 @@ trace_dump_body (trace *t, http_data *data);
 /******************** SANE_Word/SANE_String arrays ********************/
 /* Create array of SANE_Word
  */
-SANE_Word*
-sane_word_array_new (void);
+static inline SANE_Word*
+sane_word_array_new (void)
+{
+    return mem_new(SANE_Word,1);
+}
 
 /* Free array of SANE_Word
  */
-void
-sane_word_array_free (SANE_Word *a);
+static inline void
+sane_word_array_free (SANE_Word *a)
+{
+    mem_free(a);
+}
 
 /* Reset array of SANE_Word
  */
-void
-sane_word_array_reset (SANE_Word **a);
+static inline void
+sane_word_array_reset (SANE_Word **a)
+{
+    (*a)[0] = 0;
+}
 
 /* Get length of the SANE_Word array
  */
-size_t
-sane_word_array_len (const SANE_Word *a);
+static inline size_t
+sane_word_array_len (const SANE_Word *a)
+{
+    return (size_t) a[0];
+}
 
 /* Append word to array. Returns new array (old becomes invalid)
  */
-SANE_Word*
-sane_word_array_append (SANE_Word *a, SANE_Word w);
+static inline SANE_Word*
+sane_word_array_append (SANE_Word *a, SANE_Word w)
+{
+    size_t len = sane_word_array_len(a) + 1;
+    a = mem_resize(a, len + 1, 0);
+    a[0] = len;
+    a[len] = w;
+    return a;
+}
 
 /* Sort array of SANE_Word in increasing order
  */
@@ -1458,28 +1819,43 @@ sane_word_array_intersect_sorted ( const SANE_Word *a1, const SANE_Word *a2);
 
 /* Create array of SANE_String
  */
-SANE_String*
-sane_string_array_new (void);
+static inline SANE_String*
+sane_string_array_new (void)
+{
+    return ptr_array_new(SANE_String);
+}
 
 /* Free array of SANE_String
  */
-void
-sane_string_array_free (SANE_String *a);
+static inline void
+sane_string_array_free (SANE_String *a)
+{
+    mem_free(a);
+}
 
 /* Reset array of SANE_String
  */
-void
-sane_string_array_reset (SANE_String *a);
+static inline void
+sane_string_array_reset (SANE_String *a)
+{
+    ptr_array_trunc(a);
+}
 
 /* Get length of the SANE_String array
  */
-size_t
-sane_string_array_len (const SANE_String *a);
+static inline size_t
+sane_string_array_len (const SANE_String *a)
+{
+    return mem_len(a);
+}
 
 /* Append string to array Returns new array (old becomes invalid)
  */
-SANE_String*
-sane_string_array_append(SANE_String *a, SANE_String s);
+static inline SANE_String*
+sane_string_array_append(SANE_String *a, SANE_String s)
+{
+    return ptr_array_append(a, s);
+}
 
 /* Compute max string length in array of strings
  */
@@ -1488,23 +1864,35 @@ sane_string_array_max_strlen(const SANE_String *a);
 
 /* Create array of SANE_Device
  */
-const SANE_Device**
-sane_device_array_new (void);
+static inline const SANE_Device**
+sane_device_array_new (void)
+{
+    return ptr_array_new(SANE_Device*);
+}
 
 /* Free array of SANE_Device
  */
-void
-sane_device_array_free (const SANE_Device **a);
+static inline void
+sane_device_array_free (const SANE_Device **a)
+{
+    mem_free(a);
+}
 
 /* Get length of the SANE_Device array
  */
-size_t
-sane_device_array_len (const SANE_Device * const *a);
+static inline size_t
+sane_device_array_len (const SANE_Device * const *a)
+{
+    return mem_len(a);
+}
 
 /* Append device to array. Returns new array (old becomes invalid)
  */
-const SANE_Device**
-sane_device_array_append(const SANE_Device **a, SANE_Device *d);
+static inline const SANE_Device**
+sane_device_array_append(const SANE_Device **a, SANE_Device *d)
+{
+    return ptr_array_append(a, d);
+}
 
 /******************** XML utilities ********************/
 /* xml_ns defines XML namespace.

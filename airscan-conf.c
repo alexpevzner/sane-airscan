@@ -8,6 +8,7 @@
 
 #include "airscan.h"
 
+#include <dirent.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -42,20 +43,16 @@ typedef struct {
     FILE                *fp;                    /* File pointer */
 
     bool                tk_open;                /* Token is currently open */
-    GString             *tk_buffer;             /* Parser buffer, tokenized */
+    char                *tk_buffer;             /* Parser buffer, tokenized */
     unsigned int        *tk_offsets;            /* Tokens offsets */
     unsigned int        tk_count;               /* Tokens count */
-    unsigned int        tk_count_max;           /* Max ever allocated tokens
-                                                   count */
 
-    GString             *buffer;                /* Parser buffer */
-    GString             *section;               /* Section name string */
-    GString             *variable;              /* Variable name string */
-    GString             *value;                 /* Value string */
+    char                *buffer;                /* Parser buffer */
+    char                *section;               /* Section name string */
+    char                *variable;              /* Variable name string */
+    char                *value;                 /* Value string */
     inifile_record      record;                 /* Record buffer */
 } inifile;
-
-#define INIFILE_TOKEN_ARRAY_INCREMENT   32
 
 /***** Functions *****/
 /* Open the .INI file
@@ -71,15 +68,15 @@ inifile_open (const char *name)
         return NULL;
     }
 
-    file = g_new0(inifile, 1);
+    file = mem_new(inifile, 1);
     file->fp = fp;
-    file->file = g_strdup(name);
+    file->file = str_dup(name);
     file->line = 1;
-    file->tk_buffer = g_string_new(NULL);
-    file->buffer = g_string_new(NULL);
-    file->section = g_string_new(NULL);
-    file->variable = g_string_new(NULL);
-    file->value = g_string_new(NULL);
+    file->tk_buffer = str_new();
+    file->buffer = str_new();
+    file->section = str_new();
+    file->variable = str_new();
+    file->value = str_new();
 
     return file;
 }
@@ -90,15 +87,15 @@ static void
 inifile_close (inifile *file)
 {
     fclose(file->fp);
-    g_free((char*) file->file);
-    g_string_free(file->tk_buffer, TRUE);
-    g_free(file->tk_offsets);
-    g_string_free(file->buffer, TRUE);
-    g_string_free(file->section, TRUE);
-    g_string_free(file->variable, TRUE);
-    g_string_free(file->value, TRUE);
-    g_free(file->record.tokv);
-    g_free(file);
+    mem_free((char*) file->file);
+    mem_free(file->tk_buffer);
+    mem_free(file->tk_offsets);
+    mem_free(file->buffer);
+    mem_free(file->section);
+    mem_free(file->variable);
+    mem_free(file->value);
+    mem_free(file->record.tokv);
+    mem_free(file);
 }
 
 /* Get next character from the file
@@ -131,7 +128,7 @@ inifile_getc_nonspace (inifile *file)
 {
     int c;
 
-    while ((c = inifile_getc(file)) != EOF && g_ascii_isspace(c))
+    while ((c = inifile_getc(file)) != EOF && safe_isspace(c))
         ;
 
     return c;
@@ -179,10 +176,10 @@ inifile_istkbreaker (int c)
 static inline unsigned int
 inifile_hex2int (int c)
 {
-    if (g_ascii_isdigit(c)) {
+    if (isdigit(c)) {
         return c - '0';
     } else {
-        return g_ascii_toupper(c) - 'A' + 10;
+        return safe_toupper(c) - 'A' + 10;
     }
 }
 
@@ -192,7 +189,7 @@ static inline void
 inifile_tk_reset (inifile *file)
 {
     file->tk_open = false;
-    g_string_truncate(file->tk_buffer, 0);
+    str_trunc(file->tk_buffer);
     file->tk_count = 0;
 }
 
@@ -201,15 +198,8 @@ inifile_tk_reset (inifile *file)
 static void
 inifile_tk_array_push (inifile *file)
 {
-    /* Grow array on demand */
-    if (file->tk_count == file->tk_count_max) {
-        file->tk_count_max += INIFILE_TOKEN_ARRAY_INCREMENT;
-        file->tk_offsets = g_realloc(file->tk_offsets,
-            sizeof(*file->tk_offsets) * file->tk_count_max);
-    }
-
-    /* Push token offset into array */
-    file->tk_offsets[file->tk_count ++] = file->tk_buffer->len;
+    file->tk_offsets = mem_resize(file->tk_offsets, file->tk_count + 1, 0);
+    file->tk_offsets[file->tk_count ++] = mem_len(file->tk_buffer);
 }
 
 /* Export token array to file->record
@@ -219,14 +209,14 @@ inifile_tk_array_export (inifile *file)
 {
     unsigned int        i;
 
-    file->record.tokv = g_realloc(file->record.tokv,
-            sizeof(*file->record.tokv) * file->tk_count_max);
+    file->record.tokv = mem_resize(file->record.tokv,
+            sizeof(*file->record.tokv) * file->tk_count, 0);
 
     file->record.tokc = file->tk_count;
     for (i = 0; i < file->tk_count; i ++) {
         const char      *token;
 
-        token = file->tk_buffer->str + file->tk_offsets[i];
+        token = file->tk_buffer + file->tk_offsets[i];
         file->record.tokv[i] = token;
     }
 }
@@ -248,7 +238,7 @@ static void
 inifile_tk_close (inifile *file)
 {
     if (file->tk_open) {
-        g_string_append_c(file->tk_buffer, '\0');
+        file->tk_buffer = str_append_c(file->tk_buffer, '\0');
         file->tk_open = false;
     }
 }
@@ -259,7 +249,7 @@ static inline void
 inifile_tk_append (inifile *file, int c)
 {
     inifile_tk_open(file);
-    g_string_append_c(file->tk_buffer, c);
+    file->tk_buffer = str_append_c(file->tk_buffer, c);
 }
 
 /* Strip trailing space in line currently being read
@@ -267,7 +257,8 @@ inifile_tk_append (inifile *file, int c)
 static inline void
 inifile_strip_trailing_space (inifile *file, unsigned int *trailing_space)
 {
-    g_string_truncate(file->buffer, file->buffer->len - *trailing_space);
+    size_t len = mem_len(file->buffer) - *trailing_space;
+    file->buffer = str_resize(file->buffer, len);
     *trailing_space = 0;
 }
 
@@ -295,7 +286,7 @@ inifile_gets (inifile *file, char delimiter, bool linecont, bool *syntax)
         PRS_COMMENT
     } state = PRS_SKIP_SPACE;
 
-    g_string_truncate(file->buffer, 0);
+    str_trunc(file->buffer);
     inifile_tk_reset(file);
 
     /* Parse the string */
@@ -313,7 +304,7 @@ inifile_gets (inifile *file, char delimiter, bool linecont, bool *syntax)
 
         switch(state) {
         case PRS_SKIP_SPACE:
-            if (g_ascii_isspace(c)) {
+            if (safe_isspace(c)) {
                 break;
             }
 
@@ -335,11 +326,11 @@ inifile_gets (inifile *file, char delimiter, bool linecont, bool *syntax)
                     inifile_ungetc(file, c);
                 }
             } else {
-                g_string_append_c(file->buffer, c);
+                file->buffer = str_append_c(file->buffer, c);
             }
 
             if (state == PRS_BODY) {
-                if (g_ascii_isspace(c)) {
+                if (safe_isspace(c)) {
                     trailing_space ++;
                     inifile_tk_close(file);
                 } else {
@@ -362,7 +353,7 @@ inifile_gets (inifile *file, char delimiter, bool linecont, bool *syntax)
             } else if (c == '"') {
                 state = PRS_BODY;
             } else {
-                g_string_append_c(file->buffer, c);
+                file->buffer = str_append_c(file->buffer, c);
                 inifile_tk_append(file, c);
             }
             break;
@@ -387,14 +378,14 @@ inifile_gets (inifile *file, char delimiter, bool linecont, bool *syntax)
                 case 'v': c = '\v'; break;
                 }
 
-                g_string_append_c(file->buffer, c);
+                file->buffer = str_append_c(file->buffer, c);
                 inifile_tk_append(file, c);
                 state = PRS_STRING;
             }
             break;
 
         case PRS_STRING_HEX:
-            if (g_ascii_isxdigit(c)) {
+            if (safe_isxdigit(c)) {
                 if (count != 2) {
                     accumulator = accumulator * 16 + inifile_hex2int(c);
                     count ++;
@@ -405,7 +396,7 @@ inifile_gets (inifile *file, char delimiter, bool linecont, bool *syntax)
             }
 
             if (state != PRS_STRING_HEX) {
-                g_string_append_c(file->buffer, accumulator);
+                file->buffer = str_append_c(file->buffer, accumulator);
                 inifile_tk_append(file, accumulator);
             }
             break;
@@ -423,7 +414,7 @@ inifile_gets (inifile *file, char delimiter, bool linecont, bool *syntax)
             }
 
             if (state != PRS_STRING_OCTAL) {
-                g_string_append_c(file->buffer, accumulator);
+                file->buffer = str_append_c(file->buffer, accumulator);
                 inifile_tk_append(file, accumulator);
             }
             break;
@@ -453,14 +444,14 @@ inifile_read_finish (inifile *file, int last_char, INIFILE_RECORD rec_type)
 {
     file->record.type = rec_type;
     file->record.file = file->file;
-    file->record.section = file->section->str;
+    file->record.section = file->section;
     file->record.variable = file->record.value = NULL;
 
     if (rec_type == INIFILE_VARIABLE || rec_type == INIFILE_COMMAND) {
         inifile_tk_array_export(file);
         if (rec_type == INIFILE_VARIABLE) {
-            file->record.variable = file->variable->str;
-            file->record.value = file->value->str;
+            file->record.variable = file->variable;
+            file->record.value = file->value;
         } else {
             log_assert(NULL, file->record.tokc);
             file->record.variable = file->record.tokv[0];
@@ -509,7 +500,7 @@ inifile_read (inifile *file)
 
         if (c == ']' && !syntax)
         {
-            g_string_assign(file->section, file->buffer->str);
+            file->section = str_assign(file->section, file->buffer);
             return inifile_read_finish(file, c, INIFILE_SECTION);
         }
     } else if (c != '=') {
@@ -517,10 +508,10 @@ inifile_read (inifile *file)
 
         c = inifile_gets(file, '=', false, &syntax);
         if(c == '=' && !syntax) {
-            g_string_assign(file->variable, file->buffer->str);
+            file->variable = str_assign(file->variable, file->buffer);
             c = inifile_gets(file, EOF, true, &syntax);
             if(!syntax) {
-                g_string_assign(file->value, file->buffer->str);
+                file->value = str_assign(file->value, file->buffer);
                 return inifile_read_finish(file, c, INIFILE_VARIABLE);
             }
         }
@@ -541,30 +532,30 @@ static bool
 inifile_match_name (const char *n1, const char *n2)
 {
     /* Skip leading space */
-    while (g_ascii_isspace(*n1)) {
+    while (safe_isspace(*n1)) {
         n1 ++;
     }
 
-    while (g_ascii_isspace(*n2)) {
+    while (safe_isspace(*n2)) {
         n2 ++;
     }
 
     /* Perform the match */
     while (*n1 && *n2) {
-        if (g_ascii_isspace(*n1)) {
-            if (!g_ascii_isspace(*n2)) {
+        if (safe_isspace(*n1)) {
+            if (!safe_isspace(*n2)) {
                 break;
             }
 
             do {
                 n1 ++;
-            } while (g_ascii_isspace(*n1));
+            } while (safe_isspace(*n1));
 
             do {
                 n2 ++;
-            } while (g_ascii_isspace(*n2));
+            } while (safe_isspace(*n2));
         }
-        else if (g_ascii_toupper(*n1) == g_ascii_toupper(*n2)) {
+        else if (safe_toupper(*n1) == safe_toupper(*n2)) {
             n1 ++, n2 ++;
         } else {
             break;
@@ -572,11 +563,11 @@ inifile_match_name (const char *n1, const char *n2)
     }
 
     /* Skip trailing space */
-    while (g_ascii_isspace(*n1)) {
+    while (safe_isspace(*n1)) {
         n1 ++;
     }
 
-    while (g_ascii_isspace(*n2)) {
+    while (safe_isspace(*n2)) {
         n2 ++;
     }
 
@@ -616,10 +607,10 @@ conf_device_list_free (void)
 
     while (list != NULL) {
         next = list->next;
-        g_free((char*) list->name);
-        g_free((char*) list->uri);
+        mem_free((char*) list->name);
+        mem_free((char*) list->uri);
         devid_free(list->devid);
-        g_free(list);
+        mem_free(list);
         list = next;
     }
 }
@@ -629,8 +620,8 @@ conf_device_list_free (void)
 static void
 conf_device_list_prepend (const char *name, http_uri *uri, ID_PROTO proto)
 {
-    conf_device *dev = g_new0(conf_device, 1);
-    dev->name = g_strdup(name);
+    conf_device *dev = mem_new(conf_device, 1);
+    dev->name = str_dup(name);
     dev->devid = devid_alloc();
     dev->proto = proto;
     dev->uri = uri;
@@ -650,15 +641,16 @@ conf_device_list_lookup (const char *name) {
 }
 
 /* Expand path name. The returned string must be eventually
- * released with g_free()
+ * released with mem_free()
  */
 static const char*
 conf_expand_path (const char *path)
 {
-    const char *prefix = "", *suffix = "", *home = NULL, *end;
+    const char *prefix = "";
+    char       *ret;
 
     if (path[0] == '~' && (path[1] == '\0' || path[1] == '/')) {
-        home = g_get_home_dir();
+        const char *home = os_homedir();
         if (home != NULL) {
             prefix = home;
             path ++;
@@ -667,11 +659,10 @@ conf_expand_path (const char *path)
         }
     }
 
-    end = path[0] ? path : prefix;
-    suffix = g_str_has_suffix(end, "/") ? "" : "/";
-    path = g_strconcat(home, path, suffix, NULL);
+    ret = str_concat(prefix, path, NULL);
+    ret = str_terminate(ret, '/');
 
-    return path;
+    return ret;
 }
 
 /* Report configuration file error
@@ -770,7 +761,7 @@ conf_load_from_ini (inifile *ini)
                 }
             } else if (inifile_match_name(rec->section, "debug")) {
                 if (inifile_match_name(rec->variable, "trace")) {
-                    g_free((char*) conf.dbg_trace);
+                    mem_free((char*) conf.dbg_trace);
                     conf.dbg_trace = conf_expand_path(rec->value);
                     if (conf.dbg_trace == NULL) {
                         conf_perror(rec, "failed to expand path");
@@ -811,38 +802,39 @@ conf_load_from_file (const char *name)
  *
  * This function uses its path parameter as its temporary
  * buffer and doesn't guarantee to preserve its content
+ *
+ * The `path' can be reallocated by this function; old
+ * value is consumed and new is returned
  */
-static void
-conf_load_from_dir (GString *path)
+static char*
+conf_load_from_dir (char *path)
 {
-    if (path->len != 0 && path->str[path->len - 1] != '/') {
-        g_string_append_c(path, '/');
-    }
+    path = str_terminate(path, '/');
 
     /* Load from CONFIG_AIRSCAN_CONF file */
-    size_t len = path->len;
-    g_string_append(path, CONFIG_AIRSCAN_CONF);
-    conf_load_from_file(path->str);
+    size_t len = mem_len(path);
+    path = str_append(path, CONFIG_AIRSCAN_CONF);
+    conf_load_from_file(path);
 
     /* Scan CONFIG_AIRSCAN_D directory */
-    g_string_truncate(path, len);
-    g_string_append(path, CONFIG_AIRSCAN_D);
-    if (path->str[path->len - 1] != '/') {
-        g_string_append_c(path, '/');
-    }
-    len = path->len;
+    path = str_resize(path, len);
+    path = str_append(path, CONFIG_AIRSCAN_D);
+    path = str_terminate(path, '/');
+    len = mem_len(path);
 
-    GDir *dir = g_dir_open(path->str, 0, NULL);
+    DIR *dir = opendir(path);
     if (dir) {
-        const char *name;
-        while ((name = g_dir_read_name(dir)) != NULL) {
-            g_string_truncate(path, len);
-            g_string_append(path, name);
-            conf_load_from_file(path->str);
+        struct dirent *ent;
+        while ((ent = readdir(dir)) != NULL) {
+            path = str_resize(path, len);
+            path = str_append(path, ent->d_name);
+            conf_load_from_file(path);
         }
 
-        g_dir_close(dir);
+        closedir(dir);
     }
+
+    return path;
 }
 
 /* Load configuration from environment
@@ -879,9 +871,9 @@ conf_load_from_env (void)
 void
 conf_load (void)
 {
-    GString   *dir_list = g_string_new(NULL);
-    GString   *path = g_string_new(NULL);
-    char      *s;
+    char    *dir_list = str_new();
+    char    *path = str_new();
+    char    *s;
 
     /* Reset the configuration */
     conf = conf_init;
@@ -889,23 +881,20 @@ conf_load (void)
     /* Look to configuration path in environment */
     s = getenv(CONFIG_PATH_ENV);
     if (s != NULL) {
-        g_string_assign(dir_list, s);
+        dir_list = str_assign(dir_list, s);
     }
 
     /* Append default directories */
-    if (dir_list->len && dir_list->str[dir_list->len - 1] != ':') {
-        g_string_append_c(dir_list, ':');
-    }
-
-    g_string_append(dir_list, CONFIG_SANE_CONFIG_DIR);
+    dir_list = str_terminate(dir_list, ':');
+    dir_list = str_append(dir_list, CONFIG_SANE_CONFIG_DIR);
 
     /* Iterate over the dir_list */
-    for (s = dir_list->str; ; s ++) {
+    for (s = dir_list; ; s ++) {
         if (*s == ':' || *s == '\0') {
-            conf_load_from_dir(path);
-            g_string_truncate(path, 0);
+            path = conf_load_from_dir(path);
+            str_trunc(path);
         } else {
-            g_string_append_c(path, *s);
+            path = str_append_c(path, *s);
         }
 
         if (*s == '\0') {
@@ -919,8 +908,8 @@ conf_load (void)
     /* Cleanup and exit */
     conf_device_list_revert();
 
-    g_string_free(dir_list, TRUE);
-    g_string_free(path, TRUE);
+    mem_free(dir_list);
+    mem_free(path);
 }
 
 /* Free resources, allocated by conf_load, and reset configuration
@@ -930,7 +919,7 @@ void
 conf_unload (void)
 {
     conf_device_list_free();
-    g_free((char*) conf.dbg_trace);
+    mem_free((char*) conf.dbg_trace);
     conf = conf_init;
 }
 

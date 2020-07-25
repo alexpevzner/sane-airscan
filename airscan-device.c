@@ -49,11 +49,12 @@ enum {
  *     |    |     finished |     | finished         |          |
  *     |    |              V     V                  |          |
  *     |    |  CANCEL_JOB_DONE  CANCEL_REQ_DONE     |          |
- *     |    |              |            |           |          |
- *     |    V              |            |           |          |
- *     |  CLEANUP          |            |           |          |
- *     |    |              |            |           |          |
- *     |    V              V            V           V          |
+ *     |    |   cancel req |     | job              |          |
+ *     |    |   finished   |     | finished         |          |
+ *     |    V              |     |                  |          |
+ *     |  CLEANUP          |     |                  |          |
+ *     |    |              |     |                  |          |
+ *     |    V              V     V                  V          |
  *     ---DONE<--------------------------------------          |
  *          |                                                  |
  *          V                                                  |
@@ -87,7 +88,7 @@ struct device {
 
     /* State machinery */
     DEVICE_STM_STATE     stm_state;         /* Device state */
-    GCond                stm_cond;          /* Signalled when state changes */
+    pthread_cond_t       stm_cond;          /* Signalled when state changes */
     eloop_event          *stm_cancel_event; /* Signalled to initiate cancel */
     http_query           *stm_cancel_query; /* CANCEL query */
     bool                 stm_cancel_sent;   /* Cancel was sent to device */
@@ -127,7 +128,7 @@ struct device {
 
 /* Static variables
  */
-static GPtrArray *device_table;
+static device **device_table;
 
 /* Forward declarations
  */
@@ -181,7 +182,7 @@ device_new (zeroconf_devinfo *devinfo)
     device            *dev;
 
     /* Create device */
-    dev = g_new0(device, 1);
+    dev = mem_new(device, 1);
 
     dev->devinfo = devinfo;
     dev->log = log_ctx_new(dev->devinfo->name, NULL);
@@ -195,13 +196,13 @@ device_new (zeroconf_devinfo *devinfo)
 
     dev->proto_ctx.http = http_client_new(dev->log, dev);
 
-    g_cond_init(&dev->stm_cond);
+    pthread_cond_init(&dev->stm_cond, NULL);
 
     dev->read_pollable = pollable_new();
     dev->read_queue = http_data_queue_new();
 
     /* Add to the table */
-    g_ptr_array_add(device_table, dev);
+    device_table = ptr_array_append(device_table, dev);
 
     return dev;
 }
@@ -215,7 +216,7 @@ device_free (device *dev)
 
     /* Remove device from table */
     log_debug(dev->log, "removed from device table");
-    g_ptr_array_remove(device_table, dev);
+    ptr_array_del(device_table, ptr_array_find(device_table, dev));
 
     /* Stop all pending I/O activity */
     device_http_cancel(dev);
@@ -235,9 +236,9 @@ device_free (device *dev)
 
     http_client_free(dev->proto_ctx.http);
     http_uri_free(dev->proto_ctx.base_uri_nozone);
-    g_free((char*) dev->proto_ctx.location);
+    mem_free((char*) dev->proto_ctx.location);
 
-    g_cond_clear(&dev->stm_cond);
+    pthread_cond_destroy(&dev->stm_cond);
 
     for (i = 0; i < NUM_ID_FORMAT; i ++) {
         image_decoder *decoder = dev->decoders[i];
@@ -253,23 +254,20 @@ device_free (device *dev)
     log_debug(dev->log, "device destroyed");
     log_ctx_free(dev->log);
     zeroconf_devinfo_free(dev->devinfo);
-    g_free(dev);
+    mem_free(dev);
 }
 
 /* Start probing. Called via eloop_call
  */
-static gboolean
-device_start_probing (gpointer data)
+static void
+device_start_probing (void *data)
 {
     device      *dev = data;
 
     device_probe_endpoint(dev, dev->devinfo->endpoints);
-
-    return FALSE;
 }
 
-/* Start device I/O. Called via eloop_call
- * device_start_do
+/* Start device I/O.
  */
 static SANE_Status
 device_io_start (device *dev)
@@ -291,10 +289,10 @@ device_io_start (device *dev)
 static device*
 device_find_by_ident (const char *ident)
 {
-    unsigned int i;
+    size_t i, len = mem_len(device_table);
 
-    for (i = 0; i < device_table->len; i ++) {
-        device *dev = g_ptr_array_index(device_table, i);
+    for (i = 0; i < len; i ++) {
+        device *dev = device_table[i];
         if (!strcmp(dev->devinfo->ident, ident)) {
             return dev;
         }
@@ -308,8 +306,8 @@ device_find_by_ident (const char *ident)
 static void
 device_table_purge (void)
 {
-    while (device_table->len > 0) {
-        device_free(g_ptr_array_index(device_table, 0));
+    while (mem_len(device_table) > 0) {
+        device_free(device_table[0]);
     }
 }
 
@@ -471,13 +469,22 @@ device_http_cancel (device *dev)
 /* http_client onerror callback
  */
 static void
-device_http_onerror (void *ptr, error err) {
-    device *dev = ptr;
+device_http_onerror (void *ptr, error err)
+{
+    device      *dev = ptr;
+    SANE_Status status;
 
-    log_debug(dev->log, ESTRING(err));
+    status = err == ERROR_ENOMEM ? SANE_STATUS_NO_MEM : SANE_STATUS_IO_ERROR;
 
-    if (!device_stm_cancel_perform(dev, SANE_STATUS_IO_ERROR)) {
+    log_debug(dev->log, "cancelling job due to error: %s", ESTRING(err));
+
+    if (!device_stm_cancel_perform(dev, status)) {
         device_stm_state_set(dev, DEVICE_STM_DONE);
+    } else {
+        /* Scan job known to be done, now waiting for cancel
+         * completion
+         */
+        device_stm_state_set(dev, DEVICE_STM_CANCEL_JOB_DONE);
     }
 }
 
@@ -637,7 +644,7 @@ device_stm_state_set (device *dev, DEVICE_STM_STATE state)
             device_stm_state_name(old_state), device_stm_state_name(state));
 
         __atomic_store_n(&dev->stm_state, state, __ATOMIC_SEQ_CST);
-        g_cond_broadcast(&dev->stm_cond);
+        pthread_cond_broadcast(&dev->stm_cond);
 
         if (!device_stm_state_working(dev)) {
             pollable_signal(dev->read_pollable);
@@ -751,10 +758,10 @@ device_stm_op_callback (void *ptr, http_query *q)
     /* Save useful result, if any */
     if (dev->proto_op_current == PROTO_OP_SCAN) {
         if (result.data.location != NULL) {
-            g_free((char*) dev->proto_ctx.location); /* Just in case */
+            mem_free((char*) dev->proto_ctx.location); /* Just in case */
             dev->proto_ctx.location = result.data.location;
             dev->proto_ctx.failed_attempt = 0;
-            g_cond_broadcast(&dev->stm_cond);
+            pthread_cond_broadcast(&dev->stm_cond);
         }
     } else if (dev->proto_op_current == PROTO_OP_LOAD) {
         if (result.data.image != NULL) {
@@ -763,7 +770,7 @@ device_stm_op_callback (void *ptr, http_query *q)
             pollable_signal(dev->read_pollable);
 
             dev->proto_ctx.failed_attempt = 0;
-            g_cond_broadcast(&dev->stm_cond);
+            pthread_cond_broadcast(&dev->stm_cond);
         }
     }
 
@@ -1159,14 +1166,12 @@ device_get_parameters (device *dev, SANE_Parameters *params)
 
 /* Start scanning operation - runs on a context of event loop thread
  */
-static gboolean
-device_start_do (gpointer data)
+static void
+device_start_do (void *data)
 {
     device      *dev = data;
 
     device_stm_start_scan(dev);
-
-    return FALSE;
 }
 
 /* Start new scanning job
@@ -1176,7 +1181,7 @@ device_start_new_job (device *dev)
 {
     dev->stm_cancel_sent = false;
     dev->job_status = SANE_STATUS_GOOD;
-    g_free((char*) dev->proto_ctx.location);
+    mem_free((char*) dev->proto_ctx.location);
     dev->proto_ctx.location = NULL;
     dev->proto_ctx.failed_op = PROTO_OP_NONE;
     dev->proto_ctx.failed_attempt = 0;
@@ -1414,7 +1419,7 @@ device_read_next (device *dev)
     }
 
     /* Initialize image decoding */
-    dev->read_line_buf = g_malloc(line_capacity);
+    dev->read_line_buf = mem_new(SANE_Byte, line_capacity);
     memset(dev->read_line_buf, 0xff, line_capacity);
 
     dev->read_line_num = 0;
@@ -1617,7 +1622,7 @@ DONE:
         http_data_unref(dev->read_image);
         dev->read_image = NULL;
     }
-    g_free(dev->read_line_buf);
+    mem_free(dev->read_line_buf);
     dev->read_line_buf = NULL;
 
     if (device_stm_state_get(dev) == DEVICE_STM_DONE &&
@@ -1634,7 +1639,7 @@ DONE:
 SANE_Status
 device_management_init (void)
 {
-    device_table = g_ptr_array_new();
+    device_table = ptr_array_new(device*);
     eloop_add_start_stop_callback(device_management_start_stop);
 
     return SANE_STATUS_GOOD;
@@ -1646,8 +1651,8 @@ void
 device_management_cleanup (void)
 {
     if (device_table != NULL) {
-        log_assert(NULL, device_table->len == 0);
-        g_ptr_array_unref(device_table);
+        log_assert(NULL, mem_len(device_table) == 0);
+        mem_free(device_table);
         device_table = NULL;
     }
 }

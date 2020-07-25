@@ -8,6 +8,8 @@
 
 #include "airscan.h"
 
+#include <alloca.h>
+
 /* Protocol constants */
 #define WSD_ADDR_ANONYMOUS              \
         "http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous"
@@ -71,7 +73,7 @@ typedef struct {
 static void
 wsd_free (proto_handler *proto)
 {
-    g_free(proto);
+    mem_free(proto);
 }
 
 /* Create a HTTP POST request
@@ -791,8 +793,8 @@ wsd_scan_decode (const proto_ctx *ctx)
             err = xml_rd_node_value_uint(xml, &job_id);
         } else if (!strcmp(path, "s:Envelope/s:Body/scan:CreateScanJobResponse"
                 "/scan:JobToken")) {
-            g_free(job_token);
-            job_token = g_strdup(xml_rd_node_value(xml));
+            mem_free(job_token);
+            job_token = str_dup(xml_rd_node_value(xml));
         }
 
         xml_rd_deep_next(xml, 0);
@@ -809,12 +811,12 @@ wsd_scan_decode (const proto_ctx *ctx)
     }
 
     result.next = PROTO_OP_LOAD;
-    result.data.location = g_strdup_printf("%u:%s", job_id, job_token);
+    result.data.location = str_printf("%u:%s", job_id, job_token);
 
     /* Cleanup and exit */
 DONE:
     xml_rd_finish(&xml);
-    g_free(job_token);
+    mem_free(job_token);
 
     if (err != NULL) {
         result.err = eloop_eprintf("CreateScanJobResponse: %s", ESTRING(err));
@@ -836,7 +838,7 @@ wsd_load_query (const proto_ctx *ctx)
     char   *job_id, *job_token;
 
     /* Split location into JobId and JobToken */
-    job_id = g_alloca(strlen(ctx->location) + 1);
+    job_id = alloca(strlen(ctx->location) + 1);
     strcpy(job_id, ctx->location);
     job_token = strchr(job_id, ':');
     *job_token ++ = '\0';
@@ -934,7 +936,7 @@ wsd_cancel_query (const proto_ctx *ctx)
     char   *job_id, *job_token;
 
     /* Split location into JobId and JobToken */
-    job_id = g_alloca(strlen(ctx->location) + 1);
+    job_id = alloca(strlen(ctx->location) + 1);
     strcpy(job_id, ctx->location);
     job_token = strchr(job_id, ':');
     *job_token ++ = '\0';
@@ -958,7 +960,7 @@ wsd_cancel_query (const proto_ctx *ctx)
 proto_handler*
 proto_handler_wsd_new (void)
 {
-    proto_handler_wsd *wsd = g_new0(proto_handler_wsd, 1);
+    proto_handler_wsd *wsd = mem_new(proto_handler_wsd, 1);
 
     wsd->proto.name = "WSD";
     wsd->proto.free = wsd_free;

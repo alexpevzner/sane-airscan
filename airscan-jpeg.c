@@ -32,7 +32,7 @@ image_decoder_jpeg_free (image_decoder *decoder)
     image_decoder_jpeg *jpeg = (image_decoder_jpeg*) decoder;
 
     jpeg_destroy_decompress(&jpeg->cinfo);
-    g_free(jpeg);
+    mem_free(jpeg);
 }
 
 /* Begin JPEG decoding
@@ -202,7 +202,7 @@ image_decoder_jpeg_error_exit (j_common_ptr cinfo)
 image_decoder*
 image_decoder_jpeg_new (void)
 {
-    image_decoder_jpeg *jpeg = g_new0(image_decoder_jpeg, 1);
+    image_decoder_jpeg *jpeg = mem_new(image_decoder_jpeg, 1);
 
     jpeg->decoder.content_type = "image/jpeg";
     jpeg->decoder.free = image_decoder_jpeg_free;

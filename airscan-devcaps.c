@@ -15,7 +15,7 @@
 devcaps_source*
 devcaps_source_new (void)
 {
-    devcaps_source *src = g_new0(devcaps_source, 1);
+    devcaps_source *src = mem_new(devcaps_source, 1);
     src->resolutions = sane_word_array_new();
     return src;
 }
@@ -27,7 +27,7 @@ devcaps_source_free (devcaps_source *src)
 {
     if (src != NULL) {
         sane_word_array_free(src->resolutions);
-        g_free(src);
+        mem_free(src);
     }
 }
 
@@ -36,7 +36,7 @@ devcaps_source_free (devcaps_source *src)
 devcaps_source*
 devcaps_source_clone (const devcaps_source *src)
 {
-    devcaps_source *src2 = g_new0(devcaps_source, 1);
+    devcaps_source *src2 = mem_new(devcaps_source, 1);
     unsigned int   i, len;
 
     *src2 = *src;
@@ -160,8 +160,8 @@ devcaps_reset (devcaps *caps)
 void
 devcaps_dump (log_ctx *log, devcaps *caps)
 {
-    int          i;
-    GString      *buf = g_string_new(NULL);
+    int  i;
+    char *buf = str_new();
 
     log_trace(log, "===== device capabilities =====");
     log_trace(log, "  Size units:       %d DPI", caps->units);
@@ -174,17 +174,17 @@ devcaps_dump (log_ctx *log, devcaps *caps)
         log_trace(log, "  Compression norm: %d", caps->compression_norm);
     }
 
-    g_string_truncate(buf, 0);
+    str_trunc(buf);
     for (i = 0; i < NUM_ID_SOURCE; i ++) {
         if (caps->src[i] != NULL) {
-            if (buf->len != 0) {
-                g_string_append(buf, ", ");
+            if (buf[0] != '\0') {
+                buf = str_append(buf, ", ");
             }
-            g_string_append(buf, id_source_sane_name(i));
+            buf = str_append(buf, id_source_sane_name(i));
         }
     }
 
-    log_trace(log, "  Sources:          %s", buf->str);
+    log_trace(log, "  Sources:          %s", buf);
 
     ID_SOURCE id_src;
     for (id_src = (ID_SOURCE) 0; id_src < NUM_ID_SOURCE; id_src ++) {
@@ -211,45 +211,45 @@ devcaps_dump (log_ctx *log, devcaps *caps)
                 src->max_wid_px, src->max_hei_px, xbuf, ybuf);
 
         if (src->flags & DEVCAPS_SOURCE_RES_DISCRETE) {
-            g_string_truncate(buf, 0);
+            str_trunc(buf);
             for (i = 0; i < (int) sane_word_array_len(src->resolutions); i ++) {
                 if (i != 0) {
-                    g_string_append_c(buf, ' ');
+                    buf = str_append_c(buf, ' ');
                 }
-                g_string_append_printf(buf, "%d", src->resolutions[i+1]);
+                buf = str_append_printf(buf, "%d", src->resolutions[i+1]);
             }
 
-            log_trace(log, "    Resolutions: %s", buf->str);
+            log_trace(log, "    Resolutions: %s", buf);
         }
 
-        g_string_truncate(buf, 0);
+        str_trunc(buf);
 
         for (i = 0; i < NUM_ID_COLORMODE; i ++) {
             if ((src->colormodes & (1 << i)) != 0) {
-                if (buf->len != 0) {
-                    g_string_append(buf, ", ");
+                if (buf[0] != '\0') {
+                    buf = str_append(buf, ", ");
                 }
-                g_string_append(buf, id_colormode_sane_name(i));
+                buf = str_append(buf, id_colormode_sane_name(i));
             }
         }
 
-        log_trace(log, "    Color modes: %s", buf->str);
+        log_trace(log, "    Color modes: %s", buf);
 
-        g_string_truncate(buf, 0);
+        str_trunc(buf);
 
         for (i = 0; i < NUM_ID_FORMAT; i ++) {
             if ((src->formats & (1 << i)) != 0) {
-                if (buf->len != 0) {
-                    g_string_append(buf, ", ");
+                if (buf[0] != '\0') {
+                    buf = str_append(buf, ", ");
                 }
-                g_string_append(buf, id_format_short_name(i));
+                buf = str_append(buf, id_format_short_name(i));
             }
         }
 
-        log_trace(log, "    Formats:     %s", buf->str);
+        log_trace(log, "    Formats:     %s", buf);
     }
 
-    g_string_free(buf, TRUE);
+    mem_free(buf);
     log_trace(log, "");
 }
 

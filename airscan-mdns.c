@@ -48,19 +48,18 @@ typedef enum {
  * device discovery
  */
 typedef struct {
-    zeroconf_finding finding;        /* Base class */
-    GPtrArray        *resolvers;     /* Array of pending AvahiServiceResolver */
-    ll_node          node_list;      /* In mdns_finding_list */
-    bool             should_publish; /* Should we publish this finding */
-    bool             is_published;   /* Finding actually published */
-    bool             initscan;       /* Device discovered during initial scan */
+    zeroconf_finding     finding;        /* Base class */
+    AvahiServiceResolver **resolvers;    /* Array of pending resolvers */
+    ll_node              node_list;      /* In mdns_finding_list */
+    bool                 should_publish; /* Should we publish this finding */
+    bool                 is_published;   /* Finding actually published */
+    bool                 initscan;       /* Device discovered during initial scan */
 } mdns_finding;
 
 /* Static variables
  */
 static log_ctx *mdns_log;
 static ll_head mdns_finding_list;
-static AvahiGLibPoll *mdns_avahi_glib_poll;
 static const AvahiPoll *mdns_avahi_poll;
 static AvahiTimeout *mdns_avahi_restart_timer;
 static AvahiClient *mdns_avahi_client;
@@ -245,13 +244,13 @@ static mdns_finding*
 mdns_finding_new (ZEROCONF_METHOD method, int ifindex, const char *name,
         bool initscan)
 {
-    mdns_finding *mdns = g_new0(mdns_finding, 1);
+    mdns_finding *mdns = mem_new(mdns_finding, 1);
 
     mdns->finding.method = method;
     mdns->finding.ifindex = ifindex;
-    mdns->finding.name = g_strdup(name);
+    mdns->finding.name = str_dup(name);
 
-    mdns->resolvers = g_ptr_array_new();
+    mdns->resolvers = ptr_array_new(AvahiServiceResolver*);
 
     mdns->initscan = initscan;
     if (mdns->initscan) {
@@ -266,16 +265,16 @@ mdns_finding_new (ZEROCONF_METHOD method, int ifindex, const char *name,
 static void
 mdns_finding_free (mdns_finding *mdns)
 {
-    g_free((char*) mdns->finding.name);
-    g_free((char*) mdns->finding.model);
+    mem_free((char*) mdns->finding.name);
+    mem_free((char*) mdns->finding.model);
     zeroconf_endpoint_list_free(mdns->finding.endpoints);
 
     if (mdns->initscan) {
         mdns_initscan_count_dec(mdns->finding.method);
     }
 
-    g_ptr_array_free(mdns->resolvers, TRUE);
-    g_free(mdns);
+    mem_free(mdns->resolvers);
+    mem_free(mdns);
 }
 
 /* Find mdns_finding
@@ -325,10 +324,13 @@ mdns_finding_get (ZEROCONF_METHOD method, int ifindex, const char *name,
 static void
 mdns_finding_kill_resolvers (mdns_finding *mdns)
 {
-    while (mdns->resolvers->len > 0) {
-        avahi_service_resolver_free(mdns->resolvers->pdata[0]);
-        g_ptr_array_remove_index(mdns->resolvers, 0);
+    size_t i, len = mem_len(mdns->resolvers);
+
+    for (i = 0; i < len; i ++) {
+        avahi_service_resolver_free(mdns->resolvers[i]);
     }
+
+    ptr_array_trunc(mdns->resolvers);
 }
 
 /* Del the mdns_finding
@@ -414,18 +416,17 @@ mdns_make_escl_endpoint (ZEROCONF_METHOD method, const AvahiAddress *addr,
     /* Make eSCL URL */
     if (rs == NULL) {
         /* Assume /eSCL by default */
-        u = g_strdup_printf("%s://%s:%d/eSCL/", scheme, str_addr, port);
+        u = str_printf("%s://%s:%d/eSCL/", scheme, str_addr, port);
     } else if (rs_len == 0) {
         /* Empty rs, avoid double '/' */
-        u = g_strdup_printf("%s://%s:%d/", scheme, str_addr, port);
+        u = str_printf("%s://%s:%d/", scheme, str_addr, port);
     } else {
-        u = g_strdup_printf("%s://%s:%d/%.*s/", scheme, str_addr, port,
-                rs_len, rs);
+        u = str_printf("%s://%s:%d/%.*s/", scheme, str_addr, port, rs_len, rs);
     }
 
     uri = http_uri_new(u, true);
     log_assert(mdns_log, uri != NULL);
-    g_free(u);
+    mem_free(u);
 
     return zeroconf_endpoint_new(ID_PROTO_ESCL, uri);
 }
@@ -484,7 +485,7 @@ mdns_avahi_resolver_found (mdns_finding *mdns, MDNS_SERVICE service,
 
     /* Update finding */
     if (mdns->finding.model == NULL && txt_ty != NULL) {
-        mdns->finding.model = g_strdup(txt_ty);
+        mdns->finding.model = str_dup(txt_ty);
     }
 
     if (!uuid_valid(mdns->finding.uuid) && txt_uuid != NULL) {
@@ -552,7 +553,7 @@ mdns_avahi_resolver_callback (AvahiServiceResolver *r,
     }
 
     /* Remove resolver from list of pending ones */
-    if (!g_ptr_array_remove(mdns->resolvers, r)) {
+    if (!ptr_array_del(mdns->resolvers, ptr_array_find(mdns->resolvers, r))) {
         mdns_debug(name, protocol, "resolve", "spurious avahi callback");
         return;
     }
@@ -570,7 +571,7 @@ mdns_avahi_resolver_callback (AvahiServiceResolver *r,
     }
 
     /* Perform appropriate actions, if resolving is done */
-    if (mdns->resolvers->len == 0) {
+    if (mdns->resolvers[0] == NULL) {
         /* Fixup endpoints */
         mdns->finding.endpoints = zeroconf_endpoint_list_sort_dedup(
                 mdns->finding.endpoints);
@@ -578,7 +579,7 @@ mdns_avahi_resolver_callback (AvahiServiceResolver *r,
         /* Fixup model and UUID */
         if (mdns->finding.model == NULL) {
             /* Very unlikely, just paranoia */
-            mdns->finding.model = g_strdup(mdns->finding.name);
+            mdns->finding.model = str_dup(mdns->finding.name);
         }
 
         if (!uuid_valid(mdns->finding.uuid)) {
@@ -653,7 +654,7 @@ mdns_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
         }
 
         /* Attach resolver to device state */
-        g_ptr_array_add(mdns->resolvers, r);
+        mdns->resolvers = ptr_array_append(mdns->resolvers, r);
         break;
 
     case AVAHI_BROWSER_REMOVE:
@@ -867,12 +868,7 @@ mdns_init (void)
         mdns_initscan_count[i] = 0;
     }
 
-    mdns_avahi_glib_poll = eloop_new_avahi_poll();
-    if (mdns_avahi_glib_poll == NULL) {
-        return SANE_STATUS_NO_MEM;
-    }
-
-    mdns_avahi_poll = avahi_glib_poll_get(mdns_avahi_glib_poll);
+    mdns_avahi_poll = eloop_poll_get();
 
     mdns_avahi_restart_timer =
             mdns_avahi_poll->timeout_new(mdns_avahi_poll, NULL,
@@ -895,7 +891,7 @@ mdns_init (void)
 void
 mdns_cleanup (void)
 {
-    if (mdns_avahi_glib_poll != NULL) {
+    if (mdns_avahi_poll != NULL) {
         mdns_avahi_browser_stop();
         mdns_avahi_client_stop();
         mdns_finding_del_all();
@@ -905,9 +901,7 @@ mdns_cleanup (void)
             mdns_avahi_restart_timer = NULL;
         }
 
-        avahi_glib_poll_free(mdns_avahi_glib_poll);
         mdns_avahi_poll = NULL;
-        mdns_avahi_glib_poll = NULL;
     }
 
     log_ctx_free(mdns_log);

@@ -16,10 +16,10 @@
 /* Trace file handle
  */
 struct  trace {
-    volatile gint refcnt;    /* Reference count */
-    FILE          *log;      /* Log file */
-    FILE          *data;     /* Data file */
-    unsigned int  index;     /* Message index */
+    volatile unsigned int refcnt;  /* Reference count */
+    FILE                  *log;    /* Log file */
+    FILE                  *data;   /* Data file */
+    unsigned int          index;   /* Message index */
 };
 
 /* TAR file hader
@@ -90,8 +90,8 @@ trace_open (const char *device_name)
         return NULL;
     }
 
-    g_mkdir_with_parents (conf.dbg_trace, 0755);
-    t = g_new0(trace, 1);
+    os_mkdir(conf.dbg_trace, 0755);
+    t = mem_new(trace, 1);
     t->refcnt = 1;
 
     strcpy(path, conf.dbg_trace);
@@ -129,7 +129,7 @@ trace*
 trace_ref (trace *t)
 {
     if (t != NULL) {
-        g_atomic_int_inc(&t->refcnt);
+        __sync_fetch_and_add(&t->refcnt, 1);
     }
     return t;
 }
@@ -139,7 +139,7 @@ trace_ref (trace *t)
 void
 trace_unref (trace *t)
 {
-    if (t != NULL && g_atomic_int_dec_and_test(&t->refcnt)) {
+    if (t != NULL && (__sync_fetch_and_sub(&t->refcnt, 1) == 1)) {
         if (t->log != NULL) {
             fclose(t->log);
         }
@@ -151,7 +151,7 @@ trace_unref (trace *t)
             }
             fclose(t->data);
         }
-        g_free(t);
+        mem_free(t);
     }
 }
 
@@ -160,7 +160,7 @@ trace_unref (trace *t)
  */
 static void
 trace_message_headers_foreach_callback (const char *name, const char *value,
-        gpointer ptr)
+        void *ptr)
 {
     trace *t = ptr;
     fprintf(t->log, "%s: %s\n", name, value);
@@ -173,8 +173,8 @@ static void
 trace_dump_data (trace *t, http_data *data)
 {
     tar_header hdr;
-    guint32 chsum;
-    size_t i;
+    uint32_t   chsum;
+    size_t     i;
     const char *ext;
 
     log_assert(NULL, sizeof(hdr) == 512);
@@ -270,10 +270,10 @@ trace_dump_body (trace *t, http_data *data)
         return;
     }
 
-    if (g_str_has_prefix(data->content_type, "text/") ||
-        g_str_has_prefix(data->content_type, "application/xml") ||
-        g_str_has_prefix(data->content_type, "application/soap+xml") ||
-        g_str_has_prefix(data->content_type, "application/xop+xml"))
+    if (str_has_prefix(data->content_type, "text/") ||
+        str_has_prefix(data->content_type, "application/xml") ||
+        str_has_prefix(data->content_type, "application/soap+xml") ||
+        str_has_prefix(data->content_type, "application/xop+xml"))
     {
         trace_dump_text(t, data, strstr(data->content_type, "xml") != NULL);
     } else {

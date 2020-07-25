@@ -15,7 +15,7 @@
 #include <unistd.h>
 
 /* Static variables */
-static GString *log_buffer;
+static char *log_buffer;
 static bool log_configured;
 static uint64_t log_start_time;
 
@@ -37,7 +37,7 @@ log_get_time (void)
 void
 log_init (void)
 {
-    log_buffer = g_string_new(NULL);
+    log_buffer = str_new();
     log_configured = false;
     log_start_time = log_get_time();
 }
@@ -49,7 +49,7 @@ log_init (void)
 void
 log_cleanup (void)
 {
-    g_string_free(log_buffer, TRUE);
+    mem_free(log_buffer);
     log_buffer = NULL;
 }
 
@@ -58,9 +58,9 @@ log_cleanup (void)
 static void
 log_flush (void)
 {
-    int rc = write(1, log_buffer->str, log_buffer->len);
+    int rc = write(1, log_buffer, mem_len(log_buffer));
     (void) rc;
-    g_string_truncate(log_buffer, 0);
+    str_trunc(log_buffer);
 }
 
 /* Notify logger that configuration is loaded and
@@ -78,7 +78,7 @@ log_configure (void)
     if (conf.dbg_enabled) {
         log_flush();
     } else {
-        g_string_truncate(log_buffer, 0);
+        str_trunc(log_buffer);
     }
 }
 
@@ -114,9 +114,9 @@ struct log_ctx {
 log_ctx*
 log_ctx_new (const char *name, log_ctx *parent)
 {
-    log_ctx *log = g_new0(log_ctx, 1);
+    log_ctx *log = mem_new(log_ctx, 1);
 
-    log->name = g_strstrip(g_strdup(name));
+    log->name = str_trim(str_dup(name));
 
     if (parent != NULL) {
         log->trace = trace_ref(parent->trace);
@@ -133,8 +133,8 @@ void
 log_ctx_free (log_ctx *log)
 {
     trace_unref(log->trace);
-    g_free((char*) log->name);
-    g_free(log);
+    mem_free((char*) log->name);
+    mem_free(log);
 }
 
 /* Get protocol trace associated with logging context
@@ -179,8 +179,8 @@ log_message (log_ctx *log, bool trace_only, bool force,
 
     /* Write to log */
     if (!dont_log) {
-        g_string_append(log_buffer, msg);
-        g_string_append_c(log_buffer, '\n');
+        log_buffer = str_append(log_buffer, msg);
+        log_buffer = str_append_c(log_buffer, '\n');
 
         if ((log_configured && conf.dbg_enabled) || force) {
             log_flush();
@@ -248,7 +248,7 @@ log_panic (log_ctx *log, const char *fmt, ...)
      * At this case we discard these messages, but panic
      * message is written anyway
      */
-    g_string_truncate(log_buffer, 0);
+    str_trunc(log_buffer);
 
     va_start(ap, fmt);
     log_message(log, false, true, fmt, ap);
