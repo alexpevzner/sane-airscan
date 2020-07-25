@@ -1598,6 +1598,12 @@ http_query_error (const http_query *q);
 error
 http_query_transport_error (const http_query *q);
 
+/* Returns true, if query was failed due to out of
+ * memory error
+ */
+bool
+http_query_oom (const http_query *q);
+
 /* Get HTTP status code. Code not available, if query finished
  * with error
  */

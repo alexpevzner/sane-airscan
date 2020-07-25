@@ -1563,17 +1563,27 @@ http_data_unref (http_data *data)
 
 /* Append bytes to data. http_data must be owner of its
  * own buffer, i.e. it must have no parent
+ *
+ * Returns true on success, false on OOM
  */
-static void
+static bool
 http_data_append (http_data *data, const char *bytes, size_t size)
 {
     http_data_ex *data_ex = OUTER_STRUCT(data, http_data_ex, data);
+    void         *p;
 
     log_assert(NULL, data_ex->parent == NULL);
 
-    data->bytes = mem_resize((char*) data->bytes, data->size + size, 0);
+    p = mem_try_resize((char*) data->bytes, data->size + size, 0);
+    if (p == NULL) {
+        return false;
+    }
+
+    data->bytes = p;
     memcpy((char*) data->bytes + data->size, bytes, size);
     data->size += size;
+
+    return true;
 }
 
 /******************** HTTP data queue ********************/
@@ -1746,6 +1756,7 @@ struct http_query {
     /* Low-level I/O */
     uint64_t          eloop_callid;             /* For eloop_call_cancel */
     error             err;                      /* Transport error */
+    bool              oom;                      /* Out of memory error */
     struct addrinfo   *addrs;                   /* Addresses to connect to */
     struct addrinfo   *addr_next;               /* Next address to try */
     int               sock;                     /* HTTP socket */
@@ -1998,7 +2009,10 @@ http_query_on_body_callback (http_parser *parser,
         q->response_data = http_data_new(NULL, NULL, 0);
     }
 
-    http_data_append(q->response_data, data, size);
+    if (!http_data_append(q->response_data, data, size)) {
+        q->oom = true;
+        q->http_parser_done = true;
+    }
 
     return 0;
 }
@@ -2120,7 +2134,11 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
             error err = ERROR(http_errno_description(q->http_parser.http_errno));
             http_query_complete(q, err);
         } else if (q->http_parser_done) {
-            http_query_complete(q, NULL);
+            error err = NULL;
+            if (q->oom) {
+                err = ERROR(strerror(ENOMEM));
+            }
+            http_query_complete(q, err);
         } else if (rc == 0) {
             error err = ERROR("connection closed by device");
             http_query_complete(q, err);
@@ -2481,6 +2499,15 @@ error
 http_query_transport_error (const http_query *q)
 {
     return q->err;
+}
+
+/* Returns true, if query was failed due to out of
+ * memory error
+ */
+bool
+http_query_oom (const http_query *q)
+{
+    return q->oom;
 }
 
 /* Get HTTP status code. Code not available, if query finished
