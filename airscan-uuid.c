@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <gnutls/gnutls.h>
 #include <gnutls/crypto.h>
 
 #pragma GCC diagnostic ignored "-Wunused-result"
