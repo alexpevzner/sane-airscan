@@ -471,11 +471,14 @@ device_http_cancel (device *dev)
 static void
 device_http_onerror (void *ptr, error err)
 {
-    device *dev = ptr;
+    device      *dev = ptr;
+    SANE_Status status;
+
+    status = err == ERROR_ENOMEM ? SANE_STATUS_NO_MEM : SANE_STATUS_IO_ERROR;
 
     log_debug(dev->log, "cancelling job due to error: %s", ESTRING(err));
 
-    if (!device_stm_cancel_perform(dev, SANE_STATUS_IO_ERROR)) {
+    if (!device_stm_cancel_perform(dev, status)) {
         device_stm_state_set(dev, DEVICE_STM_DONE);
     } else {
         /* Scan job known to be done, now waiting for cancel

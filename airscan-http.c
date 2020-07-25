@@ -2136,7 +2136,7 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
         } else if (q->http_parser_done) {
             error err = NULL;
             if (q->oom) {
-                err = ERROR(strerror(ENOMEM));
+                err = ERROR_ENOMEM;
             }
             http_query_complete(q, err);
         } else if (rc == 0) {
@@ -2499,15 +2499,6 @@ error
 http_query_transport_error (const http_query *q)
 {
     return q->err;
-}
-
-/* Returns true, if query was failed due to out of
- * memory error
- */
-bool
-http_query_oom (const http_query *q)
-{
-    return q->oom;
 }
 
 /* Get HTTP status code. Code not available, if query finished

@@ -29,6 +29,9 @@ static char *eloop_estring = NULL;
 static void (*eloop_start_stop_callbacks[ELOOP_START_STOP_CALLBACKS_MAX]) (bool);
 static int eloop_start_stop_callbacks_count;
 
+/******************** Standard errors *********************/
+error ERROR_ENOMEM = (error) "Out of memory";
+
 /******************** Forward declarations *********************/
 static int
 eloop_poll_func (struct pollfd *ufds, unsigned int nfds, int timeout, void *p);
