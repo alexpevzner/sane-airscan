@@ -1744,6 +1744,7 @@ struct http_query {
     http_hdr          response_header;          /* Response header */
 
     /* Low-level I/O */
+    uint64_t          eloop_callid;             /* For eloop_call_cancel */
     error             err;                      /* Transport error */
     struct addrinfo   *addrs;                   /* Addresses to connect to */
     struct addrinfo   *addr_next;               /* Next address to try */
@@ -2407,7 +2408,7 @@ http_query_submit (http_query *q, void (*callback)(void *ptr, http_query *q))
     log_assert(q->client->log, q->sock == -1);
     ll_push_end(&q->client->pending, &q->chain);
 
-    eloop_call(http_query_start_processing, q);
+    q->eloop_callid = eloop_call(http_query_start_processing, q);
 }
 
 /* Cancel unfinished http_query. Callback will not be called and
@@ -2420,6 +2421,7 @@ http_query_cancel (http_query *q)
             http_uri_str(q->uri));
 
     ll_del(&q->chain);
+    eloop_call_cancel(q->eloop_callid);
 
     http_query_free(q);
 }
