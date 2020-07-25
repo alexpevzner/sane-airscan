@@ -212,7 +212,7 @@ All contributions are welcome and greatly appreciated, assuming the following:
 Please note, this project has two branches:
 
 * stable branch: https://github.com/alexpevzner/sane-airscan
-* development branch: https://github.com/alexpevzner/sane-airscan-wsd
+* development branch: https://github.com/alexpevzner/sane-airscan-unstable
 
 Stable branch accepts mostly bug fixes and minor features with small
 change in code base. Major features should be contributed into the
