@@ -73,7 +73,7 @@ Legend:
 | EPSON XP-8600 Series               | Yes                       |                           |
 | HP Color Laserjet MFP m178-m181    | Yes                       |                           |
 | HP Color LaserJet MFP M281fdw      | Yes                       |                           |
-| HP Color LaserJet MFP M477fdw      | Yes                       |                           |
+| HP Color LaserJet MFP M477fdw      | Yes                       | Yes                       |
 | HP DeskJet 2540                    | Yes                       |                           |
 | HP ENVY 4500                       | Yes                       |                           |
 | HP ENVY 5540                       | Yes                       |                           |
