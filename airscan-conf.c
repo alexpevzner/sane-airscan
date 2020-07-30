@@ -608,7 +608,7 @@ conf_device_list_free (void)
     while (list != NULL) {
         next = list->next;
         mem_free((char*) list->name);
-        mem_free((char*) list->uri);
+        http_uri_free(list->uri);
         devid_free(list->devid);
         mem_free(list);
         list = next;
