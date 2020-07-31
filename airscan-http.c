@@ -2008,14 +2008,16 @@ http_query_onerror (http_query *q, void (*onerror)(void *ptr, error err))
 static error
 http_query_redirect (http_query *q)
 {
-    const char *method = q->method;
+    const char *method = q->orig_method ? q->orig_method : q->method;
     const char *location;
     http_uri   *uri;
 
     /* Check HTTP status code */
     switch(http_query_status(q)) {
     case 303:
-        method = "GET";
+        if (!strcmp(method, "POST") || !strcmp(method, "PUT")) {
+            method = "GET";
+        }
         break;
 
     case 301: case 302: case 307: case 308:
@@ -2053,7 +2055,8 @@ http_query_redirect (http_query *q)
 
 
     /* Issue log message */
-    log_debug(q->client->log, "HTTP redirected to %s", http_uri_str(uri));
+    log_debug(q->client->log, "HTTP redirected %d: %s %s",
+        q->redirect_count, method, http_uri_str(uri));
 
     /* Perform redirection */
     http_query_reset(q);
