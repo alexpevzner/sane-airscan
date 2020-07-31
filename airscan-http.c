@@ -2055,7 +2055,7 @@ http_query_redirect (http_query *q)
 
 
     /* Issue log message */
-    log_debug(q->client->log, "HTTP redirected %d: %s %s",
+    log_debug(q->client->log, "HTTP redirect %d: %s %s",
         q->redirect_count, method, http_uri_str(uri));
 
     /* Perform redirection */
