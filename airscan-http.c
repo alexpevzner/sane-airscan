@@ -27,7 +27,11 @@
 /******************** Constants ********************/
 /* I/O buffer size
  */
-#define HTTP_IOBUF_SIZE 65536
+#define HTTP_IOBUF_SIZE         65536
+
+/* Limit of chained HTTP redirects
+ */
+#define HTTP_REDIRECT_LIMIT     8
 
 /******************** Static variables ********************/
 static gnutls_certificate_credentials_t gnutls_cred;
@@ -1006,6 +1010,19 @@ http_hdr_set (http_hdr *hdr, const char *name, const char *value)
     }
 }
 
+/* Del header field
+ */
+static void
+http_hdr_del (http_hdr *hdr, const char *name)
+{
+    http_hdr_field *field = http_hdr_lookup(hdr, name);
+
+    if (field != NULL) {
+        ll_del(&field->chain);
+        http_hdr_field_free(field);
+    }
+}
+
 /* Handle HTTP parser on_header_field callback
  * parser->data must point to the header being parsed
  */
@@ -1752,6 +1769,12 @@ struct http_query {
     /* Request and response headers */
     http_hdr          request_header;           /* Request header */
     http_hdr          response_header;          /* Response header */
+    bool              host_inserted;            /* Host: auto-inserted */
+
+    /* HTTP redirects */
+    int               redirect_count;           /* Count of redirects */
+    http_uri          *orig_uri;                /* Original URI */
+    const char        *orig_method;             /* Original method */
 
     /* Low-level I/O */
     uint64_t          eloop_callid;             /* For eloop_call_cancel */
@@ -1800,32 +1823,60 @@ http_query_by_ll_node (ll_node *node)
      return OUTER_STRUCT(node, http_query, chain);
 }
 
+/* Reset query into the state it had before http_query_submit()
+ */
+static void
+http_query_reset (http_query *q)
+{
+    if (q->host_inserted) {
+        http_hdr_del(&q->request_header, "Host");
+        q->host_inserted = false;
+    }
+
+    http_hdr_cleanup(&q->response_header);
+
+    if (q->addrs != NULL) {
+        freeaddrinfo(q->addrs);
+        q->addrs = NULL;
+        q->addr_next = NULL;
+    }
+
+    q->handshake = q->sending = false;
+    if (q->fdpoll != NULL) {
+        eloop_fdpoll_free(q->fdpoll);
+        q->fdpoll = NULL;
+    }
+
+    http_query_disconnect(q);
+
+    str_trunc(q->rq_buf);
+    q->rq_off = 0;
+
+    q->http_parser_done = false;
+
+    http_data_unref(q->response_data);
+    q->response_data = NULL;
+
+    if (q->response_multipart != NULL) {
+        http_multipart_free(q->response_multipart);
+        q->response_multipart = NULL;
+    }
+}
+
 /* Free http_query
  */
 static void
 http_query_free (http_query *q)
 {
+    http_query_reset(q);
+
     http_uri_free(q->uri);
+    http_uri_free(q->orig_uri);
     http_hdr_cleanup(&q->request_header);
-    http_hdr_cleanup(&q->response_header);
-
-    if (q->addrs != NULL) {
-        freeaddrinfo(q->addrs);
-    }
-
-    if (q->fdpoll != NULL) {
-        eloop_fdpoll_free(q->fdpoll);
-    }
-
-    http_query_disconnect(q);
 
     mem_free(q->rq_buf);
 
     http_data_unref(q->request_data);
-    http_data_unref(q->response_data);
-    if (q->response_multipart != NULL) {
-        http_multipart_free(q->response_multipart);
-    }
 
     mem_free(q);
 }
@@ -1902,9 +1953,6 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
     http_parser_init(&q->http_parser, HTTP_RESPONSE);
     q->http_parser.data = &q->response_header;
 
-    /* Build and set Host: header */
-    http_query_set_host(q);
-
     /* Note, on Kyocera ECOSYS M2040dn connection keep-alive causes
      * scanned job to remain in "Processing" state about 10 seconds
      * after job has been actually completed, making scanner effectively
@@ -1955,6 +2003,69 @@ http_query_onerror (http_query *q, void (*onerror)(void *ptr, error err))
     q->onerror = onerror;
 }
 
+/* Handle HTTP redirection
+ */
+static error
+http_query_redirect (http_query *q)
+{
+    const char *method = q->method;
+    const char *location;
+    http_uri   *uri;
+
+    /* Check HTTP status code */
+    switch(http_query_status(q)) {
+    case 303:
+        method = "GET";
+        break;
+
+    case 301: case 302: case 307: case 308:
+        break;
+
+    default:
+        return ERROR("HTTP redirect: invalid status code");
+    }
+
+    /* Check and parse location */
+    location = http_query_get_response_header(q, "Location");
+    if (location == NULL || *location == '\0') {
+        return ERROR("HTTP redirect: missed Location: field");
+    }
+
+    uri = http_uri_new_relative(q->uri, location, true, false);
+    if (uri == NULL) {
+        return ERROR("HTTP redirect: invalid Location: field");
+    }
+
+    /* Enforce redirects limit */
+    q->redirect_count ++;
+    if (q->redirect_count == HTTP_REDIRECT_LIMIT) {
+        return ERROR("HTTP redirect: too many redirects");
+    }
+
+    /* Save original URI and method at the first redirect */
+    if (q->redirect_count == 1) {
+        q->orig_uri = q->uri;
+        q->orig_method = q->method;
+    } else {
+        http_uri_free(q->uri);
+        q->uri = NULL; /* Just in case */
+    }
+
+
+    /* Issue log message */
+    log_debug(q->client->log, "HTTP redirected to %s", http_uri_str(uri));
+
+    /* Perform redirection */
+    http_query_reset(q);
+
+    q->method = method;
+    q->uri = uri;
+
+    http_query_submit(q, q->callback);
+
+    return NULL;
+}
+
 /* Complete query processing
  */
 static void
@@ -1965,16 +2076,11 @@ http_query_complete (http_query *q, error err)
     /* Make sure latest response header field is terminated */
     http_hdr_on_header_value(&q->http_parser, "", 0);
 
-    /* Save error */
-    q->err = err;
-
     /* Unlink query from a client */
     ll_del(&q->chain);
 
     /* Issue log messages */
     if (err != NULL) {
-        log_debug(client->log, "HTTP %s %s: %s", q->method,
-                http_uri_str(q->uri), http_query_status_string(q));
     } else {
         log_debug(client->log, "HTTP %s %s: %d %s", q->method,
                 http_uri_str(q->uri),
@@ -1982,6 +2088,31 @@ http_query_complete (http_query *q, error err)
     }
 
     trace_http_query_hook(log_ctx_trace(client->log), q);
+
+    /* Do redirection */
+    if (err == NULL && http_query_status(q) / 100 == 3) {
+        err = http_query_redirect(q);
+        if (err == NULL) {
+            return;
+        }
+    }
+
+    /* Save and log the error */
+    q->err = err;
+    if (err != NULL) {
+        log_debug(client->log, "HTTP %s %s: %s", q->method,
+                http_uri_str(q->uri), http_query_status_string(q));
+    }
+
+    /* Restore original method and URI, in case of redirection */
+    if (q->orig_uri != NULL) {
+        http_uri_free(q->uri);
+        q->uri = q->orig_uri;
+        q->method = q->orig_method;
+
+        q->orig_uri = NULL;
+        q->orig_method = NULL;
+    }
 
     /* Call user callback */
     if (err != NULL && q->onerror != NULL) {
@@ -2112,6 +2243,10 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
         if (q->rq_off == mem_len(q->rq_buf)) {
             q->sending = false;
             eloop_fdpoll_set_mask(q->fdpoll, ELOOP_FDPOLL_BOTH);
+
+            /* Initialize HTTP parser */
+            http_parser_init(&q->http_parser, HTTP_RESPONSE);
+            q->http_parser.data = &q->response_header;
         }
     } else {
         static char io_buf[HTTP_IOBUF_SIZE];
@@ -2385,6 +2520,12 @@ http_query_start_processing (void *p)
 
     q->addr_next = q->addrs;
 
+    /* Set Host: header, if not set by user */
+    if (http_hdr_lookup(&q->request_header, "Host") == NULL) {
+        q->host_inserted = true;
+        http_query_set_host(q);
+    }
+
     /* Format HTTP request */
     str_trunc(q->rq_buf);
     q->rq_buf = str_append_printf(q->rq_buf, "%s %s HTTP/1.1\r\n",
@@ -2420,7 +2561,9 @@ http_query_submit (http_query *q, void (*callback)(void *ptr, http_query *q))
     /* Issue log message and set timestamp */
     log_debug(q->client->log, "HTTP %s %s", q->method, http_uri_str(q->uri));
 
-    q->timestamp = timestamp_now();
+    if (q->redirect_count == 0) {
+        q->timestamp = timestamp_now();
+    }
 
     /* Submit the query */
     log_assert(q->client->log, q->sock == -1);
