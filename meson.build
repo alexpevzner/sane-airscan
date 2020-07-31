@@ -58,7 +58,7 @@ shared_library(
   ],
   link_depends : [ 'airscan.sym' ],
   install : true,
-  install_dir : 'lib/sane'
+  install_dir : join_paths(get_option('libdir'), 'sane')
 )
 
 executable(
@@ -68,6 +68,17 @@ executable(
   install: true
 )
 
+dll_file = configure_file(
+  input : 'dll.conf',
+  output: 'airscan',
+  copy: true
+)
+
 install_man('sane-airscan.5')
 install_man('airscan-discover.1')
-install_data(['airscan.conf', 'dll.conf'], install_dir : 'etc/sane.d')
+install_data('airscan.conf',
+  install_dir: join_paths(get_option('sysconfdir'),  'sane.d')
+)
+install_data(dll_file,
+  install_dir: join_paths(get_option('sysconfdir'),  'sane.d', 'dll.d')
+)

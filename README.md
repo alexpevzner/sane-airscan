@@ -79,7 +79,7 @@ Legend:
 | EPSON XP-8600 Series               | Yes                       |                           |
 | HP Color Laserjet MFP m178-m181    | Yes                       |                           |
 | HP Color LaserJet MFP M281fdw      | Yes                       |                           |
-| HP Color LaserJet MFP M477fdw      | Yes                       |                           |
+| HP Color LaserJet MFP M477fdw      | Yes                       | Yes                       |
 | HP DeskJet 2540                    | Yes                       |                           |
 | HP ENVY 4500                       | Yes                       |                           |
 | HP ENVY 5540                       | Yes                       |                           |
@@ -102,6 +102,7 @@ Legend:
 | HP OfficeJet Pro 9010 series       | Yes                       |                           |
 | HP Smart Tank Plus 550 series      | Yes                       |                           |
 | Kyocera ECOSYS M2040dn             | Yes                       | Yes<sup>[4](#note4)</sup> |
+| Kyocera ECOSYS M5526cdw            | Yes                       |                           |
 | Lexmark CX317dn                    | Yes<sup>[5](#note5)</sup> | Yes<sup>[5](#note5)</sup> |
 | Lexmark MC2535adwe                 | Yes                       |                           |
 | Ricoh MP C3003                     | No                        | Yes<sup>[6](#note6)</sup> |
@@ -220,7 +221,7 @@ All contributions are welcome and greatly appreciated, assuming the following:
 Please note, this project has two branches:
 
 * stable branch: https://github.com/alexpevzner/sane-airscan
-* development branch: https://github.com/alexpevzner/sane-airscan-wsd
+* development branch: https://github.com/alexpevzner/sane-airscan-unstable
 
 Stable branch accepts mostly bug fixes and minor features with small
 change in code base. Major features should be contributed into the
