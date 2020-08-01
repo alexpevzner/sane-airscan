@@ -802,7 +802,7 @@ void
 http_uri_fix_ipv6_zone (http_uri *uri, int ifindex)
 {
     http_uri_field field;
-    char           *host, *end;
+    char           *host;
 
     /* Check if we need to change something */
     if (uri->addr.sockaddr.sa_family != AF_INET6) {
@@ -819,13 +819,11 @@ http_uri_fix_ipv6_zone (http_uri *uri, int ifindex)
     }
 
     /* Obtain writable copy of host name */
-    /* Append zone suffix */
     host = alloca(field.len + 64);
     memcpy(host, field.str, field.len);
 
-    end = host + field.len;
-    end += sprintf(end, "%%25%d", ifindex);
-    *end = '\0';
+    /* Append zone suffix */
+    sprintf(host + field.len, "%%25%d", ifindex);
 
     /* Update URL's host */
     http_uri_field_replace(uri, UF_HOST, host);
