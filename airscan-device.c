@@ -235,6 +235,7 @@ device_free (device *dev)
     devopt_cleanup(&dev->opt);
 
     http_client_free(dev->proto_ctx.http);
+    http_uri_free(dev->proto_ctx.base_uri);
     http_uri_free(dev->proto_ctx.base_uri_nozone);
     mem_free((char*) dev->proto_ctx.location);
 
@@ -330,6 +331,19 @@ device_proto_set (device *dev, ID_PROTO proto)
         log_debug(dev->log, "using protocol \"%s\"",
             dev->proto_ctx.proto->name);
     }
+}
+
+/* Set base URI. `uri' ownership is taken by this function
+ */
+static void
+device_proto_set_base_uri (device *dev, http_uri *uri)
+{
+    http_uri_free(dev->proto_ctx.base_uri);
+    dev->proto_ctx.base_uri = uri;
+
+    http_uri_free(dev->proto_ctx.base_uri_nozone);
+    dev->proto_ctx.base_uri_nozone = http_uri_clone(uri);
+    http_uri_strip_zone_suffux(dev->proto_ctx.base_uri_nozone);
 }
 
 /* Query device capabilities
@@ -503,11 +517,8 @@ device_probe_endpoint (device *dev, zeroconf_endpoint *endpoint)
     }
 
     dev->endpoint_current = endpoint;
-    dev->proto_ctx.base_uri = endpoint->uri;
 
-    http_uri_free(dev->proto_ctx.base_uri_nozone);
-    dev->proto_ctx.base_uri_nozone = http_uri_clone(endpoint->uri);
-    http_uri_strip_zone_suffux(dev->proto_ctx.base_uri_nozone);
+    device_proto_set_base_uri(dev, http_uri_clone(endpoint->uri));
 
     /* Fetch device capabilities */
     device_proto_devcaps_submit (dev, device_scanner_capabilities_callback);
@@ -570,6 +581,35 @@ device_scanner_capabilities_callback (void *ptr, http_query *q)
             }
 
             log_debug(dev->log, "new decoder: %s", id_format_short_name(i));
+        }
+    }
+
+    /* Update endpoint address in case of HTTP redirection */
+    if (!http_uri_equal(http_query_uri(q), http_query_real_uri(q))) {
+        const char *uri_str = http_uri_str(http_query_uri(q));
+        const char *real_uri_str = http_uri_str(http_query_real_uri(q));
+
+        if (str_has_prefix(uri_str, base_str)) {
+            const char *base_str = http_uri_str(dev->proto_ctx.base_uri);
+            const char *tail = uri_str + strlen(base_str);
+
+            if (str_has_suffix(real_uri_str, tail)) {
+                size_t   l = strlen(real_uri_str) - strlen(tail);
+                char     *new_uri_str = alloca(l + 1);
+                http_uri *new_uri;
+
+                memcpy(new_uri_str, real_uri_str, l);
+                new_uri_str[l] = '\0';
+
+                log_debug(dev->log, "endpoint URI changed due to redirection:");
+                log_debug(dev->log, "  old URL: %s", base_str);
+                log_debug(dev->log, "  new URL: %s", new_uri_str);
+
+                new_uri = http_uri_new(new_uri_str, true);
+                log_assert(dev->log, new_uri != NULL);
+
+                device_proto_set_base_uri(dev, new_uri);
+            }
         }
     }
 
