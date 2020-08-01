@@ -588,9 +588,9 @@ device_scanner_capabilities_callback (void *ptr, http_query *q)
     if (!http_uri_equal(http_query_uri(q), http_query_real_uri(q))) {
         const char *uri_str = http_uri_str(http_query_uri(q));
         const char *real_uri_str = http_uri_str(http_query_real_uri(q));
+        const char *base_str = http_uri_str(dev->proto_ctx.base_uri);
 
         if (str_has_prefix(uri_str, base_str)) {
-            const char *base_str = http_uri_str(dev->proto_ctx.base_uri);
             const char *tail = uri_str + strlen(base_str);
 
             if (str_has_suffix(real_uri_str, tail)) {
