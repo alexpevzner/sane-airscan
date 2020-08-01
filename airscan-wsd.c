@@ -68,7 +68,7 @@ typedef struct {
     bool          dib;
 } proto_handler_wsd;
 
-/* Free ESCL protocol handler
+/* Free WSD protocol handler
  */
 static void
 wsd_free (proto_handler *proto)
