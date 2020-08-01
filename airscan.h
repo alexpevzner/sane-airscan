@@ -1618,6 +1618,12 @@ http_query_status_string (const http_query *q);
 http_uri*
 http_query_uri (const http_query *q);
 
+/* Get real URI, that can differ from the requested URI
+ * in a case of HTTP redirection
+ */
+http_uri*
+http_query_real_uri (const http_query *q);
+
 /* Get query method
  */
 const char*

@@ -1764,6 +1764,7 @@ http_client_has_pending (const http_client *client)
 struct http_query {
     /* URI and method */
     http_uri          *uri;                     /* Query URI */
+    http_uri          *real_uri;                /* Real URI, may be NULL */
     const char        *method;                  /* Request method */
 
     /* Request and response headers */
@@ -1871,6 +1872,7 @@ http_query_free (http_query *q)
     http_query_reset(q);
 
     http_uri_free(q->uri);
+    http_uri_free(q->real_uri);
     http_uri_free(q->orig_uri);
     http_hdr_cleanup(&q->request_header);
 
@@ -2109,7 +2111,7 @@ http_query_complete (http_query *q, error err)
 
     /* Restore original method and URI, in case of redirection */
     if (q->orig_uri != NULL) {
-        http_uri_free(q->uri);
+        q->real_uri = q->uri;
         q->uri = q->orig_uri;
         q->method = q->orig_method;
 
@@ -2676,6 +2678,15 @@ http_uri*
 http_query_uri (const http_query *q)
 {
     return q->uri;
+}
+
+/* Get real URI, that can differ from the requested URI
+ * in a case of HTTP redirection
+ */
+http_uri*
+http_query_real_uri (const http_query *q)
+{
+    return q->real_uri ? q->real_uri : q->uri;
 }
 
 /* Get query method
