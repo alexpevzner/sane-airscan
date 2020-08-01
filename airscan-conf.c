@@ -209,10 +209,9 @@ inifile_tk_array_export (inifile *file)
 {
     unsigned int        i;
 
-    file->record.tokv = mem_resize(file->record.tokv,
-            sizeof(*file->record.tokv) * file->tk_count, 0);
-
+    file->record.tokv = mem_resize(file->record.tokv, file->tk_count, 0);
     file->record.tokc = file->tk_count;
+
     for (i = 0; i < file->tk_count; i ++) {
         const char      *token;
 
