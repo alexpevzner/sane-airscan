@@ -53,7 +53,7 @@ test_addr (const char *s, const char *expected)
         fail("URI addr not understood: %s", s);
     }
 
-    straddr = ip_straddr_from_sockaddr(sa);
+    straddr = ip_straddr_from_sockaddr(sa, true);
     if (strcmp(straddr.text, expected)) {
         fail("URI addr %s != %s: %s", straddr.text, expected, s);
     }

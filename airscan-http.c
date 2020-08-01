@@ -391,6 +391,17 @@ http_uri_parse (http_uri *uri, const char *str)
     return NULL;
 }
 
+/* Un-escape host name in place
+ */
+static void
+http_uri_unescape_host (char *host)
+{
+    char *zone = strstr(host, "%25");
+    if (zone != NULL) {
+        memmove(zone + 1, zone + 3, strlen(zone + 3) + 1);
+    }
+}
+
 /* Parse URI address
  */
 static void
@@ -410,6 +421,7 @@ http_uri_parse_addr (http_uri *uri)
         host = alloca(field.len + 1);
         memcpy(host, field.str, field.len);
         host[field.len] = '\0';
+        http_uri_unescape_host(host);
     }
 
     field = http_uri_field_get(uri, UF_PORT);
@@ -812,7 +824,7 @@ http_uri_fix_ipv6_zone (http_uri *uri, int ifindex)
     memcpy(host, field.str, field.len);
 
     end = host + field.len;
-    end += sprintf(end, "%%%d", ifindex);
+    end += sprintf(end, "%%25%d", ifindex);
     *end = '\0';
 
     /* Update URL's host */
@@ -1788,7 +1800,7 @@ struct http_query {
     bool              handshake;                /* TLS handshake in progress */
     bool              sending;                  /* We are now sending */
     eloop_fdpoll      *fdpoll;                  /* Polls q->sock */
-    ip_straddr        straddr;                  /* q->sock target addr */
+    ip_straddr        straddr;                  /* q->sock peer addr, for log */
 
     char              *rq_buf;                  /* Formatted request */
     size_t            rq_off;                   /* send() offset in request */
@@ -1910,7 +1922,7 @@ http_query_set_host (http_query *q)
             break;
         }
 
-        s = ip_straddr_from_sockaddr_dport(addr, dport);
+        s = ip_straddr_from_sockaddr_dport(addr, dport, false);
         http_query_set_request_header(q, "Host", s.text);
 
         return;
@@ -2308,7 +2320,7 @@ AGAIN:
         return;
     }
 
-    q->straddr = ip_straddr_from_sockaddr(q->addr_next->ai_addr);
+    q->straddr = ip_straddr_from_sockaddr(q->addr_next->ai_addr, true);
     log_debug(q->client->log, "trying %s", q->straddr.text);
 
     /* Create socket and try to connect */
@@ -2495,11 +2507,7 @@ http_query_start_processing (void *p)
     host = alloca(field.len + 1);
     memcpy(host, field.str, field.len);
     host[field.len] = '\0';
-
-    if (field.len > 2 && host[0] == '[' && host[field.len-1] == ']') {
-        host[field.len-1] = '\0';
-        host ++;
-    }
+    http_uri_unescape_host(host);
 
     /* Get port name from the URI */
     if (http_uri_field_nonempty(q->uri, UF_PORT)) {

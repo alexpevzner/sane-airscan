@@ -934,9 +934,9 @@ wsdd_resolver_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
         }
     }
 
-    str_from = ip_straddr_from_sockaddr((struct sockaddr*) &from);
+    str_from = ip_straddr_from_sockaddr((struct sockaddr*) &from, true);
     getsockname(fd, (struct sockaddr*) &to, &tolen);
-    str_to = ip_straddr_from_sockaddr((struct sockaddr*) &to);
+    str_to = ip_straddr_from_sockaddr((struct sockaddr*) &to, true);
 
     log_trace(wsdd_log, "%d bytes received: %s->%s", rc,
         str_from.text, str_to.text);
@@ -1019,7 +1019,7 @@ wsdd_resolver_send_probe (wsdd_resolver *resolver)
         addrlen = sizeof(wsdd_mcast_ipv4);
     }
 
-    straddr = ip_straddr_from_sockaddr(addr);
+    straddr = ip_straddr_from_sockaddr(addr, true);
     log_trace(wsdd_log, "probe sent: %s->%s",
         resolver->str_sockaddr.text, straddr.text);
     log_trace_data(wsdd_log, "application/xml", wsdd_buf, n);
@@ -1118,7 +1118,8 @@ wsdd_resolver_new (const netif_addr *addr, bool initscan)
 
         getsockname(resolver->fd, (struct sockaddr*) &a, &alen);
         port = a.sin6_port;
-        resolver->str_sockaddr = ip_straddr_from_sockaddr((struct sockaddr*) &a);
+        resolver->str_sockaddr = ip_straddr_from_sockaddr(
+                (struct sockaddr*) &a, true);
     } else {
         struct sockaddr_in a;
         socklen_t          alen = sizeof(a);
@@ -1127,13 +1128,15 @@ wsdd_resolver_new (const netif_addr *addr, bool initscan)
         a.sin_family = AF_INET;
         a.sin_addr = addr->ip.v4;
         resolver->str_ifaddr = ip_straddr_from_ip(AF_INET, &addr->ip);
-        resolver->str_sockaddr = ip_straddr_from_sockaddr((struct sockaddr*) &a);
+        resolver->str_sockaddr = ip_straddr_from_sockaddr(
+                (struct sockaddr*) &a, true);
 
         rc = bind(resolver->fd, (struct sockaddr*) &a, sizeof(a));
 
         getsockname(resolver->fd, (struct sockaddr*) &a, &alen);
         port = a.sin_port;
-        resolver->str_sockaddr = ip_straddr_from_sockaddr((struct sockaddr*) &a);
+        resolver->str_sockaddr = ip_straddr_from_sockaddr(
+                (struct sockaddr*) &a, true);
     }
 
     log_debug(wsdd_log, "%s: started discovery, UDP port=%d",
@@ -1404,14 +1407,14 @@ wsdd_mcsock_open (bool ipv6)
         memset(&addr, 0, sizeof(addr));
         addr.sin6_family = AF_INET6;
         addr.sin6_port = wsdd_mcast_ipv6.sin6_port;
-        straddr = ip_straddr_from_sockaddr((struct sockaddr*) &addr);
+        straddr = ip_straddr_from_sockaddr((struct sockaddr*) &addr, true);
         rc = bind(fd, (struct sockaddr*) &addr, sizeof(addr));
     } else {
         struct sockaddr_in addr;
         memset(&addr, 0, sizeof(addr));
         addr.sin_family = AF_INET;
         addr.sin_port = wsdd_mcast_ipv4.sin_port;
-        straddr = ip_straddr_from_sockaddr((struct sockaddr*) &addr);
+        straddr = ip_straddr_from_sockaddr((struct sockaddr*) &addr, true);
         rc = bind(fd, (struct sockaddr*) &addr, sizeof(addr));
     }
     if (rc < 0) {

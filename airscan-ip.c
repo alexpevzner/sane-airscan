@@ -22,20 +22,26 @@ ip_straddr_from_ip (int af, const void *addr)
     return straddr;
 }
 
-/* Format struct sockaddr. Both AF_INET and AF_INET6 are supported
+/* Format ip_straddr from struct sockaddr.
+ * Both AF_INET and AF_INET6 are supported
+ *
+ * If `withzone' is true, zone suffix will be appended, when appropriate
  */
 ip_straddr
-ip_straddr_from_sockaddr(const struct sockaddr *addr)
+ip_straddr_from_sockaddr (const struct sockaddr *addr, bool withzone)
 {
-     return ip_straddr_from_sockaddr_dport(addr, -1);
+     return ip_straddr_from_sockaddr_dport(addr, -1, withzone);
 }
 
 /* Format ip_straddr from struct sockaddr.
- * Port will not be appended, if it matches provided default port
  * Both AF_INET and AF_INET6 are supported
+ *
+ * Port will not be appended, if it matches provided default port
+ * If `withzone' is true, zone suffix will be appended, when appropriate
  */
 ip_straddr
-ip_straddr_from_sockaddr_dport(const struct sockaddr *addr, int dport)
+ip_straddr_from_sockaddr_dport (const struct sockaddr *addr,
+        int dport, bool withzone)
 {
     ip_straddr straddr = {""};
     struct sockaddr_in  *addr_in = (struct sockaddr_in*) addr;
@@ -52,6 +58,10 @@ ip_straddr_from_sockaddr_dport(const struct sockaddr *addr, int dport)
         straddr.text[0] = '[';
         inet_ntop(AF_INET6, &addr_in6->sin6_addr,
             straddr.text + 1, sizeof(straddr.text) - 2);
+        if (withzone && addr_in6->sin6_scope_id != 0) {
+            sprintf(straddr.text + strlen(straddr.text), "%%%d",
+                addr_in6->sin6_scope_id);
+        }
         strcat(straddr.text, "]");
         port = addr_in6->sin6_port;
         break;

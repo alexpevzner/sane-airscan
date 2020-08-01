@@ -862,16 +862,21 @@ ip_straddr_from_ip (int af, const void *addr);
 
 /* Format ip_straddr from struct sockaddr.
  * Both AF_INET and AF_INET6 are supported
+ *
+ * If `withzone' is true, zone suffix will be appended, when appropriate
  */
 ip_straddr
-ip_straddr_from_sockaddr(const struct sockaddr *addr);
+ip_straddr_from_sockaddr(const struct sockaddr *addr, bool withzone);
 
 /* Format ip_straddr from struct sockaddr.
- * Port will not be appended, if it matches provided default port
  * Both AF_INET and AF_INET6 are supported
+ *
+ * Port will not be appended, if it matches provided default port
+ * If `withzone' is true, zone suffix will be appended, when appropriate
  */
 ip_straddr
-ip_straddr_from_sockaddr_dport(const struct sockaddr *addr, int dport);
+ip_straddr_from_sockaddr_dport (const struct sockaddr *addr,
+        int dport, bool withzone);
 
 /* Check if address is link-local
  * af must be AF_INET or AF_INET6
