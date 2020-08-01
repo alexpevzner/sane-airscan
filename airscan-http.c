@@ -1543,7 +1543,7 @@ http_data_set_content_type (http_data *data, const char *content_type)
     mem_free((char*) data->content_type);
 
     if (content_type == NULL) {
-        content_type = "text/plain";
+        content_type = str_dup("text/plain");
     } else {
         char *s;
 
@@ -1978,7 +1978,7 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
     /* Save request body and set Content-Type */
     if (body != NULL) {
         q->request_data = http_data_new(NULL, body, strlen(body));
-        if ( content_type != NULL) {
+        if (content_type != NULL) {
             http_query_set_request_header(q, "Content-Type", content_type);
             http_data_set_content_type(q->request_data, content_type);
         }
