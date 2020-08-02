@@ -1853,10 +1853,6 @@ http_query_reset (http_query *q)
     }
 
     q->handshake = q->sending = false;
-    if (q->fdpoll != NULL) {
-        eloop_fdpoll_free(q->fdpoll);
-        q->fdpoll = NULL;
-    }
 
     http_query_disconnect(q);
 
@@ -2213,6 +2209,13 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
         if (rc < 0) {
             error err = http_query_sock_err(q, rc);
 
+            if (err == NULL) {
+                return;
+            }
+
+            log_debug(q->client->log, "%s: gnutls_handshake(): %s",
+                q->straddr.text, ESTRING(err));
+
             /* TLS handshake failed, try another address, if any */
             http_query_disconnect(q);
             if (err != NULL) {
@@ -2237,9 +2240,6 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
 
             log_debug(q->client->log, "%s: send(): %s",
                 q->straddr.text, ESTRING(err));
-
-            eloop_fdpoll_free(q->fdpoll);
-            q->fdpoll = NULL;
 
             http_query_disconnect(q);
 
@@ -2388,6 +2388,11 @@ AGAIN:
 static void
 http_query_disconnect (http_query *q)
 {
+    if (q->fdpoll != NULL) {
+        eloop_fdpoll_free(q->fdpoll);
+        q->fdpoll = NULL;
+    }
+
     if (q->tls != NULL) {
         gnutls_deinit(q->tls);
         q->tls = NULL;
