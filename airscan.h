@@ -281,7 +281,7 @@ ll_cat (ll_head *list1, ll_head *list2)
 void
 mem_trunc (void *p);
 
-/* Shrink the memory block length, preserving its capasity
+/* Shrink the memory block length, preserving its capacity
  */
 #define mem_shrink(p,len)       __mem_shrink(p,len, sizeof(*p))
 
@@ -551,7 +551,7 @@ __ptr_array_del (void **a, int i)
 
     len --;
     p = a[i];
-    memmove(&a[i], &a[i + 1], sizeof(void*) * len);
+    memmove(&a[i], &a[i + 1], sizeof(void*) * (len - i));
     mem_shrink(a, len);
     a[len] = NULL;
 
