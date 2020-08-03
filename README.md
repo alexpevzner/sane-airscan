@@ -34,9 +34,18 @@ scan from ADF supported as well
 
 ### Compatibility
 
-Any **eSCL** and **WSD** apable scanner expected to work. Here is a list of devices
+Any **eSCL** and **WSD** capable scanner expected to work. Here is a list of devices
 that were actually tested. If you have success with a scanner not included
 into this list, please let me know.
+
+In most cases, devices were tested with network connection. However, most (all?) of
+the **eSCL** devices will also work over **USB**, if **IPP-over-USB** daemon is installed on
+your computer. WSD-only devices cannot be used with the IPP-over-USB daemon.
+
+Currently, there is a choice of two **IPP-over-USB** implementations:
+* [ippusbxd](https://github.com/OpenPrinting/ippusbxd), which comes with some distros
+* [ipp-usb](https://github.com/OpenPrinting/ipp-usb), a modern replacement of the `ippusbxd`.
+'ipp-usb` works better, binary packages available for many popular distros (see link from a project page).
 
 Legend:
 
@@ -112,11 +121,8 @@ Legend:
 scanning on its web console: Home->Menu->Preferences->Network->TCP/IP
 Settings->Network Link Scan Settings->On.
 
-<a name="note2"><sup>[2]</sup></a>: this USB device supports IPP over USB protocol, which
-allows it to be used with network protocols like eSCL. To enable IPP over USB, you need
-to install additional program: either [ippusbxd](https://github.com/OpenPrinting/ippusbxd), which
-comes with some distros, or [ipp-usb](https://github.com/OpenPrinting/ipp-usb). 'ipp-usb`
-works better, binary packages available for many popular distros.
+<a name="note2"><sup>[2]</sup></a>: this device is USB-only, but it works well with the
+IPP-over-USB daemon.
 
 <a name="note3"><sup>[3]</sup></a>: by default, WS-Scan is disabled on this
 device and needs to be enabled before use: open web console, Click `[Settings/Registration]`,
