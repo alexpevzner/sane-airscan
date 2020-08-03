@@ -50,7 +50,8 @@ Legend:
 | Brother MFC-L2720DW                | No                        | Yes                       |
 | Brother MFC-L2750DW                | Yes                       | Yes                       |
 | Canon D570                         | Yes                       |                           |
-| Canon ImageCLASS MF743cdw          | Yes<sup>[1](#note1)</sup> |                           |
+| Canon imageCLASS MF642C/643C/644C  | Yes                       |                           |
+| Canon imageCLASS MF743cdw          | Yes<sup>[1](#note1)</sup> |                           |
 | Canon imageRUNNER ADVANCE 4545/4551| Yes                       | Yes                       |
 | Canon imageRUNNER C3120L           | Yes                       | Yes                       |
 | Canon i-SENSYS MF641C              | No                        | Yes                       |
