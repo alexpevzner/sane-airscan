@@ -82,6 +82,7 @@ Legend:
 | HP LaserJet MFP M227sdn            | Yes                       |                           |
 | HP LaserJet MFP M426dw             | Yes                       |                           |
 | HP LaserJet MFP M630               | Yes                       |                           |
+| HP LaserJet Pro M28a               | Yes<sup>[2](#note2)</sup> |                           |
 | HP LaserJet Pro M28w               | Yes                       | Yes                       |
 | HP LaserJet Pro MFP 148fdw         | Yes                       |                           |
 | HP LaserJet Pro MFP M125 series    | No                        | Yes                       |
