@@ -45,7 +45,8 @@ your computer. WSD-only devices cannot be used with the IPP-over-USB daemon.
 Currently, there is a choice of two **IPP-over-USB** implementations:
 * [ippusbxd](https://github.com/OpenPrinting/ippusbxd), which comes with some distros
 * [ipp-usb](https://github.com/OpenPrinting/ipp-usb), a modern replacement of the `ippusbxd`.
-'ipp-usb` works better, binary packages available for many popular distros (see link from a project page).
+The `ipp-usb` works better, binary packages available for many popular distros (see link from
+a project page).
 
 Legend:
 
