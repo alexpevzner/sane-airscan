@@ -1039,7 +1039,6 @@ device_stm_wait_while_working (device *dev)
     }
 }
 
-
 /* Cancel scanning and wait until device leaves the working state
  */
 static void
@@ -1214,11 +1213,42 @@ device_start_do (void *data)
     device_stm_start_scan(dev);
 }
 
+/* Wait until new job is started
+ */
+static SANE_Status
+device_start_wait (device *dev)
+{
+    for (;;) {
+        DEVICE_STM_STATE state = device_stm_state_get(dev);
+
+        switch (state) {
+        case DEVICE_STM_IDLE:
+            break;
+
+        case DEVICE_STM_SCANNING:
+            if (dev->proto_ctx.location != NULL) {
+                return SANE_STATUS_GOOD;
+            }
+            break;
+
+        case DEVICE_STM_DONE:
+            return dev->job_status;
+
+        default:
+            return SANE_STATUS_GOOD;
+        }
+
+        eloop_cond_wait(&dev->stm_cond);
+    }
+}
+
 /* Start new scanning job
  */
 static SANE_Status
 device_start_new_job (device *dev)
 {
+    SANE_Status status;
+
     dev->stm_cancel_sent = false;
     dev->job_status = SANE_STATUS_GOOD;
     mem_free((char*) dev->proto_ctx.location);
@@ -1229,12 +1259,17 @@ device_start_new_job (device *dev)
 
     eloop_call(device_start_do, dev);
 
-    while (device_stm_state_get(dev) == DEVICE_STM_IDLE) {
-        eloop_cond_wait(&dev->stm_cond);
+    log_debug(dev->log, "device_start_wait: waiting");
+    status = device_start_wait(dev);
+    log_debug(dev->log, "device_start_wait: %s", sane_strstatus(status));
+
+    if (status == SANE_STATUS_GOOD) {
+        dev->flags |= DEVICE_READING;
+    } else {
+        dev->flags &= ~DEVICE_SCANNING;
     }
 
-    dev->flags |= DEVICE_READING;
-    return SANE_STATUS_GOOD;
+    return status;
 }
 
 /* Start scanning operation
