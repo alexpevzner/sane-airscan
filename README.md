@@ -40,9 +40,19 @@ scan from ADF supported as well
 
 ### Compatibility
 
-Any **eSCL** and **WSD** apable scanner expected to work. Here is a list of devices
+Any **eSCL** and **WSD** capable scanner expected to work. Here is a list of devices
 that were actually tested. If you have success with a scanner not included
 into this list, please let me know.
+
+In most cases, devices were tested with network connection. However, most (all?) of
+the **eSCL** devices will also work over **USB**, if **IPP-over-USB** daemon is installed on
+your computer. WSD-only devices cannot be used with the IPP-over-USB daemon.
+
+Currently, there is a choice of two **IPP-over-USB** implementations:
+* [ippusbxd](https://github.com/OpenPrinting/ippusbxd), which comes with some distros
+* [ipp-usb](https://github.com/OpenPrinting/ipp-usb), a modern replacement of the `ippusbxd`.
+The `ipp-usb` works better, binary packages available for many popular distros (see link from
+a project page).
 
 Legend:
 
@@ -56,7 +66,8 @@ Legend:
 | Brother MFC-L2720DW                | No                        | Yes                       |
 | Brother MFC-L2750DW                | Yes                       | Yes                       |
 | Canon D570                         | Yes                       |                           |
-| Canon ImageCLASS MF743cdw          | Yes<sup>[1](#note1)</sup> |                           |
+| Canon imageCLASS MF642C/643C/644C  | Yes                       |                           |
+| Canon imageCLASS MF743cdw          | Yes<sup>[1](#note1)</sup> |                           |
 | Canon imageRUNNER ADVANCE 4545/4551| Yes                       | Yes                       |
 | Canon imageRUNNER C3120L           | Yes                       | Yes                       |
 | Canon i-SENSYS MF641C              | No                        | Yes                       |
@@ -74,6 +85,7 @@ Legend:
 | Canon TS 3300                      | Yes                       |                           |
 | Canon TS 6151                      | Yes                       |                           |
 | Canon TS 6250                      | Yes                       |                           |
+| EPSON ET-2750 Series               | Yes                       |                           |
 | EPSON WF-7710                      | Yes                       |                           |
 | EPSON XP-7100 Series               | Yes                       |                           |
 | EPSON XP-8600 Series               | Yes                       |                           |
@@ -88,6 +100,7 @@ Legend:
 | HP LaserJet MFP M227sdn            | Yes                       |                           |
 | HP LaserJet MFP M426dw             | Yes                       |                           |
 | HP LaserJet MFP M630               | Yes                       |                           |
+| HP LaserJet Pro M28a               | Yes<sup>[2](#note2)</sup> |                           |
 | HP LaserJet Pro M28w               | Yes                       | Yes                       |
 | HP LaserJet Pro MFP 148fdw         | Yes                       |                           |
 | HP LaserJet Pro MFP M125 series    | No                        | Yes                       |
@@ -116,11 +129,8 @@ Legend:
 scanning on its web console: Home->Menu->Preferences->Network->TCP/IP
 Settings->Network Link Scan Settings->On.
 
-<a name="note2"><sup>[2]</sup></a>: this USB device supports IPP over USB protocol, which
-allows it to be used with network protocols like eSCL. To enable IPP over USB, you need
-to install additional program: either [ippusbxd](https://github.com/OpenPrinting/ippusbxd), which
-comes with some distros, or [ipp-usb](https://github.com/OpenPrinting/ipp-usb). 'ipp-usb`
-works better, binary packages available for many popular distros.
+<a name="note2"><sup>[2]</sup></a>: this device is USB-only, but it works well with the
+IPP-over-USB daemon.
 
 <a name="note3"><sup>[3]</sup></a>: by default, WS-Scan is disabled on this
 device and needs to be enabled before use: open web console, Click `[Settings/Registration]`,

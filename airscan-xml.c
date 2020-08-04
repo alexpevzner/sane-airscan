@@ -75,7 +75,7 @@ xml_rd_node_switched (xml_rd *xml)
     } else {
         const char *prefix = NULL;
 
-        if (xml->node->ns != NULL) {
+        if (xml->node->ns != NULL && xml->node->ns->prefix != NULL) {
             prefix = (const char*) xml->node->ns->prefix;
             prefix = xml_rd_ns_subst_lookup(xml, prefix,
                     (const char*) xml->node->ns->href);
@@ -661,7 +661,7 @@ xml_wr_leave (xml_wr *xml)
 static void
 xml_format_node_name (FILE *fp, xmlNode *node)
 {
-    if (node->ns != NULL) {
+    if (node->ns != NULL && node->ns->prefix != NULL) {
         fputs((char*) node->ns->prefix, fp);
         putc(':', fp);
     }
@@ -678,6 +678,10 @@ xml_format_node_attrs (FILE *fp, xmlNode *node)
 
     /* Format namespace attributes */
     for (ns = node->nsDef; ns != NULL; ns = ns->next) {
+        if (ns->prefix == NULL) {
+            continue;
+        }
+
         /* Write namespace name */
         putc(' ', fp);
         fputs("xmlns:", fp);
@@ -696,7 +700,7 @@ xml_format_node_attrs (FILE *fp, xmlNode *node)
 
         /* Write attribute name with namespace prefix */
         putc(' ', fp);
-        if (attr->ns != NULL) {
+        if (attr->ns != NULL && attr->ns->prefix != NULL) {
             fputs((char*) attr->ns->prefix, fp);
             putc(':', fp);
         }
