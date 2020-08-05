@@ -1461,7 +1461,7 @@ device_read_next (device *dev)
     } else {
         image_window win;
         int          bpp = dev->opt.params.format == SANE_FRAME_RGB ? 3 : 1;
-        int          returned_width;
+        int          returned_size_and_skip;
 
         win.x_off = dev->job_skip_x;
         win.y_off = dev->job_skip_y;
@@ -1483,13 +1483,14 @@ device_read_next (device *dev)
         }
 
         line_capacity = win.wid;
-        if (dev->read_24_to_8) {
+        if (params.format == SANE_FRAME_RGB) {
             line_capacity *= 3;
         }
 
-        returned_width = dev->read_skip_bytes + dev->opt.params.bytes_per_line;
+        returned_size_and_skip = dev->read_skip_bytes +
+                                 dev->opt.params.bytes_per_line;
 
-        line_capacity = math_max(line_capacity, returned_width);
+        line_capacity = math_max(line_capacity, returned_size_and_skip);
         dev->read_line_real_wid = win.wid;
     }
 
