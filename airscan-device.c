@@ -10,6 +10,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 /******************** Device management ********************/
 /* Device flags
@@ -93,6 +94,7 @@ struct device {
     http_query           *stm_cancel_query; /* CANCEL query */
     bool                 stm_cancel_sent;   /* Cancel was sent to device */
     eloop_timer          *stm_timer;        /* Delay timer */
+    struct timespec      stm_last_fail_time;/* Last failed sane_start() time */
 
     /* Protocol handling */
     proto_ctx            proto_ctx;        /* Protocol handler context */
@@ -1242,12 +1244,40 @@ device_start_wait (device *dev)
     }
 }
 
+/* Enforce CONFIG_START_RETRY_INTERVAL
+ */
+static void
+device_start_retry_pause (device *dev)
+{
+    struct timespec now;
+    int64_t         pause_us;
+
+    clock_gettime(CLOCK_MONOTONIC, &now);
+
+    pause_us = (int64_t) (now.tv_sec - dev->stm_last_fail_time.tv_sec) *
+                    1000000;
+    pause_us += (int64_t) (now.tv_nsec - dev->stm_last_fail_time.tv_nsec) /
+                    1000;
+    pause_us = (int64_t) (CONFIG_START_RETRY_INTERVAL * 1000) - pause_us;
+
+    if (pause_us > 1000) {
+        log_debug(dev->log, "sane_start() retried too often; pausing for %d ms",
+                (int) (pause_us / 1000));
+
+        eloop_mutex_unlock();
+        usleep((useconds_t) pause_us);
+        eloop_mutex_lock();
+    }
+}
+
 /* Start new scanning job
  */
 static SANE_Status
 device_start_new_job (device *dev)
 {
     SANE_Status status;
+
+    device_start_retry_pause(dev);
 
     dev->stm_cancel_sent = false;
     dev->job_status = SANE_STATUS_GOOD;
@@ -1262,6 +1292,16 @@ device_start_new_job (device *dev)
     log_debug(dev->log, "device_start_wait: waiting");
     status = device_start_wait(dev);
     log_debug(dev->log, "device_start_wait: %s", sane_strstatus(status));
+
+    switch (status) {
+    case SANE_STATUS_GOOD:
+    case SANE_STATUS_CANCELLED:
+        memset(&dev->stm_last_fail_time, 0, sizeof(dev->stm_last_fail_time));
+        break;
+
+    default:
+        clock_gettime(CLOCK_MONOTONIC, &dev->stm_last_fail_time);
+    }
 
     if (status == SANE_STATUS_GOOD) {
         dev->flags |= DEVICE_READING;

@@ -49,6 +49,11 @@
  */
 #define CONFIG_DEFAULT_RESOLUTION       300
 
+/* Minimal interval between subsequent sane_start()
+ * attempts, if previous sane_start was failed
+ */
+#define CONFIG_START_RETRY_INTERVAL      2500
+
 /******************** Forward declarations ********************/
 /* log_ctx represents logging context
  */
