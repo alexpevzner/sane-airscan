@@ -1342,7 +1342,7 @@ wsdd_send_directed_probe (int ifindex, int af, const void *addr)
     u = uuid_rand();
     sprintf(wsdd_buf, wsdd_probe_template, u.text);
 
-    /* Send prove request */
+    /* Send probe request */
     q = http_query_new(wsdd_http_client, uri,
         "POST", str_dup(wsdd_buf), "application/soap+xml; charset=utf-8");
     http_query_set_uintptr(q, ifindex);
