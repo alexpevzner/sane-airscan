@@ -1417,6 +1417,12 @@ http_uri_get_path (const http_uri *uri);
 void
 http_uri_set_path (http_uri *uri, const char *path);
 
+/* Fix URI host: if `match` is NULL or uri's host matches `match`,
+ * replace uri's host with base_uri's host
+ */
+void
+http_uri_fix_host (http_uri *uri, const http_uri *base_uri, const char *match);
+
 /* Fix IPv6 address zone suffix
  */
 void
@@ -1570,6 +1576,13 @@ http_query_new_relative(http_client *client,
 void
 http_query_onerror (http_query *q, void (*onerror)(void *ptr, error err));
 
+/* Set on-redirect callback. It is called in a case of HTTP
+ * redirect and may modify the supplied URI
+ */
+void
+http_query_onredir (http_query *q,
+        void (*onredir)(void *ptr, http_uri *uri, const http_uri *orig_uri));
+
 /* Submit the query.
  *
  * When query is finished, callback will be called. After return from
@@ -1624,9 +1637,21 @@ const char*
 http_query_status_string (const http_query *q);
 
 /* Get query URI
+ *
+ * It works as http_query_orig_uri() before query is submitted
+ * or after it is completed, and as http_query_real_uri() in
+ * between
+ *
+ * This function is deprecated, use http_query_orig_uri()
+ * or http_query_real_uri() instead
  */
 http_uri*
 http_query_uri (const http_query *q);
+
+/* Get original URI (the same as used when http_query was created)
+ */
+http_uri*
+http_query_orig_uri (const http_query *q);
 
 /* Get real URI, that can differ from the requested URI
  * in a case of HTTP redirection

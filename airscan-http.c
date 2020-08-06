@@ -189,10 +189,12 @@ http_uri_field_equal (const http_uri *uri1, const http_uri *uri2,
     }
 }
 
-/* Replace particular URI field
+
+
+/* Replace particular URI field with val[len] string
  */
 static void
-http_uri_field_replace (http_uri *uri, int num, const char *val)
+http_uri_field_replace_len (http_uri *uri, int num, const char *val, size_t len)
 {
     static const struct { char *pfx; int num; char *sfx; } fields[] = {
         {"",  UF_SCHEMA, "://"},
@@ -206,7 +208,7 @@ http_uri_field_replace (http_uri *uri, int num, const char *val)
     };
 
     int      i;
-    char     *buf = alloca(strlen(uri->str) + strlen(val) + 4);
+    char     *buf = alloca(strlen(uri->str) + len + 4);
     char     *end = buf;
     http_uri *uri2;
 
@@ -215,7 +217,8 @@ http_uri_field_replace (http_uri *uri, int num, const char *val)
         http_uri_field field;
 
         if (num == fields[i].num) {
-            field = http_uri_field_make(val);
+            field.str = val;
+            field.len = len;
         } else {
             field = http_uri_field_get(uri, fields[i].num);
         }
@@ -259,6 +262,14 @@ http_uri_field_replace (http_uri *uri, int num, const char *val)
     mem_free((char*) uri->path);
     *uri = *uri2;
     mem_free(uri2);
+}
+
+/* Replace particular URI field
+ */
+static void
+http_uri_field_replace (http_uri *uri, int num, const char *val)
+{
+    http_uri_field_replace_len (uri, num, val, strlen(val));
 }
 
 /* Append UF_PATH part of URI to buffer up to the final '/'
@@ -794,6 +805,25 @@ void
 http_uri_set_path (http_uri *uri, const char *path)
 {
     http_uri_field_replace(uri, UF_PATH, path);
+}
+
+/* Fix URI host: if `match` is NULL or uri's host matches `match`,
+ * replace uri's host with base_uri's host
+ */
+void
+http_uri_fix_host (http_uri *uri, const http_uri *base_uri, const char *match)
+{
+    http_uri_field host;
+
+    if (match != NULL) {
+        host = http_uri_field_get(uri, UF_HOST);
+        if (strncasecmp(host.str, match, host.len)) {
+            return;
+        }
+    }
+
+    host = http_uri_field_get(base_uri, UF_HOST);
+    http_uri_field_replace_len(uri, UF_HOST, host.str, host.len);
 }
 
 /* Fix IPv6 address zone suffix
@@ -1817,6 +1847,9 @@ struct http_query {
     uintptr_t         uintptr;                  /* User-defined parameter */
     void              (*onerror) (void *ptr,    /* On-error callback */
                                 error err);
+    void              (*onredir) (void *ptr,    /* On-redirect callback */
+                                http_uri *uri,
+                                const http_uri *orig_uri);
     void              (*callback) (void *ptr,   /* Completion callback */
                                 http_query *q);
 
@@ -2011,6 +2044,16 @@ http_query_onerror (http_query *q, void (*onerror)(void *ptr, error err))
     q->onerror = onerror;
 }
 
+/* Set on-redirect callback. It is called in a case of HTTP
+ * redirect and may modify the supplied URI
+ */
+void
+http_query_onredir (http_query *q,
+        void (*onredir)(void *ptr, http_uri *uri, const http_uri *orig_uri))
+{
+    q->onredir = onredir;
+}
+
 /* Handle HTTP redirection
  */
 static error
@@ -2061,10 +2104,21 @@ http_query_redirect (http_query *q)
         q->uri = NULL; /* Just in case */
     }
 
-
     /* Issue log message */
     log_debug(q->client->log, "HTTP redirect %d: %s %s",
         q->redirect_count, method, http_uri_str(uri));
+
+    /* Call user hook, if any */
+    if (q->onredir != NULL) {
+        char *old_uri_str = alloca(strlen(uri->str) + 1);
+
+        strcpy(old_uri_str, uri->str);
+        q->onredir(q->client->ptr, uri, q->orig_uri);
+        if (strcmp(old_uri_str, uri->str)) {
+            log_debug(q->client->log, "HTTP redirect override: %s %s",
+                method, http_uri_str(uri));
+        }
+    }
 
     /* Perform redirection */
     http_query_reset(q);
@@ -2684,11 +2738,26 @@ http_query_status_string (const http_query *q)
 }
 
 /* Get query URI
+ *
+ * It works as http_query_orig_uri() before query is submitted
+ * or after it is completed, and as http_query_real_uri() in
+ * between
+ *
+ * This function is deprecated, use http_query_orig_uri()
+ * or http_query_real_uri() instead
  */
 http_uri*
 http_query_uri (const http_query *q)
 {
     return q->uri;
+}
+
+/* Get original URI (the same as used when http_query was created)
+ */
+http_uri*
+http_query_orig_uri (const http_query *q)
+{
+    return q->orig_uri ? q->orig_uri : q->uri;
 }
 
 /* Get real URI, that can differ from the requested URI
