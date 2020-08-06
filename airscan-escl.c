@@ -514,6 +514,17 @@ escl_devcaps_decode (const proto_ctx *ctx, devcaps *caps)
     return escl_devcaps_parse(caps, data->bytes, data->size);
 }
 
+/* Fix Location: URL
+ *
+ * Can be used as http_query_onredir() callback
+ */
+static void
+escl_scan_fix_location (void *p, http_uri *uri, const http_uri *orig_uri)
+{
+    (void) p;
+    http_uri_fix_host(uri, orig_uri, "localhost");
+}
+
 /* Initiate scanning
  */
 static http_query*
@@ -595,6 +606,7 @@ escl_scan_query (const proto_ctx *ctx)
      * many devices.
      */
     http_query_set_request_header(query, "Host", "localhost");
+    http_query_onredir(query, escl_scan_fix_location);
 
     return query;
 }
@@ -626,13 +638,14 @@ escl_scan_decode (const proto_ctx *ctx)
     }
 
     /* Validate and save location */
-    uri = http_uri_new_relative(ctx->base_uri, location, true, true);
+    uri = http_uri_new_relative(ctx->base_uri, location, true, false);
     if (uri == NULL) {
         err = eloop_eprintf("ScanJobs request: invalid location received");
         goto ERROR;
     }
 
-    result.data.location = str_dup(http_uri_get_path(uri));
+    escl_scan_fix_location(NULL, uri, http_query_uri(ctx->query));
+    result.data.location = str_dup(http_uri_str(uri));
     http_uri_free(uri);
 
     result.next = PROTO_OP_LOAD;
