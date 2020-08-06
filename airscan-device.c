@@ -20,6 +20,7 @@
 #define DEVICE_HTTP_TIMEOUT_LOAD        -1
 #define DEVICE_HTTP_TIMEOUT_CHECK       5000
 #define DEVICE_HTTP_TIMEOUT_CLEANUP     30000
+#define DEVICE_HTTP_TIMEOUT_CANCEL      30000
 
 /******************** Device management ********************/
 /* Device flags
@@ -766,6 +767,9 @@ device_stm_cancel_perform (device *dev, SANE_Status status)
             dev->stm_cancel_query = ctx->proto->cancel_query(ctx);
 
             http_query_onerror(dev->stm_cancel_query, NULL);
+            http_query_timeout(dev->stm_cancel_query,
+                DEVICE_HTTP_TIMEOUT_CANCEL, false);
+
             http_query_submit(dev->stm_cancel_query, device_stm_cancel_callback);
 
             dev->stm_cancel_sent = true;

@@ -357,6 +357,7 @@ eloop_event_new (void (*callback)(void *), void *data)
 
     event->fdpoll = eloop_fdpoll_new(pollable_get_fd(p),
         eloop_event_callback, event);
+    eloop_fdpoll_set_mask(event->fdpoll, ELOOP_FDPOLL_READ);
 
     return event;
 }
