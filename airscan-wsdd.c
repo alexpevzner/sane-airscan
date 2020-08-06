@@ -626,7 +626,7 @@ wsdd_finding_get_metadata_callback (void *ptr, http_query *q)
         }
     }
 
-    /* Cancel all cancel all unnecessary metadata requests.
+    /* Cancel cancel all unnecessary metadata requests.
      *
      * Note, we consider request is unnecessary if:
      *   * it has the same address family
