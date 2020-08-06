@@ -12,6 +12,15 @@
 #include <string.h>
 #include <unistd.h>
 
+/******************** Constants ********************/
+/* HTTP timeouts, by operation, in milliseconds
+ */
+#define DEVICE_HTTP_TIMEOUT_DEVCAPS     5000
+#define DEVICE_HTTP_TIMEOUT_SCAN        30000
+#define DEVICE_HTTP_TIMEOUT_LOAD        -1
+#define DEVICE_HTTP_TIMEOUT_CHECK       5000
+#define DEVICE_HTTP_TIMEOUT_CLEANUP     30000
+
 /******************** Device management ********************/
 /* Device flags
  */
@@ -356,6 +365,7 @@ device_proto_devcaps_submit (device *dev, void (*callback) (void*, http_query*))
     http_query *q;
 
     q = dev->proto_ctx.proto->devcaps_query(&dev->proto_ctx);
+    http_query_timeout(q, DEVICE_HTTP_TIMEOUT_DEVCAPS, false);
     http_query_submit(q, callback);
     dev->proto_ctx.query = q;
 }
@@ -393,15 +403,34 @@ device_proto_op_submit (device *dev, PROTO_OP op,
         void (*callback) (void*, http_query*))
 {
     http_query *(*func) (const proto_ctx *ctx) = NULL;
+    int        timeout = -1;
+    bool       timeout_header_only = false;
     http_query *q;
 
     switch (op) {
     case PROTO_OP_NONE:    log_internal_error(dev->log); break;
-    case PROTO_OP_SCAN:    func = dev->proto_ctx.proto->scan_query; break;
-    case PROTO_OP_LOAD:    func = dev->proto_ctx.proto->load_query; break;
-    case PROTO_OP_CHECK:   func = dev->proto_ctx.proto->status_query; break;
-    case PROTO_OP_CLEANUP: func = dev->proto_ctx.proto->cleanup_query; break;
     case PROTO_OP_FINISH:  log_internal_error(dev->log); break;
+
+    case PROTO_OP_SCAN:
+        func = dev->proto_ctx.proto->scan_query;
+        timeout = DEVICE_HTTP_TIMEOUT_SCAN;
+        break;
+
+    case PROTO_OP_LOAD:
+        func = dev->proto_ctx.proto->load_query;
+        timeout = DEVICE_HTTP_TIMEOUT_LOAD;
+        timeout_header_only = true;
+        break;
+
+    case PROTO_OP_CHECK:
+        func = dev->proto_ctx.proto->status_query;
+        timeout = DEVICE_HTTP_TIMEOUT_CHECK;
+        break;
+
+    case PROTO_OP_CLEANUP:
+        func = dev->proto_ctx.proto->cleanup_query;
+        timeout = DEVICE_HTTP_TIMEOUT_CLEANUP;
+        break;
     }
 
     log_assert(dev->log, func != NULL);
@@ -410,6 +439,7 @@ device_proto_op_submit (device *dev, PROTO_OP op,
         device_proto_op_name(dev, op), dev->proto_ctx.failed_attempt);
     dev->proto_op_current = op;
     q = func(&dev->proto_ctx);
+    http_query_timeout(q, timeout, timeout_header_only);
     http_query_submit(q, callback);
     dev->proto_ctx.query = q;
 }
