@@ -33,6 +33,11 @@
  */
 #define HTTP_REDIRECT_LIMIT     8
 
+/* Default query timeout, milliseconds
+ * Disabled, if negative
+ */
+#define HTTP_QUERY_TIMEOUT      -1
+
 /******************** Static variables ********************/
 static gnutls_certificate_credentials_t gnutls_cred;
 
@@ -45,8 +50,14 @@ http_data_new(http_data *parent, const char *bytes, size_t size);
 static void
 http_data_set_content_type (http_data *data, const char *content_type);
 
+static void
+http_query_timeout_cancel (http_query *q);
+
 static http_query*
 http_query_by_ll_node (ll_node *node);
+
+static void
+http_query_complete (http_query *q, error err);
 
 static void
 http_query_connect (http_query *q, error err);
@@ -1817,6 +1828,11 @@ struct http_query {
     http_uri          *orig_uri;                /* Original URI */
     const char        *orig_method;             /* Original method */
 
+    /* Query timeout */
+    eloop_timer       *timeout_timer;           /* Timeout timer */
+    int               timeout_value;            /* In milliseconds */
+    int               timeout_header_only;      /* Body not covered */
+
     /* Low-level I/O */
     uint64_t          eloop_callid;             /* For eloop_call_cancel */
     error             err;                      /* Transport error */
@@ -1910,6 +1926,7 @@ http_query_free (http_query *q)
 {
     http_query_reset(q);
 
+    http_query_timeout_cancel(q);
     http_uri_free(q->uri);
     http_uri_free(q->real_uri);
     http_uri_free(q->orig_uri);
@@ -2013,6 +2030,9 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
         }
     }
 
+    /* Set default timeout */
+    http_query_timeout(q, HTTP_QUERY_TIMEOUT, false);
+
     return q;
 }
 
@@ -2029,6 +2049,44 @@ http_query_new_relative(http_client *client,
     http_uri *uri = http_uri_new_relative(base_uri, path, true, false);
     log_assert(client->log, uri != NULL);
     return http_query_new(client, uri, method, body, content_type);
+}
+
+/* http_query_timeout callback
+ */
+static void
+http_query_timeout_callback (void *p)
+{
+    http_query *q = (http_query*) p;
+
+    q->timeout_timer = NULL; /* to prevent eloop_timer_cancel() */
+    http_query_complete(q, ERROR("timeout"));
+}
+
+/* Set query timeout, in milliseconds.
+ *
+ * If `timeout` is negative, timeout disabled
+ *
+ * If `header_only` is true, body reception is not covered by the
+ * timeout
+ *
+ * This function must be called before http_query_submit()
+ */
+void
+http_query_timeout (http_query *q, int timeout, bool header_only)
+{
+    q->timeout_value = timeout;
+    q->timeout_header_only = header_only;
+}
+
+/* Cancel query timeout timer
+ */
+static void
+http_query_timeout_cancel (http_query *q)
+{
+    if (q->timeout_timer != NULL) {
+        eloop_timer_cancel(q->timeout_timer);
+        q->timeout_timer = NULL;
+    }
 }
 
 /* For this particular query override on-error callback, previously
@@ -2054,16 +2112,15 @@ http_query_onredir (http_query *q,
     q->onredir = onredir;
 }
 
-/* Handle HTTP redirection
+/* Choose HTTP redirect method, based on HTTP status code
+ * Returns NULL for non-redirection status code, and may
+ * be used to detect if status code implies redirection
  */
-static error
-http_query_redirect (http_query *q)
+static const char*
+http_query_redirect_method (const http_query *q)
 {
     const char *method = q->orig_method ? q->orig_method : q->method;
-    const char *location;
-    http_uri   *uri;
 
-    /* Check HTTP status code */
     switch(http_query_status(q)) {
     case 303:
         if (!strcmp(method, "POST") || !strcmp(method, "PUT")) {
@@ -2075,6 +2132,24 @@ http_query_redirect (http_query *q)
         break;
 
     default:
+        return NULL;
+    }
+
+    return method;
+}
+
+/* Handle HTTP redirection
+ */
+static error
+http_query_redirect (http_query *q)
+{
+    const char *method;
+    const char *location;
+    http_uri   *uri;
+
+    /* Choose method, based on HTTP status code */
+    method = http_query_redirect_method(q);
+    if (method == NULL) {
         return ERROR("HTTP redirect: invalid status code");
     }
 
@@ -2207,7 +2282,28 @@ http_query_on_body_callback (http_parser *parser,
 
     if (!http_data_append(q->response_data, data, size)) {
         q->oom = true;
-        q->http_parser_done = true;
+    }
+
+    return 0;
+}
+
+/* HTTP parser on_headers_complete callback
+ */
+static int
+http_query_on_headers_complete (http_parser *parser)
+{
+    http_query *q = OUTER_STRUCT(parser, http_query, http_parser);
+
+    if (http_query_redirect_method(q) == NULL) {
+        log_debug(q->client->log,
+                "HTTP %s %s: got response headers (%d)",
+                q->method,
+                http_uri_str(q->uri),
+                http_query_status(q));
+
+        if (q->timeout_header_only) {
+            http_query_timeout_cancel(q);
+        }
     }
 
     return 0;
@@ -2243,6 +2339,7 @@ http_query_callbacks = {
     .on_header_field     = http_hdr_on_header_field,
     .on_header_value     = http_hdr_on_header_value,
     .on_body             = http_query_on_body_callback,
+    .on_headers_complete = http_query_on_headers_complete,
     .on_message_complete = http_query_on_message_complete
 };
 
@@ -2267,7 +2364,7 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
                 return;
             }
 
-            log_debug(q->client->log, "%s: gnutls_handshake(): %s",
+            log_debug(q->client->log, "HTTP %s: gnutls_handshake(): %s",
                 q->straddr.text, ESTRING(err));
 
             /* TLS handshake failed, try another address, if any */
@@ -2292,7 +2389,7 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
                 return;
             }
 
-            log_debug(q->client->log, "%s: send(): %s",
+            log_debug(q->client->log, "HTTP %s: send(): %s",
                 q->straddr.text, ESTRING(err));
 
             http_query_disconnect(q);
@@ -2373,7 +2470,7 @@ AGAIN:
     }
 
     q->straddr = ip_straddr_from_sockaddr(q->addr_next->ai_addr, true);
-    log_debug(q->client->log, "trying %s", q->straddr.text);
+    log_debug(q->client->log, "HTTP trying %s", q->straddr.text);
 
     /* Create socket and try to connect */
     log_assert(q->client->log, q->sock < 0);
@@ -2382,7 +2479,7 @@ AGAIN:
 
     if (q->sock == -1) {
         err = ERROR(strerror(errno));
-        log_debug(q->client->log, "%s: socket(): %s",
+        log_debug(q->client->log, "HTTP %s: socket(): %s",
             q->straddr.text, ESTRING(err));
 
         q->addr_next = q->addr_next->ai_next;
@@ -2395,7 +2492,7 @@ AGAIN:
 
     if (rc < 0 && errno != EINPROGRESS) {
         err = ERROR(strerror(errno));
-        log_debug(q->client->log, "%s: connect(): %s",
+        log_debug(q->client->log, "HTTP %s: connect(): %s",
             q->straddr.text, ESTRING(err));
 
         http_query_disconnect(q);
@@ -2577,7 +2674,7 @@ http_query_start_processing (void *p)
     }
 
     /* Lookup target addresses */
-    log_debug(q->client->log, "resolving %s %s", host, port);
+    log_debug(q->client->log, "HTTP resolving %s %s", host, port);
     memset(&hints, 0, sizeof(hints));
     hints.ai_flags = AI_ADDRCONFIG;
     hints.ai_family = AF_UNSPEC;
@@ -2629,11 +2726,20 @@ http_query_submit (http_query *q, void (*callback)(void *ptr, http_query *q))
 {
     q->callback = callback;
 
-    /* Issue log message and set timestamp */
+    /* Issue log message, set timestamp and start timeout timer */
     log_debug(q->client->log, "HTTP %s %s", q->method, http_uri_str(q->uri));
 
     if (q->redirect_count == 0) {
         q->timestamp = timestamp_now();
+
+        log_assert(q->client->log, q->timeout_timer == NULL);
+        if (q->timeout_value >= 0) {
+            q->timeout_timer = eloop_timer_new(q->timeout_value,
+                http_query_timeout_callback, q);
+            log_debug(q->client->log, "HTTP using timeout: %d ms (%s)",
+                q->timeout_value,
+                q->timeout_header_only ? "header only" : "header+body");
+        }
     }
 
     /* Submit the query */

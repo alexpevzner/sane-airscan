@@ -1566,6 +1566,18 @@ http_query_new_relative(http_client *client,
         const http_uri *base_uri, const char *path,
         const char *method, char *body, const char *content_type);
 
+/* Set query timeout, in milliseconds.
+ *
+ * If `timeout` is negative, timeout disabled
+ *
+ * If `header_only` is true, body reception is not covered by the
+ * timeout
+ *
+ * This function must be called before http_query_submit()
+ */
+void
+http_query_timeout (http_query *q, int timeout, bool header_only);
+
 /* For this particular query override on-error callback, previously
  * set by http_client_onerror()
  *
