@@ -1533,6 +1533,11 @@ http_client_onerror (http_client *client,
 void
 http_client_cancel (http_client *client);
 
+/* Set timeout of all pending queries, if any. Timeout is in milliseconds
+ */
+void
+http_client_timeout (http_client *client, int timeout);
+
 /* Cancel all pending queries with matching address family and uintptr
  */
 void
@@ -1573,12 +1578,6 @@ http_query_new_relative(http_client *client,
  */
 void
 http_query_timeout (http_query *q, int timeout);
-
-/* This convenience function can be used as http_query_onrxhdr()
- * callback to disable query timeout during response body reception.
- */
-void
-http_query_onrxhdr_stop_timeout (void *ptr, http_query *q);
 
 /* For this particular query override on-error callback, previously
  * set by http_client_onerror()

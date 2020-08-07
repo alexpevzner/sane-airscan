@@ -1777,6 +1777,20 @@ http_client_cancel (http_client *client)
     }
 }
 
+/* Set timeout of all pending queries, if any. Timeout is in milliseconds
+ */
+void
+http_client_timeout (http_client *client, int timeout)
+{
+    ll_node *node;
+
+    while ((node = ll_pop_beg(&client->pending)) != NULL) {
+         http_query *q;
+         q = http_query_by_ll_node(node);
+         http_query_timeout(q, timeout);
+    }
+}
+
 /* Cancel all pending queries with matching address family and uintptr
  */
 void
@@ -2087,16 +2101,6 @@ http_query_timeout (http_query *q, int timeout)
             log_debug(q->client->log, "HTTP using timeout: none");
         }
     }
-}
-
-/* This convenience function can be used as http_query_onrxhdr()
- * callback to disable query timeout during response body reception.
- */
-void
-http_query_onrxhdr_stop_timeout (void *ptr, http_query *q)
-{
-    (void) ptr;
-    http_query_timeout(q, -1);
 }
 
 /* Cancel query timeout timer

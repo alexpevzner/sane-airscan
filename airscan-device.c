@@ -22,6 +22,11 @@
 #define DEVICE_HTTP_TIMEOUT_CLEANUP     30000
 #define DEVICE_HTTP_TIMEOUT_CANCEL      30000
 
+/* HTTP timeout for operation that was pending
+ * in a moment of cancel (if any)
+ */
+#define DEVICE_HTTP_TIMEOUT_CANCELED_OP 10000
+
 /******************** Device management ********************/
 /* Device flags
  */
@@ -397,6 +402,18 @@ device_proto_op_name (device *dev, PROTO_OP op)
     return NULL;
 }
 
+/* http_query_onrxhdr() callback
+ */
+static void
+device_proto_op_onrxhdr (void *p, http_query *q)
+{
+    device *dev = p;
+
+    if (dev->proto_op_current == PROTO_OP_LOAD && !dev->stm_cancel_sent) {
+        http_query_timeout(q, -1);
+    }
+}
+
 /* Submit operation request
  */
 static void
@@ -441,7 +458,7 @@ device_proto_op_submit (device *dev, PROTO_OP op,
     q = func(&dev->proto_ctx);
     http_query_timeout(q, timeout);
     if (op == PROTO_OP_LOAD) {
-        http_query_onrxhdr(q, http_query_onrxhdr_stop_timeout);
+        http_query_onrxhdr(q, device_proto_op_onrxhdr);
     }
 
     http_query_submit(q, callback);
@@ -775,6 +792,9 @@ device_stm_cancel_perform (device *dev, SANE_Status status)
             http_query_onerror(dev->stm_cancel_query, NULL);
             http_query_timeout(dev->stm_cancel_query,
                     DEVICE_HTTP_TIMEOUT_CANCEL);
+
+            http_client_timeout(dev->proto_ctx.http,
+                    DEVICE_HTTP_TIMEOUT_CANCELED_OP);
 
             http_query_submit(dev->stm_cancel_query, device_stm_cancel_callback);
 
