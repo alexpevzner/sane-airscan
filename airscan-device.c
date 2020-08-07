@@ -755,9 +755,12 @@ device_stm_cancel_perform (device *dev, SANE_Status status)
             ctx->images_received > 0) {
             /* If we are not expecting more images, skip cancel
              * and simple wait until job is done
+             *
+             * Otherwise Xerox VersaLink B405 remains busy for
+             * a quite long time without any need
              */
             log_debug(dev->log, "cancel skipped as job is almost done");
-            device_stm_state_set(dev, DEVICE_STM_CANCEL_REQ_DONE);
+            return false;
         } else {
             /* Otherwise, perform a normal cancel operation
              */
