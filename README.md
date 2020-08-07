@@ -67,7 +67,7 @@ Legend:
 | Canon i-SENSYS MF641C              | No                        | Yes                       |
 | Canon Lide 400                     | Yes<sup>[2](#note2)</sup> |                           |
 | Canon MF240 Series                 | No                        | Yes<sup>[3](#note3)</sup> |
-| Canon MF260 Series                 | Yes                       | Yes                       |
+| Canon MF260 Series                 | Yes                       | Yes<sup>[3](#note3)</sup> |
 | Canon MF745C/746C                  | Yes                       | Yes                       |
 | Canon PIXMA MG3600 series          | Yes                       |                           |
 | Canon PIXMA MG5500 Series          | No                        | Yes                       |
