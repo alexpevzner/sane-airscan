@@ -366,7 +366,7 @@ device_proto_devcaps_submit (device *dev, void (*callback) (void*, http_query*))
     http_query *q;
 
     q = dev->proto_ctx.proto->devcaps_query(&dev->proto_ctx);
-    http_query_timeout(q, DEVICE_HTTP_TIMEOUT_DEVCAPS, false);
+    http_query_timeout(q, DEVICE_HTTP_TIMEOUT_DEVCAPS);
     http_query_submit(q, callback);
     dev->proto_ctx.query = q;
 }
@@ -405,7 +405,6 @@ device_proto_op_submit (device *dev, PROTO_OP op,
 {
     http_query *(*func) (const proto_ctx *ctx) = NULL;
     int        timeout = -1;
-    bool       timeout_header_only = false;
     http_query *q;
 
     switch (op) {
@@ -420,7 +419,6 @@ device_proto_op_submit (device *dev, PROTO_OP op,
     case PROTO_OP_LOAD:
         func = dev->proto_ctx.proto->load_query;
         timeout = DEVICE_HTTP_TIMEOUT_LOAD;
-        timeout_header_only = true;
         break;
 
     case PROTO_OP_CHECK:
@@ -439,8 +437,13 @@ device_proto_op_submit (device *dev, PROTO_OP op,
     log_debug(dev->log, "%s: submitting: attempt=%d",
         device_proto_op_name(dev, op), dev->proto_ctx.failed_attempt);
     dev->proto_op_current = op;
+
     q = func(&dev->proto_ctx);
-    http_query_timeout(q, timeout, timeout_header_only);
+    http_query_timeout(q, timeout);
+    if (op == PROTO_OP_LOAD) {
+        http_query_onrxhdr(q, http_query_onrxhdr_stop_timeout);
+    }
+
     http_query_submit(q, callback);
     dev->proto_ctx.query = q;
 }
@@ -771,7 +774,7 @@ device_stm_cancel_perform (device *dev, SANE_Status status)
 
             http_query_onerror(dev->stm_cancel_query, NULL);
             http_query_timeout(dev->stm_cancel_query,
-                DEVICE_HTTP_TIMEOUT_CANCEL, false);
+                    DEVICE_HTTP_TIMEOUT_CANCEL);
 
             http_query_submit(dev->stm_cancel_query, device_stm_cancel_callback);
 

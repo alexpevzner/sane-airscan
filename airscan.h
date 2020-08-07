@@ -1566,17 +1566,19 @@ http_query_new_relative(http_client *client,
         const http_uri *base_uri, const char *path,
         const char *method, char *body, const char *content_type);
 
-/* Set query timeout, in milliseconds.
+/* Set query timeout, in milliseconds. Negative timeout means 'infinite'
  *
- * If `timeout` is negative, timeout disabled
- *
- * If `header_only` is true, body reception is not covered by the
- * timeout
- *
- * This function must be called before http_query_submit()
+ * This function may be called multiple times (each subsequent call overrides
+ * a previous one)
  */
 void
-http_query_timeout (http_query *q, int timeout, bool header_only);
+http_query_timeout (http_query *q, int timeout);
+
+/* This convenience function can be used as http_query_onrxhdr()
+ * callback to disable query timeout during response body reception.
+ */
+void
+http_query_onrxhdr_stop_timeout (void *ptr, http_query *q);
 
 /* For this particular query override on-error callback, previously
  * set by http_client_onerror()
@@ -1594,6 +1596,12 @@ http_query_onerror (http_query *q, void (*onerror)(void *ptr, error err));
 void
 http_query_onredir (http_query *q,
         void (*onredir)(void *ptr, http_uri *uri, const http_uri *orig_uri));
+
+/* Set callback that will be called, when response headers reception
+ * is completed
+ */
+void
+http_query_onrxhdr (http_query *q, void (*onrxhdr)(void *ptr, http_query *q));
 
 /* Submit the query.
  *

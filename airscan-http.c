@@ -1831,9 +1831,9 @@ struct http_query {
     /* Query timeout */
     eloop_timer       *timeout_timer;           /* Timeout timer */
     int               timeout_value;            /* In milliseconds */
-    int               timeout_header_only;      /* Body not covered */
 
     /* Low-level I/O */
+    bool              submitted;                /* http_query_submit() called */
     uint64_t          eloop_callid;             /* For eloop_call_cancel */
     error             err;                      /* Transport error */
     bool              oom;                      /* Out of memory error */
@@ -1866,6 +1866,8 @@ struct http_query {
     void              (*onredir) (void *ptr,    /* On-redirect callback */
                                 http_uri *uri,
                                 const http_uri *orig_uri);
+    void              (*onrxhdr) (void *ptr,    /* On-header reception */
+                                http_query *q);
     void              (*callback) (void *ptr,   /* Completion callback */
                                 http_query *q);
 
@@ -2031,7 +2033,7 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
     }
 
     /* Set default timeout */
-    http_query_timeout(q, HTTP_QUERY_TIMEOUT, false);
+    http_query_timeout(q, HTTP_QUERY_TIMEOUT);
 
     return q;
 }
@@ -2062,20 +2064,39 @@ http_query_timeout_callback (void *p)
     http_query_complete(q, ERROR("timeout"));
 }
 
-/* Set query timeout, in milliseconds.
+/* Set query timeout, in milliseconds. Negative timeout means 'infinite'
  *
- * If `timeout` is negative, timeout disabled
- *
- * If `header_only` is true, body reception is not covered by the
- * timeout
- *
- * This function must be called before http_query_submit()
+ * This function may be called multiple times (each subsequent call overrides
+ * a previous one)
  */
 void
-http_query_timeout (http_query *q, int timeout, bool header_only)
+http_query_timeout (http_query *q, int timeout)
 {
     q->timeout_value = timeout;
-    q->timeout_header_only = header_only;
+
+    if (q->submitted) {
+        http_query_timeout_cancel(q);
+
+        if (timeout >= 0) {
+            log_debug(q->client->log, "HTTP using timeout: %d ms",
+                q->timeout_value);
+
+            q->timeout_timer = eloop_timer_new(timeout,
+                http_query_timeout_callback, q);
+        } else {
+            log_debug(q->client->log, "HTTP using timeout: none");
+        }
+    }
+}
+
+/* This convenience function can be used as http_query_onrxhdr()
+ * callback to disable query timeout during response body reception.
+ */
+void
+http_query_onrxhdr_stop_timeout (void *ptr, http_query *q)
+{
+    (void) ptr;
+    http_query_timeout(q, -1);
 }
 
 /* Cancel query timeout timer
@@ -2110,6 +2131,15 @@ http_query_onredir (http_query *q,
         void (*onredir)(void *ptr, http_uri *uri, const http_uri *orig_uri))
 {
     q->onredir = onredir;
+}
+
+/* Set callback that will be called, when response headers reception
+ * is completed
+ */
+void
+http_query_onrxhdr (http_query *q, void (*onrxhdr)(void *ptr, http_query *q))
+{
+    q->onrxhdr = onrxhdr;
 }
 
 /* Choose HTTP redirect method, based on HTTP status code
@@ -2301,8 +2331,8 @@ http_query_on_headers_complete (http_parser *parser)
                 http_uri_str(q->uri),
                 http_query_status(q));
 
-        if (q->timeout_header_only) {
-            http_query_timeout_cancel(q);
+        if (q->onrxhdr != NULL) {
+            q->onrxhdr(q->client->ptr, q);
         }
     }
 
@@ -2729,16 +2759,12 @@ http_query_submit (http_query *q, void (*callback)(void *ptr, http_query *q))
     /* Issue log message, set timestamp and start timeout timer */
     log_debug(q->client->log, "HTTP %s %s", q->method, http_uri_str(q->uri));
 
-    if (q->redirect_count == 0) {
+    if (!q->submitted) {
+        q->submitted = true;
         q->timestamp = timestamp_now();
 
-        log_assert(q->client->log, q->timeout_timer == NULL);
         if (q->timeout_value >= 0) {
-            q->timeout_timer = eloop_timer_new(q->timeout_value,
-                http_query_timeout_callback, q);
-            log_debug(q->client->log, "HTTP using timeout: %d ms (%s)",
-                q->timeout_value,
-                q->timeout_header_only ? "header only" : "header+body");
+            http_query_timeout(q, q->timeout_value);
         }
     }
 
