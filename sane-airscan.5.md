@@ -80,7 +80,7 @@ the following options are supported:
     discovery = enable | disable
 
     ; Choose what SANE apps will show in a list of devices:
-    ; scanner network (the default) name or hardware model name
+    ; scanner network name (the default) or hardware model name
     model = network | hardware
 
     ; If device supports both eSCL and WSD protocol, sane-airscan
@@ -142,7 +142,7 @@ project page: **https://github.com/alexpevzner/sane-airscan**
 
 ## SEE ALSO
 
-sane(7), scanimage(1), xscane(1), airscan-discover(1)
+sane(7), scanimage(1), xsane(1), airscan-discover(1)
 
 ## AUTHOR
 Alexander Pevzner <pzz@apevzner.com\>
