@@ -8,6 +8,11 @@
 
 #include "airscan.h"
 
+/* Forward declarations
+ */
+static void
+sane_exit_internal (void);
+
 /* Static variables
  */
 static const SANE_Device **sane_device_list;
@@ -60,7 +65,7 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
     }
 
     if (status != SANE_STATUS_GOOD) {
-        sane_exit();
+        sane_exit_internal();
     }
 
     /* Start airscan thread */
@@ -75,10 +80,10 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
     return status;
 }
 
-/* Exit the backend
+/* Exit the backend -- internal version
  */
-void
-sane_exit (void)
+static void
+sane_exit_internal (void)
 {
     log_debug(NULL, "sane_exit() called");
 
@@ -100,6 +105,22 @@ sane_exit (void)
 
     trace_cleanup();
     log_cleanup(); /* Must be the last thing to do */
+}
+
+/* Exit the backend
+ *
+ * It wraps sane_exit_internal(), which does the actual work.
+ * Without this wrapping, if sane_exit() is overridden by
+ * dynamic linking and sane_init() calls sane_exit() to
+ * cleanup after failed initialization, it leads to unpredictable
+ * results
+ *
+ * See #61 for details
+ */
+void
+sane_exit (void)
+{
+    sane_exit_internal();
 }
 
 /* Get list of devices
