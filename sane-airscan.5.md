@@ -68,6 +68,12 @@ devices it may differ. Discovering WSD URLs doing this way is much
 harder, because it is very difficult to guess TCP port and URL path,
 that in a case of eSCL.
 
+For eSCL devices, the URL can also use the unix:// scheme, such as
+unix://scanner.sock/eSCL.  The "host" from the URL is a file name that will be
+searched for in the directory specified by socket_dir (see below).  When
+connecting to the scanner, all traffic will be sent to the specified UNIX socket
+instead of a TCP connection.
+
 ## CONFIGURATION OPTIONS
 
 Miscellaneous options all goes to the ``[options]`` section. Currently
@@ -95,6 +101,11 @@ the following options are supported:
     ; This is also possible to disable automatic discovery
     ; of WSD devices. The default is "fast".
     ws-discovery = fast | full | off
+
+    ; Scanners that use the unix:// schema in their URL can only specify a
+    ; socket name (not a full path).  The name will be searched for in the
+    ; directory specified here. The default is /var/run.
+    socket_dir = /path/to/directory
 
 ## DEBUGGING
 

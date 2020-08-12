@@ -54,6 +54,8 @@ typedef struct {
     inifile_record      record;                 /* Record buffer */
 } inifile;
 
+static const char DEFAULT_SOCKET_DIR[] = "/var/run";
+
 /***** Functions *****/
 /* Open the .INI file
  */
@@ -757,6 +759,12 @@ conf_load_from_ini (inifile *ini)
                         conf_perror(rec, "usage: %s = fast | full | off",
                             rec->variable);
                     }
+                } else if (inifile_match_name(rec->variable, "socket_dir")) {
+                    mem_free((char*) conf.socket_dir);
+                    conf.socket_dir = conf_expand_path(rec->value);
+                    if (conf.socket_dir == NULL) {
+                        conf_perror(rec, "failed to expand socket_dir path");
+                    }
                 }
             } else if (inifile_match_name(rec->section, "debug")) {
                 if (inifile_match_name(rec->variable, "trace")) {
@@ -876,6 +884,7 @@ conf_load (void)
 
     /* Reset the configuration */
     conf = conf_init;
+    conf.socket_dir = str_dup(DEFAULT_SOCKET_DIR);
 
     /* Look to configuration path in environment */
     s = getenv(CONFIG_PATH_ENV);

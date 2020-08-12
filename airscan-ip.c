@@ -10,6 +10,7 @@
 
 #include <string.h>
 #include <arpa/inet.h>
+#include <sys/un.h>
 
 /* Format ip_straddr from IP address (struct in_addr or struct in6_addr)
  * af must be AF_INET or AF_INET6
@@ -23,7 +24,7 @@ ip_straddr_from_ip (int af, const void *addr)
 }
 
 /* Format ip_straddr from struct sockaddr.
- * Both AF_INET and AF_INET6 are supported
+ * AF_INET, AF_INET6, and AF_UNIX are supported
  *
  * If `withzone' is true, zone suffix will be appended, when appropriate
  */
@@ -34,7 +35,7 @@ ip_straddr_from_sockaddr (const struct sockaddr *addr, bool withzone)
 }
 
 /* Format ip_straddr from struct sockaddr.
- * Both AF_INET and AF_INET6 are supported
+ * AF_INET, AF_INET6, and AF_UNIX are supported
  *
  * Port will not be appended, if it matches provided default port
  * If `withzone' is true, zone suffix will be appended, when appropriate
@@ -46,6 +47,7 @@ ip_straddr_from_sockaddr_dport (const struct sockaddr *addr,
     ip_straddr straddr = {""};
     struct sockaddr_in  *addr_in = (struct sockaddr_in*) addr;
     struct sockaddr_in6 *addr_in6 = (struct sockaddr_in6*) addr;
+    struct sockaddr_un  *addr_un = (struct sockaddr_un*) addr;
     uint16_t port = 0;
 
     switch (addr->sa_family) {
@@ -65,10 +67,14 @@ ip_straddr_from_sockaddr_dport (const struct sockaddr *addr,
         strcat(straddr.text, "]");
         port = addr_in6->sin6_port;
         break;
+    case AF_UNIX:
+        strncpy(straddr.text, addr_un->sun_path, sizeof(straddr.text) - 1);
+        straddr.text[sizeof(straddr.text)-1] = '\0';
+        break;
     }
 
     port = htons(port);
-    if (port != dport) {
+    if (port != dport && addr->sa_family != AF_UNIX) {
         sprintf(straddr.text + strlen(straddr.text), ":%d", port);
     }
 

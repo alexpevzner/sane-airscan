@@ -826,6 +826,7 @@ typedef struct {
     bool        model_is_netname; /* Use network name instead of model */
     bool        proto_auto;       /* Auto protocol selection */
     WSDD_MODE   wsdd_mode;        /* WS-Discovery mode */
+    const char  *socket_dir;      /* Directory for AF_UNIX sockets */
 } conf_data;
 
 #define CONF_INIT {                     \
@@ -835,7 +836,8 @@ typedef struct {
         .discovery = true,              \
         .model_is_netname = true,       \
         .proto_auto = true,             \
-        .wsdd_mode = WSDD_FAST          \
+        .wsdd_mode = WSDD_FAST,         \
+        .socket_dir = NULL              \
     }
 
 extern conf_data conf;
@@ -856,7 +858,8 @@ conf_unload (void);
  * be passed by value
  */
 typedef struct {
-    char       text[64];
+    /* Holds sun_path from sockaddr_un plus a null byte. */
+    char       text[109];
 } ip_straddr;
 
 /* Format ip_straddr from IP address (struct in_addr or struct in6_addr)
@@ -866,7 +869,7 @@ ip_straddr
 ip_straddr_from_ip (int af, const void *addr);
 
 /* Format ip_straddr from struct sockaddr.
- * Both AF_INET and AF_INET6 are supported
+ * AF_INET, AF_INET6, and AF_UNIX are supported
  *
  * If `withzone' is true, zone suffix will be appended, when appropriate
  */
@@ -874,7 +877,7 @@ ip_straddr
 ip_straddr_from_sockaddr(const struct sockaddr *addr, bool withzone);
 
 /* Format ip_straddr from struct sockaddr.
- * Both AF_INET and AF_INET6 are supported
+ * AF_INET, AF_INET6, and AF_UNIX are supported
  *
  * Port will not be appended, if it matches provided default port
  * If `withzone' is true, zone suffix will be appended, when appropriate
@@ -1747,7 +1750,8 @@ http_query_foreach_response_header (const http_query *q,
 typedef enum {
     HTTP_SCHEME_UNSET = -1,
     HTTP_SCHEME_HTTP,
-    HTTP_SCHEME_HTTPS
+    HTTP_SCHEME_HTTPS,
+    HTTP_SCHEME_UNIX
 } HTTP_SCHEME;
 
 /* Some HTTP status codes

@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/un.h>
 #include <unistd.h>
 
 #include <gnutls/gnutls.h>
@@ -406,6 +407,8 @@ http_uri_parse (http_uri *uri, const char *str)
         uri->scheme = HTTP_SCHEME_HTTP;
     } else if (!strncasecmp(str, "https://", 8)) {
         uri->scheme = HTTP_SCHEME_HTTPS;
+    } else if (!strncasecmp(str, "unix://", 7)) {
+        uri->scheme = HTTP_SCHEME_UNIX;
     } else {
         uri->scheme = HTTP_SCHEME_UNSET;
     }
@@ -530,6 +533,7 @@ http_uri_new (const char *str, bool strip_fragment)
     switch (uri->scheme) {
     case HTTP_SCHEME_HTTP:
     case HTTP_SCHEME_HTTPS:
+    case HTTP_SCHEME_UNIX:
         break;
 
     default:
@@ -703,6 +707,13 @@ http_uri_new_relative (const http_uri *base, const char *path,
 
     if (http_uri_parse(&ref, path) != NULL) {
         return NULL;
+    }
+
+    /* If the base URI uses the unix:// scheme, don't allow a relative URI to
+     * change the scheme or host.
+     */
+    if (base->scheme == HTTP_SCHEME_UNIX) {
+        path_only = true;
     }
 
     /* Set schema, userinfo, host and port */
@@ -1912,7 +1923,12 @@ http_query_reset (http_query *q)
     http_hdr_cleanup(&q->response_header);
 
     if (q->addrs != NULL) {
-        freeaddrinfo(q->addrs);
+        if (q->uri->scheme == HTTP_SCHEME_UNIX) {
+            mem_free(q->addrs->ai_addr);
+            mem_free(q->addrs);
+        } else {
+            freeaddrinfo(q->addrs);
+        }
         q->addrs = NULL;
         q->addr_next = NULL;
     }
@@ -1963,6 +1979,11 @@ http_query_set_host (http_query *q)
     char                  *host, *end, *buf;
     size_t                len;
     const struct sockaddr *addr = http_uri_addr(q->uri);
+
+    if (q->uri->scheme == HTTP_SCHEME_UNIX) {
+        http_query_set_request_header(q, "Host", "localhost");
+        return;
+    }
 
     if (addr != NULL) {
         ip_straddr s;
@@ -2494,7 +2515,8 @@ http_query_connect (http_query *q, error err)
 AGAIN:
     while (q->addr_next != NULL &&
            q->addr_next->ai_family != AF_INET &&
-           q->addr_next->ai_family != AF_INET6) {
+           q->addr_next->ai_family != AF_INET6 &&
+           q->addr_next->ai_family != AF_UNIX) {
         q->addr_next = q->addr_next->ai_next;
     }
 
@@ -2508,8 +2530,9 @@ AGAIN:
 
     /* Create socket and try to connect */
     log_assert(q->client->log, q->sock < 0);
-    q->sock = socket(q->addr_next->ai_addr->sa_family,
-        SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, IPPROTO_TCP);
+    q->sock = socket(q->addr_next->ai_family,
+        q->addr_next->ai_socktype | SOCK_NONBLOCK | SOCK_CLOEXEC,
+        q->addr_next->ai_protocol);
 
     if (q->sock == -1) {
         err = ERROR(strerror(errno));
@@ -2708,16 +2731,40 @@ http_query_start_processing (void *p)
     }
 
     /* Lookup target addresses */
-    log_debug(q->client->log, "HTTP resolving %s %s", host, port);
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_flags = AI_ADDRCONFIG;
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_protocol = IPPROTO_TCP;
+    if (q->uri->scheme != HTTP_SCHEME_UNIX) {
+        log_debug(q->client->log, "HTTP resolving %s %s", host, port);
+        memset(&hints, 0, sizeof(hints));
+        hints.ai_flags = AI_ADDRCONFIG;
+        hints.ai_family = AF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_protocol = IPPROTO_TCP;
 
-    rc = getaddrinfo(host, port, &hints, &q->addrs);
-    if (rc != 0) {
-        http_query_complete(q, ERROR(gai_strerror(rc)));
+        rc = getaddrinfo(host, port, &hints, &q->addrs);
+        if (rc != 0) {
+            http_query_complete(q, ERROR(gai_strerror(rc)));
+        }
+    } else {
+        struct sockaddr_un *addr;
+        size_t pathlen = strlen(conf.socket_dir) + 1 /* for / */ + strlen(host);
+        char *path = alloca(pathlen + 1);
+        sprintf(path, "%s/%s", conf.socket_dir, host);
+
+        log_debug(q->client->log, "connecting to local socket %s", path);
+        q->addrs = mem_new(struct addrinfo, 1);
+        q->addrs->ai_family = AF_UNIX;
+        q->addrs->ai_socktype = SOCK_STREAM;
+        q->addrs->ai_protocol = 0;
+
+        addr = mem_new(struct sockaddr_un, 1);
+        addr->sun_family = AF_UNIX;
+        strncpy(addr->sun_path, path, sizeof(addr->sun_path)-1);
+        q->addrs->ai_addrlen = sizeof(struct sockaddr_un);
+        q->addrs->ai_addr = (struct sockaddr *)addr;
+
+        if (pathlen >= sizeof(addr->sun_path)) {
+            http_query_complete(q, ERROR("Socket path is too long."));
+            return;
+        }
     }
 
     q->addr_next = q->addrs;
