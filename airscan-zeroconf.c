@@ -1441,9 +1441,11 @@ zeroconf_init (void)
 void
 zeroconf_cleanup (void)
 {
-    log_ctx_free(zeroconf_log);
-    zeroconf_log = NULL;
-    pthread_cond_destroy(&zeroconf_initscan_cond);
+    if (zeroconf_log != NULL) {
+        log_ctx_free(zeroconf_log);
+        zeroconf_log = NULL;
+        pthread_cond_destroy(&zeroconf_initscan_cond);
+    }
 }
 
 /* vim:ts=8:sw=4:et

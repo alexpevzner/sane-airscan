@@ -315,10 +315,10 @@ trace_http_query_hook (trace *t, http_query *q)
                 trace_message_headers_foreach_callback, t);
             fprintf(t->log, "\n");
 
+            trace_dump_body(t, http_query_get_response_data(q));
+
             mp_count = http_query_get_mp_response_count(q);
-            if (mp_count == 0) {
-                trace_dump_body(t, http_query_get_response_data(q));
-            } else {
+            if (mp_count != 0) {
                 int i;
 
                 for (i = 0; i < mp_count; i ++) {

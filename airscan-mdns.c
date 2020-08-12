@@ -891,6 +891,10 @@ mdns_init (void)
 void
 mdns_cleanup (void)
 {
+    if (mdns_log == NULL) {
+        return; /* MDNS not initialized */
+    }
+
     if (mdns_avahi_poll != NULL) {
         mdns_avahi_browser_stop();
         mdns_avahi_client_stop();

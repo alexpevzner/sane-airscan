@@ -1671,6 +1671,10 @@ wsdd_cleanup (void)
 {
     netif_addr *addr;
 
+    if (wsdd_log == NULL) {
+        return; /* WSDD not initialized */
+    }
+
     if (wsdd_netif_notifier != NULL) {
         netif_notifier_free(wsdd_netif_notifier);
         wsdd_netif_notifier = NULL;
@@ -1695,10 +1699,8 @@ wsdd_cleanup (void)
 
     log_assert(wsdd_log, ll_empty(&wsdd_finding_list));
 
-    if (wsdd_log != NULL) {
-        log_ctx_free(wsdd_log);
-        wsdd_log = NULL;
-    }
+    log_ctx_free(wsdd_log);
+    wsdd_log = NULL;
 }
 
 /* vim:ts=8:sw=4:et

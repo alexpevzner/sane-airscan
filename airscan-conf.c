@@ -604,6 +604,8 @@ conf_device_list_free (void)
 {
     conf_device *list = conf.devices, *next;
 
+    conf.devices = NULL;
+
     while (list != NULL) {
         next = list->next;
         mem_free((char*) list->name);

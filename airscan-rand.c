@@ -46,8 +46,10 @@ rand_init (void)
 void
 rand_cleanup (void)
 {
-    fclose(rand_fp);
-    rand_fp = NULL;
+    if (rand_fp != NULL) {
+        fclose(rand_fp);
+        rand_fp = NULL;
+    }
 }
 
 /* vim:ts=8:sw=4:et
