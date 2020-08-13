@@ -54,6 +54,12 @@ device URL on a rights side, followed by protocol (eSCL or WSD). If protocol
 is omitted, eSCL is assumed.  You may also disable particular device by
 using the `disable` keyword instead of URL.
 
+In addition, you can manually configure a device by directly passing its URL in
+a device name without adding it to the configuration file.  This takes the
+format `protocol:Device Name:URL`.  The examples above could be written as
+`escl:Kyocera eSCL:http://192.168.1.102:9095/eSCL` and
+`wsd:Kyocera WSD:http://192.168.1.102:5358/WSDScanner`.
+
 To figure out URLs of available devices, the simplest way is to
 run a supplied `airscan-discover` tool on a computer connected with
 scanner to the same LAN segment. On success, this program will
