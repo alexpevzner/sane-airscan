@@ -103,7 +103,7 @@ wsdd_netif_resolver_by_ifindex (int ifindex);
 
 /* Static variables
  */
-static log_ctx             *wsdd_log;
+static log_ctx             *wsdd_log = NULL;
 static netif_notifier      *wsdd_netif_notifier;
 static netif_addr          *wsdd_netif_addr_list;
 static int                 wsdd_mcsock_ipv4 = -1;
