@@ -1418,7 +1418,7 @@ void
 http_uri_set_path (http_uri *uri, const char *path);
 
 /* Fix URI host: if `match` is NULL or uri's host matches `match`,
- * replace uri's host with base_uri's host
+ * replace uri's host and port with values taken from the base_uri
  */
 void
 http_uri_fix_host (http_uri *uri, const http_uri *base_uri, const char *match);

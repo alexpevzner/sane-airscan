@@ -819,12 +819,12 @@ http_uri_set_path (http_uri *uri, const char *path)
 }
 
 /* Fix URI host: if `match` is NULL or uri's host matches `match`,
- * replace uri's host with base_uri's host
+ * replace uri's host and port with values taken from the base_uri
  */
 void
 http_uri_fix_host (http_uri *uri, const http_uri *base_uri, const char *match)
 {
-    http_uri_field host;
+    http_uri_field host, port;
 
     if (match != NULL) {
         host = http_uri_field_get(uri, UF_HOST);
@@ -834,7 +834,10 @@ http_uri_fix_host (http_uri *uri, const http_uri *base_uri, const char *match)
     }
 
     host = http_uri_field_get(base_uri, UF_HOST);
+    port = http_uri_field_get(base_uri, UF_PORT);
+
     http_uri_field_replace_len(uri, UF_HOST, host.str, host.len);
+    http_uri_field_replace_len(uri, UF_PORT, port.str, port.len);
 }
 
 /* Fix IPv6 address zone suffix
@@ -2175,17 +2178,10 @@ http_query_redirect_method (const http_query *q)
 /* Handle HTTP redirection
  */
 static error
-http_query_redirect (http_query *q)
+http_query_redirect (http_query *q, const char *method)
 {
-    const char *method;
     const char *location;
     http_uri   *uri;
-
-    /* Choose method, based on HTTP status code */
-    method = http_query_redirect_method(q);
-    if (method == NULL) {
-        return ERROR("HTTP redirect: invalid status code");
-    }
 
     /* Check and parse location */
     location = http_query_get_response_header(q, "Location");
@@ -2254,7 +2250,10 @@ http_query_complete (http_query *q, error err)
     ll_del(&q->chain);
 
     /* Issue log messages */
+    q->err = err;
     if (err != NULL) {
+        log_debug(client->log, "HTTP %s %s: %s", q->method,
+                http_uri_str(q->uri), http_query_status_string(q));
     } else {
         log_debug(client->log, "HTTP %s %s: %d %s", q->method,
                 http_uri_str(q->uri),
@@ -2263,22 +2262,22 @@ http_query_complete (http_query *q, error err)
 
     trace_http_query_hook(log_ctx_trace(client->log), q);
 
-    /* Do redirection */
-    if (err == NULL && http_query_status(q) / 100 == 3) {
-        err = http_query_redirect(q);
-        if (err == NULL) {
-            return;
-        }
-    }
+    /* Handle redirection */
+    if (err == NULL) {
+        const char *method = http_query_redirect_method(q);
 
-    /* Save and log the error */
-    q->err = err;
-    if (err != NULL) {
+        if (method != NULL) {
+            q->err = err = http_query_redirect(q, method);
+            if (err == NULL) {
+                return;
+            }
+        }
+
         log_debug(client->log, "HTTP %s %s: %s", q->method,
                 http_uri_str(q->uri), http_query_status_string(q));
     }
 
-    /* Restore original method and URI, in case of redirection */
+    /* Restore original method and URI, modified in case of redirection */
     if (q->orig_uri != NULL) {
         q->real_uri = q->uri;
         q->uri = q->orig_uri;
