@@ -18,6 +18,7 @@
 static char *log_buffer;
 static bool log_configured;
 static uint64_t log_start_time;
+static pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /* Get time for logging purposes
  */
@@ -179,12 +180,16 @@ log_message (log_ctx *log, bool trace_only, bool force,
 
     /* Write to log */
     if (!dont_log) {
+        pthread_mutex_lock(&log_mutex);
+
         log_buffer = str_append(log_buffer, msg);
         log_buffer = str_append_c(log_buffer, '\n');
 
         if ((log_configured && conf.dbg_enabled) || force) {
             log_flush();
         }
+
+        pthread_mutex_unlock(&log_mutex);
     }
 
     /* Write to trace */
@@ -248,7 +253,9 @@ log_panic (log_ctx *log, const char *fmt, ...)
      * At this case we discard these messages, but panic
      * message is written anyway
      */
+    pthread_mutex_lock(&log_mutex);
     str_trunc(log_buffer);
+    pthread_mutex_unlock(&log_mutex);
 
     va_start(ap, fmt);
     log_message(log, false, true, fmt, ap);
