@@ -1601,13 +1601,25 @@ http_data_set_content_type (http_data *data, const char *content_type)
     data->content_type = content_type;
 }
 
+/* Dummy http_data in case no data is present
+ */
+static http_data
+http_data_empty = {
+    .content_type = "",
+    .bytes = "",
+    .size = 0
+};
+
+
 /* Ref http_data
  */
 http_data*
 http_data_ref (http_data *data)
 {
-    http_data_ex *data_ex = OUTER_STRUCT(data, http_data_ex, data);
-    __sync_fetch_and_add(&data_ex->refcnt, 1);
+    if (data != NULL && data != &http_data_empty) {
+        http_data_ex *data_ex = OUTER_STRUCT(data, http_data_ex, data);
+        __sync_fetch_and_add(&data_ex->refcnt, 1);
+    }
     return data;
 }
 
@@ -1616,7 +1628,7 @@ http_data_ref (http_data *data)
 void
 http_data_unref (http_data *data)
 {
-    if (data != NULL) {
+    if (data != NULL && data != &http_data_empty) {
         http_data_ex *data_ex = OUTER_STRUCT(data, http_data_ex, data);
 
         if (__sync_fetch_and_sub(&data_ex->refcnt, 1) == 1) {
@@ -2938,21 +2950,12 @@ http_query_get_response_header(const http_query *q, const char *name)
     return http_hdr_get(&q->response_header, name);
 }
 
-/* Dummy http_data in case no data is present
- */
-static http_data
-http_query_no_data = {
-    .content_type = "",
-    .bytes = "",
-    .size = 0
-};
-
 /* Get request data
  */
 http_data*
 http_query_get_request_data (const http_query *q)
 {
-    return q->request_data ? q->request_data : &http_query_no_data;
+    return q->request_data ? q->request_data : &http_data_empty;
 }
 
 /* Get request data
@@ -2960,7 +2963,7 @@ http_query_get_request_data (const http_query *q)
 http_data*
 http_query_get_response_data (const http_query *q)
 {
-    return q->response_data ? q->response_data : &http_query_no_data;
+    return q->response_data ? q->response_data : &http_data_empty;
 }
 
 /* Get multipart response bodies. For non-multipart response
