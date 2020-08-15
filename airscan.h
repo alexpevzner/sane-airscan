@@ -1867,6 +1867,11 @@ sane_word_array_append (SANE_Word *a, SANE_Word w)
     return a;
 }
 
+/* Drop array elements that outside of specified boundary
+ */
+void
+sane_word_array_bound (SANE_Word *a, SANE_Word min, SANE_Word max);
+
 /* Sort array of SANE_Word in increasing order
  */
 void

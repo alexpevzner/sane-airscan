@@ -422,6 +422,7 @@ escl_devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
 {
     error  err = NULL;
     xml_rd *xml;
+    bool   quirk_canon_iR2625_2630 = false;
 
     /* Parse capabilities XML */
     err = xml_rd_begin(&xml, xml_text, xml_len, NULL);
@@ -436,7 +437,13 @@ escl_devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
 
     xml_rd_enter(xml);
     for (; !xml_rd_end(xml); xml_rd_next(xml)) {
-        if (xml_rd_node_name_match(xml, "scan:Platen")) {
+        if (xml_rd_node_name_match(xml, "pwg:MakeAndModel")) {
+            const char *m = xml_rd_node_value(xml);
+
+            if (!strcmp(m, "Canon iR2625/2630")) {
+                quirk_canon_iR2625_2630 = true;
+            }
+        } else if (xml_rd_node_name_match(xml, "scan:Platen")) {
             xml_rd_enter(xml);
             if (xml_rd_node_name_match(xml, "scan:PlatenInputCaps")) {
                 err = escl_devcaps_source_parse(xml,
@@ -481,6 +488,26 @@ escl_devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
     if (!src_ok) {
         err = ERROR("XML: neither platen nor ADF sources detected");
         goto DONE;
+    }
+
+    /* Apply quirks, if any */
+    if (quirk_canon_iR2625_2630) {
+        /* This device announces resolutions up to 600 DPI,
+         * but actually doesn't support more that 300
+         *
+         * https://oip.manual.canon/USRMA-4209-zz-CSL-2600-enUV/contents/devu-apdx-sys_spec-send.html?search=600
+         *
+         * See #57 for details
+         */
+        for (id_src = (ID_SOURCE) 0; id_src < NUM_ID_SOURCE; id_src ++) {
+            devcaps_source *src = caps->src[id_src];
+            if (src != NULL &&
+                /* paranoia: array won't be empty after quirk applied */
+                sane_word_array_len(src->resolutions) > 0 &&
+                src->resolutions[1] <= 300) {
+                sane_word_array_bound(src->resolutions, 0, 300);
+            }
+        }
     }
 
 DONE:

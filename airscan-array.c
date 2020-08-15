@@ -19,6 +19,24 @@ sane_word_array_sort_cmp(const void *p1, const void *p2)
     return *(SANE_Word*) p1 - *(SANE_Word*) p2;
 }
 
+/* Drop array elements that outside of specified boundary
+ */
+void
+sane_word_array_bound (SANE_Word *a, SANE_Word min, SANE_Word max)
+{
+    SANE_Word len = a[0];
+    SANE_Word i, o;
+
+    for (i = o = 1; i < len + 1; i ++) {
+        if (min <= a[i] && a[i] <= max) {
+            a[o ++] = a[i];
+        }
+    }
+
+    a[0] = o - 1;
+    mem_shrink(a, o);
+}
+
 /* Sort array of SANE_Word in increasing order
  */
 void
