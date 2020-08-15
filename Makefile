@@ -3,17 +3,19 @@
 # The following variables can be overridden by user (i.e.,
 # make install DESTDIR=/tmp/xxx):
 #
-#   Name     Default                  Description
-#   ----     -------                  -----------
-#   DESTDIR                           Destination directory for make install
-#   PREFIX       	              Non-standard: appended to DESTDIR
-#   CC       gcc                      C compiler
-#   CPPFLAGS                          C preprocessor flags
-#   CFLAGS   -O2 -g -W -Wall -Werror  C compiler flags
-#   LDFLAGS                           Linker flags
-#   COMPRESS gzip                     Program to compress man page, or ""
-#   MANDIR   /usr/share/man/          Where to install man page
-#   STRIP    -s                       Stripping of debug symbols
+#   Name     Default                    Description
+#   ----     -------                    -----------
+#   DESTDIR                             Destination directory for make install
+#   PREFIX           	                Non-standard: appended to DESTDIR
+#   CC         gcc                      C compiler
+#   CPPFLAGS                            C preprocessor flags
+#   CFLAGS     -O2 -g -W -Wall -Werror  C compiler flags
+#   LDFLAGS                             Linker flags
+#   COMPRESS   gzip                     Program to compress man page, or ""
+#   MANDIR     /usr/share/man/          Where to install man page
+#   STRIP      -s                       Stripping of debug symbols
+#   PKG_CONFIG pkg-config               Program to query dependencies info
+#   INSTALL    install                  Installation program
 
 CC	= gcc
 COMPRESS = gzip
@@ -21,6 +23,7 @@ CFLAGS	+= -O2 -g -W -Wall -Werror -pthread $(CPPFLAGS)
 MANDIR	= /usr/share/man/
 PKG_CONFIG = /usr/bin/pkg-config
 STRIP 	= -s
+INSTALL = install
 
 # These variables are not intended to be user-settable
 OBJDIR  = objs/
@@ -42,11 +45,11 @@ SRC	= $(wildcard airscan-*.c) sane_strstatus.c http_parser.c
 OBJ	= $(addprefix $(OBJDIR), $(SRC:.c=.o))
 
 # Obtain CFLAGS and LDFLAGS for dependencies
-deps_CFLAGS		:= $(foreach lib, $(DEPS_COMMON), $(shell pkg-config --cflags $(lib)))
-deps_CFLAGS		+= $(foreach lib, $(DEPS_CODECS), $(shell pkg-config --cflags $(lib)))
+deps_CFLAGS		:= $(foreach lib, $(DEPS_COMMON), $(shell $(PKG_CONFIG) --cflags $(lib)))
+deps_CFLAGS		+= $(foreach lib, $(DEPS_CODECS), $(shell $(PKG_CONFIG) --cflags $(lib)))
 
-deps_LIBS 		:= $(foreach lib, $(DEPS_COMMON), $(shell pkg-config --libs $(lib))) -lm
-deps_LIBS_CODECS 	:= $(foreach lib, $(DEPS_CODECS), $(shell pkg-config --libs $(lib)))
+deps_LIBS 		:= $(foreach lib, $(DEPS_COMMON), $(shell $(PKG_CONFIG) --libs $(lib))) -lm
+deps_LIBS_CODECS 	:= $(foreach lib, $(DEPS_CODECS), $(shell $(PKG_CONFIG) --libs $(lib)))
 
 # Compute CFLAGS and LDFLAGS for backend and tools
 #
@@ -89,13 +92,13 @@ install: all
 	mkdir -p $(DESTDIR)$(PREFIX)$(BINDIR)
 	mkdir -p $(DESTDIR)$(PREFIX)$(CONFDIR)
 	mkdir -p $(DESTDIR)$(PREFIX)$(CONFDIR)/dll.d
-	install $(STRIP) -D -t $(DESTDIR)$(PREFIX)$(BINDIR) $(DISCOVER)
+	$(INSTALL) $(STRIP) -D -t $(DESTDIR)$(PREFIX)$(BINDIR) $(DISCOVER)
 	cp -n airscan.conf $(DESTDIR)$(PREFIX)$(CONFDIR)
 	cp -n dll.conf $(DESTDIR)$(PREFIX)$(CONFDIR)/dll.d/airscan
-	install $(STRIP) -D -t $(DESTDIR)$(PREFIX)$(LIBDIR)/sane $(BACKEND)
+	$(INSTALL) $(STRIP) -D -t $(DESTDIR)$(PREFIX)$(LIBDIR)/sane $(BACKEND)
 	mkdir -p $(DESTDIR)$(PREFIX)/$(MANDIR)/man5
-	install -m 644 -D -t $(DESTDIR)$(PREFIX)$(MANDIR)/man1 $(MAN_DISCOVER)
-	install -m 644 -D -t $(DESTDIR)$(PREFIX)$(MANDIR)/man5 $(MAN_BACKEND)
+	$(INSTALL) -m 644 -D -t $(DESTDIR)$(PREFIX)$(MANDIR)/man1 $(MAN_DISCOVER)
+	$(INSTALL) -m 644 -D -t $(DESTDIR)$(PREFIX)$(MANDIR)/man5 $(MAN_BACKEND)
 	[ "$(COMPRESS)" = "" ] || $(COMPRESS) -f $(DESTDIR)$(PREFIX)$(MANDIR)/man1/$(MAN_DISCOVER)
 	[ "$(COMPRESS)" = "" ] || $(COMPRESS) -f $(DESTDIR)$(PREFIX)$(MANDIR)/man5/$(MAN_BACKEND)
 
