@@ -87,6 +87,7 @@ Legend:
 | HP Color Laserjet MFP m178-m181    | Yes                       |                           |
 | HP Color LaserJet MFP M281fdw      | Yes                       |                           |
 | HP Color LaserJet MFP M477fdw      | Yes                       | Yes                       |
+| HP Color LaserJet Pro M478f-9f     | Yes                       |                           |
 | HP DeskJet 2540                    | Yes                       |                           |
 | HP ENVY 4500                       | Yes                       |                           |
 | HP ENVY 5540                       | Yes                       |                           |
