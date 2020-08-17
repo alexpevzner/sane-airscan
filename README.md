@@ -68,7 +68,7 @@ Legend:
 | Canon imageRUNNER C3120L           | Yes                       | Yes                       |
 | Canon i-SENSYS MF641C              | No                        | Yes                       |
 | Canon Lide 400                     | Yes<sup>[2](#note2)</sup> |                           |
-| Canon MB5400 series                | Yes                       |                           |
+| Canon MB5400 series                | Yes                       | Yes                       |
 | Canon MF240 Series                 | No                        | Yes<sup>[3](#note3)</sup> |
 | Canon MF260 Series                 | Yes                       | Yes<sup>[3](#note3)</sup> |
 | Canon MF745C/746C                  | Yes                       | Yes                       |
