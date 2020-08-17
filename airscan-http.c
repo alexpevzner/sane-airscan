@@ -2414,10 +2414,8 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
 
             /* TLS handshake failed, try another address, if any */
             http_query_disconnect(q);
-            if (err != NULL) {
-                q->addr_next = q->addr_next->ai_next;
-                http_query_connect(q, err);
-            }
+            q->addr_next = q->addr_next->ai_next;
+            http_query_connect(q, err);
 
             return;
         }
