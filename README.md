@@ -96,7 +96,7 @@ Legend:
 | HP ENVY 5540                       | Yes                       |                           |
 | HP ENVY 5640                       | Yes                       |                           |
 | HP ENVY Pro 6400 series            | Yes                       |                           |
-| HP LaserJet MFP M130fw             |                           | Yes                       |
+| HP LaserJet MFP M130fw             | No                        | Yes                       |
 | HP LaserJet MFP M227sdn            | Yes                       |                           |
 | HP LaserJet MFP M426dw             | Yes                       |                           |
 | HP LaserJet MFP M630               | Yes                       |                           |
