@@ -1214,7 +1214,7 @@ http_hdr_params_chr_isspec (char c)
             return true;
 
         default:
-            return false;
+            return safe_isspace(c);
         }
     }
 
@@ -1239,7 +1239,7 @@ http_hdr_params_chr_isspace (char c)
  * Result is saved into `params' as collection of name/value fields
  */
 static error
-http_hdr_params_parse (http_hdr *params, const char *in)
+http_hdr_params_parse (http_hdr *params, const char *name, const char *in)
 {
     enum {
     /*  params ::= param [';' params]
@@ -1292,7 +1292,8 @@ http_hdr_params_parse (http_hdr *params, const char *in)
                 state = SP1;
                 field = NULL;
             } else {
-                return ERROR("http: invalid parameter");
+                return eloop_eprintf(
+                        "http %s: expected '=' or ';', got: %s", name, in);
             }
             break;
 
@@ -1321,7 +1322,7 @@ http_hdr_params_parse (http_hdr *params, const char *in)
             break;
 
         case TOKEN:
-            if (!http_hdr_params_chr_isspec(c)) {
+            if (c != ';' && c != '"' && !safe_isspace(c)) {
                 field->value = str_append_c(field->value, c);
             } else {
                 state = SP4;
@@ -1331,7 +1332,8 @@ http_hdr_params_parse (http_hdr *params, const char *in)
 
         case END:
             if (c != ';') {
-                return ERROR("http: invalid parameter");
+                return eloop_eprintf(
+                        "http %s: expected ';', got: %s", name, in);
             }
 
             state = SP1;
@@ -1343,7 +1345,7 @@ http_hdr_params_parse (http_hdr *params, const char *in)
     }
 
     if (state == STRING || state == STRING_BSLASH) {
-        return ERROR("http: invalid parameter");
+        return eloop_eprintf( "http %s: unterminated quoted string");
     }
 
     return NULL;
@@ -1408,7 +1410,7 @@ http_multipart_find_boundary (const char *boundary, size_t boundary_len,
  *   1) skip header
  *   2) fetch content type
  */
-static bool
+static error
 http_multipart_adjust_part (http_data *part)
 {
     const char *split;
@@ -1419,7 +1421,7 @@ http_multipart_adjust_part (http_data *part)
     /* Locate end of headers */
     split = memmem(part->bytes, part->size, "\r\n\r\n", 4);
     if (split == NULL) {
-        return false;
+        return ERROR("http multipart: can't locate end of part headers");
     }
 
     /* Parse headers and obtain content-type */
@@ -1434,7 +1436,7 @@ http_multipart_adjust_part (http_data *part)
 
     http_hdr_cleanup(&hdr);
     if (err != NULL) {
-        return false;
+        return eloop_eprintf("http multipart: %s", ESTRING(err));
     }
 
     /* Cut of header */
@@ -1444,7 +1446,7 @@ http_multipart_adjust_part (http_data *part)
 
     part->size -= 2; /* CR/LF preceding next boundary */
 
-    return true;
+    return NULL;
 }
 
 /* Free http_multipart
@@ -1462,26 +1464,38 @@ http_multipart_free (http_multipart *mp)
 }
 
 /* Parse MIME multipart message body
+ * Saves result into `out'. Result may be NULL, if no multipart
  */
-static http_multipart*
-http_multipart_parse (http_data *data, const char *content_type)
+static error
+http_multipart_parse (http_multipart **out, log_ctx *log,
+        http_data *data, const char *content_type)
 {
     http_multipart *mp;
     http_hdr       params;
     const char     *boundary;
     size_t         boundary_len = 0;
     const char     *data_beg, *data_end, *data_prev;
+    error          err;
+    ll_node        *node;
 
     /* Check MIME type */
+    *out = NULL;
     if (strncmp(data->content_type, "multipart/", 10)) {
         return NULL;
     }
 
     /* Obtain boundary */
     http_hdr_init(&params);
-    if (http_hdr_params_parse(&params, content_type) != NULL) {
+    err = http_hdr_params_parse(&params, "Content-Type", content_type);
+    if (err != NULL) {
         http_hdr_cleanup(&params);
-        return NULL;
+        return err;
+    }
+
+    log_debug(log, "http multipart parameters:");
+    for (LL_FOR_EACH(node, &params.fields)) {
+        http_hdr_field *field = OUTER_STRUCT(node, http_hdr_field, chain);
+        log_debug(log, "  %s=\"%s\"", field->name, field->value);
     }
 
     boundary = http_hdr_get (&params, "boundary");
@@ -1499,7 +1513,7 @@ http_multipart_parse (http_data *data, const char *content_type)
     http_hdr_cleanup(&params);
 
     if (!boundary) {
-        return NULL;
+        return ERROR("http multipart: missed boundary parameter");
     }
 
     /* Create http_multipart structure */
@@ -1522,9 +1536,10 @@ http_multipart_parse (http_data *data, const char *content_type)
                         data_prev, part - data_prev);
                 http_multipart_add_body(mp, body);
 
-                if (!http_multipart_adjust_part(body)) {
+                err = http_multipart_adjust_part(body);
+                if (err != NULL) {
                     http_multipart_free(mp);
-                    return NULL;
+                    return err;
                 }
             }
 
@@ -1539,7 +1554,19 @@ http_multipart_parse (http_data *data, const char *content_type)
         data_beg = next;
     }
 
-    return mp;
+    if (mp->count == 0) {
+        http_multipart_free(mp);
+        return ERROR("http multipart: no parts found");
+    }
+
+    if (data_beg != data_end) {
+        log_debug(log,
+            "http multipart: found %d bytes of garbage at the end of message",
+            (int)(data_end - data_beg));
+    }
+
+    *out = mp;
+    return NULL;
 }
 
 /******************** HTTP data ********************/
@@ -1865,7 +1892,6 @@ struct http_query {
     bool              submitted;                /* http_query_submit() called */
     uint64_t          eloop_callid;             /* For eloop_call_cancel */
     error             err;                      /* Transport error */
-    bool              oom;                      /* Out of memory error */
     struct addrinfo   *addrs;                   /* Addresses to connect to */
     struct addrinfo   *addr_next;               /* Next address to try */
     int               sock;                     /* HTTP socket */
@@ -2326,10 +2352,10 @@ http_query_on_body_callback (http_parser *parser,
     }
 
     if (!http_data_append(q->response_data, data, size)) {
-        q->oom = true;
+        q->err = ERROR_ENOMEM;
     }
 
-    return 0;
+    return q->err ? 1 : 0;
 }
 
 /* HTTP parser on_headers_complete callback
@@ -2367,14 +2393,15 @@ http_query_on_message_complete (http_parser *parser)
         content_type = http_query_get_response_header(q, "Content-Type");
         if (content_type != NULL) {
             http_data_set_content_type(q->response_data, content_type);
-            q->response_multipart = http_multipart_parse(q->response_data,
-                    content_type);
+            q->err = http_multipart_parse(
+                    &q->response_multipart, q->client->log,
+                    q->response_data, content_type);
         }
     }
 
     q->http_parser_done = true;
 
-    return 0;
+    return q->err ? 1 : 0;
 }
 
 /* HTTP parser callbacks
@@ -2476,14 +2503,13 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
                 io_buf, rc);
 
         if (q->http_parser.http_errno != HPE_OK) {
-            error err = ERROR(http_errno_description(q->http_parser.http_errno));
-            http_query_complete(q, err);
-        } else if (q->http_parser_done) {
-            error err = NULL;
-            if (q->oom) {
-                err = ERROR_ENOMEM;
+            error err = q->err;
+            if (err == NULL) {
+                err = ERROR(http_errno_description(q->http_parser.http_errno));
             }
             http_query_complete(q, err);
+        } else if (q->http_parser_done) {
+            http_query_complete(q, NULL);
         } else if (rc == 0) {
             error err = ERROR("connection closed by device");
             http_query_complete(q, err);
@@ -3014,6 +3040,28 @@ http_query_foreach_response_header (const http_query *q,
         void *ptr)
 {
     hdr_for_each(&q->response_header, callback, ptr);
+}
+
+/* Decode response part of the query.
+ * This function is intended for testing purposes, not for regular use
+ */
+error
+http_query_test_decode_response (http_query *q, const void *data, size_t size)
+{
+    http_parser_execute(&q->http_parser, &http_query_callbacks, data, size);
+
+    if (q->http_parser.http_errno != HPE_OK) {
+        if (q->err != NULL) {
+            return q->err;
+        }
+        return ERROR(http_errno_description(q->http_parser.http_errno));
+    }
+
+    if (!q->http_parser_done) {
+        return ERROR("truncated response");
+    }
+
+    return NULL;
 }
 
 /******************** HTTP initialization & cleanup ********************/

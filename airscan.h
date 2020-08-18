@@ -1742,6 +1742,12 @@ http_query_foreach_response_header (const http_query *q,
         void (*callback)(const char *name, const char *value, void *ptr),
         void *ptr);
 
+/* Decode response part of the query.
+ * This function is intended for testing purposes, not for regular use
+ */
+error
+http_query_test_decode_response (http_query *q, const void *data, size_t size);
+
 /* HTTP schemes
  */
 typedef enum {

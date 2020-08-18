@@ -25,7 +25,7 @@ static bool eloop_thread_running;
 static ll_head eloop_call_pending_list;
 static bool eloop_poll_restart;
 
-static char *eloop_estring = NULL;
+static __thread char eloop_estring[256];
 static void (*eloop_start_stop_callbacks[ELOOP_START_STOP_CALLBACKS_MAX]) (bool);
 static int eloop_start_stop_callbacks_count;
 
@@ -544,19 +544,15 @@ eloop_fdpoll_set_mask (eloop_fdpoll *fdpoll, ELOOP_FDPOLL_MASK mask)
 error
 eloop_eprintf(const char *fmt, ...)
 {
-    char    *estring;
     va_list ap;
-
-    log_assert(NULL, pthread_equal(pthread_self(), eloop_thread));
+    char    buf[sizeof(eloop_estring)];
 
     va_start(ap, fmt);
-    estring = str_vprintf(fmt, ap);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    strcpy(eloop_estring, buf);
     va_end(ap);
 
-    mem_free(eloop_estring);
-    eloop_estring = estring;
-
-    return ERROR(estring);
+    return ERROR(eloop_estring);
 }
 
 /* vim:ts=8:sw=4:et
