@@ -9,7 +9,7 @@ Driverless scanning comes in two flavors:
 * Microsoft **WSD**, or **WS-Scan** (term WSD means "Web Services for Devices)
 
 This backend implements both protocols, choosing automatically between them.
-It was successfully tested with many devices from **Brother**, **Canon**,
+It was successfully tested with many devices from **Brother**, **Canon**, **Dell**,
 **Kyocera**, **Lexmark**, **Epson**, **HP**, **Ricoh**, **Samsung** and **Xerox**
 both in WSD and eSCL modes.
 
@@ -83,6 +83,7 @@ Legend:
 | Canon TS 3300                      | Yes                       |                           |
 | Canon TS 6151                      | Yes                       |                           |
 | Canon TS 6250                      | Yes                       |                           |
+| Dell C2665dnf Color Laser Printer  | No                        | Yes                       |
 | EPSON ET-2750 Series               | Yes                       |                           |
 | EPSON WF-7710                      | Yes                       |                           |
 | EPSON XP-7100 Series               | Yes                       |                           |
