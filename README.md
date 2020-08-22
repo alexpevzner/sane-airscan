@@ -86,6 +86,7 @@ Legend:
 | Dell C2665dnf Color Laser Printer  | No                        | Yes                       |
 | EPSON ET-2750 Series               | Yes                       |                           |
 | EPSON WF-7710                      | Yes                       |                           |
+| EPSON XP-442 445 Series            | Yes                       |                           |
 | EPSON XP-7100 Series               | Yes                       |                           |
 | EPSON XP-8600 Series               | Yes                       |                           |
 | HP Color Laserjet MFP m178-m181    | Yes                       |                           |
