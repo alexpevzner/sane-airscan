@@ -928,6 +928,7 @@ conf_unload (void)
 {
     conf_device_list_free();
     mem_free((char*) conf.dbg_trace);
+    mem_free((char*) conf.socket_dir);
     conf = conf_init;
 }
 
