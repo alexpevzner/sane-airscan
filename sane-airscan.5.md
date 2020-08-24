@@ -54,6 +54,12 @@ device URL on a rights side, followed by protocol (eSCL or WSD). If protocol
 is omitted, eSCL is assumed.  You may also disable particular device by
 using the `disable` keyword instead of URL.
 
+In addition, you can manually configure a device by directly passing its URL in
+a device name without adding it to the configuration file.  This takes the
+format `protocol:Device Name:URL`.  The examples above could be written as
+`escl:Kyocera eSCL:http://192.168.1.102:9095/eSCL` and
+`wsd:Kyocera WSD:http://192.168.1.102:5358/WSDScanner`.
+
 To figure out URLs of available devices, the simplest way is to
 run a supplied `airscan-discover` tool on a computer connected with
 scanner to the same LAN segment. On success, this program will
@@ -67,6 +73,12 @@ the URL path component most likely is the "/eSCL", though on some
 devices it may differ. Discovering WSD URLs doing this way is much
 harder, because it is very difficult to guess TCP port and URL path,
 that in a case of eSCL.
+
+For eSCL devices, the URL can also use the unix:// scheme, such as
+unix://scanner.sock/eSCL.  The "host" from the URL is a file name that will be
+searched for in the directory specified by socket_dir (see below).  When
+connecting to the scanner, all traffic will be sent to the specified UNIX socket
+instead of a TCP connection.
 
 ## CONFIGURATION OPTIONS
 
@@ -95,6 +107,11 @@ the following options are supported:
     ; This is also possible to disable automatic discovery
     ; of WSD devices. The default is "fast".
     ws-discovery = fast | full | off
+
+    ; Scanners that use the unix:// schema in their URL can only specify a
+    ; socket name (not a full path).  The name will be searched for in the
+    ; directory specified here. The default is /var/run.
+    socket_dir = /path/to/directory
 
 ## DEBUGGING
 
