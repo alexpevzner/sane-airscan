@@ -92,10 +92,16 @@ To manually configure a device, add the following section to the configuration f
 The \fB[devices]\fR section contains all manually configured devices, one line per device, and each line contains a device name on a left side of equation and device URL on a rights side, followed by protocol (eSCL or WSD)\. If protocol is omitted, eSCL is assumed\. You may also disable particular device by using the \fBdisable\fR keyword instead of URL\.
 .
 .P
+In addition, you can manually configure a device by directly passing its URL in a device name without adding it to the configuration file\. This takes the format \fBprotocol:Device Name:URL\fR\. The examples above could be written as \fBescl:Kyocera eSCL:http://192\.168\.1\.102:9095/eSCL\fR and \fBwsd:Kyocera WSD:http://192\.168\.1\.102:5358/WSDScanner\fR\.
+.
+.P
 To figure out URLs of available devices, the simplest way is to run a supplied \fBairscan\-discover\fR tool on a computer connected with scanner to the same LAN segment\. On success, this program will dump to its standard output a list of discovered devices in a format suitable for inclusion into the configuration file\.
 .
 .P
 If running \fBairscan\-discover\fR on same LAN segment as a scanner is not possible, you will have to follow a hard way\. Your administrator must know device IP address, consult your device manual for the eSCL port, and the URL path component most likely is the "/eSCL", though on some devices it may differ\. Discovering WSD URLs doing this way is much harder, because it is very difficult to guess TCP port and URL path, that in a case of eSCL\.
+.
+.P
+For eSCL devices, the URL can also use the unix:// scheme, such as unix://scanner\.sock/eSCL\. The "host" from the URL is a file name that will be searched for in the directory specified by socket_dir (see below)\. When connecting to the scanner, all traffic will be sent to the specified UNIX socket instead of a TCP connection\.
 .
 .SH "CONFIGURATION OPTIONS"
 Miscellaneous options all goes to the \fB[options]\fR section\. Currently the following options are supported:
@@ -126,6 +132,11 @@ protocol = auto | manual
 ; This is also possible to disable automatic discovery
 ; of WSD devices\. The default is "fast"\.
 ws\-discovery = fast | full | off
+
+; Scanners that use the unix:// schema in their URL can only specify a
+; socket name (not a full path)\.  The name will be searched for in the
+; directory specified here\. The default is /var/run\.
+socket_dir = /path/to/directory
 .
 .fi
 .
