@@ -54,8 +54,6 @@ typedef struct {
     inifile_record      record;                 /* Record buffer */
 } inifile;
 
-static const char DEFAULT_SOCKET_DIR[] = "/var/run";
-
 /***** Functions *****/
 /* Open the .INI file
  */
@@ -886,7 +884,7 @@ conf_load (void)
 
     /* Reset the configuration */
     conf = conf_init;
-    conf.socket_dir = str_dup(DEFAULT_SOCKET_DIR);
+    conf.socket_dir = str_dup(CONFIG_DEFAULT_SOCKET_DIR);
 
     /* Look to configuration path in environment */
     s = getenv(CONFIG_PATH_ENV);

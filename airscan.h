@@ -52,7 +52,11 @@
 /* Minimal interval between subsequent sane_start()
  * attempts, if previous sane_start was failed
  */
-#define CONFIG_START_RETRY_INTERVAL      2500
+#define CONFIG_START_RETRY_INTERVAL     2500
+
+/* Default directory for AF_UNIX sockets
+ */
+#define CONFIG_DEFAULT_SOCKET_DIR       "/var/run"
 
 /******************** Forward declarations ********************/
 /* log_ctx represents logging context
