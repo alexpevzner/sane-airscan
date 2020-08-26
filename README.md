@@ -163,8 +163,9 @@ helps, version V4.00.02.20 MAY-27-2020 known to work.
 
 The following distros (in alphabetical order) include `sane-airscan`
 officially:
-* ALT Linux Sisyphus
+* ALT Linux (Sisyphus and p9)
 * Arch Linux (in extra repository)
+* Fedora 32+
 * NixOS
 
 ### Installation from pre-build binaries
