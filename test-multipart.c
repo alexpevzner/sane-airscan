@@ -95,11 +95,23 @@ main (int argc, char **argv)
 
     cnt = http_query_get_mp_response_count(q);
     if (cnt > 0) {
-        printf("Part    Size  Content-Type\n");
-        printf("====    ====  ============\n");
+        printf("Part    Size  Saved As       Content-Type\n");
+        printf("====    ====  =============  ============\n");
         for (i = 0; i < cnt; i ++) {
             http_data *data = http_query_get_mp_response_data(q, i);
-            printf("%3d %8d  %s\n", i, (int) data->size, data->content_type);
+            char      name[64];
+            FILE      *fp;
+
+            sprintf(name, "%8.8d.part", i);
+            printf("%3d %8d  %s  %s\n", i, (int) data->size, name, data->content_type);
+
+            fp = fopen(name, "wb");
+            if (fp == NULL) {
+                die("%s: %s", strerror(errno));
+            }
+
+            fwrite(data->bytes, 1, data->size, fp);
+            fclose(fp);
         }
     }
 
