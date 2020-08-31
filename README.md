@@ -56,6 +56,8 @@ Legend:
 
 | Device                             | eSCL mode                 | WSD mode                  |
 | ---------------------------------- | :-----------------------: | :-----------------------: |
+| Brother DCP-L2550DW                | Yes                       |                           |
+| Brother MFC-J485DW                 | Yes                       |                           |
 | Brother MFC-L2700DW                | No                        | Yes                       |
 | Brother MFC-L2710DW                | Yes                       | Yes                       |
 | Brother MFC-L2720DW                | No                        | Yes                       |
@@ -95,6 +97,7 @@ Legend:
 | HP Color LaserJet MFP M477fdw      | Yes                       | Yes                       |
 | HP Color LaserJet Pro M478f-9f     | Yes                       |                           |
 | HP DeskJet 2540                    | Yes                       |                           |
+| HP DeskJet 5000 series             | Yes                       |                           |
 | HP ENVY 4500                       | Yes                       |                           |
 | HP ENVY 5540                       | Yes                       |                           |
 | HP ENVY 5640                       | Yes                       |                           |
@@ -126,6 +129,7 @@ Legend:
 | Samsung M288x Series               | No                        | Yes                       |
 | Samsung M337x 387x 407x Series     | No                        | Yes<sup>[7](#note7)</sup> |
 | Xerox VersaLink B405               | Yes                       |                           |
+| Xerox WorkCentre 3025              | No                        | Yes                       |
 | TODO                               |                           |                           |
 
 ---
@@ -162,8 +166,9 @@ helps, version V4.00.02.20 MAY-27-2020 known to work.
 
 The following distros (in alphabetical order) include `sane-airscan`
 officially:
-* ALT Linux Sisyphus
+* ALT Linux (Sisyphus and p9)
 * Arch Linux (in extra repository)
+* Fedora 32+
 * NixOS
 
 ### Installation from pre-build binaries

@@ -1403,18 +1403,17 @@ http_multipart_add_body (http_multipart *mp, http_data *body)
 static const char*
 http_multipart_find_boundary (const char *boundary, size_t boundary_len,
         const char *data, size_t size) {
-    const char *found = memmem(data, size, boundary, boundary_len);
 
-    if (found != NULL) {
-        ptrdiff_t off = found - data;
-
-        /* Boundary must be either at beginning or preceded by CR/LF */
-        if (off == 0 || (off >= 2 && found[-2] == '\r' && found[-1] == '\n')) {
-            return found;
-        }
-    }
-
-    return NULL;
+    /* Note, per RFC 2046, "the boundary delimiter MUST occur at the beginning
+     * of a line, i.e., following a CRLF, and the initial CRLF is considered to
+     * be attached to the boundary delimiter line rather than part of the
+     * preceding part".
+     *
+     * However, Xerox WorkCentre 3025 violates this requirement, and
+     * puts boundary delimiter without preceding CRLF, so we must relax
+     * out expectations
+     */
+    return memmem(data, size, boundary, boundary_len);
 }
 
 /* Adjust part of multipart message:
@@ -1455,7 +1454,10 @@ http_multipart_adjust_part (http_data *part)
     part->size -= (split - (char*) part->bytes);
     part->bytes = split;
 
-    part->size -= 2; /* CR/LF preceding next boundary */
+    /* Strip CR/LF preceding next boundary, if any */
+    if (split[part->size - 2] == '\r' && split[part->size - 1] == '\n') {
+        part->size -= 2;
+    }
 
     return NULL;
 }
@@ -1509,7 +1511,7 @@ http_multipart_parse (http_multipart **out, log_ctx *log,
         log_debug(log, "  %s=\"%s\"", field->name, field->value);
     }
 
-    boundary = http_hdr_get (&params, "boundary");
+    boundary = http_hdr_get(&params, "boundary");
     if (boundary) {
         char *s;
 
@@ -3096,6 +3098,9 @@ error
 http_query_test_decode_response (http_query *q, const void *data, size_t size)
 {
     http_parser_execute(&q->http_parser, &http_query_callbacks, data, size);
+    if (q->http_parser.http_errno == HPE_OK && !q->http_parser_done) {
+        http_parser_execute(&q->http_parser, &http_query_callbacks, data, 0);
+    }
 
     if (q->http_parser.http_errno != HPE_OK) {
         if (q->err != NULL) {
