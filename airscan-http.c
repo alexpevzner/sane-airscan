@@ -3051,6 +3051,9 @@ error
 http_query_test_decode_response (http_query *q, const void *data, size_t size)
 {
     http_parser_execute(&q->http_parser, &http_query_callbacks, data, size);
+    if (q->http_parser.http_errno == HPE_OK && !q->http_parser_done) {
+        http_parser_execute(&q->http_parser, &http_query_callbacks, data, 0);
+    }
 
     if (q->http_parser.http_errno != HPE_OK) {
         if (q->err != NULL) {
