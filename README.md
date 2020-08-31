@@ -56,6 +56,7 @@ Legend:
 
 | Device                             | eSCL mode                 | WSD mode                  |
 | ---------------------------------- | :-----------------------: | :-----------------------: |
+| Brother DCP-L2550DW                | Yes                       |                           |
 | Brother MFC-J485DW                 | Yes                       |                           |
 | Brother MFC-L2700DW                | No                        | Yes                       |
 | Brother MFC-L2710DW                | Yes                       | Yes                       |
