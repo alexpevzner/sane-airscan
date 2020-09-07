@@ -126,6 +126,7 @@ Legend:
 | Lexmark CX317dn                    | Yes<sup>[5](#note5)</sup> | Yes<sup>[5](#note5)</sup> |
 | Lexmark MC2535adwe                 | Yes                       |                           |
 | Ricoh MP C3003                     | No                        | Yes<sup>[6](#note6)</sup> |
+| Samsung M267x 287x Series          | No                        | Yes                       |
 | Samsung M288x Series               | No                        | Yes                       |
 | Samsung M337x 387x 407x Series     | No                        | Yes<sup>[7](#note7)</sup> |
 | Xerox VersaLink B405               | Yes                       |                           |
