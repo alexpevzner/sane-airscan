@@ -80,7 +80,7 @@ Legend:
 | Canon PIXMA MG7700 Series          | Yes                       |                           |
 | Canon PIXMA TS5000 Series          | Yes                       |                           |
 | Canon PIXMA TS 9550 Series         | Yes                       |                           |
-| Canon TR4529 (PIXMA TR4500 Series) | Yes                       |                           |
+| Canon TR4529 (PIXMA TR4500 Series) | Yes                       | Yes                       |
 | Canon TR7500 Series                | No                        | Yes                       |
 | Canon TS 3100                      | Yes                       |                           |
 | Canon TS 3300                      | Yes                       |                           |
