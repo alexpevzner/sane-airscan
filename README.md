@@ -85,7 +85,7 @@ Legend:
 | Canon TS 3100                      | Yes                       |                           |
 | Canon TS 3300                      | Yes                       |                           |
 | Canon TS 6151                      | Yes                       |                           |
-| Canon TS 6250                      | Yes                       |                           |
+| Canon TS 6250                      | Yes                       | Yes                       |
 | Dell C2665dnf Color Laser Printer  | No                        | Yes                       |
 | EPSON ET-2750 Series               | Yes                       |                           |
 | EPSON WF-7710                      | Yes                       |                           |
