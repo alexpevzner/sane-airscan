@@ -75,6 +75,7 @@ Legend:
 | Canon MF240 Series                 | No                        | Yes<sup>[3](#note3)</sup> |
 | Canon MF260 Series                 | Yes                       | Yes<sup>[3](#note3)</sup> |
 | Canon MF745C/746C                  | Yes                       | Yes                       |
+| Canon PIXMA G3000 series           | No                        | Yes                       |
 | Canon PIXMA MG3600 series          | Yes                       |                           |
 | Canon PIXMA MG5500 Series          | No                        | Yes                       |
 | Canon PIXMA MG7700 Series          | Yes                       |                           |
