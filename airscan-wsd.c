@@ -117,7 +117,7 @@ wsd_devcaps_query (const proto_ctx *ctx)
     xml_wr_enter(xml, "scan:RequestedElements");
     //xml_wr_add_text(xml, "scan:Name", "scan:ScannerDescription");
     xml_wr_add_text(xml, "scan:Name", "scan:ScannerConfiguration");
-    xml_wr_add_text(xml, "scan:Name", "scan:DefaultScanTicket");
+    //xml_wr_add_text(xml, "scan:Name", "scan:DefaultScanTicket");
     //xml_wr_add_text(xml, "scan:Name", "scan:ScannerStatus");
     xml_wr_leave(xml);
     xml_wr_leave(xml);
