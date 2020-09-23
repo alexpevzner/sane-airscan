@@ -123,7 +123,7 @@ wsd_devcaps_query (const proto_ctx *ctx)
     xml_wr_leave(xml);
     xml_wr_leave(xml);
 
-    return wsd_http_post(ctx, xml_wr_finish(xml));
+    return wsd_http_post(ctx, xml_wr_finish_compact(xml));
 }
 
 /* Parse supported formats
@@ -753,9 +753,9 @@ wsd_scan_query (const proto_ctx *ctx)
     xml_wr_leave(xml); // scan:CreateScanJobRequest
     xml_wr_leave(xml); // s:Body
 
-//log_debug(0, "%s", xml_wr_finish(xml)); exit(0);
+//log_debug(0, "%s", xml_wr_finish_compact(xml)); exit(0);
 
-    return wsd_http_post(ctx, xml_wr_finish(xml));
+    return wsd_http_post(ctx, xml_wr_finish_compact(xml));
 }
 
 /* Decode result of scan request
@@ -859,7 +859,7 @@ wsd_load_query (const proto_ctx *ctx)
     xml_wr_leave(xml);
     xml_wr_leave(xml);
 
-    return wsd_http_post(ctx, xml_wr_finish(xml));
+    return wsd_http_post(ctx, xml_wr_finish_compact(xml));
 }
 
 /* Decode result of image request
@@ -911,7 +911,7 @@ wsd_status_query (const proto_ctx *ctx)
     xml_wr_leave(xml);
     xml_wr_leave(xml);
 
-    return wsd_http_post(ctx, xml_wr_finish(xml));
+    return wsd_http_post(ctx, xml_wr_finish_compact(xml));
 }
 
 /* Decode result of device status request
@@ -952,7 +952,7 @@ wsd_cancel_query (const proto_ctx *ctx)
     xml_wr_leave(xml);
     xml_wr_leave(xml);
 
-    return wsd_http_post(ctx, xml_wr_finish(xml));
+    return wsd_http_post(ctx, xml_wr_finish_compact(xml));
 }
 
 /* proto_handler_wsd_new creates new eSCL protocol handler
