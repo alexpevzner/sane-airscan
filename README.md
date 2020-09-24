@@ -69,6 +69,7 @@ Legend:
 | Canon imageRUNNER ADVANCE 4545/4551| Yes                       | Yes                       |
 | Canon imageRUNNER ADV C5550/5560   | Yes                       |                           |
 | Canon imageRUNNER C3120L           | Yes                       | Yes                       |
+| Canon i-SENSYS MF4780w             | No                        | Yes<sup>[3](#note3)</sup> |
 | Canon i-SENSYS MF641C              | No                        | Yes                       |
 | Canon Lide 400                     | Yes<sup>[2](#note2)</sup> |                           |
 | Canon MB5400 series                | Yes                       | Yes                       |
