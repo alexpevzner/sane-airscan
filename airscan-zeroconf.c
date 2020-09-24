@@ -16,17 +16,6 @@
 #include <string.h>
 
 /******************** Constants *********************/
-/* Service types we are interested in
- */
-#define ZEROCONF_SERVICE_USCAN                  "_uscan._tcp"
-#define ZEROCONF_SERVICE_USCANS                 "_uscans._tcp"
-
-/* If failed, AVAHI client will be automatically
- * restarted after the following timeout expires,
- * in seconds
- */
-#define ZEROCONF_AVAHI_CLIENT_RESTART_TIMEOUT   1
-
 /* Max time to wait until device table is ready, in seconds
  */
 #define ZEROCONF_READY_TIMEOUT                  5
