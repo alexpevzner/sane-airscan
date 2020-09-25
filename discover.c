@@ -53,39 +53,6 @@ die (const char *format, ...)
     exit(1);
 }
 
-/* Initialize airscan
- */
-static void
-airscan_init (void)
-{
-    SANE_Status status;
-
-    log_init();
-    log_configure();
-    trace_init();
-    devid_init();
-    eloop_init();
-    status = rand_init();
-    if (status != SANE_STATUS_GOOD) {
-        die("rand-init: %s", sane_strstatus(status));
-    }
-    http_init();
-    netif_init();
-    zeroconf_init();
-
-    status = mdns_init();
-    if (status != SANE_STATUS_GOOD) {
-        die("DNS-SD: %s", sane_strstatus(status));
-    }
-
-    status = wsdd_init();
-    if (status != SANE_STATUS_GOOD) {
-        die("WS-Discovery: %s", sane_strstatus(status));
-    }
-
-    eloop_thread_start();
-}
-
 /* The main function
  */
 int
@@ -112,7 +79,7 @@ main (int argc, char **argv)
     }
 
     /* Initialize airscan */
-    airscan_init();
+    airscan_init(AIRSCAN_INIT_NO_CONF, NULL);
 
     /* Get list of devices */
     eloop_mutex_lock();

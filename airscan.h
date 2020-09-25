@@ -3094,5 +3094,25 @@ log_panic (log_ctx *log, const char *fmt, ...);
 
 #endif
 
+/******************** Initialization/Cleanup ********************/
+/* AIRSCAN_INIT_FLAGS represents airscan_init() flags
+ */
+typedef enum {
+    AIRSCAN_INIT_NO_CONF        = (1 << 0),     // Don't load configuration
+    AIRSCAN_INIT_NO_THREAD      = (1 << 1)      // Don't start worker thread
+} AIRSCAN_INIT_FLAGS;
+
+/* Initialize airscan.
+ * If log_msg is not NULL, it is written to the log early
+ */
+SANE_Status
+airscan_init (AIRSCAN_INIT_FLAGS flags, const char *log_msg);
+
+/* Cleanup airscan
+ * If log_msg is not NULL, it is written to the log as late as possible
+ */
+void
+airscan_cleanup (const char *log_msg);
+
 /* vim:ts=8:sw=4:et
  */
