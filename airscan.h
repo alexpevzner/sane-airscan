@@ -792,6 +792,71 @@ uuid_equal (uuid u1, uuid u2)
     return !strcmp(u1.text, u2.text);
 }
 
+/******************** Generic .INI file parser ********************/
+/* Types of .INI file records
+ */
+typedef enum {
+    INIFILE_SECTION,                    /* The [section name] string */
+    INIFILE_VARIABLE,                   /* The variable = value string */
+    INIFILE_COMMAND,                    /* command param1 param2 ... */
+    INIFILE_SYNTAX                      /* The syntax error */
+} INIFILE_RECORD;
+
+/* .INI file record
+ */
+typedef struct {
+    INIFILE_RECORD      type;           /* Record type */
+    const char          *section;       /* Section name */
+    const char          *variable;      /* Variable name */
+    const char          *value;         /* Variable value */
+    const char          **tokv;         /* Value split to tokens */
+    unsigned int        tokc;           /* Count of strings in tokv */
+    const char          *file;          /* File name */
+    unsigned int        line;           /* File line */
+} inifile_record;
+
+/* .INI file (opaque)
+ */
+typedef struct {
+    const char          *file;                  /* File name */
+    unsigned int        line;                   /* File handle */
+    FILE                *fp;                    /* File pointer */
+
+    bool                tk_open;                /* Token is currently open */
+    char                *tk_buffer;             /* Parser buffer, tokenized */
+    unsigned int        *tk_offsets;            /* Tokens offsets */
+    unsigned int        tk_count;               /* Tokens count */
+
+    char                *buffer;                /* Parser buffer */
+    char                *section;               /* Section name string */
+    char                *variable;              /* Variable name string */
+    char                *value;                 /* Value string */
+    inifile_record      record;                 /* Record buffer */
+} inifile;
+
+/* Open the .INI file
+ */
+inifile*
+inifile_open (const char *name);
+
+/* Close the .INI file
+ */
+void
+inifile_close (inifile *file);
+
+/* Read next record
+ */
+const inifile_record*
+inifile_read (inifile *file);
+
+/* Match name of section of variable
+ *   - match is case-insensitive
+ *   - difference in amount of free space is ignored
+ *   - leading and trailing space is ignored
+ */
+bool
+inifile_match_name (const char *n1, const char *n2);
+
 /******************** Configuration file loader ********************/
 /* Device URI for manually disabled device
  */
