@@ -853,6 +853,8 @@ zeroconf_finding_publish (zeroconf_finding *finding)
      *      device will keep remaining anonymous findings
      */
     device = zeroconf_device_find_by_uuid(finding->uuid);
+    found_by = "found by uuid";
+
     if (device != NULL && finding->name != NULL) {
         if (mem_len(device->ifaces) == 1 &&
             device->ifaces[0] == finding->ifindex){
