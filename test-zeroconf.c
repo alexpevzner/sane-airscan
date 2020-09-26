@@ -203,7 +203,8 @@ devlist_compare (devlist_item *expected, devlist_item *discovered)
 /* Parse ZEROCONF_METHOD
  */
 static ZEROCONF_METHOD
-parse_zeroconf_method (const inifile_record *rec) {
+parse_zeroconf_method (const inifile_record *rec)
+{
     static struct { const char *name; ZEROCONF_METHOD method; } methods[] = {
         {"MDNS_HINT",  ZEROCONF_MDNS_HINT},
         {"USCAN_TCP",  ZEROCONF_USCAN_TCP},
@@ -228,6 +229,21 @@ parse_zeroconf_method (const inifile_record *rec) {
 
     die("%s:%d: usage: %s = %s", rec->file, rec->line, rec->variable, usage);
     return -1;
+}
+
+/* Parse unsigned integer
+ */
+static int
+parse_uint (const inifile_record *rec)
+{
+    char          *end;
+    unsigned long n = strtoul(rec->value, &end, 0);
+
+    if (end == rec->value || *end) {
+        die("%s:%d: usage: %s = NUM", rec->file, rec->line, rec->variable);
+    }
+
+    return (int) n;
 }
 
 /* Get finding by name
@@ -301,7 +317,7 @@ test_section_add_del (inifile *ini, const inifile_record *rec, bool add)
     char              *name = NULL;
     char              *model = NULL;
     uuid              uuid;
-    int               ifindex = 1;
+    int               ifindex = -1;
     zeroconf_endpoint *endpoints = NULL;
     const char        *section_file = rec->file;
     unsigned int      section_line = rec->line;
@@ -335,6 +351,8 @@ test_section_add_del (inifile *ini, const inifile_record *rec, bool add)
             if (!uuid_valid(uuid)) {
                 die("%s:%d: bad UUID", rec->file, rec->line);
             }
+        } else if (inifile_match_name(rec->variable, "ifindex")) {
+            ifindex = parse_uint(rec);
         } else if (inifile_match_name(rec->variable, "endpoint")) {
             http_uri          *uri;
             zeroconf_endpoint *endpoint;
@@ -385,6 +403,10 @@ test_section_add_del (inifile *ini, const inifile_record *rec, bool add)
 
     if (!uuid_valid(uuid)) {
         die("%s:%d: missed uuid", section_file, section_line);
+    }
+
+    if (ifindex == -1) {
+        die("%s:%d: missed ifindex", section_file, section_line);
     }
 
     if (method != ZEROCONF_MDNS_HINT && add && endpoints == NULL) {
