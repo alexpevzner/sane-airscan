@@ -34,6 +34,172 @@ die (const char *format, ...)
     exit(1);
 }
 
+/* devlist_item represents device list item
+ */
+typedef struct devlist_item devlist_item;
+struct devlist_item {
+    const char        *name;      /* Device name */
+    ID_PROTO          proto;      /* Device protocol */
+    zeroconf_endpoint *endpoints; /* Device endpoints */
+    devlist_item      *next;      /* Next item in the list */
+};
+
+/* Free device list
+ */
+static void
+devlist_free (devlist_item *devlist)
+{
+    devlist_item *next;
+
+    while (devlist != NULL) {
+        next = devlist->next;
+        mem_free((char*) devlist->name);
+        zeroconf_endpoint_list_free(devlist->endpoints);
+        devlist = next;
+    }
+}
+
+/* Revert device list
+ */
+static devlist_item*
+devlist_revert (devlist_item *devlist)
+{
+    devlist_item *reverted = NULL, *next;
+
+    while (devlist != NULL) {
+        next = devlist->next;
+        devlist->next = reverted;
+        reverted = devlist;
+        devlist = next;
+    }
+
+    return reverted;
+}
+
+/* Obtain list of devices from zeroconf
+ */
+static devlist_item*
+devlist_from_zeroconf (void)
+{
+    const SANE_Device **devices;
+    int               i;
+    devlist_item      *devlist = NULL;
+
+    devices = zeroconf_device_list_get();
+    for (i = 0; devices[i] != NULL; i ++) {
+        devlist_item     *item = mem_new(devlist_item, 1);
+        zeroconf_devinfo *devinfo;
+
+        devinfo = zeroconf_devinfo_lookup(devices[i]->name);
+        if (devinfo == NULL) {
+            die("%s: zeroconf_devinfo_lookup() failed)", devices[i]->name);
+        }
+
+        item->name = str_dup(devinfo->name);
+        item->proto = id_proto_by_name(devices[i]->vendor);
+        item->endpoints = devinfo->endpoints;
+        devinfo->endpoints = NULL;
+        zeroconf_devinfo_free(devinfo);
+
+        item->next = devlist;
+        devlist = item;
+    }
+    zeroconf_device_list_free(devices);
+
+    return devlist_revert(devlist);
+}
+
+/* Parse device list item from configuration file record
+ */
+static devlist_item*
+devlist_item_parse (const inifile_record *rec)
+{
+    devlist_item *item = mem_new(devlist_item, 1);
+    unsigned int i;
+
+    if (rec->tokc < 2) {
+        die("%s:%d: usage: %s = protocol, endpoint, ...",
+            rec->file, rec->line, rec->variable);
+    }
+
+    item->name = rec->variable;
+    item->proto = id_proto_by_name(rec->tokv[0]);
+    if (item->proto == ID_PROTO_UNKNOWN) {
+        die("%s:%d: unknown protocol %s",
+            rec->file, rec->line, rec->variable, rec->tokv[0]);
+    }
+
+    for (i = 1; i < rec->tokc; i ++) {
+        http_uri          *uri = http_uri_new(rec->tokv[i], true);
+        zeroconf_endpoint *endpoint;
+        if (uri == NULL) {
+            die("%s:%d: invalid URI %s",
+                rec->file, rec->line, rec->variable, rec->tokv[i]);
+        }
+
+        endpoint = zeroconf_endpoint_new(item->proto, uri);
+        endpoint->next = item->endpoints;
+        item->endpoints = endpoint;
+    }
+
+    item->endpoints = zeroconf_endpoint_list_sort(item->endpoints);
+    return item;
+}
+
+/* Compare 2 device lists
+ */
+static void
+devlist_compare (devlist_item *expected, devlist_item *discovered)
+{
+    while (expected != NULL && discovered != NULL) {
+        zeroconf_endpoint *ep_expected = expected->endpoints;
+        zeroconf_endpoint *ep_discovered = discovered->endpoints;
+
+        if (strcmp(expected->name, discovered->name)) {
+            die("%s: name mismatch: discovered %s",
+                expected->name, discovered->name);
+        }
+
+        if (expected->proto != discovered->proto) {
+            die("%s: proto mismatch: expected %s, discovered %s",
+                expected->name, id_proto_name(expected->proto),
+                id_proto_name(discovered->proto));
+        }
+
+        while (ep_expected != NULL && ep_discovered != NULL) {
+            if (!http_uri_equal(ep_expected->uri, ep_discovered->uri)) {
+                die("%s: uri mismatch: expected %s, discovered %s",
+                    expected->name, http_uri_str(ep_expected->uri),
+                    http_uri_str(ep_discovered->uri));
+            }
+
+            ep_expected = ep_expected->next;
+            ep_discovered = ep_discovered->next;
+        }
+
+        if (ep_expected != NULL && ep_discovered == NULL) {
+            die("%s: uri expected but not discovered: %s",
+                expected->name, http_uri_str(ep_expected->uri));
+        }
+
+        if (ep_expected == NULL && ep_discovered != NULL) {
+            die("%s: uri not expected but discovered: %s",
+                expected->name, http_uri_str(ep_discovered->uri));
+        }
+
+        expected = expected->next;
+        discovered = discovered->next;
+    }
+
+    if (expected != NULL && discovered == NULL) {
+        die("%s: device extected, but not discovered", expected->name);
+    }
+
+    if (expected == NULL && discovered != NULL) {
+        die("%s: device not extected, but discovered", discovered->name);
+    }
+}
+
 /* Parse ZEROCONF_METHOD
  */
 static ZEROCONF_METHOD
@@ -125,7 +291,7 @@ finding_free (zeroconf_finding *finding)
     mem_free(finding);
 }
 
-/* Load and execute [add] or [del] section
+/* Parse and execute [add] or [del] section
  */
 static const inifile_record*
 test_section_add_del (inifile *ini, const inifile_record *rec, bool add)
@@ -186,7 +352,11 @@ test_section_add_del (inifile *ini, const inifile_record *rec, bool add)
             endpoint = zeroconf_endpoint_new(proto, uri);
             endpoint->next = endpoints;
             endpoints = endpoint;
+        } else {
+            die("%s:%d: unknown parameter %s", rec->file, rec->line,
+                rec->variable);
         }
+
         rec = inifile_read(ini);
     }
 
@@ -253,6 +423,39 @@ test_section_add_del (inifile *ini, const inifile_record *rec, bool add)
     return rec;
 }
 
+/* Parse and execute [expect] section
+ */
+static const inifile_record*
+test_section_expect (inifile *ini, const inifile_record *rec)
+{
+    devlist_item *expected = NULL, *discovered;
+
+    /* Parse the section */
+    rec = inifile_read(ini);
+    while (rec != NULL && rec->type == INIFILE_VARIABLE) {
+        devlist_item *item = devlist_item_parse(rec);
+        item->next = expected;
+        expected = item;
+        rec = inifile_read(ini);
+    }
+
+    /* In a case of obviously broken file, return immediately */
+    if (rec != NULL && rec->type != INIFILE_SECTION) {
+        devlist_free(expected);
+        return rec;
+    }
+
+    expected = devlist_revert(expected);
+    discovered = devlist_from_zeroconf();
+
+    devlist_compare(expected, discovered);
+
+    devlist_free(discovered);
+    devlist_free(expected);
+
+    return rec;
+}
+
 /* Load and execute next test file section
  * Returns inifile_record that follows the section
  */
@@ -263,6 +466,8 @@ test_section (inifile *ini, const inifile_record *rec)
         rec = test_section_add_del(ini, rec, true);
     } else if (inifile_match_name(rec->section, "del")) {
         rec = test_section_add_del(ini, rec, false);
+    } else if (inifile_match_name(rec->section, "expect")) {
+        rec = test_section_expect(ini, rec);
     } else {
         die("%s:%d: unexpected section [%s]", rec->file, rec->line,
             rec->section);
@@ -316,6 +521,7 @@ static void run_test (const char *file)
     conf.dbg_trace = str_dup(TRACE_DIR);
     conf.discovery = false;
     conf.proto_auto = false;
+    conf.model_is_netname = true;
 
     test_file = file;
     findings = ptr_array_new(zeroconf_finding);
