@@ -18,7 +18,7 @@
  * Note, some printers (namely, HP LaserJet MFP M28w) require
  * a lot of retry attempts when loading next page at high res
  */
-#define ESCL_RETRY_ATTEMPTS_LOAD        20
+#define ESCL_RETRY_ATTEMPTS_LOAD        30
 #define ESCL_RETRY_ATTEMPTS             10
 
 /* And pause between retries, in milliseconds
