@@ -74,9 +74,9 @@ $(OBJDIR)%.o: %.c Makefile airscan.h
 
 .PHONY: all clean install man
 
-all:	tags $(BACKEND) $(DISCOVER) test test-decode test-multipart test-uri
+all:	tags $(BACKEND) $(DISCOVER) test test-decode test-multipart test-zeroconf test-uri
 
-tags: $(SRC) airscan.h test.c test-decode.c test-multipart.c test-uri.c
+tags: $(SRC) airscan.h test.c test-decode.c test-multipart.c test-zeroconf.c test-uri.c
 	-ctags -R .
 
 $(BACKEND): $(OBJDIR)airscan.o $(LIBAIRSCAN) airscan.sym
@@ -103,7 +103,7 @@ install: all
 	[ "$(COMPRESS)" = "" ] || $(COMPRESS) -f $(DESTDIR)$(PREFIX)$(MANDIR)/man5/$(MAN_BACKEND)
 
 clean:
-	rm -f test test-decode test-multipart test-uri $(BACKEND) tags
+	rm -f test test-decode test-multipart test-zeroconf test-uri $(BACKEND) tags
 	rm -rf $(OBJDIR)
 
 uninstall:
@@ -129,6 +129,9 @@ test-decode: test-decode.c $(LIBAIRSCAN)
 
 test-multipart: test-multipart.c $(LIBAIRSCAN)
 	 $(CC) -o test-multipart test-multipart.c $(CPPFLAGS) $(common_CFLAGS) $(LIBAIRSCAN) $(tests_LDFLAGS)
+
+test-zeroconf: test-zeroconf.c $(LIBAIRSCAN)
+	 $(CC) -o test-zeroconf test-zeroconf.c $(CPPFLAGS) $(common_CFLAGS) $(LIBAIRSCAN) $(tests_LDFLAGS)
 
 test-uri: test-uri.c $(LIBAIRSCAN)
 	 $(CC) -o test-uri test-uri.c $(CPPFLAGS) $(common_CFLAGS) $(LIBAIRSCAN) $(tests_LDFLAGS)

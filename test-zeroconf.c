@@ -1,0 +1,366 @@
+/* sane-airscan zeroconf test
+ *
+ * Copyright (C) 2019 and up by Alexander Pevzner (pzz@apevzner.com)
+ * See LICENSE for license terms and conditions
+ */
+
+#include "airscan.h"
+
+#include <errno.h>
+#include <glob.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define TEST_FILES      "testdata/test-zeroconf*.cfg"
+#define TRACE_DIR       "testdata/logs"
+
+static const char       *test_file;
+static zeroconf_finding **findings = NULL;
+
+/* Print error message and exit
+ */
+void __attribute__((noreturn))
+die (const char *format, ...)
+{
+    va_list ap;
+
+    va_start(ap, format);
+    vprintf(format, ap);
+    printf("\n");
+    va_end(ap);
+
+    exit(1);
+}
+
+/* Parse ZEROCONF_METHOD
+ */
+static ZEROCONF_METHOD
+parse_zeroconf_method (const inifile_record *rec) {
+    static struct { const char *name; ZEROCONF_METHOD method; } methods[] = {
+        {"MDNS_HINT",  ZEROCONF_MDNS_HINT},
+        {"USCAN_TCP",  ZEROCONF_USCAN_TCP},
+        {"USCANS_TCP", ZEROCONF_USCANS_TCP},
+        {"WSD",        ZEROCONF_WSD},
+        {NULL, 0}
+    };
+    int  i;
+    char *usage;
+
+    for (i = 0; methods[i].name != NULL; i ++) {
+        if (inifile_match_name(rec->value, methods[i].name)) {
+            return methods[i].method;
+        }
+    }
+
+    usage = str_dup(methods[0].name);
+    for (i = 1; methods[i].name != NULL; i ++) {
+        usage = str_append(usage, "|");
+        usage = str_append(usage, methods[i].name);
+    }
+
+    die("%s:%d: usage: %s = %s", rec->file, rec->line, rec->variable, usage);
+    return -1;
+}
+
+/* Get finding by name
+ */
+static zeroconf_finding*
+finding_by_name(ZEROCONF_METHOD method, int ifindex, const char *name)
+{
+    size_t len = mem_len(findings);
+    size_t i;
+
+    for (i = 0; i < len; i ++) {
+        if (findings[i]->method == method &&
+            findings[i]->ifindex == ifindex &&
+            !strcasecmp(findings[i]->name, name)) {
+            return findings[i];
+        }
+    }
+
+    return NULL;
+}
+
+/* Get finding by UUID
+ */
+static zeroconf_finding*
+finding_by_uuid(ZEROCONF_METHOD method, int ifindex, uuid uuid)
+{
+    size_t len = mem_len(findings);
+    size_t i;
+
+    for (i = 0; i < len; i ++) {
+        if (findings[i]->method == method &&
+            findings[i]->ifindex == ifindex &&
+            uuid_equal(findings[i]->uuid, uuid)) {
+            return findings[i];
+        }
+    }
+
+    return NULL;
+}
+
+/* Get finding by name or UUID
+ */
+static zeroconf_finding*
+finding_find(ZEROCONF_METHOD method, int ifindex, const char *name, uuid uuid)
+{
+    if (name != NULL) {
+        return finding_by_name(method, ifindex, name);
+    } else {
+        return finding_by_uuid(method, ifindex, uuid);
+    }
+}
+
+/* Free the zeroconf_finding
+ */
+static void
+finding_free (zeroconf_finding *finding)
+{
+    mem_free((char*) finding->name);
+    mem_free((char*) finding->model);
+    zeroconf_endpoint_list_free(finding->endpoints);
+    mem_free(finding);
+}
+
+/* Load and execute [add] or [del] section
+ */
+static const inifile_record*
+test_section_add_del (inifile *ini, const inifile_record *rec, bool add)
+{
+    ZEROCONF_METHOD   method = (ZEROCONF_METHOD) -1;
+    ID_PROTO          proto = ID_PROTO_UNKNOWN;
+    char              *name = NULL;
+    char              *model = NULL;
+    uuid              uuid;
+    int               ifindex = 1;
+    zeroconf_endpoint *endpoints = NULL;
+    const char        *section_file = rec->file;
+    unsigned int      section_line = rec->line;
+    zeroconf_finding  *finding;
+
+    /* Parse the section */
+    memset(&uuid, 0, sizeof(uuid));
+    rec = inifile_read(ini);
+    while (rec != NULL && rec->type == INIFILE_VARIABLE) {
+        if (inifile_match_name(rec->variable, "method")) {
+            method = parse_zeroconf_method(rec);
+            switch (method) {
+                case ZEROCONF_USCAN_TCP:
+                case ZEROCONF_USCANS_TCP:
+                    proto = ID_PROTO_ESCL;
+                    break;
+                case ZEROCONF_WSD:
+                    proto = ID_PROTO_WSD;
+                    break;
+                default:
+                    proto = ID_PROTO_UNKNOWN;
+            }
+        } else if (inifile_match_name(rec->variable, "name")) {
+            mem_free(name);
+            name = str_dup(rec->value);
+        } else if (inifile_match_name(rec->variable, "model")) {
+            mem_free(model);
+            model = str_dup(rec->value);
+        } else if (inifile_match_name(rec->variable, "uuid")) {
+            uuid = uuid_parse(rec->value);
+            if (!uuid_valid(uuid)) {
+                die("%s:%d: bad UUID", rec->file, rec->line);
+            }
+        } else if (inifile_match_name(rec->variable, "endpoint")) {
+            http_uri          *uri;
+            zeroconf_endpoint *endpoint;
+
+            if (proto == ID_PROTO_UNKNOWN) {
+                die("%s:%d: protocol not known; set method first",
+                    rec->file, rec->line);
+            }
+
+            uri = http_uri_new(rec->value, true);
+            if (uri == NULL) {
+                die("%s:%d: invalid URI", rec->file, rec->line);
+            }
+
+            endpoint = zeroconf_endpoint_new(proto, uri);
+            endpoint->next = endpoints;
+            endpoints = endpoint;
+        }
+        rec = inifile_read(ini);
+    }
+
+    /* In a case of obviously broken file, return immediately */
+    if (rec != NULL && rec->type != INIFILE_SECTION) {
+        return rec;
+    }
+
+    /* Validate things */
+    if (method == (ZEROCONF_METHOD) -1) {
+        die("%s:%d: missed method", section_file, section_line);
+    }
+
+    if (method != ZEROCONF_WSD && name == NULL) {
+        die("%s:%d: missed name", section_file, section_line);
+    }
+
+    if (method == ZEROCONF_WSD && name != NULL) {
+        mem_free(name);
+        name = NULL;
+    }
+
+    if (model == NULL && add) {
+        die("%s:%d: missed model", section_file, section_line);
+    }
+
+    if (!uuid_valid(uuid)) {
+        die("%s:%d: missed uuid", section_file, section_line);
+    }
+
+    if (method != ZEROCONF_MDNS_HINT && add && endpoints == NULL) {
+        die("%s:%d: missed endpoint", section_file, section_line);
+    }
+
+    /* Perform an action */
+    finding = finding_find(method, ifindex, name, uuid);
+    if (add) {
+        if (finding != NULL) {
+            die("%s:%d: duplicate [add]", section_file, section_line);
+        }
+
+        finding = mem_new(zeroconf_finding, 1);
+        finding->method = method;
+        finding->name = name;
+        finding->model = model;
+        finding->uuid = uuid;
+        finding->ifindex = ifindex;
+        finding->endpoints = zeroconf_endpoint_list_sort(endpoints);
+        zeroconf_finding_publish(finding);
+        findings = ptr_array_append(findings, finding);
+    } else {
+        if (finding == NULL) {
+            die("%s:%d: can't find device to [del]", section_file, section_line);
+        }
+        zeroconf_finding_withdraw(finding);
+        ptr_array_del(findings, ptr_array_find(findings, finding));
+        finding_free(finding);
+
+        mem_free(name);
+        mem_free(model);
+        zeroconf_endpoint_list_free(endpoints);
+    }
+
+    return rec;
+}
+
+/* Load and execute next test file section
+ * Returns inifile_record that follows the section
+ */
+static const inifile_record*
+test_section (inifile *ini, const inifile_record *rec)
+{
+    if (inifile_match_name(rec->section, "add")) {
+        rec = test_section_add_del(ini, rec, true);
+    } else if (inifile_match_name(rec->section, "del")) {
+        rec = test_section_add_del(ini, rec, false);
+    } else {
+        die("%s:%d: unexpected section [%s]", rec->file, rec->line,
+            rec->section);
+    }
+    return rec;
+}
+
+/* Run test in the eloop thread context
+ */
+static void
+run_test_in_eloop_thread (void)
+{
+    inifile              *ini;
+    const inifile_record *rec;
+
+    ini = inifile_open(test_file);
+    if (ini == NULL) {
+        die("%s: %s", test_file, strerror(errno));
+    }
+
+    rec = inifile_read(ini);
+    while (rec != NULL) {
+        if (rec->type == INIFILE_SECTION) {
+            rec = test_section(ini, rec);
+        } else if (rec->type == INIFILE_SYNTAX) {
+            die("%s:%d: sytnax error", rec->file, rec->line);
+        } else {
+            die("%s:%d: section expected", rec->file, rec->line);
+        }
+    }
+}
+
+/* eloop_add_start_stop_callback callback
+ */
+static void
+start_stop_callback (bool start)
+{
+    if (start) {
+        run_test_in_eloop_thread();
+    }
+}
+
+/* Run test, using specified test file
+ */
+static void run_test (const char *file)
+{
+    char   title[1024];
+    size_t i, len;
+
+    conf.dbg_enabled = true;
+    conf.dbg_trace = str_dup(TRACE_DIR);
+    conf.discovery = false;
+    conf.proto_auto = false;
+
+    test_file = file;
+    findings = ptr_array_new(zeroconf_finding);
+
+    sprintf(title, "=== %s ===", file);
+    airscan_init(AIRSCAN_INIT_NO_CONF | AIRSCAN_INIT_NO_THREAD, title);
+    eloop_add_start_stop_callback(start_stop_callback);
+    eloop_thread_start();
+    eloop_thread_stop();
+    airscan_cleanup(NULL);
+
+    for (i = 0, len = mem_len(findings); i < len; i ++) {
+        finding_free(findings[i]);
+    }
+
+    mem_free(findings);
+    findings = NULL;
+}
+
+/* glob() error callback
+ */
+static int
+glob_errfunc (const char *path, int err)
+{
+    die("%s: %s", path, strerror(err));
+}
+
+/* The main function
+ */
+int
+main (void)
+{
+    glob_t glob_data;
+    int    rc;
+    size_t i;
+
+    rc = glob(TEST_FILES, 0, glob_errfunc, &glob_data);
+    if (rc != 0) {
+        die("glob(%s): error %d", TEST_FILES, rc);
+    }
+
+    for (i = 0; i < glob_data.gl_pathc; i ++) {
+        run_test(glob_data.gl_pathv[i]);
+    }
+}
+
+/* vim:ts=8:sw=4:et
+ */
