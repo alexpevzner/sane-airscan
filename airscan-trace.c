@@ -96,6 +96,11 @@ trace_open (const char *device_name)
 
     strcpy(path, conf.dbg_trace);
     len = strlen(path);
+    if (len != 0 && path[len - 1] != '/') {
+        path[len ++] = '/';
+        path[len] = '\0';
+    }
+
     strcat(path, program);
     strcat(path, "-");
     strcat(path, device_name);
