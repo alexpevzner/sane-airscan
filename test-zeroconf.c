@@ -122,7 +122,7 @@ devlist_item_parse (const inifile_record *rec)
             rec->file, rec->line, rec->variable);
     }
 
-    item->name = rec->variable;
+    item->name = str_dup(rec->variable);
     item->proto = id_proto_by_name(rec->tokv[0]);
     if (item->proto == ID_PROTO_UNKNOWN) {
         die("%s:%d: unknown protocol %s",
@@ -497,18 +497,12 @@ test_section (inifile *ini, const inifile_record *rec)
     return rec;
 }
 
-/* Run test in the eloop thread context
+/* Load and execute all sections from the test file
  */
 static void
-run_test_in_eloop_thread (void)
+test_all (inifile *ini)
 {
-    inifile              *ini;
     const inifile_record *rec;
-
-    ini = inifile_open(test_file);
-    if (ini == NULL) {
-        die("%s: %s", test_file, strerror(errno));
-    }
 
     rec = inifile_read(ini);
     while (rec != NULL) {
@@ -520,6 +514,34 @@ run_test_in_eloop_thread (void)
             die("%s:%d: section expected", rec->file, rec->line);
         }
     }
+}
+
+/* Run test in the eloop thread context
+ */
+static void
+run_test_in_eloop_thread (void)
+{
+    inifile              *ini;
+    size_t               i, len;
+
+    findings = ptr_array_new(zeroconf_finding);
+
+    ini = inifile_open(test_file);
+    if (ini == NULL) {
+        die("%s: %s", test_file, strerror(errno));
+    }
+
+    test_all(ini);
+
+    inifile_close(ini);
+
+    for (i = 0, len = mem_len(findings); i < len; i ++) {
+        zeroconf_finding_withdraw(findings[i]);
+        finding_free(findings[i]);
+    }
+
+    mem_free(findings);
+    findings = NULL;
 }
 
 /* eloop_add_start_stop_callback callback
@@ -537,7 +559,6 @@ start_stop_callback (bool start)
 static void run_test (const char *file)
 {
     char   title[1024];
-    size_t i, len;
 
     conf.dbg_enabled = true;
     conf.dbg_trace = str_dup(TRACE_DIR);
@@ -546,7 +567,6 @@ static void run_test (const char *file)
     conf.model_is_netname = true;
 
     test_file = file;
-    findings = ptr_array_new(zeroconf_finding);
 
     sprintf(title, "=== %s ===", file);
     airscan_init(AIRSCAN_INIT_NO_CONF | AIRSCAN_INIT_NO_THREAD, title);
@@ -554,13 +574,6 @@ static void run_test (const char *file)
     eloop_thread_start();
     eloop_thread_stop();
     airscan_cleanup(NULL);
-
-    for (i = 0, len = mem_len(findings); i < len; i ++) {
-        finding_free(findings[i]);
-    }
-
-    mem_free(findings);
-    findings = NULL;
 }
 
 /* glob() error callback
