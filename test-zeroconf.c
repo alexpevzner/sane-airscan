@@ -192,11 +192,11 @@ devlist_compare (devlist_item *expected, devlist_item *discovered)
     }
 
     if (expected != NULL && discovered == NULL) {
-        die("%s: device extected, but not discovered", expected->name);
+        die("%s: device expected, but not discovered", expected->name);
     }
 
     if (expected == NULL && discovered != NULL) {
-        die("%s: device not extected, but discovered", discovered->name);
+        die("%s: device not expected, but discovered", discovered->name);
     }
 }
 
