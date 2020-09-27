@@ -55,6 +55,7 @@ devlist_free (devlist_item *devlist)
         next = devlist->next;
         mem_free((char*) devlist->name);
         zeroconf_endpoint_list_free(devlist->endpoints);
+        mem_free(devlist);
         devlist = next;
     }
 }
@@ -601,6 +602,8 @@ main (void)
     for (i = 0; i < glob_data.gl_pathc; i ++) {
         run_test(glob_data.gl_pathv[i]);
     }
+
+    globfree(&glob_data);
 }
 
 /* vim:ts=8:sw=4:et
