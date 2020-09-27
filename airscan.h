@@ -792,6 +792,35 @@ uuid_equal (uuid u1, uuid u2)
     return !strcmp(u1.text, u2.text);
 }
 
+/* uuidset represents a set of UUIDs
+ */
+typedef struct uuidset uuidset;
+
+/* Create new uuidset
+ */
+uuidset*
+uuidset_new (void);
+
+/* Free uuidset
+ */
+void
+uuidset_free (uuidset *set);
+
+/* Add uuid to uuidset
+ */
+void
+uuidset_add (uuidset *set, uuid uuid);
+
+/* Del uuid from uuidset
+ */
+void
+uuidset_del (uuidset *set, uuid uuid);
+
+/* Check if uuid is in the uuidset
+ */
+bool
+uuidset_lookup (const uuidset *set, uuid uuid);
+
 /******************** Generic .INI file parser ********************/
 /* Types of .INI file records
  */
