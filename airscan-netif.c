@@ -14,8 +14,13 @@
 
 #include <arpa/inet.h>
 #include <ifaddrs.h>
+#ifdef OS_HAVE_RTNETLINK
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
+#endif
+#ifdef OS_HAVE_AF_ROUTE
+#include <net/route.h>
+#endif
 #include <net/if.h>
 #include <sys/socket.h>
 
@@ -445,8 +450,6 @@ netif_notifier_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
 {
     static uint8_t  buf[16384];
     int             rc;
-    struct nlmsghdr *p;
-    size_t          sz;
 
     (void) fd;
     (void) data;
@@ -458,6 +461,9 @@ netif_notifier_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
         return;
     }
 
+#if defined(OS_HAVE_RTNETLINK)
+    struct nlmsghdr *p;
+    size_t          sz;
     /* Parse rtnetlink message */
     sz = (size_t) rc;
     for (p = (struct nlmsghdr*) buf;
@@ -477,6 +483,11 @@ netif_notifier_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
             return;
         }
     }
+#elif defined(OS_HAVE_AF_ROUTE)
+    // Given the ROUTE_FILTERs, we know that this is a RTM_NEWADDR or
+    // a RTM_DELADDR.
+    netif_refresh_ifaddrs();
+#endif
 }
 
 /* Create netif_notifier
@@ -523,10 +534,11 @@ netif_start_stop_callback (bool start)
 SANE_Status
 netif_init (void)
 {
+    ll_init(&netif_notifier_list);
+
+#if defined(OS_HAVE_RTNETLINK)
     struct sockaddr_nl addr;
     int                rc;
-
-    ll_init(&netif_notifier_list);
 
     /* Create AF_NETLINK socket */
     netif_rtnetlink_sock = socket(AF_NETLINK,
@@ -548,6 +560,24 @@ netif_init (void)
         close(netif_rtnetlink_sock);
         return SANE_STATUS_IO_ERROR;
     }
+#elif defined(OS_HAVE_AF_ROUTE)
+    /* Create AF_ROUTE socket */
+    netif_rtnetlink_sock = socket(AF_ROUTE,
+        SOCK_RAW | SOCK_CLOEXEC | SOCK_NONBLOCK, AF_UNSPEC);
+
+    if (netif_rtnetlink_sock < 0) {
+        log_debug(NULL, "can't open AF_ROUTE socket: %s", strerror(errno));
+        return SANE_STATUS_IO_ERROR;
+    }
+
+    unsigned int rtfilter =
+        ROUTE_FILTER(RTM_NEWADDR) | ROUTE_FILTER(RTM_DELADDR);
+    if (setsockopt(netif_rtnetlink_sock, AF_ROUTE, ROUTE_MSGFILTER,
+                   &rtfilter, sizeof(rtfilter)) < 0) {
+        log_debug(NULL, "can't set ROUTE_MSGFILTER: %s", strerror(errno));
+        return SANE_STATUS_IO_ERROR;
+    }
+#endif
 
     /* Initialize netif_ifaddrs */
     if (getifaddrs(&netif_ifaddrs) < 0) {
