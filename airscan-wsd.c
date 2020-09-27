@@ -8,7 +8,7 @@
 
 #include "airscan.h"
 
-#include <alloca.h>
+#include <stdlib.h>
 
 /* Protocol constants */
 #define WSD_ADDR_ANONYMOUS              \

@@ -11,7 +11,6 @@
 #include <arpa/inet.h>
 #include <net/if.h>
 
-#include <alloca.h>
 #include <stdlib.h>
 #include <string.h>
 
