@@ -2548,6 +2548,7 @@ typedef struct {
     const char        *name;      /* Network-unique name, NULL for WSD */
     const char        *model;     /* Model name */
     uuid              uuid;       /* Device UUID */
+    ip_addrset        *addrs;     /* Device addresses */
     int               ifindex;    /* Network interface index */
     zeroconf_endpoint *endpoints; /* List of endpoints */
 

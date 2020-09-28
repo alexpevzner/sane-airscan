@@ -249,6 +249,7 @@ mdns_finding_new (ZEROCONF_METHOD method, int ifindex, const char *name,
     mdns->finding.method = method;
     mdns->finding.ifindex = ifindex;
     mdns->finding.name = str_dup(name);
+    mdns->finding.addrs = ip_addrset_new();
 
     mdns->resolvers = ptr_array_new(AvahiServiceResolver*);
 
@@ -267,6 +268,7 @@ mdns_finding_free (mdns_finding *mdns)
 {
     mem_free((char*) mdns->finding.name);
     mem_free((char*) mdns->finding.model);
+    ip_addrset_free(mdns->finding.addrs);
     zeroconf_endpoint_list_free(mdns->finding.endpoints);
 
     if (mdns->initscan) {
@@ -445,6 +447,8 @@ mdns_avahi_resolver_found (mdns_finding *mdns, MDNS_SERVICE service,
     AvahiStringList   *s;
     zeroconf_endpoint *endpoint;
     ZEROCONF_METHOD   method = mdns->finding.method;
+    ip_addr           ip_addr = ip_addr_make(interface,
+                          addr->proto == AVAHI_PROTO_INET ? AF_INET : AF_INET6, &addr->data);
 
     /* Decode TXT record */
     s = avahi_string_list_find(txt, "ty");
@@ -492,6 +496,8 @@ mdns_avahi_resolver_found (mdns_finding *mdns, MDNS_SERVICE service,
         mdns->finding.uuid = uuid_parse(txt_uuid);
     }
 
+    ip_addrset_add(mdns->finding.addrs, ip_addr);
+
     /* Handle the event */
     switch (service) {
     case MDNS_SERVICE_IPP_TCP:
@@ -518,12 +524,6 @@ mdns_avahi_resolver_found (mdns_finding *mdns, MDNS_SERVICE service,
     case MDNS_SERVICE_UNKNOWN:
     case NUM_MDNS_SERVICE:
         log_internal_error(mdns_log);
-    }
-
-    if (mdns->finding.method == ZEROCONF_MDNS_HINT && mdns->should_publish) {
-        /* We already have enough info for this kind of finding
-         */
-        mdns_finding_kill_resolvers(mdns);
     }
 }
 

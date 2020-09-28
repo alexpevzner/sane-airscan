@@ -302,6 +302,7 @@ finding_find(ZEROCONF_METHOD method, int ifindex, const char *name, uuid uuid)
 static void
 finding_free (zeroconf_finding *finding)
 {
+    ip_addrset_free(finding->addrs);
     mem_free((char*) finding->name);
     mem_free((char*) finding->model);
     zeroconf_endpoint_list_free(finding->endpoints);
@@ -355,8 +356,8 @@ test_section_add_del (inifile *ini, const inifile_record *rec, bool add)
         } else if (inifile_match_name(rec->variable, "ifindex")) {
             ifindex = parse_uint(rec);
         } else if (inifile_match_name(rec->variable, "endpoint")) {
-            http_uri          *uri;
-            zeroconf_endpoint *endpoint;
+            http_uri              *uri;
+            zeroconf_endpoint     *endpoint;
 
             if (proto == ID_PROTO_UNKNOWN) {
                 die("%s:%d: protocol not known; set method first",
@@ -417,6 +418,8 @@ test_section_add_del (inifile *ini, const inifile_record *rec, bool add)
     /* Perform an action */
     finding = finding_find(method, ifindex, name, uuid);
     if (add) {
+        zeroconf_endpoint     *endpoint;
+
         if (finding != NULL) {
             die("%s:%d: duplicate [add]", section_file, section_line);
         }
@@ -426,8 +429,17 @@ test_section_add_del (inifile *ini, const inifile_record *rec, bool add)
         finding->name = name;
         finding->model = model;
         finding->uuid = uuid;
+        finding->addrs = ip_addrset_new();
         finding->ifindex = ifindex;
         finding->endpoints = zeroconf_endpoint_list_sort(endpoints);
+
+        for (endpoint = endpoints; endpoint != NULL; endpoint = endpoint->next) {
+            const struct sockaddr *sockaddr = http_uri_addr(endpoint->uri);
+            if (sockaddr != NULL) {
+                ip_addrset_add(finding->addrs, ip_addr_from_sockaddr(sockaddr));
+            }
+        }
+
         zeroconf_finding_publish(finding);
         findings = ptr_array_append(findings, finding);
     } else {
