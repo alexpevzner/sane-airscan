@@ -871,6 +871,7 @@ http_uri_fix_ipv6_zone (http_uri *uri, int ifindex)
 
     /* Update URL's host */
     http_uri_field_replace(uri, UF_HOST, host);
+    uri->addr.in6.sin6_scope_id = ifindex;
 }
 
 /* Strip zone suffix from literal IPv6 host address
@@ -904,6 +905,7 @@ http_uri_strip_zone_suffux (http_uri *uri)
     host[len] = '\0';
 
     http_uri_field_replace(uri, UF_HOST, host);
+    uri->addr.in6.sin6_scope_id = 0;
 }
 
 /* Make sure URI's path ends with the slash character
