@@ -1068,6 +1068,11 @@ ip_addr_from_sockaddr (const struct sockaddr *sockaddr)
     return addr;
 }
 
+/* Format ip_addr into ip_straddr
+ */
+ip_straddr
+ip_addr_to_straddr (ip_addr addr, bool withzone);
+
 /* Check if two addresses are equal
  */
 static inline bool
@@ -1133,6 +1138,11 @@ ip_addrset_purge (ip_addrset *addrset);
  */
 void
 ip_addrset_merge (ip_addrset *addrset, const ip_addrset *addrset2);
+
+/* Get access to array of addresses in the set
+ */
+const ip_addr*
+ip_addrset_addresses (const ip_addrset *addrset, size_t *count);
 
 /******************** Network interfaces addresses ********************/
 /* Network interface name, wrapped into structure, so

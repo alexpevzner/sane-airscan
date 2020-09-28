@@ -129,6 +129,40 @@ ip_is_loopback (int af, const void *addr)
     }
 }
 
+/* Format ip_addr into ip_straddr
+ */
+ip_straddr
+ip_addr_to_straddr (ip_addr addr, bool withzone)
+{
+    ip_straddr          straddr = {""};
+    struct sockaddr_in  addr_in;
+    struct sockaddr_in6 addr_in6;
+    struct sockaddr     *sockaddr = NULL;
+
+    switch (addr.af) {
+    case AF_INET:
+        memset(&addr_in, 0, sizeof(addr_in));
+        addr_in.sin_family = AF_INET;
+        addr_in.sin_addr = addr.ip.v4;
+        sockaddr = (struct sockaddr*) &addr_in;
+        break;
+
+    case AF_INET6:
+        memset(&addr_in6, 0, sizeof(addr_in6));
+        addr_in6.sin6_family = AF_INET6;
+        addr_in6.sin6_addr = addr.ip.v6;
+        addr_in6.sin6_scope_id = addr.ifindex;
+        sockaddr = (struct sockaddr*) &addr_in6;
+        break;
+    }
+
+    if (sockaddr != NULL) {
+        straddr =  ip_straddr_from_sockaddr_dport(sockaddr, 0, withzone);
+    }
+
+    return straddr;
+}
+
 /* ip_addr_set represents a set of IP addresses
  */
 struct ip_addrset {
@@ -240,6 +274,15 @@ ip_addrset_merge (ip_addrset *addrset, const ip_addrset *addrset2)
     for (i = 0; i < len; i ++) {
         ip_addrset_add(addrset, addrset2->addrs[i]);
     }
+}
+
+/* Get access to array of addresses in the set
+ */
+const ip_addr*
+ip_addrset_addresses (const ip_addrset *addrset, size_t *count)
+{
+    *count = mem_len(addrset->addrs);
+    return addrset->addrs;
 }
 
 /* vim:ts=8:sw=4:et
