@@ -221,5 +221,26 @@ ip_addrset_del (ip_addrset *addrset, ip_addr addr)
     }
 }
 
+/* Delete all addresses from the set
+ */
+void
+ip_addrset_purge (ip_addrset *addrset)
+{
+    mem_shrink(addrset->addrs, 0);
+}
+
+/* Merge two sets:
+ *   addrset += addrset2
+ */
+void
+ip_addrset_merge (ip_addrset *addrset, const ip_addrset *addrset2)
+{
+    size_t i, len = mem_len(addrset2->addrs);
+
+    for (i = 0; i < len; i ++) {
+        ip_addrset_add(addrset, addrset2->addrs[i]);
+    }
+}
+
 /* vim:ts=8:sw=4:et
  */

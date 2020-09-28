@@ -197,5 +197,26 @@ uuidset_lookup (const uuidset *set, uuid uuid)
     return uuidset_index(set, uuid) >= 0;
 }
 
+/* Delete all addresses from the set
+ */
+void
+uuidset_purge (uuidset *set)
+{
+    mem_shrink(set->uuids, 0);
+}
+
+/* Merge two sets:
+ *   set += set2
+ */
+void
+uuidset_merge (uuidset *set, const uuidset *set2)
+{
+    size_t i, len = mem_len(set2->uuids);
+
+    for (i = 0; i < len; i ++) {
+        uuidset_add(set, set2->uuids[i]);
+    }
+}
+
 /* vim:ts=8:sw=4:et
  */

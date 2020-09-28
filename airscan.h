@@ -821,6 +821,17 @@ uuidset_del (uuidset *set, uuid uuid);
 bool
 uuidset_lookup (const uuidset *set, uuid uuid);
 
+/* Delete all addresses from the set
+ */
+void
+uuidset_purge (uuidset *set);
+
+/* Merge two sets:
+ *   set += set2
+ */
+void
+uuidset_merge (uuidset *set, const uuidset *set2);
+
 /******************** Generic .INI file parser ********************/
 /* Types of .INI file records
  */
@@ -1111,6 +1122,17 @@ ip_addrset_add_unsafe (ip_addrset *addrset, ip_addr addr);
  */
 void
 ip_addrset_del (ip_addrset *addrset, ip_addr addr);
+
+/* Delete all addresses from the set
+ */
+void
+ip_addrset_purge (ip_addrset *addrset);
+
+/* Merge two sets:
+ *   addrset += addrset2
+ */
+void
+ip_addrset_merge (ip_addrset *addrset, const ip_addrset *addrset2);
 
 /******************** Network interfaces addresses ********************/
 /* Network interface name, wrapped into structure, so
