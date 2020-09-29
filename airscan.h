@@ -832,6 +832,11 @@ uuidset_purge (uuidset *set);
 void
 uuidset_merge (uuidset *set, const uuidset *set2);
 
+/* Check if two address sets are intersecting
+ */
+bool
+uuidset_is_intersect (const uuidset *set, const uuidset *set2);
+
 /******************** Generic .INI file parser ********************/
 /* Types of .INI file records
  */
@@ -1143,6 +1148,11 @@ ip_addrset_merge (ip_addrset *addrset, const ip_addrset *addrset2);
  */
 const ip_addr*
 ip_addrset_addresses (const ip_addrset *addrset, size_t *count);
+
+/* Check if two address sets are intersecting
+ */
+bool
+ip_addrset_is_intersect (const ip_addrset *set, const ip_addrset *set2);
 
 /******************** Network interfaces addresses ********************/
 /* Network interface name, wrapped into structure, so

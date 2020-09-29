@@ -218,5 +218,21 @@ uuidset_merge (uuidset *set, const uuidset *set2)
     }
 }
 
+/* Check if two address sets are intersecting
+ */
+bool
+uuidset_is_intersect (const uuidset *set, const uuidset *set2)
+{
+    size_t i, len = mem_len(set2->uuids);
+
+    for (i = 0; i < len; i ++) {
+        if (uuidset_lookup(set2, set->uuids[i])) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 /* vim:ts=8:sw=4:et
  */

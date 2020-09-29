@@ -285,5 +285,21 @@ ip_addrset_addresses (const ip_addrset *addrset, size_t *count)
     return addrset->addrs;
 }
 
+/* Check if two address sets are intersecting
+ */
+bool
+ip_addrset_is_intersect (const ip_addrset *set, const ip_addrset *set2)
+{
+    size_t i, len = mem_len(set2->addrs);
+
+    for (i = 0; i < len; i ++) {
+        if (ip_addrset_lookup(set2, set->addrs[i])) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 /* vim:ts=8:sw=4:et
  */
