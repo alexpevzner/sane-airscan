@@ -2035,8 +2035,8 @@ http_query_set_host (http_query *q)
 
     host = strstr(http_uri_str(q->uri), "//") + 2;
     end = strchr(host, '/');
+    len = end ? (size_t) (end - host) : strlen(host);
 
-    len = end - host;
     buf = alloca(len + 1);
     memcpy(buf, host, len);
 
