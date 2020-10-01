@@ -204,7 +204,7 @@ trace_dump_data (trace *t, http_data *data)
     strcpy(hdr.uid, "0");
     strcpy(hdr.gid, "0");
     sprintf(hdr.size, "%lo", (unsigned long) data->size);
-    sprintf(hdr.mtime, "%lo", time(NULL));
+    sprintf(hdr.mtime, "%llo", (long long) time(NULL));
     hdr.typeflag[0] = '0';
     strcpy(hdr.magic, "ustar");
     memcpy(hdr.version, "00", 2);

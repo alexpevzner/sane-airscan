@@ -8,9 +8,12 @@
 
 #include "airscan.h"
 
+#ifdef __linux__
 #include <sys/eventfd.h>
+#endif
 #include <poll.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #pragma GCC diagnostic ignored "-Wunused-result"
 
@@ -18,6 +21,10 @@
  */
 struct pollable {
     int efd; /* Underlying eventfd handle */
+#ifndef __linux__
+    // Without eventfd we use a pipe, so we need a second fd.
+    int write_fd;
+#endif
 };
 
 /* Create new pollable event
@@ -25,13 +32,22 @@ struct pollable {
 pollable*
 pollable_new (void)
 {
+#ifdef __linux__
     int efd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+#else
+    int fds[2];
+    int r = pipe2(fds, O_CLOEXEC | O_NONBLOCK);
+    int efd = r < 0 ? r : fds[0];
+#endif
     if (efd< 0) {
         return NULL;
     }
 
     pollable *p = mem_new(pollable, 1);
     p->efd = efd;
+#ifndef __linux__
+    p->write_fd = fds[1];
+#endif
 
     return p;
 }
@@ -42,6 +58,9 @@ void
 pollable_free (pollable *p)
 {
     close(p->efd);
+#ifndef __linux__
+    close(p->write_fd);
+#endif
     mem_free(p);
 }
 
@@ -59,7 +78,11 @@ void
 pollable_signal (pollable *p)
 {
     static uint64_t c = 1;
+#ifdef __linux__
     write(p->efd, &c, sizeof(c));
+#else
+    write(p->write_fd, &c, sizeof(c));
+#endif
 }
 
 /* Make pollable event "not ready"

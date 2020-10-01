@@ -138,7 +138,9 @@ eloop_poll_func (struct pollfd *ufds, unsigned int nfds, int timeout,
     pthread_mutex_lock(&eloop_mutex);
 
     if (eloop_poll_restart) {
-        errno = ERESTART;
+        /* We have to return an error other than EINTR to restart the
+           avahi loop. */
+        errno = EBUSY;
         return -1;
     }
 
@@ -165,7 +167,7 @@ eloop_thread_func (void *data)
     do {
         eloop_call_execute();
         i = avahi_simple_poll_iterate(eloop_poll, -1);
-    } while (i == 0 || (i < 0 && (errno == EINTR || errno == ERESTART)));
+    } while (i == 0 || (i < 0 && (errno == EINTR || errno == EBUSY)));
 
     for (i = eloop_start_stop_callbacks_count - 1; i >= 0; i --) {
         eloop_start_stop_callbacks[i](false);

@@ -13,7 +13,6 @@
 #include "airscan.h"
 #include "http_parser.h"
 
-#include <alloca.h>
 #include <arpa/inet.h>
 #include <errno.h>
 #include <netdb.h>
