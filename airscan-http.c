@@ -824,7 +824,7 @@ http_uri_set_path (http_uri *uri, const char *path)
 void
 http_uri_fix_host (http_uri *uri, const http_uri *base_uri, const char *match)
 {
-    http_uri_field host, port;
+    http_uri_field schema, host, port;
 
     if (match != NULL) {
         host = http_uri_field_get(uri, UF_HOST);
@@ -833,9 +833,11 @@ http_uri_fix_host (http_uri *uri, const http_uri *base_uri, const char *match)
         }
     }
 
+    schema = http_uri_field_get(base_uri, UF_SCHEMA);
     host = http_uri_field_get(base_uri, UF_HOST);
     port = http_uri_field_get(base_uri, UF_PORT);
 
+    http_uri_field_replace_len(uri, UF_SCHEMA, schema.str, schema.len);
     http_uri_field_replace_len(uri, UF_HOST, host.str, host.len);
     http_uri_field_replace_len(uri, UF_PORT, port.str, port.len);
 }
