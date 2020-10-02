@@ -2759,6 +2759,7 @@ http_query_start_processing (void *p)
     rc = getaddrinfo(host, port, &hints, &q->addrs);
     if (rc != 0) {
         http_query_complete(q, ERROR(gai_strerror(rc)));
+        return;
     }
 
     q->addr_next = q->addrs;
