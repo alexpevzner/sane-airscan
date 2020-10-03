@@ -81,8 +81,16 @@ wsd_free (proto_handler *proto)
 static http_query*
 wsd_http_post (const proto_ctx *ctx, char *body)
 {
-    return http_query_new(ctx->http, http_uri_clone(ctx->base_uri),
+    http_query *q;
+
+    q = http_query_new(ctx->http, http_uri_clone(ctx->base_uri),
         "POST", body, "application/soap+xml; charset=utf-8");
+
+    http_query_set_request_header(q, "Cache-Control", "no-cache");
+    http_query_set_request_header(q, "Pragma", "no-cache");
+    http_query_set_request_header(q, "User-Agent", "WSDAPI");
+
+    return q;
 }
 
 /* Make SOAP header for outgoing request
