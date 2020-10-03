@@ -461,9 +461,11 @@ test_section_add_del (inifile *ini, const inifile_record *rec, bool add)
 /* Parse and execute [expect] section
  */
 static const inifile_record*
-test_section_expect (inifile *ini, const inifile_record *rec)
+test_section_expect (inifile *ini, const inifile_record *rec, bool merged)
 {
     devlist_item *expected = NULL, *discovered;
+
+    conf.proto_auto = merged;
 
     /* Parse the section */
     rec = inifile_read(ini);
@@ -502,7 +504,9 @@ test_section (inifile *ini, const inifile_record *rec)
     } else if (inifile_match_name(rec->section, "del")) {
         rec = test_section_add_del(ini, rec, false);
     } else if (inifile_match_name(rec->section, "expect")) {
-        rec = test_section_expect(ini, rec);
+        rec = test_section_expect(ini, rec, false);
+    } else if (inifile_match_name(rec->section, "merged")) {
+        rec = test_section_expect(ini, rec, true);
     } else {
         die("%s:%d: unexpected section [%s]", rec->file, rec->line,
             rec->section);
