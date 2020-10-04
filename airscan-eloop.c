@@ -50,6 +50,7 @@ eloop_init (void)
     SANE_Status         status = SANE_STATUS_NO_MEM;
 
     ll_init(&eloop_call_pending_list);
+    eloop_start_stop_callbacks_count = 0;
 
     /* Initialize eloop_mutex */
     if (pthread_mutexattr_init(&attr)) {

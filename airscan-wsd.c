@@ -40,10 +40,9 @@ static const xml_ns wsd_ns_rd[] = {
 /* XML namespace definitions for XML writer
  */
 static const xml_ns wsd_ns_wr[] = {
-    {"s",    "http://www.w3.org/2003/05/soap-envelope"},  /* SOAP 1.2 */
-    {"d",    "http://schemas.xmlsoap.org/ws/2005/04/discovery"},
-    {"a",    "http://schemas.xmlsoap.org/ws/2004/08/addressing"},
-    {"scan", "http://schemas.microsoft.com/windows/2006/08/wdp/scan"},
+    {"soap", "http://www.w3.org/2003/05/soap-envelope"},  /* SOAP 1.2 */
+    {"wsa",  "http://schemas.xmlsoap.org/ws/2004/08/addressing"},
+    {"sca",  "http://schemas.microsoft.com/windows/2006/08/wdp/scan"},
     {NULL, NULL}
 };
 
@@ -81,8 +80,16 @@ wsd_free (proto_handler *proto)
 static http_query*
 wsd_http_post (const proto_ctx *ctx, char *body)
 {
-    return http_query_new(ctx->http, http_uri_clone(ctx->base_uri),
-        "POST", body, "application/soap+xml; charset=utf-8");
+    http_query *q;
+
+    q = http_query_new(ctx->http, http_uri_clone(ctx->base_uri),
+        "POST", body, "application/soap+xml");
+
+    http_query_set_request_header(q, "Cache-Control", "no-cache");
+    http_query_set_request_header(q, "Pragma", "no-cache");
+    http_query_set_request_header(q, "User-Agent", "WSDAPI");
+
+    return q;
 }
 
 /* Make SOAP header for outgoing request
@@ -92,14 +99,14 @@ wsd_make_request_header (const proto_ctx *ctx, xml_wr *xml, const char *action)
 {
     uuid   u = uuid_rand();
 
-    xml_wr_enter(xml, "s:Header");
-    xml_wr_add_text(xml, "a:MessageID", u.text);
-    //xml_wr_add_text(xml, "a:To", WSD_ADDR_ANONYMOUS);
-    xml_wr_add_text(xml, "a:To", http_uri_str(ctx->base_uri_nozone));
-    xml_wr_enter(xml, "a:ReplyTo");
-    xml_wr_add_text(xml, "a:Address", WSD_ADDR_ANONYMOUS);
+    xml_wr_enter(xml, "soap:Header");
+    xml_wr_add_text(xml, "wsa:MessageID", u.text);
+    //xml_wr_add_text(xml, "wsa:To", WSD_ADDR_ANONYMOUS);
+    xml_wr_add_text(xml, "wsa:To", http_uri_str(ctx->base_uri_nozone));
+    xml_wr_enter(xml, "wsa:ReplyTo");
+    xml_wr_add_text(xml, "wsa:Address", WSD_ADDR_ANONYMOUS);
     xml_wr_leave(xml);
-    xml_wr_add_text(xml, "a:Action", action);
+    xml_wr_add_text(xml, "wsa:Action", action);
     xml_wr_leave(xml);
 }
 
@@ -108,22 +115,22 @@ wsd_make_request_header (const proto_ctx *ctx, xml_wr *xml, const char *action)
 static http_query*
 wsd_devcaps_query (const proto_ctx *ctx)
 {
-    xml_wr *xml = xml_wr_begin("s:Envelope", wsd_ns_wr);
+    xml_wr *xml = xml_wr_begin("soap:Envelope", wsd_ns_wr);
 
     wsd_make_request_header(ctx, xml, WSD_ACTION_GET_SCANNER_ELEMENTS);
 
-    xml_wr_enter(xml, "s:Body");
-    xml_wr_enter(xml, "scan:GetScannerElementsRequest");
-    xml_wr_enter(xml, "scan:RequestedElements");
-    //xml_wr_add_text(xml, "scan:Name", "scan:ScannerDescription");
-    xml_wr_add_text(xml, "scan:Name", "scan:ScannerConfiguration");
-    xml_wr_add_text(xml, "scan:Name", "scan:DefaultScanTicket");
-    //xml_wr_add_text(xml, "scan:Name", "scan:ScannerStatus");
+    xml_wr_enter(xml, "soap:Body");
+    xml_wr_enter(xml, "sca:GetScannerElementsRequest");
+    xml_wr_enter(xml, "sca:RequestedElements");
+    //xml_wr_add_text(xml, "sca:Name", "sca:ScannerDescription");
+    xml_wr_add_text(xml, "sca:Name", "sca:ScannerConfiguration");
+    //xml_wr_add_text(xml, "sca:Name", "sca:DefaultScanTicket");
+    //xml_wr_add_text(xml, "sca:Name", "sca:ScannerStatus");
     xml_wr_leave(xml);
     xml_wr_leave(xml);
     xml_wr_leave(xml);
 
-    return wsd_http_post(ctx, xml_wr_finish(xml));
+    return wsd_http_post(ctx, xml_wr_finish_compact(xml));
 }
 
 /* Parse supported formats
@@ -617,12 +624,12 @@ wsd_scan_query (const proto_ctx *ctx)
 {
     proto_handler_wsd       *wsd = (proto_handler_wsd*) ctx->proto;
     const proto_scan_params *params = &ctx->params;
-    xml_wr                  *xml = xml_wr_begin("s:Envelope", wsd_ns_wr);
+    xml_wr                  *xml = xml_wr_begin("soap:Envelope", wsd_ns_wr);
     const char              *source = NULL;
     const char              *colormode = NULL;
     const char              *format = NULL;
-    static const char       *sides_simplex[] = {"scan:MediaFront", NULL};
-    static const char       *sides_duplex[] = {"scan:MediaFront", "scan:MediaBack", NULL};
+    static const char       *sides_simplex[] = {"sca:MediaFront", NULL};
+    static const char       *sides_duplex[] = {"sca:MediaFront", "sca:MediaBack", NULL};
     const char              **sides;
     int                     i;
 
@@ -650,23 +657,23 @@ wsd_scan_query (const proto_ctx *ctx)
     /* Create scan request */
     wsd_make_request_header(ctx, xml, WSD_ACTION_CREATE_SCAN_JOB);
 
-    xml_wr_enter(xml, "s:Body");
-    xml_wr_enter(xml, "scan:CreateScanJobRequest");
-    xml_wr_enter(xml, "scan:ScanTicket");
+    xml_wr_enter(xml, "soap:Body");
+    xml_wr_enter(xml, "sca:CreateScanJobRequest");
+    xml_wr_enter(xml, "sca:ScanTicket");
 
-    xml_wr_enter(xml, "scan:JobDescription");
-    xml_wr_add_text(xml, "scan:JobName", "sane-airscan request");
-    xml_wr_add_text(xml, "scan:JobOriginatingUserName", "sane-airscan");
+    xml_wr_enter(xml, "sca:JobDescription");
+    xml_wr_add_text(xml, "sca:JobName", "sane-airscan request");
+    xml_wr_add_text(xml, "sca:JobOriginatingUserName", "sane-airscan");
 
     /* WS-Scan specification says that this parameter is optional,
      * but without this parameter the Canon TR7500 rejects scan
      * request with the InvalidArgs error
      */
-    xml_wr_add_text(xml, "scan:JobInformation", "sane-airscan");
+    xml_wr_add_text(xml, "sca:JobInformation", "sane-airscan");
 
-    xml_wr_leave(xml); // scan:JobDescription
+    xml_wr_leave(xml); // sca:JobDescription
 
-    xml_wr_enter(xml, "scan:DocumentParameters");
+    xml_wr_enter(xml, "sca:DocumentParameters");
 
     switch (ctx->params.format) {
     case ID_FORMAT_JPEG:
@@ -713,49 +720,49 @@ wsd_scan_query (const proto_ctx *ctx)
     }
 
     log_assert(ctx->log, format != NULL);
-    xml_wr_add_text(xml, "scan:Format", format);
+    xml_wr_add_text(xml, "sca:Format", format);
 
-    xml_wr_add_text(xml, "scan:ImagesToTransfer", "0");
+    xml_wr_add_text(xml, "sca:ImagesToTransfer", "0");
 
-    xml_wr_enter(xml, "scan:InputSize");
-    xml_wr_enter(xml, "scan:InputMediaSize");
-    xml_wr_add_uint(xml, "scan:Width", params->wid);
-    xml_wr_add_uint(xml, "scan:Height", params->hei);
-    xml_wr_leave(xml); // scan:InputMediaSize
-    xml_wr_leave(xml); // scan:InputSize
+    xml_wr_enter(xml, "sca:InputSize");
+    xml_wr_enter(xml, "sca:InputMediaSize");
+    xml_wr_add_uint(xml, "sca:Width", params->wid);
+    xml_wr_add_uint(xml, "sca:Height", params->hei);
+    xml_wr_leave(xml); // sca:InputMediaSize
+    xml_wr_leave(xml); // sca:InputSize
 
-    xml_wr_add_text(xml, "scan:InputSource", source);
+    xml_wr_add_text(xml, "sca:InputSource", source);
 
-    xml_wr_enter(xml, "scan:MediaSides");
+    xml_wr_enter(xml, "sca:MediaSides");
     for (i = 0; sides[i] != NULL; i ++) {
         xml_wr_enter(xml, sides[i]);
 
-        xml_wr_add_text(xml, "scan:ColorProcessing", colormode);
+        xml_wr_add_text(xml, "sca:ColorProcessing", colormode);
 
-        xml_wr_enter(xml, "scan:Resolution");
-        xml_wr_add_uint(xml, "scan:Width", params->x_res);
-        xml_wr_add_uint(xml, "scan:Height", params->y_res);
-        xml_wr_leave(xml); // scan:Resolution
+        xml_wr_enter(xml, "sca:Resolution");
+        xml_wr_add_uint(xml, "sca:Width", params->x_res);
+        xml_wr_add_uint(xml, "sca:Height", params->y_res);
+        xml_wr_leave(xml); // sca:Resolution
 
-        xml_wr_enter(xml, "scan:ScanRegion");
-        xml_wr_add_uint(xml, "scan:ScanRegionXOffset", params->x_off);
-        xml_wr_add_uint(xml, "scan:ScanRegionYOffset", params->y_off);
-        xml_wr_add_uint(xml, "scan:ScanRegionWidth", params->wid);
-        xml_wr_add_uint(xml, "scan:ScanRegionHeight", params->hei);
-        xml_wr_leave(xml); // scan:ScanRegion
+        xml_wr_enter(xml, "sca:ScanRegion");
+        xml_wr_add_uint(xml, "sca:ScanRegionXOffset", params->x_off);
+        xml_wr_add_uint(xml, "sca:ScanRegionYOffset", params->y_off);
+        xml_wr_add_uint(xml, "sca:ScanRegionWidth", params->wid);
+        xml_wr_add_uint(xml, "sca:ScanRegionHeight", params->hei);
+        xml_wr_leave(xml); // sca:ScanRegion
 
         xml_wr_leave(xml);
     }
-    xml_wr_leave(xml); // scan:MediaSides
+    xml_wr_leave(xml); // sca:MediaSides
 
-    xml_wr_leave(xml); // scan:DocumentParameters
-    xml_wr_leave(xml); // scan:ScanTicket
-    xml_wr_leave(xml); // scan:CreateScanJobRequest
-    xml_wr_leave(xml); // s:Body
+    xml_wr_leave(xml); // sca:DocumentParameters
+    xml_wr_leave(xml); // sca:ScanTicket
+    xml_wr_leave(xml); // sca:CreateScanJobRequest
+    xml_wr_leave(xml); // soap:Body
 
-//log_debug(0, "%s", xml_wr_finish(xml)); exit(0);
+//log_debug(0, "%s", xml_wr_finish_compact(xml)); exit(0);
 
-    return wsd_http_post(ctx, xml_wr_finish(xml));
+    return wsd_http_post(ctx, xml_wr_finish_compact(xml));
 }
 
 /* Decode result of scan request
@@ -834,7 +841,7 @@ DONE:
 static http_query*
 wsd_load_query (const proto_ctx *ctx)
 {
-    xml_wr *xml = xml_wr_begin("s:Envelope", wsd_ns_wr);
+    xml_wr *xml = xml_wr_begin("soap:Envelope", wsd_ns_wr);
     char   *job_id, *job_token;
 
     /* Split location into JobId and JobToken */
@@ -846,20 +853,20 @@ wsd_load_query (const proto_ctx *ctx)
     /* Build RetrieveImageRequest */
     wsd_make_request_header(ctx, xml, WSD_ACTION_RETRIEVE_IMAGE);
 
-    xml_wr_enter(xml, "s:Body");
-    xml_wr_enter(xml, "scan:RetrieveImageRequest");
+    xml_wr_enter(xml, "soap:Body");
+    xml_wr_enter(xml, "sca:RetrieveImageRequest");
 
-    xml_wr_enter(xml, "scan:DocumentDescription");
-    xml_wr_add_text(xml, "scan:DocumentName", "IMAGE000.JPG");
+    xml_wr_enter(xml, "sca:DocumentDescription");
+    xml_wr_add_text(xml, "sca:DocumentName", "IMAGE000.JPG");
     xml_wr_leave(xml);
 
-    xml_wr_add_text(xml, "scan:JobId", job_id);
-    xml_wr_add_text(xml, "scan:JobToken", job_token);
+    xml_wr_add_text(xml, "sca:JobId", job_id);
+    xml_wr_add_text(xml, "sca:JobToken", job_token);
 
     xml_wr_leave(xml);
     xml_wr_leave(xml);
 
-    return wsd_http_post(ctx, xml_wr_finish(xml));
+    return wsd_http_post(ctx, xml_wr_finish_compact(xml));
 }
 
 /* Decode result of image request
@@ -899,19 +906,19 @@ wsd_load_decode (const proto_ctx *ctx)
 static http_query*
 wsd_status_query (const proto_ctx *ctx)
 {
-    xml_wr *xml = xml_wr_begin("s:Envelope", wsd_ns_wr);
+    xml_wr *xml = xml_wr_begin("soap:Envelope", wsd_ns_wr);
 
     wsd_make_request_header(ctx, xml, WSD_ACTION_GET_SCANNER_ELEMENTS);
 
-    xml_wr_enter(xml, "s:Body");
-    xml_wr_enter(xml, "scan:GetScannerElementsRequest");
-    xml_wr_enter(xml, "scan:RequestedElements");
-    xml_wr_add_text(xml, "scan:Name", "scan:ScannerStatus");
+    xml_wr_enter(xml, "soap:Body");
+    xml_wr_enter(xml, "sca:GetScannerElementsRequest");
+    xml_wr_enter(xml, "sca:RequestedElements");
+    xml_wr_add_text(xml, "sca:Name", "sca:ScannerStatus");
     xml_wr_leave(xml);
     xml_wr_leave(xml);
     xml_wr_leave(xml);
 
-    return wsd_http_post(ctx, xml_wr_finish(xml));
+    return wsd_http_post(ctx, xml_wr_finish_compact(xml));
 }
 
 /* Decode result of device status request
@@ -932,7 +939,7 @@ wsd_status_decode (const proto_ctx *ctx)
 static http_query*
 wsd_cancel_query (const proto_ctx *ctx)
 {
-    xml_wr *xml = xml_wr_begin("s:Envelope", wsd_ns_wr);
+    xml_wr *xml = xml_wr_begin("soap:Envelope", wsd_ns_wr);
     char   *job_id, *job_token;
 
     /* Split location into JobId and JobToken */
@@ -944,15 +951,15 @@ wsd_cancel_query (const proto_ctx *ctx)
     /* Build CancelJob Request */
     wsd_make_request_header(ctx, xml, WSD_ACTION_CANCEL_JOB);
 
-    xml_wr_enter(xml, "s:Body");
-    xml_wr_enter(xml, "scan:CancelJobRequest");
+    xml_wr_enter(xml, "soap:Body");
+    xml_wr_enter(xml, "sca:CancelJobRequest");
 
-    xml_wr_add_text(xml, "scan:JobId", job_id);
+    xml_wr_add_text(xml, "sca:JobId", job_id);
 
     xml_wr_leave(xml);
     xml_wr_leave(xml);
 
-    return wsd_http_post(ctx, xml_wr_finish(xml));
+    return wsd_http_post(ctx, xml_wr_finish_compact(xml));
 }
 
 /* proto_handler_wsd_new creates new eSCL protocol handler

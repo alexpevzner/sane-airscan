@@ -8,11 +8,6 @@
 
 #include "airscan.h"
 
-/* Forward declarations
- */
-static void
-sane_exit_internal (void);
-
 /* Static variables
  */
 static const SANE_Device **sane_device_list;
@@ -24,15 +19,6 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
 {
     SANE_Status status;
 
-    log_init(); /* Must be the first thing to do */
-    trace_init();
-    log_debug(NULL, "sane_init() called");
-
-    devid_init();
-    conf_load();
-
-    log_configure(); /* As soon, as configuration is available */
-
     if (version_code != NULL) {
         *version_code = SANE_VERSION_CODE (SANE_CURRENT_MAJOR,
                 SANE_CURRENT_MINOR, 0);
@@ -40,37 +26,9 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
 
     (void) authorize;
 
-    /* Initialize all parts */
-    status = eloop_init();
-    if (status == SANE_STATUS_GOOD) {
-        status = rand_init();
-    }
-    if (status == SANE_STATUS_GOOD) {
-        status = http_init();
-    }
+    status = airscan_init(0, "sane_init() called");
     if (status == SANE_STATUS_GOOD) {
         status = device_management_init();
-    }
-    if (status == SANE_STATUS_GOOD) {
-        status = netif_init();
-    }
-    if (status == SANE_STATUS_GOOD) {
-        status = zeroconf_init();
-    }
-    if (status == SANE_STATUS_GOOD) {
-        status = mdns_init();
-    }
-    if (status == SANE_STATUS_GOOD) {
-        status = wsdd_init();
-    }
-
-    if (status != SANE_STATUS_GOOD) {
-        sane_exit_internal();
-    }
-
-    /* Start airscan thread */
-    if (status == SANE_STATUS_GOOD) {
-        eloop_thread_start();
     }
 
     if (status != SANE_STATUS_GOOD) {
@@ -80,47 +38,16 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
     return status;
 }
 
-/* Exit the backend -- internal version
- */
-static void
-sane_exit_internal (void)
-{
-    log_debug(NULL, "sane_exit() called");
-
-    eloop_thread_stop();
-
-    mdns_cleanup();
-    wsdd_cleanup();
-    zeroconf_cleanup();
-    netif_cleanup();
-    device_management_cleanup();
-    http_cleanup();
-    rand_cleanup();
-    eloop_cleanup();
-    zeroconf_device_list_free(sane_device_list);
-    sane_device_list = NULL;
-
-    log_debug(NULL, "sane_exit(): OK");
-    conf_unload();
-
-    trace_cleanup();
-    log_cleanup(); /* Must be the last thing to do */
-}
-
 /* Exit the backend
- *
- * It wraps sane_exit_internal(), which does the actual work.
- * Without this wrapping, if sane_exit() is overridden by
- * dynamic linking and sane_init() calls sane_exit() to
- * cleanup after failed initialization, it leads to unpredictable
- * results
- *
- * See #61 for details
  */
 void
 sane_exit (void)
 {
-    sane_exit_internal();
+    log_debug(NULL, "sane_exit() called");
+
+    eloop_thread_stop();
+    device_management_cleanup();
+    airscan_cleanup("sane_exit(): OK");
 }
 
 /* Get list of devices

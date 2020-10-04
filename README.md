@@ -10,8 +10,8 @@ Driverless scanning comes in two flavors:
 
 This backend implements both protocols, choosing automatically between them.
 It was successfully tested with many devices from **Brother**, **Canon**, **Dell**,
-**Kyocera**, **Lexmark**, **Epson**, **HP**, **Ricoh**, **Samsung** and **Xerox**
-both in WSD and eSCL modes.
+**Kyocera**, **Lexmark**, **Epson**, **HP**, **Panasonic**, **Ricoh**, **Samsung**
+and **Xerox** both in WSD and eSCL modes.
 
 For eSCL devices, Apple maintains [a comprehensive list](https://support.apple.com/en-us/HT201311)
 of compatible devices, but please note, this list contains not only scanners and MFP,
@@ -70,26 +70,29 @@ Legend:
 | Canon imageRUNNER ADVANCE 4545/4551| Yes                       | Yes                       |
 | Canon imageRUNNER ADV C5550/5560   | Yes                       |                           |
 | Canon imageRUNNER C3120L           | Yes                       | Yes                       |
+| Canon i-SENSYS MF4780w             | No                        | Yes<sup>[3](#note3)</sup> |
 | Canon i-SENSYS MF641C              | No                        | Yes                       |
 | Canon Lide 400                     | Yes<sup>[2](#note2)</sup> |                           |
 | Canon MB5400 series                | Yes                       | Yes                       |
 | Canon MF240 Series                 | No                        | Yes<sup>[3](#note3)</sup> |
 | Canon MF260 Series                 | Yes                       | Yes<sup>[3](#note3)</sup> |
 | Canon MF745C/746C                  | Yes                       | Yes                       |
+| Canon PIXMA G3000 series           | No                        | Yes                       |
 | Canon PIXMA MG3600 series          | Yes                       |                           |
 | Canon PIXMA MG5500 Series          | No                        | Yes                       |
 | Canon PIXMA MG7700 Series          | Yes                       |                           |
 | Canon PIXMA TS5000 Series          | Yes                       |                           |
 | Canon PIXMA TS 9550 Series         | Yes                       |                           |
-| Canon TR4529 (PIXMA TR4500 Series) | Yes                       |                           |
+| Canon TR4529 (PIXMA TR4500 Series) | Yes                       | Yes                       |
 | Canon TR7500 Series                | No                        | Yes                       |
 | Canon TS 3100                      | Yes                       |                           |
 | Canon TS 3300                      | Yes                       |                           |
 | Canon TS 6151                      | Yes                       |                           |
-| Canon TS 6250                      | Yes                       |                           |
+| Canon TS 6250                      | Yes                       | Yes                       |
 | Dell C2665dnf Color Laser Printer  | No                        | Yes                       |
 | EPSON ET-2750 Series               | Yes                       |                           |
 | EPSON WF-7710                      | Yes                       |                           |
+| EPSON XP-340 Series                | Yes                       |                           |
 | EPSON XP-442 445 Series            | Yes                       |                           |
 | EPSON XP-7100 Series               | Yes                       |                           |
 | EPSON XP-8600 Series               | Yes                       |                           |
@@ -98,6 +101,7 @@ Legend:
 | HP Color LaserJet MFP M477fdw      | Yes                       | Yes                       |
 | HP Color LaserJet Pro M478f-9f     | Yes                       |                           |
 | HP DeskJet 2540                    | Yes                       |                           |
+| HP DeskJet 2600 series             | Yes                       |                           |
 | HP DeskJet 5000 series             | Yes                       |                           |
 | HP ENVY 4500                       | Yes                       |                           |
 | HP ENVY 5540                       | Yes                       |                           |
@@ -126,7 +130,9 @@ Legend:
 | Kyocera ECOSYS M5526cdw            | Yes                       |                           |
 | Lexmark CX317dn                    | Yes<sup>[5](#note5)</sup> | Yes<sup>[5](#note5)</sup> |
 | Lexmark MC2535adwe                 | Yes                       |                           |
+| Panasonic KV-S1058Y                | No                        | Yes                       |
 | Ricoh MP C3003                     | No                        | Yes<sup>[6](#note6)</sup> |
+| Samsung M267x 287x Series          | No                        | Yes                       |
 | Samsung M288x Series               | No                        | Yes                       |
 | Samsung M337x 387x 407x Series     | No                        | Yes<sup>[7](#note7)</sup> |
 | Xerox VersaLink B405               | Yes                       |                           |

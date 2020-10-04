@@ -12,6 +12,8 @@ sources = [
   'airscan-escl.c',
   'airscan-http.c',
   'airscan-id.c',
+  'airscan-inifile.c',
+  'airscan-init.c',
   'airscan-ip.c',
   'airscan-jpeg.c',
   'airscan-log.c',

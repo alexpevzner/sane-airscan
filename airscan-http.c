@@ -834,7 +834,7 @@ http_uri_set_path (http_uri *uri, const char *path)
 void
 http_uri_fix_host (http_uri *uri, const http_uri *base_uri, const char *match)
 {
-    http_uri_field host, port;
+    http_uri_field schema, host, port;
 
     if (match != NULL) {
         host = http_uri_field_get(uri, UF_HOST);
@@ -843,9 +843,11 @@ http_uri_fix_host (http_uri *uri, const http_uri *base_uri, const char *match)
         }
     }
 
+    schema = http_uri_field_get(base_uri, UF_SCHEMA);
     host = http_uri_field_get(base_uri, UF_HOST);
     port = http_uri_field_get(base_uri, UF_PORT);
 
+    http_uri_field_replace_len(uri, UF_SCHEMA, schema.str, schema.len);
     http_uri_field_replace_len(uri, UF_HOST, host.str, host.len);
     http_uri_field_replace_len(uri, UF_PORT, port.str, port.len);
 }
@@ -881,6 +883,7 @@ http_uri_fix_ipv6_zone (http_uri *uri, int ifindex)
 
     /* Update URL's host */
     http_uri_field_replace(uri, UF_HOST, host);
+    uri->addr.in6.sin6_scope_id = ifindex;
 }
 
 /* Strip zone suffix from literal IPv6 host address
@@ -914,6 +917,7 @@ http_uri_strip_zone_suffux (http_uri *uri)
     host[len] = '\0';
 
     http_uri_field_replace(uri, UF_HOST, host);
+    uri->addr.in6.sin6_scope_id = 0;
 }
 
 /* Make sure URI's path ends with the slash character
@@ -2053,8 +2057,8 @@ http_query_set_host (http_query *q)
 
     host = strstr(http_uri_str(q->uri), "//") + 2;
     end = strchr(host, '/');
+    len = end ? (size_t) (end - host) : strlen(host);
 
-    len = end - host;
     buf = alloca(len + 1);
     memcpy(buf, host, len);
 
@@ -2778,6 +2782,7 @@ http_query_start_processing (void *p)
         rc = getaddrinfo(host, port, &hints, &q->addrs);
         if (rc != 0) {
             http_query_complete(q, ERROR(gai_strerror(rc)));
+            return;
         }
     } else {
         struct sockaddr_un *addr;

@@ -15,17 +15,6 @@
 #include <string.h>
 
 /******************** Constants *********************/
-/* Service types we are interested in
- */
-#define ZEROCONF_SERVICE_USCAN                  "_uscan._tcp"
-#define ZEROCONF_SERVICE_USCANS                 "_uscans._tcp"
-
-/* If failed, AVAHI client will be automatically
- * restarted after the following timeout expires,
- * in seconds
- */
-#define ZEROCONF_AVAHI_CLIENT_RESTART_TIMEOUT   1
-
 /* Max time to wait until device table is ready, in seconds
  */
 #define ZEROCONF_READY_TIMEOUT                  5
@@ -34,15 +23,17 @@
 /* zeroconf_device represents a single device
  */
 struct zeroconf_device {
-    unsigned int devid;      /* Unique ident */
-    uuid         uuid;       /* Device UUID */
-    const char   *name;      /* Device name */
-    unsigned int protocols;  /* Protocols with endpoints, set of 1<<ID_PROTO */
-    unsigned int methods;    /* How device was discovered, set of
-                                1 << ZEROCONF_METHOD */
-    ll_node      node_list;  /* In zeroconf_device_list */
-    ll_head      findings;   /* zeroconf_finding, by method */
-    int          *ifaces;    /* Set of interfaces the device is visible from */
+    unsigned int    devid;      /* Unique ident */
+    uuid            uuid;       /* Device UUID */
+    ip_addrset      *addrs;     /* Device's addresses */
+    const char      *mdns_name; /* Device's MDNS name, NULL for WSDD */
+    const char      *model;     /* Device model name */
+    unsigned int    protocols;  /* Supported protocols, set of 1<<ID_PROTO */
+    unsigned int    methods;    /* How device was discovered, set of
+                                    1 << ZEROCONF_METHOD */
+    ll_node         node_list;  /* In zeroconf_device_list */
+    ll_head         findings;   /* zeroconf_finding, by method */
+    zeroconf_device *buddy;     /* "Buddy" device, MDNS vs WSDD */
 };
 
 /* Global variables
@@ -57,9 +48,6 @@ static int zeroconf_initscan_bits;
 static eloop_timer *zeroconf_initscan_timer;
 
 /******************** Forward declarations *********************/
-static bool
-zeroconf_device_ifaces_lookup (zeroconf_device *device, int ifindex);
-
 static zeroconf_endpoint*
 zeroconf_endpoint_copy_single (const zeroconf_endpoint *endpoint);
 
@@ -118,10 +106,11 @@ zeroconf_device_add (zeroconf_finding *finding)
 
     device->devid = devid_alloc();
     device->uuid = finding->uuid;
+    device->addrs = ip_addrset_new();
     if (finding->name != NULL) {
-        device->name = str_dup(finding->name);
+        device->mdns_name = str_dup(finding->name);
     }
-    device->ifaces = mem_new(int, 0);
+    device->model = finding->model;
 
     ll_init(&device->findings);
     ll_push_end(&zeroconf_device_list, &device->node_list);
@@ -134,100 +123,19 @@ zeroconf_device_add (zeroconf_finding *finding)
 static void
 zeroconf_device_del (zeroconf_device *device)
 {
-    mem_free(device->ifaces);
     ll_del(&device->node_list);
-    mem_free((char*) device->name);
+    ip_addrset_free(device->addrs);
+    mem_free((char*) device->mdns_name);
     devid_free(device->devid);
     mem_free(device);
 }
 
-/* Find zeroconf_device by uuid and name
- */
-static zeroconf_device*
-zeroconf_device_find_by_uuid_and_name (uuid uuid, const char *name)
-{
-    ll_node *node;
-
-    for (LL_FOR_EACH(node, &zeroconf_device_list)) {
-        zeroconf_device *device;
-        device = OUTER_STRUCT(node, zeroconf_device, node_list);
-
-        if (device->name != NULL && uuid_equal(uuid, device->uuid)) {
-            if (!strcasecmp(name, device->name)) {
-                return device;
-            }
-        }
-    }
-
-    return NULL;
-}
-
-/* Find anonymous device by uuid
- */
-static zeroconf_device*
-zeroconf_device_find_by_uuid(uuid uuid)
-{
-    ll_node *node;
-
-    for (LL_FOR_EACH(node, &zeroconf_device_list)) {
-        zeroconf_device *device;
-        device = OUTER_STRUCT(node, zeroconf_device, node_list);
-
-        if (device->name == NULL && uuid_equal(uuid, device->uuid)) {
-            return device;
-        }
-    }
-
-    return NULL;
-}
-
-/* Find named device by uuid and interface index
- */
-static zeroconf_device*
-zeroconf_device_find_by_uuid_and_ifindex (uuid uuid, int ifindex)
-{
-    ll_node *node;
-
-    for (LL_FOR_EACH(node, &zeroconf_device_list)) {
-        zeroconf_device *device;
-        device = OUTER_STRUCT(node, zeroconf_device, node_list);
-
-        if (device->name != NULL && uuid_equal(uuid, device->uuid)) {
-            if (zeroconf_device_ifaces_lookup(device, ifindex)) {
-                return device;
-            }
-        }
-    }
-
-    return NULL;
-}
-
-/* Check if device is visible from the particular network interface
+/* Check if device is MDNS device
  */
 static bool
-zeroconf_device_ifaces_lookup (zeroconf_device *device, int ifindex)
+zeroconf_device_is_mdns (zeroconf_device *device)
 {
-    size_t i, len = mem_len(device->ifaces);
-
-    for (i = 0; i < len; i ++ ) {
-        if (ifindex == device->ifaces[i]) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-/* Add interface to the set of interfaces device is seen from
- */
-static void
-zeroconf_device_ifaces_add (zeroconf_device *device, int ifindex)
-{
-    if (!zeroconf_device_ifaces_lookup(device, ifindex)) {
-        size_t len = mem_len(device->ifaces);
-        device->ifaces = mem_resize(device->ifaces, len + 1, 0);
-        device->ifaces[len] = ifindex;
-    }
+    return device->mdns_name != NULL;
 }
 
 /* Rebuild device->ifaces, device->protocols and device->methods
@@ -239,7 +147,6 @@ zeroconf_device_rebuild_sets (zeroconf_device *device)
 
     device->protocols = 0;
     device->methods = 0;
-    mem_trunc(device->ifaces);
 
     for (LL_FOR_EACH(node, &device->findings)) {
         zeroconf_finding *finding;
@@ -248,7 +155,6 @@ zeroconf_device_rebuild_sets (zeroconf_device *device)
         finding = OUTER_STRUCT(node, zeroconf_finding, list_node);
         proto = zeroconf_method_to_proto(finding->method);
 
-        zeroconf_device_ifaces_add(device, finding->ifindex);
         if (proto != ID_PROTO_UNKNOWN) {
             device->protocols |= 1 << proto;
         }
@@ -256,87 +162,10 @@ zeroconf_device_rebuild_sets (zeroconf_device *device)
     }
 }
 
-/* Add zeroconf_finding to zeroconf_device
+/* Update device->model
  */
 static void
-zeroconf_device_add_finding (zeroconf_device *device,
-    zeroconf_finding *finding)
-{
-    log_assert(zeroconf_log, finding->device == NULL);
-
-    finding->device = device;
-
-    ll_push_end(&device->findings, &finding->list_node);
-    zeroconf_device_ifaces_add(device, finding->ifindex);
-
-    if (finding->endpoints != NULL) {
-        ID_PROTO proto = zeroconf_method_to_proto(finding->method);
-        if (proto != ID_PROTO_UNKNOWN) {
-            device->protocols |= 1 << proto;
-        }
-        device->methods |= 1 << finding->method;
-    }
-}
-
-/* Delete zeroconf_finding from zeroconf_device
- */
-static void
-zeroconf_device_del_finding (zeroconf_finding *finding)
-{
-    zeroconf_device *device = finding->device;
-
-    log_assert(zeroconf_log, device != NULL);
-
-    ll_del(&finding->list_node);
-    if (ll_empty(&device->findings)) {
-        zeroconf_device_del(device);
-        return;
-    }
-
-    zeroconf_device_rebuild_sets(device);
-}
-
-/* Borrow findings that belongs to the particular interface.
- * Found findings will be added to the output list. List must
- * be initialized before call to this function
- */
-static void
-zeroconf_device_borrow_findings (zeroconf_device *device,
-    int ifindex, ll_head *output)
-{
-    ll_node          *node;
-    ll_head          leftover;
-
-    ll_init(&leftover);
-
-    while ((node = ll_pop_beg(&device->findings)) != NULL) {
-        zeroconf_finding *finding;
-
-        finding = OUTER_STRUCT(node, zeroconf_finding, list_node);
-
-        if (finding->ifindex == ifindex) {
-            finding->device = NULL;
-            ll_push_end(output, node);
-        } else {
-            ll_push_end(&leftover, node);
-        }
-    }
-
-    ll_cat(&device->findings, &leftover);
-
-    if (ll_empty(&device->findings)) {
-        zeroconf_device_del(device);
-        return;
-    }
-
-    zeroconf_device_rebuild_sets(device);
-}
-
-/* Get most authoritative zeroconf_finding, that provides
- * name and model
- */
-static const zeroconf_finding*
-zeroconf_device_name_model_source (zeroconf_device *device)
+zeroconf_device_update_model (zeroconf_device *device)
 {
     ll_node          *node;
     zeroconf_finding *hint = NULL, *wsd = NULL;
@@ -348,7 +177,8 @@ zeroconf_device_name_model_source (zeroconf_device *device)
         switch (finding->method) {
             case ZEROCONF_USCAN_TCP:
             case ZEROCONF_USCANS_TCP:
-                return finding;
+                device->model = finding->model;
+                return;
 
             case ZEROCONF_MDNS_HINT:
                 if (hint == NULL) {
@@ -367,26 +197,50 @@ zeroconf_device_name_model_source (zeroconf_device *device)
         }
     }
 
-    return hint ? hint : wsd;
+    device->model =  hint ? hint->model : wsd->model;
 }
 
-/* Get device name and model
+/* Add zeroconf_finding to zeroconf_device
  */
 static void
-zeroconf_device_name_model (zeroconf_device *device,
-        const char **name, const char **model)
+zeroconf_device_add_finding (zeroconf_device *device,
+    zeroconf_finding *finding)
 {
-    const zeroconf_finding *finding = zeroconf_device_name_model_source(device);
-    log_assert(zeroconf_log, finding != NULL);
+    log_assert(zeroconf_log, finding->device == NULL);
 
-    /* Note, device discovery may end up in the incomplete state,
-     * when neither name nor model is available. At this
-     * case we return device UUID as a name, to simplify
-     * outer logic that relies on a fact that name is
-     * always available
-     */
-    *model = finding->model ? finding->model : device->uuid.text;
-    *name = device->name ? device->name : *model;
+    finding->device = device;
+
+    ll_push_end(&device->findings, &finding->list_node);
+    ip_addrset_merge(device->addrs, finding->addrs);
+
+    if (finding->endpoints != NULL) {
+        ID_PROTO proto = zeroconf_method_to_proto(finding->method);
+        if (proto != ID_PROTO_UNKNOWN) {
+            device->protocols |= 1 << proto;
+        }
+        device->methods |= 1 << finding->method;
+    }
+
+    zeroconf_device_update_model(device);
+}
+
+/* Delete zeroconf_finding from zeroconf_device
+ */
+static void
+zeroconf_device_del_finding (zeroconf_finding *finding)
+{
+    zeroconf_device *device = finding->device;
+
+    log_assert(zeroconf_log, device != NULL);
+
+    ll_del(&finding->list_node);
+    if (ll_empty(&device->findings)) {
+        zeroconf_device_del(device);
+        return;
+    }
+
+    zeroconf_device_rebuild_sets(device);
+    zeroconf_device_update_model(device);
 }
 
 /* Get device name
@@ -394,14 +248,23 @@ zeroconf_device_name_model (zeroconf_device *device,
 static const char*
 zeroconf_device_name (zeroconf_device *device)
 {
-    const char *name, *model;
-
-    if (device->name) {
-        return device->name;
+    if (zeroconf_device_is_mdns(device)) {
+        return device->mdns_name;
     }
 
-    zeroconf_device_name_model(device, &name, &model);
-    return name;
+    if (device->buddy != NULL) {
+        return device->buddy->mdns_name;
+    }
+
+    return device->model;
+}
+
+/* Get model name
+ */
+static const char*
+zeroconf_device_model (zeroconf_device *device)
+{
+    return device->model;
 }
 
 /* Get protocols, exposed by device
@@ -484,6 +347,79 @@ zeroconf_device_find_by_ident (const char *ident, ID_PROTO *proto)
     /* Check that device supports requested protocol */
     if ((device->protocols & (1 << *proto)) != 0) {
         return device;
+    }
+
+    return NULL;
+}
+
+/******************** Merging devices *********************/
+/* Recompute device->buddy for all devices
+ */
+static void
+zeroconf_merge_recompute_buddies (void)
+{
+    ll_node         *node, *node2;
+    zeroconf_device *device, *device2;
+
+    for (LL_FOR_EACH(node, &zeroconf_device_list)) {
+        device = OUTER_STRUCT(node, zeroconf_device, node_list);
+        device->buddy = NULL;
+    }
+
+    for (LL_FOR_EACH(node, &zeroconf_device_list)) {
+        device = OUTER_STRUCT(node, zeroconf_device, node_list);
+
+        for (node2 = ll_next(&zeroconf_device_list, node); node2 != NULL;
+             node2 = ll_next(&zeroconf_device_list, node2)) {
+
+            device2 = OUTER_STRUCT(node2, zeroconf_device, node_list);
+
+            if (zeroconf_device_is_mdns(device) !=
+                zeroconf_device_is_mdns(device2)) {
+                if (ip_addrset_is_intersect(device->addrs, device2->addrs)) {
+                    device->buddy = device2;
+                    device2->buddy = device;
+                }
+            }
+        }
+    }
+}
+
+/* Check that new finding should me merged with existent device
+ */
+static bool
+zeroconf_merge_check (zeroconf_device *device, zeroconf_finding *finding)
+{
+    if ((device->mdns_name == NULL) != (finding->name == NULL)) {
+        return false;
+    }
+
+    if (device->mdns_name != NULL &&
+        strcasecmp(device->mdns_name, finding->name)) {
+        return false;
+    }
+
+    if (uuid_equal(device->uuid, finding->uuid)) {
+        return true;
+    }
+
+    return false;
+}
+
+/* Find device, suitable for merging with specified findind
+ */
+static zeroconf_device*
+zeroconf_merge_find (zeroconf_finding *finding)
+{
+    ll_node *node;
+
+    for (LL_FOR_EACH(node, &zeroconf_device_list)) {
+        zeroconf_device *device;
+        device = OUTER_STRUCT(node, zeroconf_device, node_list);
+
+        if (zeroconf_merge_check(device, finding)) {
+            return device;
+        }
     }
 
     return NULL;
@@ -837,70 +773,11 @@ zeroconf_find_static_by_ident (const char *ident)
 void
 zeroconf_finding_publish (zeroconf_finding *finding)
 {
+    size_t            count, i;
     zeroconf_device   *device;
-    ID_PROTO          proto = zeroconf_method_to_proto(finding->method);
     char              ifname[IF_NAMESIZE];
-    ll_head           findings;
-    ll_node           *node;
-    const char        *found_by = NULL;
-
-    ll_init(&findings);
-    ll_push_end(&findings, &finding->list_node);
-
-    /* Lookup anonymous device with the same uuid.
-     *
-     * If such a device was found, 3 cases are possible:
-     *   1. New finding as also anonymous. At this case it
-     *      will be added to device
-     *   2. All findings, including the new one, belongs to
-     *      the same network interface. At this case,
-     *      anonymous device upgraded to named and new
-     *      finding is added to it
-     *   3. Some of device's findings belongs to another network
-     *      interfaces. At this case, findings that belongs to
-     *      the new finding's interface will be borrowed from
-     *      the device, and new device will be created. Old
-     *      device will keep remaining anonymous findings
-     */
-    device = zeroconf_device_find_by_uuid(finding->uuid);
-    if (device != NULL && finding->name != NULL) {
-        if (mem_len(device->ifaces) == 1 &&
-            device->ifaces[0] == finding->ifindex){
-            /* Case 2: all findings belongs to the same network
-             * interface; upgrade anonymous device to named
-             */
-            device->name = str_dup(finding->name);
-            found_by = "found by uuid";
-        } else {
-            /* Case 3: borrow findings that belongs to the new finding's
-             * interface. Leave found device to keep remaining findings
-             */
-            zeroconf_device_borrow_findings(device,
-                finding->ifindex, &findings);
-
-            device = NULL;
-        }
-    }
-
-    /* Lookup device by name and uuid */
-    if (device == NULL && finding->name != NULL) {
-        found_by = "found by uuid+name";
-        device = zeroconf_device_find_by_uuid_and_name(finding->uuid,
-            finding->name);
-    }
-
-    /* Lookup device by uuid and interface index */
-    if (device == NULL && finding->name == NULL) {
-        found_by = "found by uuid+ifindex";
-        device = zeroconf_device_find_by_uuid_and_ifindex(finding->uuid,
-            finding->ifindex);
-    }
-
-    /* Create new device, if still not found */
-    if (device == NULL) {
-        found_by = "created";
-        device = zeroconf_device_add(finding);
-    }
+    const ip_addr     *addrs;
+    ID_PROTO          proto = zeroconf_method_to_proto(finding->method);
 
     /* Print log messages */
     if (if_indextoname(finding->ifindex, ifname) == NULL) {
@@ -914,7 +791,13 @@ zeroconf_finding_publish (zeroconf_finding *finding)
     log_debug(zeroconf_log, "  name:      %s",
         finding->name ? finding->name : "-");
     log_debug(zeroconf_log, "  model:     %s", finding->model);
-    log_debug(zeroconf_log, "  device:    %4.4x (%s)", device->devid, found_by);
+
+    log_debug(zeroconf_log, "  addresses:");
+    addrs = ip_addrset_addresses(finding->addrs, &count);
+    for (i = 0; i < count; i ++) {
+        ip_straddr straddr = ip_addr_to_straddr(addrs[i], true);
+        log_debug(zeroconf_log, "    %s", straddr.text);
+    }
 
     if (proto != ID_PROTO_UNKNOWN) {
         zeroconf_endpoint *ep;
@@ -926,12 +809,17 @@ zeroconf_finding_publish (zeroconf_finding *finding)
         }
     }
 
-    /* Add finding to device */
-    while ((node = ll_pop_beg(&findings)) != NULL) {
-        finding = OUTER_STRUCT(node, zeroconf_finding, list_node);
-        zeroconf_device_add_finding(device, finding);
+    /* Handle new finding */
+    device = zeroconf_merge_find(finding);
+    if (device != NULL) {
+        log_debug(zeroconf_log, "  device:    %4.4x (found)", device->devid);
+    } else {
+        device = zeroconf_device_add(finding);
+        log_debug(zeroconf_log, "  device:    %4.4x (created)", device->devid);
     }
 
+    zeroconf_device_add_finding(device, finding);
+    zeroconf_merge_recompute_buddies();
     pthread_cond_broadcast(&zeroconf_initscan_cond);
 }
 
@@ -949,6 +837,8 @@ zeroconf_finding_withdraw (zeroconf_finding *finding)
     log_debug(zeroconf_log, "  interface: %d (%s)", finding->ifindex, ifname);
 
     zeroconf_device_del_finding(finding);
+    zeroconf_merge_recompute_buddies();
+    pthread_cond_broadcast(&zeroconf_initscan_cond);
 }
 
 /* Notify zeroconf subsystem that initial scan
@@ -996,6 +886,7 @@ zeroconf_initscan_done (void)
 
     /* Regardless of options, all DNS-SD methods must be done */
     if ((zeroconf_initscan_bits & ~(1 << ZEROCONF_WSD)) != 0) {
+        log_debug(zeroconf_log, "device_list wait: DNS-SD not finished...");
         return false;
     }
 
@@ -1006,24 +897,31 @@ zeroconf_initscan_done (void)
         (zeroconf_initscan_bits & (1 << ZEROCONF_WSD)) != 0);
 
     if (conf.wsdd_mode != WSDD_FAST) {
+        log_debug(zeroconf_log, "device_list wait: WSDD not finished...");
         return false;
     }
 
     /* Check for completion, device by device:
      *
-     * In manual protocol switch mode, WSDD must be done
-     * for device, so we have a choice. Otherwise, it's
+     * In manual protocol switch mode, WSDD buddy must be
+     * found for device, so we have a choice. Otherwise, it's
      * enough if device has supported protocols
      */
     for (LL_FOR_EACH(node, &zeroconf_device_list)) {
         device = OUTER_STRUCT(node, zeroconf_device, node_list);
 
         if (!conf.proto_auto) {
-            if ((device->methods & (1 << ZEROCONF_WSD)) == 0) {
+            if (zeroconf_device_is_mdns(device) && device->buddy == NULL) {
+                log_debug(zeroconf_log,
+                    "device_list wait: waiting for WSDD buddy for '%s' (%d)",
+                    device->mdns_name, device->devid);
                 return false;
             }
         } else {
             if (device->protocols == 0) {
+                log_debug(zeroconf_log,
+                    "device_list wait: waiting for any proto for '%s' (%d)",
+                    device->mdns_name, device->devid);
                 return false;
             }
         }
@@ -1039,7 +937,7 @@ zeroconf_initscan_wait (void)
 {
     bool   ok = false;
 
-    log_debug(zeroconf_log, "zeroconf_initscan_wait: requested");
+    log_debug(zeroconf_log, "device_list wait: requested");
 
     for (;;) {
         ok = zeroconf_initscan_done();
@@ -1049,8 +947,7 @@ zeroconf_initscan_wait (void)
         eloop_cond_wait(&zeroconf_initscan_cond);
     }
 
-    log_debug(zeroconf_log, "zeroconf_initscan_wait: %s",
-        ok ? "OK" : "timeout" );
+    log_debug(zeroconf_log, "device_list wait: %s", ok ? "OK" : "timeout" );
 }
 
 /* Compare SANE_Device*, for qsort
@@ -1106,7 +1003,8 @@ zeroconf_device_list_log (zeroconf_device *device, const char *name,
     zeroconf_device_list_fmt_protocols(can, sizeof(can), device->protocols);
     zeroconf_device_list_fmt_protocols(use, sizeof(use), protocols);
 
-    log_debug(zeroconf_log, "%s: can:%s, use:%s", name, can, use);
+    log_debug(zeroconf_log, "%s (%d): can:%s, use:%s", name, device->devid,
+        can, use);
 }
 
 /* Get list of devices, in SANE format
@@ -1160,7 +1058,8 @@ zeroconf_device_list_get (void)
         unsigned int    protocols;
 
         device = OUTER_STRUCT(node, zeroconf_device, node_list);
-        zeroconf_device_name_model(device, &name, &model);
+        name = zeroconf_device_name(device);
+        model = zeroconf_device_model(device);
         protocols = zeroconf_device_protocols(device);
 
         zeroconf_device_list_log(device, name, protocols);
@@ -1168,13 +1067,25 @@ zeroconf_device_list_get (void)
         if (zeroconf_find_static_by_name(name) != NULL) {
             /* Static configuration overrides discovery */
             log_debug(zeroconf_log,
-                "%s: skipping, device clashes statically configured", name);
+                "%s (%d): skipping, device clashes statically configured",
+                name, device->devid);
             continue;
+        }
+
+        if (conf.proto_auto && !zeroconf_device_is_mdns(device)) {
+            zeroconf_device *device2 = device->buddy;
+            if (device2 != NULL && zeroconf_device_protocols(device2) != 0) {
+                log_debug(zeroconf_log,
+                    "%s (%d): skipping, shadowed by %s (%d)",
+                    name, device->devid, device2->mdns_name, device2->devid);
+                continue;
+            }
         }
 
         if (protocols == 0) {
             log_debug(zeroconf_log,
-                "%s: skipping, no of supported protocols discovered", name);
+                "%s (%d): skipping, none of supported protocols discovered",
+                name, device->devid);
             continue;
         }
 
@@ -1200,7 +1111,7 @@ zeroconf_device_list_get (void)
     log_debug(zeroconf_log, "zeroconf_device_list_get: resulting list:");
     for (i = 0; dev_list[i] != NULL; i ++) {
         log_debug(zeroconf_log,
-            "  %-4s  \"%s\"", dev_list[i]->vendor, dev_list[i]->model);
+            "  %-4s  \"%s\"", dev_list[i]->vendor, dev_list[i]->name);
     }
 
     return dev_list;
@@ -1333,11 +1244,7 @@ zeroconf_devinfo_lookup (const char *ident)
         devinfo->name = str_dup(dev_conf->name);
         devinfo->endpoints = zeroconf_endpoint_new(dev_conf->proto, uri);
     } else {
-        const char      *name, *model;
-
-        zeroconf_device_name_model(device, &name, &model);
-        devinfo->name = str_dup(name);
-
+        devinfo->name = str_dup(zeroconf_device_name(device));
         devinfo->endpoints = zeroconf_device_endpoints(device, proto);
     }
 
@@ -1386,6 +1293,7 @@ zeroconf_init (void)
     zeroconf_log = log_ctx_new("zeroconf", NULL);
 
     ll_init(&zeroconf_device_list);
+
     pthread_cond_init(&zeroconf_initscan_cond, NULL);
 
     if (conf.discovery) {

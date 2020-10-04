@@ -254,6 +254,7 @@ wsdd_finding_new (int ifindex, const char *address)
     if (!uuid_valid(wsdd->finding.uuid)) {
         wsdd->finding.uuid = uuid_hash(address);
     }
+    wsdd->finding.addrs = ip_addrset_new();
     wsdd->finding.ifindex = ifindex;
 
     wsdd->address = str_dup(address);
@@ -282,6 +283,7 @@ wsdd_finding_free (wsdd_finding *wsdd)
     zeroconf_endpoint_list_free(wsdd->finding.endpoints);
     mem_free((char*) wsdd->address);
     wsdd_xaddr_list_purge(&wsdd->xaddrs);
+    ip_addrset_free(wsdd->finding.addrs);
     mem_free((char*) wsdd->finding.model);
     mem_free((char*) wsdd->finding.name);
     mem_free(wsdd);
@@ -547,7 +549,12 @@ wsdd_finding_parse_endpoints (wsdd_finding *wsdd, xml_rd *xml)
     ok = endpoints != NULL;
 
     while (endpoints != NULL) {
-        zeroconf_endpoint *ep = endpoints;
+        zeroconf_endpoint     *ep = endpoints;
+        const struct sockaddr *addr = http_uri_addr(ep->uri);
+
+        if (addr != NULL) {
+            ip_addrset_add(wsdd->finding.addrs, ip_addr_from_sockaddr(addr));
+        }
         endpoints = endpoints->next;
         ep->next = wsdd->finding.endpoints;
         wsdd->finding.endpoints = ep;
