@@ -821,6 +821,7 @@ zeroconf_finding_publish (zeroconf_finding *finding)
 
     zeroconf_device_add_finding(device, finding);
     zeroconf_merge_recompute_buddies();
+    pthread_cond_broadcast(&zeroconf_initscan_cond);
 }
 
 /* Withdraw the finding
@@ -838,6 +839,7 @@ zeroconf_finding_withdraw (zeroconf_finding *finding)
 
     zeroconf_device_del_finding(finding);
     zeroconf_merge_recompute_buddies();
+    pthread_cond_broadcast(&zeroconf_initscan_cond);
 }
 
 /* Notify zeroconf subsystem that initial scan
@@ -885,6 +887,7 @@ zeroconf_initscan_done (void)
 
     /* Regardless of options, all DNS-SD methods must be done */
     if ((zeroconf_initscan_bits & ~(1 << ZEROCONF_WSD)) != 0) {
+        log_debug(zeroconf_log, "device_list wait: DNS-SD not finished...");
         return false;
     }
 
@@ -895,6 +898,7 @@ zeroconf_initscan_done (void)
         (zeroconf_initscan_bits & (1 << ZEROCONF_WSD)) != 0);
 
     if (conf.wsdd_mode != WSDD_FAST) {
+        log_debug(zeroconf_log, "device_list wait: WSDD not finished...");
         return false;
     }
 
@@ -909,10 +913,16 @@ zeroconf_initscan_done (void)
 
         if (!conf.proto_auto) {
             if (zeroconf_device_is_mdns(device) && device->buddy == NULL) {
+                log_debug(zeroconf_log,
+                    "device_list wait: waiting for WSDD buddy for '%s' (%d)",
+                    device->mdns_name, device->devid);
                 return false;
             }
         } else {
             if (device->protocols == 0) {
+                log_debug(zeroconf_log,
+                    "device_list wait: waiting for any proto for '%s' (%d)",
+                    device->mdns_name, device->devid);
                 return false;
             }
         }
@@ -928,7 +938,7 @@ zeroconf_initscan_wait (void)
 {
     bool   ok = false;
 
-    log_debug(zeroconf_log, "zeroconf_initscan_wait: requested");
+    log_debug(zeroconf_log, "device_list wait: requested");
 
     for (;;) {
         ok = zeroconf_initscan_done();
@@ -938,8 +948,7 @@ zeroconf_initscan_wait (void)
         eloop_cond_wait(&zeroconf_initscan_cond);
     }
 
-    log_debug(zeroconf_log, "zeroconf_initscan_wait: %s",
-        ok ? "OK" : "timeout" );
+    log_debug(zeroconf_log, "device_list wait: %s", ok ? "OK" : "timeout" );
 }
 
 /* Compare SANE_Device*, for qsort
