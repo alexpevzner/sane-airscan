@@ -444,7 +444,8 @@ test_section_add_del (inifile *ini, const inifile_record *rec, bool add)
         finding->ifindex = ifindex;
         finding->endpoints = zeroconf_endpoint_list_sort(endpoints);
 
-        for (endpoint = endpoints; endpoint != NULL; endpoint = endpoint->next) {
+        for (endpoint = finding->endpoints; endpoint != NULL;
+             endpoint = endpoint->next) {
             const struct sockaddr *sockaddr = http_uri_addr(endpoint->uri);
             if (sockaddr != NULL) {
                 ip_addrset_add(finding->addrs, ip_addr_from_sockaddr(sockaddr));
