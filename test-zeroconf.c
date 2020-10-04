@@ -42,6 +42,8 @@ struct devlist_item {
     ID_PROTO          proto;      /* Device protocol */
     zeroconf_endpoint *endpoints; /* Device endpoints */
     devlist_item      *next;      /* Next item in the list */
+    const char        *file;      /* Test file */
+    unsigned int      line;       /* Line in the test file */
 };
 
 /* Free device list
@@ -125,6 +127,9 @@ devlist_item_parse (const inifile_record *rec)
 
     item->name = str_dup(rec->variable);
     item->proto = id_proto_by_name(rec->tokv[0]);
+    item->file = rec->file;
+    item->line = rec->line;
+
     if (item->proto == ID_PROTO_UNKNOWN) {
         die("%s:%d: unknown protocol %s",
             rec->file, rec->line, rec->variable, rec->tokv[0]);
@@ -157,20 +162,23 @@ devlist_compare (devlist_item *expected, devlist_item *discovered)
         zeroconf_endpoint *ep_discovered = discovered->endpoints;
 
         if (strcmp(expected->name, discovered->name)) {
-            die("%s: name mismatch: discovered %s",
+            die("%s:%d: name mismatch: expected '%s', discovered '%s'",
+                expected->file, expected->line,
                 expected->name, discovered->name);
         }
 
         if (expected->proto != discovered->proto) {
-            die("%s: proto mismatch: expected %s, discovered %s",
-                expected->name, id_proto_name(expected->proto),
+            die("%s:%d: proto mismatch: expected %s, discovered %s",
+                expected->file, expected->line,
+                id_proto_name(expected->proto),
                 id_proto_name(discovered->proto));
         }
 
         while (ep_expected != NULL && ep_discovered != NULL) {
             if (!http_uri_equal(ep_expected->uri, ep_discovered->uri)) {
-                die("%s: uri mismatch: expected %s, discovered %s",
-                    expected->name, http_uri_str(ep_expected->uri),
+                die("%s:%d: uri mismatch: expected %s, discovered %s",
+                    expected->file, expected->line,
+                    http_uri_str(ep_expected->uri),
                     http_uri_str(ep_discovered->uri));
             }
 
@@ -179,13 +187,15 @@ devlist_compare (devlist_item *expected, devlist_item *discovered)
         }
 
         if (ep_expected != NULL && ep_discovered == NULL) {
-            die("%s: uri expected but not discovered: %s",
-                expected->name, http_uri_str(ep_expected->uri));
+            die("%s:%d: uri expected but not discovered: %s",
+                expected->file, expected->line,
+                http_uri_str(ep_expected->uri));
         }
 
         if (ep_expected == NULL && ep_discovered != NULL) {
-            die("%s: uri not expected but discovered: %s",
-                expected->name, http_uri_str(ep_discovered->uri));
+            die("%s:%d: uri not expected but discovered: %s",
+                expected->file, expected->line,
+                http_uri_str(ep_discovered->uri));
         }
 
         expected = expected->next;
@@ -193,11 +203,12 @@ devlist_compare (devlist_item *expected, devlist_item *discovered)
     }
 
     if (expected != NULL && discovered == NULL) {
-        die("%s: device expected, but not discovered", expected->name);
+        die("%s:%d: device '%s' expected, but not discovered",
+            expected->file, expected->line, expected->name);
     }
 
     if (expected == NULL && discovered != NULL) {
-        die("%s: device not expected, but discovered", discovered->name);
+        die("'%s': device not expected, but discovered", discovered->name);
     }
 }
 
