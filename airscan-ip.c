@@ -290,7 +290,7 @@ ip_addrset_addresses (const ip_addrset *addrset, size_t *count)
 bool
 ip_addrset_is_intersect (const ip_addrset *set, const ip_addrset *set2)
 {
-    size_t i, len = mem_len(set2->addrs);
+    size_t i, len = mem_len(set->addrs);
 
     for (i = 0; i < len; i ++) {
         if (ip_addrset_lookup(set2, set->addrs[i])) {
