@@ -24,6 +24,7 @@
 #include <time.h>
 
 #include <netinet/in.h>
+#include <sys/param.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 
@@ -574,6 +575,22 @@ __ptr_array_del (void **a, int i)
 #define safe_tolower(c)         tolower((unsigned char) c)
 
 /******************** OS Facilities ********************/
+/* The following macros, if defined, indicate that OS
+ * has a particular features:
+ *
+ *   OS_HAVE_EVENTFD   - Linux-like eventfd (2)
+ *   OS_HAVE_RTNETLINK - Linux-like rtnetlink (7)
+ *   OS_HAVE_AF_ROUTE  - BSD-like AF_ROUTE
+ */
+#ifdef  __linux__
+#   define OS_HAVE_EVENTFD   1
+#   define OS_HAVE_RTNETLINK 1
+#endif
+
+#ifdef BSD
+#   define OS_HAVE_AF_ROUTE  1
+#endif
+
 /* Get user's home directory. There is no need to
  * free the returned string
  *
