@@ -620,6 +620,12 @@ wsdd_finding_get_metadata_callback (void *ptr, http_query *q)
     }
 
     if (wsdd->finding.model == NULL) {
+        if (model != NULL && manufacturer != NULL &&
+            str_has_prefix(model, manufacturer)) {
+            mem_free(manufacturer);
+            manufacturer = NULL;
+        }
+
         if (model != NULL && manufacturer != NULL) {
             wsdd->finding.model = str_printf("%s %s", manufacturer, model);
         } else if (model != NULL) {
