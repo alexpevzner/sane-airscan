@@ -813,22 +813,28 @@ device_stm_cancel_event_callback (void *data)
 {
     device *dev = data;
 
-    log_debug(dev->log, "cancel requested");
+    log_debug(dev->log, "cancel processing started");
     if (!device_stm_cancel_perform(dev, SANE_STATUS_CANCELLED)) {
         device_stm_state_set(dev, DEVICE_STM_CANCEL_DELAYED);
     }
 }
 
-/* Request cancel
+/* Request cancel.
+ *
+ * Note, reason must be NULL, if cancel requested from the signal handler
  */
 static void
-device_stm_cancel_req (device *dev)
+device_stm_cancel_req (device *dev, const char *reason)
 {
     DEVICE_STM_STATE expected = DEVICE_STM_SCANNING;
     bool ok = __atomic_compare_exchange_n(&dev->stm_state, &expected,
         DEVICE_STM_CANCEL_REQ, true, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
 
     if (ok) {
+        if (reason != NULL) {
+            log_debug(dev->log, "cancel requested: %s", reason);
+        }
+
         eloop_event_trigger(dev->stm_cancel_event);
     }
 }
@@ -1104,9 +1110,9 @@ device_stm_wait_while_working (device *dev)
 /* Cancel scanning and wait until device leaves the working state
  */
 static void
-device_stm_cancel_wait (device *dev)
+device_stm_cancel_wait (device *dev, const char *reason)
 {
-    device_stm_cancel_req(dev);
+    device_stm_cancel_req(dev, reason);
     device_stm_wait_while_working(dev);
 }
 
@@ -1215,7 +1221,7 @@ device_close (device *dev)
 {
     /* Cancel job in progress, if any */
     if (device_stm_state_working(dev)) {
-        device_stm_cancel_wait(dev);
+        device_stm_cancel_wait(dev, "device close");
     }
 
     /* Close the device */
@@ -1403,6 +1409,7 @@ device_start (device *dev)
      */
     while (device_stm_state_working(dev)
         && http_data_queue_len(dev->read_queue) == 0) {
+        log_debug(dev->log, "device_start: waiting for background scan job");
         eloop_cond_wait(&dev->stm_cond);
     }
 
@@ -1411,6 +1418,7 @@ device_start (device *dev)
      */
     if (http_data_queue_len(dev->read_queue) > 0) {
         dev->flags |= DEVICE_READING;
+        pollable_signal(dev->read_pollable);
         return SANE_STATUS_GOOD;
     }
 
@@ -1437,7 +1445,17 @@ device_start (device *dev)
 void
 device_cancel (device *dev)
 {
-    device_stm_cancel_req(dev);
+    /* Note, xsane calls sane_cancel() after each successful
+     * scan "just in case", which kills scan job running in
+     * background. So ignore cancel request, if from the API
+     * point of view we are not "scanning" (i.e., not between
+     * sane_start() and sane_read() completion)
+     */
+    if ((dev->flags & DEVICE_SCANNING) == 0) {
+        return;
+    }
+
+    device_stm_cancel_req(dev, NULL);
 }
 
 /* Set I/O mode
@@ -1777,7 +1795,7 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
 
     if (status == SANE_STATUS_IO_ERROR) {
         device_job_set_status(dev, SANE_STATUS_IO_ERROR);
-        device_cancel(dev);
+        device_stm_cancel_req(dev, "I/O error");
     }
 
     /* Cleanup and exit */
