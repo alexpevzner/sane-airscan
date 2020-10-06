@@ -48,7 +48,7 @@ OBJ	= $(addprefix $(OBJDIR), $(SRC:.c=.o))
 deps_CFLAGS		:= $(foreach lib, $(DEPS_COMMON), $(shell $(PKG_CONFIG) --cflags $(lib)))
 deps_CFLAGS		+= $(foreach lib, $(DEPS_CODECS), $(shell $(PKG_CONFIG) --cflags $(lib)))
 
-deps_LIBS 		:= $(foreach lib, $(DEPS_COMMON), $(shell $(PKG_CONFIG) --libs $(lib))) -lm
+deps_LIBS 		:= $(foreach lib, $(DEPS_COMMON), $(shell $(PKG_CONFIG) --libs $(lib))) -lm -lpthread
 deps_LIBS_CODECS 	:= $(foreach lib, $(DEPS_CODECS), $(shell $(PKG_CONFIG) --libs $(lib)))
 
 # Compute CFLAGS and LDFLAGS for backend and tools
