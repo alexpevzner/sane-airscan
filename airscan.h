@@ -1652,6 +1652,15 @@ http_query*
 http_query_new (http_client *client, http_uri *uri, const char *method,
         char *body, const char *content_type);
 
+/* Create new http_query
+ *
+ * Newly created http_query takes ownership on uri and body (if not NULL).
+ * The method and content_type assumed to be constant strings.
+ */
+http_query*
+http_query_new_len (http_client *client, http_uri *uri, const char *method,
+        void *body, size_t body_len, const char *content_type);
+
 /* Create new http_query, relative to base URI
  *
  * Newly created http_query takes ownership on body (if not NULL).

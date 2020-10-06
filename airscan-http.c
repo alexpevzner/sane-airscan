@@ -2056,6 +2056,19 @@ http_query*
 http_query_new (http_client *client, http_uri *uri, const char *method,
         char *body, const char *content_type)
 {
+    size_t len = body ? strlen(body) : 0;
+    return http_query_new_len(client, uri, method, body, len, content_type);
+}
+
+/* Create new http_query
+ *
+ * Works like http_query_new(), but request body length is specified
+ * explicitly
+ */
+http_query*
+http_query_new_len (http_client *client, http_uri *uri, const char *method,
+        void *body, size_t body_len, const char *content_type)
+{
     http_query *q = mem_new(http_query, 1);
 
     q->client = client;
@@ -2085,8 +2098,8 @@ http_query_new (http_client *client, http_uri *uri, const char *method,
     http_query_set_request_header(q, "Connection", "close");
 
     /* Save request body and set Content-Type */
-    if (body != NULL) {
-        q->request_data = http_data_new(NULL, body, strlen(body));
+    if (body != NULL && body_len != 0) {
+        q->request_data = http_data_new(NULL, body, body_len);
         if (content_type != NULL) {
             http_query_set_request_header(q, "Content-Type", content_type);
             http_data_set_content_type(q->request_data, content_type);
