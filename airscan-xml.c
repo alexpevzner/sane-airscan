@@ -9,6 +9,8 @@
 #include "airscan.h"
 
 #include <fnmatch.h>
+
+#include <libxml/parser.h>
 #include <libxml/tree.h>
 
 /******************** XML reader ********************/
@@ -92,6 +94,73 @@ xml_rd_node_switched (xml_rd *xml)
     }
 }
 
+/* XML parser error callback
+ *
+ * As XML parser leaves all error information in the xmlParserCtxt
+ * structure, this callback does nothing; it's purpose is to
+ * silence error message that libxml2 by default writes to
+ * the stderr
+ */
+static void
+xml_rd_error_callback (void *userdata, xmlErrorPtr error)
+{
+    (void) userdata;
+    (void) error;
+}
+
+/* Parse XML document
+ */
+static error
+xml_rd_parse (xmlDoc **doc, const char *xml_text, size_t xml_len)
+{
+    xmlParserCtxtPtr ctxt;
+    error            err = NULL;
+
+    /* Setup XML parser */
+    ctxt = xmlNewParserCtxt();
+    if (ctxt == NULL) {
+        err = ERROR("not enough memory");
+        goto DONE;
+    }
+
+    ctxt->sax->serror = xml_rd_error_callback;
+
+    /* Parse the document */
+    if (xmlCtxtResetPush(ctxt, xml_text, xml_len, NULL, NULL)) {
+        /* It's poorly documented, but xmlCtxtResetPush() fails
+         * only due to OOM.
+         */
+        err = ERROR("not enough memory");
+        goto DONE;
+    }
+
+    xmlParseDocument(ctxt);
+
+    if (ctxt->wellFormed) {
+        *doc = ctxt->myDoc;
+    } else {
+        if (ctxt->lastError.message != NULL) {
+            err = eloop_eprintf("XML: %s", ctxt->lastError.message);
+        } else {
+            err = ERROR("XML: parse error");
+        }
+
+        *doc = NULL;
+    }
+
+    /* Cleanup and exit */
+DONE:
+    if (err != NULL && ctxt != NULL && ctxt->myDoc != NULL) {
+        xmlFreeDoc(ctxt->myDoc);
+    }
+
+    if (ctxt != NULL) {
+        xmlFreeParserCtxt(ctxt);
+    }
+
+    return err;
+}
+
 /* Parse XML text and initialize reader to iterate
  * starting from the root node
  *
@@ -108,11 +177,12 @@ error
 xml_rd_begin (xml_rd **xml, const char *xml_text, size_t xml_len,
         const xml_ns *ns)
 {
-    xmlDoc *doc = xmlParseMemory(xml_text, xml_len);
+    xmlDoc *doc;
+    error  err = xml_rd_parse(&doc, xml_text, xml_len);
 
     *xml = NULL;
-    if (doc == NULL) {
-        return ERROR("Failed to parse XML");
+    if (err != NULL) {
+        return err;
     }
 
     *xml = mem_new(xml_rd, 1);
@@ -793,11 +863,12 @@ xml_format_node (FILE *fp, xmlNode *node, int indent)
 bool
 xml_format (FILE *fp, const char *xml_text, size_t xml_len)
 {
-    xmlDoc  *doc = xmlParseMemory(xml_text, xml_len);
+    xmlDoc  *doc;
+    error   err = xml_rd_parse(&doc, xml_text, xml_len);
     xmlNode *node;
 
-    if (doc == NULL) {
-        return false;
+    if (err != NULL) {
+        return err;
     }
 
     for (node = doc->children; node != NULL; node = node->next) {
