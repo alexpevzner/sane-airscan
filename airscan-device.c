@@ -190,6 +190,9 @@ static void
 device_read_filters_setup (device *dev);
 
 static void
+device_read_filters_cleanup (device *dev);
+
+static void
 device_management_start_stop (bool start);
 
 /******************** Device table management ********************/
@@ -272,6 +275,7 @@ device_free (device *dev)
 
     http_data_queue_free(dev->read_queue);
     pollable_free(dev->read_pollable);
+    device_read_filters_cleanup(dev);
 
     log_debug(dev->log, "device destroyed");
     log_ctx_free(dev->log);
@@ -1258,12 +1262,19 @@ device_get_option (device *dev, SANE_Int option, void *value)
 SANE_Status
 device_set_option (device *dev, SANE_Int option, void *value, SANE_Word *info)
 {
+    SANE_Status status;
+
     if ((dev->flags & DEVICE_SCANNING) != 0) {
         log_debug(dev->log, "device_set_option: already scanning");
         return SANE_STATUS_INVAL;
     }
 
-    return devopt_set_option(&dev->opt, option, value, info);
+    status = devopt_set_option(&dev->opt, option, value, info);
+    if (status == SANE_STATUS_GOOD && opt_is_enhancement(option)) {
+        device_read_filters_setup(dev);
+    }
+
+    return status;
 }
 
 /* Get current scan parameters
@@ -1375,7 +1386,6 @@ device_start_new_job (device *dev)
 
     if (status == SANE_STATUS_GOOD) {
         dev->flags |= DEVICE_READING;
-        device_read_filters_setup(dev);
     } else {
         dev->flags &= ~DEVICE_SCANNING;
     }
@@ -1423,7 +1433,6 @@ device_start (device *dev)
      */
     if (http_data_queue_len(dev->read_queue) > 0) {
         dev->flags |= DEVICE_READING;
-        device_read_filters_setup(dev);
         pollable_signal(dev->read_pollable);
         return SANE_STATUS_GOOD;
     }
@@ -1499,6 +1508,7 @@ device_get_select_fd (device *dev, SANE_Int *fd)
 static void
 device_read_filters_setup (device *dev)
 {
+    device_read_filters_cleanup(dev);
     dev->read_filters = filter_chain_new(dev);
     dev->read_filters = filter_chain_push_xlat(dev->read_filters, &dev->opt);
 }
@@ -1836,7 +1846,6 @@ DONE:
     /* Scan and read finished - cleanup device */
     dev->flags &= ~(DEVICE_SCANNING | DEVICE_READING);
     image_decoder_reset(decoder);
-    device_read_filters_cleanup(dev);
 
     if (dev->read_image != NULL) {
         http_data_unref(dev->read_image);

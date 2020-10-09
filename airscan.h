@@ -2338,6 +2338,14 @@ enum {
 #define OPTVAL_SOURCE_ADF_SIMPLEX "ADF"
 #define OPTVAL_SOURCE_ADF_DUPLEX  "ADF Duplex"
 
+/* Check if option belongs to image enhancement group
+ */
+static inline bool
+opt_is_enhancement (int opt)
+{
+    return OPT_BRIGHTNESS <= opt && opt <= OPT_NEGATIVE;
+}
+
 /******************** Device Capabilities ********************/
 /* Source flags
  */
