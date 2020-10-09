@@ -11,6 +11,20 @@
 #include <stdlib.h>
 #include <string.h>
 
+
+/* Static variables */
+static const SANE_Range devopt_percent_range = {
+    .min = SANE_FIX(-100),
+    .max = SANE_FIX(100),
+    .quant = SANE_FIX(1)
+};
+
+static const SANE_Range devopt_gamma_range = {
+    .min = SANE_FIX(0.1),
+    .max = SANE_FIX(4.0),
+    .quant = SANE_FIX(0.01)
+};
+
 /* Initialize device options
  */
 void
@@ -151,11 +165,6 @@ devopt_rebuild_opt_desc (devopt *opt)
     devcaps_source          *src = opt->caps.src[opt->src];
     unsigned int            colormodes = devopt_available_colormodes(src);
     int                     i;
-    static const SANE_Range percent_range = {
-        .min = SANE_FIX(-100),
-        .max = SANE_FIX(100),
-        .quant = SANE_FIX(1)
-    };
 
     memset(opt->desc, 0, sizeof(opt->desc));
 
@@ -307,7 +316,7 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_PERCENT;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
-    desc->constraint.range = &percent_range;
+    desc->constraint.range = &devopt_percent_range;
 
     /* OPT_CONTRAST */
     desc = &opt->desc[OPT_CONTRAST];
@@ -319,7 +328,18 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->unit = SANE_UNIT_PERCENT;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
-    desc->constraint.range = &percent_range;
+    desc->constraint.range = &devopt_percent_range;
+
+    /* OPT_GAMMA */
+    desc = &opt->desc[OPT_GAMMA];
+    desc->name = SANE_NAME_ANALOG_GAMMA;
+    desc->title = SANE_TITLE_ANALOG_GAMMA;
+    desc->desc = SANE_DESC_ANALOG_GAMMA;
+    desc->type = SANE_TYPE_FIXED;
+    desc->size = sizeof(SANE_Fixed);
+    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
+    desc->constraint_type = SANE_CONSTRAINT_RANGE;
+    desc->constraint.range = &devopt_gamma_range;
 
     /* OPT_NEGATIVE */
     desc = &opt->desc[OPT_NEGATIVE];
@@ -500,28 +520,40 @@ devopt_set_geom (devopt *opt, SANE_Int option, SANE_Fixed val, SANE_Word *info)
 static SANE_Status
 devopt_set_enh (devopt *opt, SANE_Int option, SANE_Fixed val, SANE_Word *info)
 {
-    double     *out = NULL;
-    SANE_Fixed val_adjusted;
+    double           *out = NULL;
+    const SANE_Range *range = NULL;
+    SANE_Fixed       val_adjusted;
 
     switch (option) {
     case OPT_BRIGHTNESS:
         out = &opt->brightness;
+        range = &devopt_percent_range;
         break;
 
     case OPT_CONTRAST:
         out = &opt->contrast;
+        range = &devopt_percent_range;
+        break;
+
+    case OPT_GAMMA:
+        out = &opt->gamma;
+        range = &devopt_gamma_range;
         break;
 
     default:
         log_internal_error(NULL);
     }
 
-    val_adjusted = math_bound(val, SANE_FIX(-100), SANE_FIX(100));
+    val_adjusted = math_range_fit(range, val);
     if (val_adjusted != val) {
         *info |= SANE_INFO_INEXACT;
     }
 
-    *out = SANE_UNFIX(val_adjusted) / 100;
+    if (range == &devopt_percent_range) {
+        *out = SANE_UNFIX(val_adjusted) / 100;
+    } else {
+        *out = SANE_UNFIX(val_adjusted);
+    }
 
     return SANE_STATUS_GOOD;
 }
@@ -545,6 +577,8 @@ devopt_set_defaults (devopt *opt)
     opt->tl_y = 0;
     opt->br_x = src->win_x_range_mm.max;
     opt->br_y = src->win_y_range_mm.max;
+
+    opt->gamma = 1.0;
 
     devopt_rebuild_opt_desc(opt);
     devopt_update_params(opt);
@@ -600,6 +634,7 @@ devopt_set_option (devopt *opt, SANE_Int option, void *value, SANE_Word *info)
 
     case OPT_BRIGHTNESS:
     case OPT_CONTRAST:
+    case OPT_GAMMA:
         status = devopt_set_enh(opt, option, *(SANE_Fixed*)value, info);
         break;
 
@@ -669,6 +704,10 @@ devopt_get_option (devopt *opt, SANE_Int option, void *value)
 
     case OPT_CONTRAST:
         *(SANE_Fixed*) value = SANE_FIX(opt->contrast * 100);
+        break;
+
+    case OPT_GAMMA:
+        *(SANE_Fixed*) value = SANE_FIX(opt->gamma);
         break;
 
     case OPT_NEGATIVE:

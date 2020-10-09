@@ -2325,6 +2325,7 @@ enum {
     OPT_GROUP_ENHANCEMENT,
     OPT_BRIGHTNESS,
     OPT_CONTRAST,
+    OPT_GAMMA,
     OPT_NEGATIVE,
 
     /* Total count of options, computed by compiler */
@@ -2483,8 +2484,9 @@ typedef struct {
     SANE_Parameters        params;            /* Scan parameters */
     SANE_String            *sane_sources;     /* Sources, in SANE format */
     SANE_String            *sane_colormodes;  /* Color modes in SANE format */
-    double                 brightness;        /* -1 ... +1 */
-    double                 contrast;          /* -1 ... +1 */
+    double                 brightness;        /* -1.0 ... +1.0 */
+    double                 contrast;          /* -1.0 ... +1.0 */
+    double                 gamma;             /* Small positive value */
     bool                   negative;          /* Flip black and white */
 } devopt;
 
