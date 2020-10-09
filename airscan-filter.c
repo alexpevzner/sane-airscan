@@ -75,7 +75,9 @@ static filter*
 filter_xlat_new (const devopt *opt)
 {
     filter_xlat *filt;
-    int          i;
+    int         i;
+    double      B = opt->brightness / 2.0;
+    double      C = opt->contrast + 1.0;
 
     if (opt->brightness == 0 &&
         opt->contrast == 0 &&
@@ -88,16 +90,16 @@ filter_xlat_new (const devopt *opt)
     filt->base.read = filter_xlat_read;
 
     for (i = 0; i < 256; i ++) {
-        double v = i / 255.;
+        double v = i / 255.0;
 
-        v += v * opt->brightness;
-        v = math_bound(v, 0, 1);
+        v = C * (v - 0.5) + 0.5 + B;
+        v = math_bound_double(v, 0.0, 1.0);
 
         if (opt->negative) {
             v = 1 - v;
         }
 
-        filt->table[i] = round(v * 255.);
+        filt->table[i] = round(v * 255.0);
     }
 
     return &filt->base;
