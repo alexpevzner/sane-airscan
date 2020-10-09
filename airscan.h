@@ -3108,6 +3108,20 @@ math_bound (SANE_Word x, SANE_Word min, SANE_Word max)
     }
 }
 
+/* Bound double within range
+ */
+static inline double
+math_bound_double (double x, double min, double max)
+{
+    if (x < min) {
+        return min;
+    } else if (x > max) {
+        return max;
+    } else {
+        return x;
+    }
+}
+
 /* Compute x * mul / div, taking in account rounding
  * and integer overflow
  */

@@ -69,20 +69,6 @@ filter_xlat_read (filter *f, SANE_Byte *data, SANE_Int max_len,
     return status;
 }
 
-static double
-filter_xlat_to_range (double v)
-{
-    if (v < 0) {
-        return v;
-    }
-
-    if (v > 1) {
-        return 1;
-    }
-
-    return v;
-}
-
 /* filter_xlat
  */
 static filter*
@@ -105,7 +91,7 @@ filter_xlat_new (const devopt *opt)
         double v = i / 255.;
 
         v += v * opt->brightness;
-        v = filter_xlat_to_range(v);
+        v = math_bound(v, 0, 1);
 
         if (opt->negative) {
             v = 1 - v;
