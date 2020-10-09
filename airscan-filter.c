@@ -78,9 +78,11 @@ filter_xlat_new (const devopt *opt)
     int         i;
     double      B = opt->brightness / 2.0;
     double      C = opt->contrast + 1.0;
+    double      G = opt->gamma;
 
     if (opt->brightness == 0 &&
         opt->contrast == 0 &&
+        opt->gamma == 1.0 &&
         !opt->negative) {
         return NULL;
     }
@@ -94,6 +96,7 @@ filter_xlat_new (const devopt *opt)
 
         v = C * (v - 0.5) + 0.5 + B;
         v = math_bound_double(v, 0.0, 1.0);
+        v = pow(v, 1/G);
 
         if (opt->negative) {
             v = 1 - v;
