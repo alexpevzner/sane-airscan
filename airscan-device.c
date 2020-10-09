@@ -141,6 +141,7 @@ struct device {
     SANE_Int             read_skip_bytes;    /* How many bytes to skip at line
                                                 beginning */
     bool                 read_24_to_8;       /* Resample 24 to 8 bits */
+    filter               *read_filters;      /* Chain of image filters */
 };
 
 /* Static variables
@@ -184,6 +185,9 @@ device_stm_op_callback (void *ptr, http_query *q);
 
 static void
 device_stm_cancel_event_callback (void *data);
+
+static void
+device_read_filters_setup (device *dev);
 
 static void
 device_management_start_stop (bool start);
@@ -1371,6 +1375,7 @@ device_start_new_job (device *dev)
 
     if (status == SANE_STATUS_GOOD) {
         dev->flags |= DEVICE_READING;
+        device_read_filters_setup(dev);
     } else {
         dev->flags &= ~DEVICE_SCANNING;
     }
@@ -1418,6 +1423,7 @@ device_start (device *dev)
      */
     if (http_data_queue_len(dev->read_queue) > 0) {
         dev->flags |= DEVICE_READING;
+        device_read_filters_setup(dev);
         pollable_signal(dev->read_pollable);
         return SANE_STATUS_GOOD;
     }
@@ -1488,6 +1494,24 @@ device_get_select_fd (device *dev, SANE_Int *fd)
 
 
 /******************** Read machinery ********************/
+/* Setup read_filters
+ */
+static void
+device_read_filters_setup (device *dev)
+{
+    dev->read_filters = filter_chain_new(dev);
+    dev->read_filters = filter_chain_push_xlat(dev->read_filters, &dev->opt);
+}
+
+/* Cleanup read_filters
+ */
+static void
+device_read_filters_cleanup (device *dev)
+{
+    filter_chain_free(dev->read_filters);
+    dev->read_filters = NULL;
+}
+
 /* Pull next image from the read queue and start decoding
  */
 static SANE_Status
@@ -1812,6 +1836,8 @@ DONE:
     /* Scan and read finished - cleanup device */
     dev->flags &= ~(DEVICE_SCANNING | DEVICE_READING);
     image_decoder_reset(decoder);
+    device_read_filters_cleanup(dev);
+
     if (dev->read_image != NULL) {
         http_data_unref(dev->read_image);
         dev->read_image = NULL;
@@ -1825,6 +1851,19 @@ DONE:
     }
 
     return status;
+}
+
+/* Read scanned image with applied image filters
+ */
+SANE_Status
+device_read_filtered (device *dev, SANE_Byte *data,
+        SANE_Int max_len, SANE_Int *len)
+{
+     if (dev->read_filters == NULL) {
+        return device_read(dev, data, max_len, len);
+     }
+
+     return dev->read_filters->read(dev->read_filters, data, max_len, len);
 }
 
 /******************** Initialization/cleanup ********************/

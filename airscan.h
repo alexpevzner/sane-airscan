@@ -2321,6 +2321,12 @@ enum {
     OPT_SCAN_BR_X,
     OPT_SCAN_BR_Y,
 
+    /* Image enhancement group */
+    OPT_GROUP_ENHANCEMENT,
+    OPT_BRIGHTNESS,
+    OPT_CONTRAST,
+    OPT_NEGATIVE,
+
     /* Total count of options, computed by compiler */
     NUM_OPTIONS
 };
@@ -2469,6 +2475,9 @@ typedef struct {
     SANE_Parameters        params;            /* Scan parameters */
     SANE_String            *sane_sources;     /* Sources, in SANE format */
     SANE_String            *sane_colormodes;  /* Color modes in SANE format */
+    double                 brightness;        /* -1 ... +1 */
+    double                 contrast;          /* -1 ... +1 */
+    bool                   negative;          /* Flip black and white */
 } devopt;
 
 /* Initialize device options
@@ -2704,7 +2713,7 @@ void
 wsdd_cleanup (void);
 
 /******************** Device Management ********************/
-/* Type device represents a scanner devise
+/* Type device represents a scanner device
  */
 typedef struct device device;
 
@@ -2766,6 +2775,12 @@ device_get_select_fd (device *dev, SANE_Int *fd);
 SANE_Status
 device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len);
 
+/* Read scanned image with applied image filters
+ */
+SANE_Status
+device_read_filtered (device *dev, SANE_Byte *data,
+        SANE_Int max_len, SANE_Int *len);
+
 /* Initialize device management
  */
 SANE_Status
@@ -2775,6 +2790,38 @@ device_management_init (void);
  */
 void
 device_management_cleanup (void);
+
+/******************** Image filters ********************/
+/* Type filter represents image filter
+ */
+typedef struct filter filter;
+struct filter {
+    filter      *next;               /* Next filter in a chain */
+    void        (*free) (filter *f); /* Free the filter */
+    SANE_Status (*read) (filter *f,  /* Image read function */
+        SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out);
+};
+
+/* Create chain of filters
+ */
+filter*
+filter_chain_new (device *dev);
+
+/* Free chain of filters
+ */
+void
+filter_chain_free (filter *f);
+
+/* Push translation table based filter, that handles the
+ * following options:
+ *     - brightness
+ *     - contrast
+ *     - negative
+ *
+ * Returns updated chain
+ */
+filter*
+filter_chain_push_xlat (filter *old_chain, const devopt *opt);
 
 /******************** Scan Protocol handling ********************/
 /* PROTO_OP represents operation

@@ -228,7 +228,7 @@ sane_read (SANE_Handle handle, SANE_Byte *data, SANE_Int max_len, SANE_Int *len)
     device *dev = (device*) handle;
 
     eloop_mutex_lock();
-    status = device_read(dev, data, max_len, len);
+    status = device_read_filtered(dev, data, max_len, len);
     eloop_mutex_unlock();
 
     if (status != SANE_STATUS_GOOD) {

@@ -147,10 +147,15 @@ devopt_choose_resolution (devopt *opt, SANE_Word wanted)
 static void
 devopt_rebuild_opt_desc (devopt *opt)
 {
-    SANE_Option_Descriptor *desc;
-    devcaps_source         *src = opt->caps.src[opt->src];
-    unsigned int           colormodes = devopt_available_colormodes(src);
-    int                    i;
+    SANE_Option_Descriptor  *desc;
+    devcaps_source          *src = opt->caps.src[opt->src];
+    unsigned int            colormodes = devopt_available_colormodes(src);
+    int                     i;
+    static const SANE_Range percent_range = {
+        .min = SANE_FIX(-100),
+        .max = SANE_FIX(100),
+        .quant = SANE_FIX(1)
+    };
 
     memset(opt->desc, 0, sizeof(opt->desc));
 
@@ -283,6 +288,47 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->unit = SANE_UNIT_MM;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
     desc->constraint.range = &src->win_y_range_mm;
+
+    /* OPT_GROUP_ENHANCEMENT */
+    desc = &opt->desc[OPT_GROUP_ENHANCEMENT];
+    desc->name = SANE_NAME_ENHANCEMENT;
+    desc->title = SANE_TITLE_ENHANCEMENT;
+    desc->desc = SANE_DESC_ENHANCEMENT;
+    desc->type = SANE_TYPE_GROUP;
+    desc->cap = 0;
+
+    /* OPT_BRIGHTNESS */
+    desc = &opt->desc[OPT_BRIGHTNESS];
+    desc->name = SANE_NAME_BRIGHTNESS;
+    desc->title = SANE_TITLE_BRIGHTNESS;
+    desc->desc = SANE_DESC_BRIGHTNESS;
+    desc->type = SANE_TYPE_FIXED;
+    desc->size = sizeof(SANE_Fixed);
+    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
+    desc->unit = SANE_UNIT_PERCENT;
+    desc->constraint_type = SANE_CONSTRAINT_RANGE;
+    desc->constraint.range = &percent_range;
+
+    /* OPT_CONTRAST */
+    desc = &opt->desc[OPT_CONTRAST];
+    desc->name = SANE_NAME_CONTRAST;
+    desc->title = SANE_TITLE_CONTRAST;
+    desc->desc = SANE_DESC_CONTRAST;
+    desc->type = SANE_TYPE_FIXED;
+    desc->size = sizeof(SANE_Fixed);
+    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
+    desc->unit = SANE_UNIT_PERCENT;
+    desc->constraint_type = SANE_CONSTRAINT_RANGE;
+    desc->constraint.range = &percent_range;
+
+    /* OPT_NEGATIVE */
+    desc = &opt->desc[OPT_NEGATIVE];
+    desc->name = SANE_NAME_NEGATIVE;
+    desc->title = SANE_TITLE_NEGATIVE;
+    desc->desc = SANE_DESC_NEGATIVE;
+    desc->type = SANE_TYPE_BOOL;
+    desc->size = sizeof(SANE_Bool);
+    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
 }
 
 /* Update scan parameters, according to the currently set
@@ -449,6 +495,37 @@ devopt_set_geom (devopt *opt, SANE_Int option, SANE_Fixed val, SANE_Word *info)
     return SANE_STATUS_GOOD;
 }
 
+/* Set enhancement option
+ */
+static SANE_Status
+devopt_set_enh (devopt *opt, SANE_Int option, SANE_Fixed val, SANE_Word *info)
+{
+    double     *out = NULL;
+    SANE_Fixed val_adjusted;
+
+    switch (option) {
+    case OPT_BRIGHTNESS:
+        out = &opt->brightness;
+        break;
+
+    case OPT_CONTRAST:
+        out = &opt->contrast;
+        break;
+
+    default:
+        log_internal_error(NULL);
+    }
+
+    val_adjusted = math_bound(val, SANE_FIX(-100), SANE_FIX(100));
+    if (val_adjusted != val) {
+        *info |= SANE_INFO_INEXACT;
+    }
+
+    *out = SANE_UNFIX(val_adjusted) / 100;
+
+    return SANE_STATUS_GOOD;
+}
+
 /* Set default option values. Before call to this function,
  * devopt.caps needs to be properly filled.
  */
@@ -521,6 +598,15 @@ devopt_set_option (devopt *opt, SANE_Int option, void *value, SANE_Word *info)
         status = devopt_set_geom(opt, option, *(SANE_Fixed*)value, info);
         break;
 
+    case OPT_BRIGHTNESS:
+    case OPT_CONTRAST:
+        status = devopt_set_enh(opt, option, *(SANE_Fixed*)value, info);
+        break;
+
+    case OPT_NEGATIVE:
+        opt->negative = *(SANE_Bool*)value != 0;
+        break;
+
     default:
         status = SANE_STATUS_INVAL;
     }
@@ -575,6 +661,18 @@ devopt_get_option (devopt *opt, SANE_Int option, void *value)
 
     case OPT_SCAN_BR_Y:
         *(SANE_Fixed*) value = opt->br_y;
+        break;
+
+    case OPT_BRIGHTNESS:
+        *(SANE_Fixed*) value = SANE_FIX(opt->brightness * 100);
+        break;
+
+    case OPT_CONTRAST:
+        *(SANE_Fixed*) value = SANE_FIX(opt->contrast * 100);
+        break;
+
+    case OPT_NEGATIVE:
+        *(SANE_Bool*)value = opt->negative;
         break;
 
     default:
