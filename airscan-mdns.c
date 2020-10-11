@@ -817,6 +817,9 @@ mdns_avahi_client_start (void)
 
     mdns_avahi_client = avahi_client_new (mdns_avahi_poll,
         AVAHI_CLIENT_NO_FAIL, mdns_avahi_client_callback, NULL, &error);
+    if (mdns_avahi_client == NULL) {
+	log_debug(mdns_log, "avahi_client_new failed: %s", avahi_strerror(error));
+    }
 }
 
 /* Deferred client restart
