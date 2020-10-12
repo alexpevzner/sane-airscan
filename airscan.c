@@ -26,13 +26,13 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
 
     (void) authorize;
 
-    status = airscan_init(0, "sane_init() called");
+    status = airscan_init(0, "API: sane_init(): called");
     if (status == SANE_STATUS_GOOD) {
         status = device_management_init();
     }
 
     if (status != SANE_STATUS_GOOD) {
-        log_debug(NULL, "sane_init(): %s", sane_strstatus(status));
+        log_debug(NULL, "API: sane_init(): %s", sane_strstatus(status));
     }
 
     return status;
@@ -43,11 +43,11 @@ sane_init (SANE_Int *version_code, SANE_Auth_Callback authorize)
 void
 sane_exit (void)
 {
-    log_debug(NULL, "sane_exit() called");
+    log_debug(NULL, "API: sane_exit(): called");
 
     eloop_thread_stop();
     device_management_cleanup();
-    airscan_cleanup("sane_exit(): OK");
+    airscan_cleanup("API: sane_exit(): OK");
 }
 
 /* Get list of devices
@@ -100,8 +100,8 @@ sane_open (SANE_String_Const name, SANE_Handle *handle)
         *handle = (SANE_Handle) dev;
     }
 
-    log_debug(device_log_ctx(dev), "sane_open(\"%s\"): %s", name ? name : "",
-            sane_strstatus(status));
+    log_debug(device_log_ctx(dev), "API: sane_open(\"%s\"): %s",
+        name ? name : "", sane_strstatus(status));
 
     zeroconf_device_list_free(dev_list);
 
@@ -113,13 +113,16 @@ sane_open (SANE_String_Const name, SANE_Handle *handle)
 void
 sane_close (SANE_Handle handle)
 {
-    device *dev = (device*) handle;
+    device  *dev = (device*) handle;
+    log_ctx *log = device_log_ctx(dev);
 
-    log_debug(device_log_ctx(dev), "sane_close()");
+    log_debug(log, "API: sane_close(): called");
 
     eloop_mutex_lock();
     device_close((device*) handle);
     eloop_mutex_unlock();
+
+    log_debug(log, "API: sane_close(): done");
 }
 
 /* Get option descriptor
@@ -137,6 +140,57 @@ sane_get_option_descriptor (SANE_Handle handle, SANE_Int option)
     return desc;
 }
 
+/* Write sane_control_option operation to the log
+ */
+static void
+sane_control_option_log (log_ctx *log, const SANE_Option_Descriptor *desc,
+        SANE_Action action, void *value)
+{
+    char vbuf[128];
+    bool get;
+
+    switch (action) {
+    case SANE_ACTION_GET_VALUE:
+        get = true;
+        break;
+
+    case SANE_ACTION_SET_VALUE:
+        get = false;
+        break;
+
+    case SANE_ACTION_SET_AUTO:
+    default:
+        /* Not supported here */
+        return;
+    }
+
+    switch (desc->type) {
+    case SANE_TYPE_BOOL:
+        strcpy(vbuf, *((SANE_Word*) value) ? "true" : "false");
+        break;
+
+    case SANE_TYPE_INT:
+        sprintf(vbuf, "%d", *((SANE_Word*) value));
+        break;
+
+    case SANE_TYPE_FIXED:
+        sprintf(vbuf, "%g", SANE_UNFIX(*((SANE_Fixed*) value)));
+        break;
+
+    case SANE_TYPE_STRING:
+        snprintf(vbuf, sizeof(vbuf), "\"%s\"", (char*) value);
+        break;
+
+    case SANE_TYPE_BUTTON:
+    case SANE_TYPE_GROUP:
+    default:
+        /* Not supported here */
+        return;
+    }
+
+    log_debug(log, "API: %s %s: %s", get ? "get" : "set", desc->name, vbuf);
+}
+
 /* Get or set option value
  */
 SANE_Status
@@ -144,8 +198,9 @@ sane_control_option (SANE_Handle handle, SANE_Int option, SANE_Action action,
                      void *value, SANE_Int *info)
 {
     SANE_Status status = SANE_STATUS_INVAL;
-    device *dev = (device*) handle;
-    const SANE_Option_Descriptor *desc;
+    device      *dev = (device*) handle;
+    const       SANE_Option_Descriptor *desc;
+    log_ctx     *log = device_log_ctx(dev);
 
     eloop_mutex_lock();
 
@@ -173,6 +228,10 @@ sane_control_option (SANE_Handle handle, SANE_Int option, SANE_Action action,
 DONE:
     eloop_mutex_unlock();
 
+    if (status == SANE_STATUS_GOOD) {
+        sane_control_option_log(log, desc, action, value);
+    }
+
     return status;
 }
 
@@ -182,7 +241,10 @@ SANE_Status
 sane_get_parameters (SANE_Handle handle, SANE_Parameters *params)
 {
     SANE_Status status = SANE_STATUS_GOOD;
-    device *dev = (device*) handle;
+    device      *dev = (device*) handle;
+    log_ctx     *log = device_log_ctx(dev);
+
+    log_debug(log, "API: sane_get_params(): called");
 
     if (params != NULL) {
         eloop_mutex_lock();
@@ -191,7 +253,7 @@ sane_get_parameters (SANE_Handle handle, SANE_Parameters *params)
     }
 
     if (status != SANE_STATUS_GOOD) {
-        log_debug(NULL, "sane_get_params(): %s", sane_strstatus(status));
+        log_debug(log, "API: sane_get_params(): %s", sane_strstatus(status));
     }
 
     return status;
@@ -203,18 +265,16 @@ SANE_Status
 sane_start (SANE_Handle handle)
 {
     SANE_Status status;
-    device *dev = (device*) handle;
+    device      *dev = (device*) handle;
+    log_ctx     *log = device_log_ctx(dev);
 
-    log_debug(device_log_ctx(dev), "sane_start()");
+    log_debug(log, "API: sane_start(): called");
 
     eloop_mutex_lock();
     status = device_start(dev);
     eloop_mutex_unlock();
 
-    if (status != SANE_STATUS_GOOD) {
-        log_debug(device_log_ctx(dev),
-            "sane_start(): %s", sane_strstatus(status));
-    }
+    log_debug(log, "API: sane_start(): %s", sane_strstatus(status));
 
     return status;
 }
@@ -225,15 +285,15 @@ SANE_Status
 sane_read (SANE_Handle handle, SANE_Byte *data, SANE_Int max_len, SANE_Int *len)
 {
     SANE_Status status;
-    device *dev = (device*) handle;
+    device      *dev = (device*) handle;
+    log_ctx     *log = device_log_ctx(dev);
 
     eloop_mutex_lock();
     status = device_read(dev, data, max_len, len);
     eloop_mutex_unlock();
 
     if (status != SANE_STATUS_GOOD) {
-        log_debug(device_log_ctx(dev),
-            "sane_read(): %s", sane_strstatus(status));
+        log_debug(log, "API: sane_read(): %s", sane_strstatus(status));
     }
 
     return status;
@@ -257,17 +317,19 @@ sane_cancel (SANE_Handle handle)
 SANE_Status
 sane_set_io_mode (SANE_Handle handle, SANE_Bool non_blocking)
 {
-    device      *dev = handle;
     SANE_Status status;
+    device      *dev = (device*) handle;
+    log_ctx     *log = device_log_ctx(dev);
+    const char  *mode = non_blocking ? "true" : "false";
+
+    log_debug(log, "API: sane_set_io_mode(%s): called", mode);
 
     eloop_mutex_lock();
     status = device_set_io_mode(dev, non_blocking);
     eloop_mutex_unlock();
 
-    if (status != SANE_STATUS_GOOD) {
-        log_debug(device_log_ctx(dev), "sane_set_io_mode(%s): %s",
-            non_blocking ? "true" : "false", sane_strstatus(status));
-    }
+    log_debug(log, "API: sane_set_io_mode(%s): %s", mode,
+        sane_strstatus(status));
 
     return status;
 }
@@ -277,16 +339,20 @@ sane_set_io_mode (SANE_Handle handle, SANE_Bool non_blocking)
 SANE_Status
 sane_get_select_fd (SANE_Handle handle, SANE_Int *fd)
 {
-    device      *dev = handle;
     SANE_Status status;
+    device      *dev = (device*) handle;
+    log_ctx     *log = device_log_ctx(dev);
+
+    log_debug(log, "API: sane_get_select_fd(): called");
 
     eloop_mutex_lock();
     status = device_get_select_fd(dev, fd);
     eloop_mutex_unlock();
 
-    if (status != SANE_STATUS_GOOD) {
-        log_debug(device_log_ctx(dev),
-            "sane_get_select_fd(): %s", sane_strstatus(status));
+    if (status == SANE_STATUS_GOOD) {
+        log_debug(log, "API: sane_get_select_fd(): fd = %d", *fd);
+    } else {
+        log_debug(log, "API: sane_get_select_fd(): %s", sane_strstatus(status));
     }
 
     return status;
