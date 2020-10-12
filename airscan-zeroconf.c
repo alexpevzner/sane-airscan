@@ -264,7 +264,11 @@ zeroconf_device_name (zeroconf_device *device)
 static const char*
 zeroconf_device_model (zeroconf_device *device)
 {
-    return device->model;
+    if (device->model != NULL) {
+        return device->model;
+    }
+
+    return device->uuid.text;
 }
 
 /* Get protocols, exposed by device

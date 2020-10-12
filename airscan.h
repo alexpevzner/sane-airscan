@@ -2545,7 +2545,8 @@ typedef enum {
 typedef struct {
     ZEROCONF_METHOD   method;     /* Discovery method */
     const char        *name;      /* Network-unique name, NULL for WSD */
-    const char        *model;     /* Model name */
+    const char        *model;     /* Model name, may be NULL for
+                                     WSDD non-scanner devices */
     uuid              uuid;       /* Device UUID */
     ip_addrset        *addrs;     /* Device addresses */
     int               ifindex;    /* Network interface index */
