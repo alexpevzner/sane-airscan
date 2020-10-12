@@ -16,6 +16,28 @@ typedef struct {
     uint8_t table[256]; /* Transformation table */
 } filter_xlat;
 
+/* Dump filter to the log
+ */
+static void
+filter_xlat_dump (filter *f, log_ctx *log)
+{
+    filter_xlat *filt = (filter_xlat*) f;
+    size_t       i;
+
+    log_debug(log, " XLAT filter:");
+    for (i = 0; i < 256; i += 16) {
+        uint8_t *row = filt->table + i;
+        log_debug(log,
+            "   "
+            "%.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x "
+            "%.2x %.2x %.2x %.2x %.2x %.2x %.2x %.2x",
+            row[0], row[1], row[2], row[3],
+            row[4], row[5], row[6], row[7],
+            row[8], row[9], row[10], row[11],
+            row[12], row[13], row[14], row[15]);
+    }
+}
+
 /* Apply filter to the image line
  */
 static void
@@ -49,6 +71,7 @@ filter_xlat_new (const devopt *opt)
 
     filt = mem_new(filter_xlat, 1);
     filt->base.free = (void (*)(filter*)) mem_free;
+    filt->base.dump = filter_xlat_dump;
     filt->base.apply = filter_xlat_apply;
 
     for (i = 0; i < 256; i ++) {
@@ -116,6 +139,19 @@ filter_chain_push_xlat (filter *old_chain, const devopt *opt)
     return filter_chain_push(old_chain, filter_xlat_new(opt));
 }
 
+/* Dump filter chain to the log
+ */
+void
+filter_chain_dump (filter *chain, log_ctx *log)
+{
+    log_debug(log, "image filter chain:");
+
+    while (chain != NULL) {
+        chain->dump(chain, log);
+        chain = chain->next;
+    }
+}
+
 /* Apply filter chain to the image line
  */
 void
@@ -126,7 +162,6 @@ filter_chain_apply (filter *chain, uint8_t *line, size_t size)
         chain = chain->next;
     }
 }
-
 
 /* vim:ts=8:sw=4:et
  */

@@ -1513,6 +1513,7 @@ device_read_filters_setup (device *dev)
 {
     device_read_filters_cleanup(dev);
     dev->read_filters = filter_chain_push_xlat(NULL, &dev->opt);
+    filter_chain_dump(dev->read_filters, dev->log);
 }
 
 /* Cleanup read_filters

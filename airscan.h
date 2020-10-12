@@ -2802,6 +2802,8 @@ device_management_cleanup (void);
 typedef struct filter filter;
 struct filter {
     filter      *next;               /* Next filter in a chain */
+    void        (*dump) (filter *f,  /* Dump filter to the log */
+        log_ctx *log);
     void        (*free) (filter *f); /* Free the filter */
     void        (*apply) (filter *f, /* Apply filter to the line of image */
         uint8_t *line, size_t size);
@@ -2822,6 +2824,11 @@ filter_chain_free (filter *chain);
  */
 filter*
 filter_chain_push_xlat (filter *old_chain, const devopt *opt);
+
+/* Dump filter chain to the log
+ */
+void
+filter_chain_dump (filter *chain, log_ctx *log);
 
 /* Apply filter chain to the image line
  */
