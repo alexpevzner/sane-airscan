@@ -243,6 +243,18 @@ zeroconf_device_del_finding (zeroconf_finding *finding)
     zeroconf_device_update_model(device);
 }
 
+/* Get model name
+ */
+static const char*
+zeroconf_device_model (zeroconf_device *device)
+{
+    if (device->model != NULL) {
+        return device->model;
+    }
+
+    return device->uuid.text;
+}
+
 /* Get device name
  */
 static const char*
@@ -256,19 +268,7 @@ zeroconf_device_name (zeroconf_device *device)
         return device->buddy->mdns_name;
     }
 
-    return device->model;
-}
-
-/* Get model name
- */
-static const char*
-zeroconf_device_model (zeroconf_device *device)
-{
-    if (device->model != NULL) {
-        return device->model;
-    }
-
-    return device->uuid.text;
+    return zeroconf_device_model(device);
 }
 
 /* Get protocols, exposed by device
