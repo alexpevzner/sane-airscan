@@ -2786,12 +2786,6 @@ device_get_select_fd (device *dev, SANE_Int *fd);
 SANE_Status
 device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len);
 
-/* Read scanned image with applied image filters
- */
-SANE_Status
-device_read_filtered (device *dev, SANE_Byte *data,
-        SANE_Int max_len, SANE_Int *len);
-
 /* Initialize device management
  */
 SANE_Status
@@ -2809,19 +2803,14 @@ typedef struct filter filter;
 struct filter {
     filter      *next;               /* Next filter in a chain */
     void        (*free) (filter *f); /* Free the filter */
-    SANE_Status (*read) (filter *f,  /* Image read function */
-        SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out);
+    void        (*apply) (filter *f, /* Apply filter to the line of image */
+        uint8_t *line, size_t size);
 };
-
-/* Create chain of filters
- */
-filter*
-filter_chain_new (device *dev);
 
 /* Free chain of filters
  */
 void
-filter_chain_free (filter *f);
+filter_chain_free (filter *chain);
 
 /* Push translation table based filter, that handles the
  * following options:
@@ -2833,6 +2822,11 @@ filter_chain_free (filter *f);
  */
 filter*
 filter_chain_push_xlat (filter *old_chain, const devopt *opt);
+
+/* Apply filter chain to the image line
+ */
+void
+filter_chain_apply (filter *chain, uint8_t *line, size_t size);
 
 /******************** Scan Protocol handling ********************/
 /* PROTO_OP represents operation

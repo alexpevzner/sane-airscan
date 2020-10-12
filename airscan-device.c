@@ -1512,8 +1512,7 @@ static void
 device_read_filters_setup (device *dev)
 {
     device_read_filters_cleanup(dev);
-    dev->read_filters = filter_chain_new(dev);
-    dev->read_filters = filter_chain_push_xlat(dev->read_filters, &dev->opt);
+    dev->read_filters = filter_chain_push_xlat(NULL, &dev->opt);
 }
 
 /* Cleanup read_filters
@@ -1753,6 +1752,9 @@ device_read_decode_line (device *dev)
         }
     }
 
+    filter_chain_apply(dev->read_filters,
+            dev->read_line_buf, dev->opt.params.bytes_per_line);
+
     dev->read_line_off = 0;
     dev->read_line_num ++;
 
@@ -1863,19 +1865,6 @@ DONE:
     }
 
     return status;
-}
-
-/* Read scanned image with applied image filters
- */
-SANE_Status
-device_read_filtered (device *dev, SANE_Byte *data,
-        SANE_Int max_len, SANE_Int *len)
-{
-     if (dev->read_filters == NULL) {
-        return device_read(dev, data, max_len, len);
-     }
-
-     return dev->read_filters->read(dev->read_filters, data, max_len, len);
 }
 
 /******************** Initialization/cleanup ********************/

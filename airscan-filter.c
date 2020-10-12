@@ -8,38 +8,6 @@
 
 #include "airscan.h"
 
-/******************** Identity filter ********************/
-/* Type filter_identity represents identity filter
- */
-typedef struct {
-    filter base;  /* Base class */
-    device *dev;  /* Link to device */
-} filter_identity;
-
-/* Read method for filter_identity
- */
-static SANE_Status
-filter_identity_read (filter *f, SANE_Byte *data, SANE_Int max_len,
-        SANE_Int *len_out)
-{
-    filter_identity *filt = (filter_identity*) f;
-    return device_read(filt->dev, data, max_len, len_out);
-}
-
-/* Create identity filter, that returns image without transformations
- */
-static filter*
-filter_identity_new (device *dev)
-{
-    filter_identity *filt = mem_new(filter_identity, 1);
-
-    filt->base.free = (void (*)(filter*)) mem_free;
-    filt->base.read = filter_identity_read;
-    filt->dev = dev;
-
-    return &filt->base;
-}
-
 /******************** Table filter ********************/
 /* Type filter_xlat represents translation table based filter
  */
@@ -48,25 +16,17 @@ typedef struct {
     uint8_t table[256]; /* Transformation table */
 } filter_xlat;
 
-/* Read method for filter_xlat
+/* Apply filter to the image line
  */
-static SANE_Status
-filter_xlat_read (filter *f, SANE_Byte *data, SANE_Int max_len,
-        SANE_Int *len_out)
+static void
+filter_xlat_apply (filter *f, uint8_t *line, size_t size)
 {
-    SANE_Status  status = f->next->read(f->next, data, max_len, len_out);
     filter_xlat *filt = (filter_xlat*) f;
-    int          i, len;
+    size_t      i;
 
-    if (status != SANE_STATUS_GOOD) {
-        return status;
+    for (i = 0; i < size; i ++) {
+        line[i] = filt->table[line[i]];
     }
-
-    for (i = 0, len = *len_out; i < len; i ++) {
-        data[i] = filt->table[data[i]];
-    }
-
-    return status;
 }
 
 /* filter_xlat
@@ -89,7 +49,7 @@ filter_xlat_new (const devopt *opt)
 
     filt = mem_new(filter_xlat, 1);
     filt->base.free = (void (*)(filter*)) mem_free;
-    filt->base.read = filter_xlat_read;
+    filt->base.apply = filter_xlat_apply;
 
     for (i = 0; i < 256; i ++) {
         double v = i / 255.0;
@@ -109,33 +69,36 @@ filter_xlat_new (const devopt *opt)
 }
 
 /******************** Filter chain management ********************/
-/* Create chain of filters
- */
-filter*
-filter_chain_new (device *dev)
-{
-    return filter_identity_new(dev);
-}
-
 /* Push filter into the chain of filters.
  * Takes ownership on both arguments and returns updated chain
  */
-filter*
+static filter*
 filter_chain_push (filter *old_chain, filter *new_filter)
 {
-    new_filter->next = old_chain;
-    return new_filter;
+    if (old_chain == NULL) {
+        return new_filter;
+    }
+
+    if (new_filter != NULL) {
+        /* Nothing to do */
+    } else if (old_chain->next == NULL) {
+        old_chain->next = new_filter;
+    } else {
+        old_chain->next = filter_chain_push(old_chain->next, new_filter);
+    }
+
+    return old_chain;
 }
 
 /* Free chain of filters
  */
 void
-filter_chain_free (filter *f)
+filter_chain_free (filter *chain)
 {
-    while (f != NULL) {
-        filter *next = f->next;
-        f->free(f);
-        f = next;
+    while (chain != NULL) {
+        filter *next = chain->next;
+        chain->free(chain);
+        chain = next;
     }
 }
 
@@ -150,15 +113,20 @@ filter_chain_free (filter *f)
 filter*
 filter_chain_push_xlat (filter *old_chain, const devopt *opt)
 {
-    filter *f = filter_xlat_new(opt);
-
-    if (f != NULL) {
-        f->next = old_chain;
-        return f;
-    }
-
-    return old_chain;
+    return filter_chain_push(old_chain, filter_xlat_new(opt));
 }
+
+/* Apply filter chain to the image line
+ */
+void
+filter_chain_apply (filter *chain, uint8_t *line, size_t size)
+{
+    while (chain != NULL) {
+        chain->apply(chain, line, size);
+        chain = chain->next;
+    }
+}
+
 
 /* vim:ts=8:sw=4:et
  */
