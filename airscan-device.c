@@ -1373,6 +1373,9 @@ device_start_new_job (device *dev)
         dev->flags |= DEVICE_READING;
     } else {
         dev->flags &= ~DEVICE_SCANNING;
+        if (device_stm_state_get(dev) == DEVICE_STM_DONE) {
+            device_stm_state_set(dev, DEVICE_STM_IDLE);
+        }
     }
 
     return status;
