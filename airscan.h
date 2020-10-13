@@ -2484,9 +2484,9 @@ typedef struct {
     SANE_Parameters        params;            /* Scan parameters */
     SANE_String            *sane_sources;     /* Sources, in SANE format */
     SANE_String            *sane_colormodes;  /* Color modes in SANE format */
-    double                 brightness;        /* -1.0 ... +1.0 */
-    double                 contrast;          /* -1.0 ... +1.0 */
-    double                 gamma;             /* Small positive value */
+    SANE_Fixed             brightness;        /* -100.0 ... +100.0 */
+    SANE_Fixed             contrast;          /* -100.0 ... +100.0 */
+    SANE_Fixed             gamma;             /* Small positive value */
     bool                   negative;          /* Flip black and white */
 } devopt;
 

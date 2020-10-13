@@ -520,7 +520,7 @@ devopt_set_geom (devopt *opt, SANE_Int option, SANE_Fixed val, SANE_Word *info)
 static SANE_Status
 devopt_set_enh (devopt *opt, SANE_Int option, SANE_Fixed val, SANE_Word *info)
 {
-    double           *out = NULL;
+    SANE_Fixed       *out = NULL;
     const SANE_Range *range = NULL;
     SANE_Fixed       val_adjusted;
 
@@ -549,11 +549,7 @@ devopt_set_enh (devopt *opt, SANE_Int option, SANE_Fixed val, SANE_Word *info)
         *info |= SANE_INFO_INEXACT;
     }
 
-    if (range == &devopt_percent_range) {
-        *out = SANE_UNFIX(val_adjusted) / 100;
-    } else {
-        *out = SANE_UNFIX(val_adjusted);
-    }
+    *out = SANE_UNFIX(val_adjusted);
 
     return SANE_STATUS_GOOD;
 }
@@ -699,15 +695,15 @@ devopt_get_option (devopt *opt, SANE_Int option, void *value)
         break;
 
     case OPT_BRIGHTNESS:
-        *(SANE_Fixed*) value = SANE_FIX(opt->brightness * 100);
+        *(SANE_Fixed*) value = opt->brightness;
         break;
 
     case OPT_CONTRAST:
-        *(SANE_Fixed*) value = SANE_FIX(opt->contrast * 100);
+        *(SANE_Fixed*) value = opt->contrast;
         break;
 
     case OPT_GAMMA:
-        *(SANE_Fixed*) value = SANE_FIX(opt->gamma);
+        *(SANE_Fixed*) value = opt->gamma;
         break;
 
     case OPT_NEGATIVE:
