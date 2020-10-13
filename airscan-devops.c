@@ -549,7 +549,7 @@ devopt_set_enh (devopt *opt, SANE_Int option, SANE_Fixed val, SANE_Word *info)
         *info |= SANE_INFO_INEXACT;
     }
 
-    *out = SANE_UNFIX(val_adjusted);
+    *out = val_adjusted;
 
     return SANE_STATUS_GOOD;
 }
@@ -574,7 +574,9 @@ devopt_set_defaults (devopt *opt)
     opt->br_x = src->win_x_range_mm.max;
     opt->br_y = src->win_y_range_mm.max;
 
-    opt->gamma = 1.0;
+    opt->brightness = SANE_FIX(0.0);
+    opt->contrast = SANE_FIX(0.0);
+    opt->gamma = SANE_FIX(1.0);
 
     devopt_rebuild_opt_desc(opt);
     devopt_update_params(opt);

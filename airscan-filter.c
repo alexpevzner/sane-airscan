@@ -60,7 +60,7 @@ filter_xlat_new (const devopt *opt)
     int         i;
     double      B = SANE_UNFIX(opt->brightness) / 200.0;
     double      C = SANE_UNFIX(opt->contrast) / 100.0 + 1.0;
-    double      G = SANE_UNFIX(opt->gamma) / 100.0;
+    double      G = SANE_UNFIX(opt->gamma);
 
     if (opt->brightness == SANE_FIX(0.0) &&
         opt->contrast == SANE_FIX(0.0) &&
