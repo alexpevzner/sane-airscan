@@ -60,7 +60,7 @@ common_CFLAGS 		+= -fPIC
 
 backend_LDFLAGS 	:= $(LDFLAGS)
 backend_LDFLAGS 	+= $(deps_LIBS) $(deps_LIBS_CODECS)
-backend_LDFLAGS 	+= -Wl,--version-script=airscan.sym -Wl,--no-undefined
+backend_LDFLAGS 	+= -Wl,--version-script=airscan.sym -Wl,--no-undefined -lc
 
 tools_LDFLAGS 		:= $(LDFLAGS)
 tools_LDFLAGS 		+= $(deps_LIBS)

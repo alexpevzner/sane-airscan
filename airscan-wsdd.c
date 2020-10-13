@@ -1462,7 +1462,7 @@ wsdd_mcast_update_membership (int fd, netif_addr *addr, bool add)
 	mreq6.ipv6mr_multiaddr = wsdd_mcast_ipv6.sin6_addr;
 	mreq6.ipv6mr_interface = addr->ifindex;
 
-        opt = add ? IPV6_ADD_MEMBERSHIP : IPV6_DROP_MEMBERSHIP;
+        opt = add ? IPV6_JOIN_GROUP : IPV6_LEAVE_GROUP;
         rc = setsockopt(fd, IPPROTO_IPV6, opt, &mreq6, sizeof(mreq6));
 
         if (rc < 0) {
