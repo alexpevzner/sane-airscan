@@ -114,15 +114,12 @@ void
 sane_close (SANE_Handle handle)
 {
     device  *dev = (device*) handle;
-    log_ctx *log = device_log_ctx(dev);
 
-    log_debug(log, "API: sane_close(): called");
+    log_debug(device_log_ctx(dev), "API: sane_close(): called");
 
     eloop_mutex_lock();
-    device_close((device*) handle);
+    device_close((device*) handle, "API: sane_close(): done");
     eloop_mutex_unlock();
-
-    log_debug(log, "API: sane_close(): done");
 }
 
 /* Get option descriptor
