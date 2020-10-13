@@ -227,7 +227,7 @@ device_new (zeroconf_devinfo *devinfo)
 /* Destroy a device
  */
 static void
-device_free (device *dev)
+device_free (device *dev, const char *log_msg)
 {
     int i;
 
@@ -270,6 +270,10 @@ device_free (device *dev)
     pollable_free(dev->read_pollable);
 
     log_debug(dev->log, "device destroyed");
+    if (log_msg != NULL) {
+        log_debug(dev->log, "%s", log_msg);
+    }
+
     log_ctx_free(dev->log);
     zeroconf_devinfo_free(dev->devinfo);
     mem_free(dev);
@@ -292,7 +296,6 @@ device_io_start (device *dev)
 {
     dev->stm_cancel_event = eloop_event_new(device_stm_cancel_event_callback, dev);
     if (dev->stm_cancel_event == NULL) {
-        device_close(dev);
         return SANE_STATUS_NO_MEM;
     }
 
@@ -325,7 +328,7 @@ static void
 device_table_purge (void)
 {
     while (mem_len(device_table) > 0) {
-        device_free(device_table[0]);
+        device_free(device_table[0], NULL);
     }
 }
 
@@ -1196,8 +1199,8 @@ device_open (const char *ident, SANE_Status *status)
     dev = device_new(devinfo);
     *status = device_io_start(dev);
     if (*status != SANE_STATUS_GOOD) {
-        device_free(dev);
-        dev = NULL;
+        device_free(dev, NULL);
+        return NULL;
     }
 
     /* Wait until device is initialized */
@@ -1206,18 +1209,19 @@ device_open (const char *ident, SANE_Status *status)
     }
 
     if (device_stm_state_get(dev) == DEVICE_STM_PROBING_FAILED) {
-        device_free(dev);
-        dev = NULL;
+        device_free(dev, NULL);
         *status = SANE_STATUS_IO_ERROR;
+        return NULL;
     }
 
     return dev;
 }
 
 /* Close the device
+ * If log_msg is not NULL, it is written to the device log as late as possible
  */
 void
-device_close (device *dev)
+device_close (device *dev, const char *log_msg)
 {
     /* Cancel job in progress, if any */
     if (device_stm_state_working(dev)) {
@@ -1226,7 +1230,7 @@ device_close (device *dev)
 
     /* Close the device */
     device_stm_state_set(dev, DEVICE_STM_CLOSED);
-    device_free(dev);
+    device_free(dev, log_msg);
 }
 
 /* Get option descriptor

@@ -2715,9 +2715,10 @@ device*
 device_open (const char *name, SANE_Status *status);
 
 /* Close the device
+ * If log_msg is not NULL, it is written to the device log as late as possible
  */
 void
-device_close (device *dev);
+device_close (device *dev, const char *log_msg);
 
 /* Get device's logging context
  */
