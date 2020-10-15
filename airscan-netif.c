@@ -415,6 +415,29 @@ struct netif_notifier {
     ll_node      list_node;          /* in the netif_notifier_list */
 };
 
+/* Get a new list of network interfaces and notify the callbacks */
+static void netif_refresh_ifaddrs() {
+    struct ifaddrs  *new_ifaddrs;
+    ll_node         *node;
+    int              rc;
+
+    rc = getifaddrs(&new_ifaddrs);
+    if (rc >= 0) {
+        if (netif_ifaddrs != NULL) {
+            freeifaddrs(netif_ifaddrs);
+        }
+
+        netif_ifaddrs = new_ifaddrs;
+    }
+
+    /* Call all registered callbacks */
+    for (LL_FOR_EACH(node, &netif_notifier_list)) {
+        netif_notifier *notifier;
+        notifier = OUTER_STRUCT(node, netif_notifier, list_node);
+        notifier->callback(notifier->data);
+    }
+}
+
 /* netif_notifier read callback
  */
 static void
@@ -424,8 +447,6 @@ netif_notifier_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
     int             rc;
     struct nlmsghdr *p;
     size_t          sz;
-    ll_node         *node;
-    struct ifaddrs  *new_ifaddrs;
 
     (void) fd;
     (void) data;
@@ -452,22 +473,7 @@ netif_notifier_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
 
         case RTM_NEWADDR:
         case RTM_DELADDR:
-            /* Refresh netif_ifaddrs */
-            rc = getifaddrs(&new_ifaddrs);
-            if (rc >= 0) {
-                if (netif_ifaddrs != NULL) {
-                    freeifaddrs(netif_ifaddrs);
-                }
-
-                netif_ifaddrs = new_ifaddrs;
-            }
-
-            /* Call all registered callbacks */
-            for (LL_FOR_EACH(node, &netif_notifier_list)) {
-                netif_notifier *notifier;
-                notifier = OUTER_STRUCT(node, netif_notifier, list_node);
-                notifier->callback(notifier->data);
-            }
+            netif_refresh_ifaddrs();
             return;
         }
     }
