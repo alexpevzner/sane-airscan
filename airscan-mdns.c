@@ -621,7 +621,10 @@ mdns_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
         AvahiLookupResultFlags flags, void* userdata)
 {
     mdns_finding    *mdns;
-    MDNS_SERVICE    service = (MDNS_SERVICE) userdata;
+    // Newer clang produces a warning about casting from void* to an enum.
+    // userdata is only set to values from the MDNS_SERVICE enum, so we can
+    // safely suppress this warning with an extra cast through intptr_t.
+    MDNS_SERVICE    service = (MDNS_SERVICE)(intptr_t) userdata;
     ZEROCONF_METHOD method = mdns_service_to_method(service);
     bool            initscan = mdns_initscan[service];
 
