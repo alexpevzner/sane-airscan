@@ -279,7 +279,8 @@ ll_cat (ll_head *list1, ll_head *list2)
  * This function never returns NULL, it panics in a case of
  * memory allocation error.
  */
-#define mem_resize(p,len,extra) __mem_resize(p,len,extra,sizeof(*p),true)
+#define mem_resize(p,len,extra)         \
+        ((__typeof__(p)) __mem_resize(p,len,extra,sizeof(*p),true))
 
 /* Try to resize memory. It works like mem_resize() but may
  * return NULL if memory allocation failed.
@@ -2063,7 +2064,7 @@ sane_string_array_max_strlen(const SANE_String *a);
 static inline const SANE_Device**
 sane_device_array_new (void)
 {
-    return ptr_array_new(SANE_Device*);
+    return ptr_array_new(const SANE_Device*);
 }
 
 /* Free array of SANE_Device
