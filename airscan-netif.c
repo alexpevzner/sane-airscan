@@ -420,8 +420,11 @@ struct netif_notifier {
     ll_node      list_node;          /* in the netif_notifier_list */
 };
 
-/* Get a new list of network interfaces and notify the callbacks */
-static void netif_refresh_ifaddrs() {
+/* Get a new list of network interfaces and notify the callbacks
+ */
+static void
+netif_refresh_ifaddrs (void)
+{
     struct ifaddrs  *new_ifaddrs;
     ll_node         *node;
     int              rc;
@@ -464,7 +467,11 @@ netif_notifier_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
 #if defined(OS_HAVE_RTNETLINK)
     struct nlmsghdr *p;
     size_t          sz;
-    /* Parse rtnetlink message */
+
+    /* Parse rtnetlink message, to suppress unneeded (and relatively
+     * expensive) netif_refresh_ifaddrs() calls. We are only interested
+     * in RTM_NEWADDR/RTM_DELADDR notifications
+     */
     sz = (size_t) rc;
     for (p = (struct nlmsghdr*) buf;
         sz >= sizeof(struct nlmsghdr); p = NLMSG_NEXT(p, sz)) {
@@ -484,8 +491,9 @@ netif_notifier_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
         }
     }
 #elif defined(OS_HAVE_AF_ROUTE)
-    // Given the ROUTE_FILTERs, we know that this is a RTM_NEWADDR or
-    // a RTM_DELADDR.
+    /* Given the ROUTE_FILTERs, we know that this is a RTM_NEWADDR or
+     * a RTM_DELADDR.
+     */
     netif_refresh_ifaddrs();
 #endif
 }
