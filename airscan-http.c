@@ -386,6 +386,10 @@ http_uri_parse (http_uri *uri, const char *str)
     size_t     path_skip = 0;
     error      err;
 
+    if (!str[0]) {
+        return ERROR("URI: empty string");
+    }
+
     /* Note, github.com/nodejs/http-parser fails to properly
      * parse relative URLs (URLs without scheme), so prepend
      * fake scheme, then remove it
@@ -572,6 +576,8 @@ http_uri_new (const char *str, bool strip_fragment)
     http_uri       *uri = mem_new(http_uri, 1);
     char           *buf;
 
+    log_assert(NULL, str != NULL);
+
     /* Parse URI */
     if (http_uri_parse(uri, str) != NULL) {
         goto FAIL;
@@ -740,6 +746,8 @@ http_uri*
 http_uri_new_relative (const http_uri *base, const char *path,
         bool strip_fragment, bool path_only)
 {
+    log_assert(NULL, path != NULL);
+
     char           *buf = alloca(strlen(base->str) + strlen(path) + 1);
     char           *end = buf;
     http_uri       ref;
