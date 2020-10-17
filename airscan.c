@@ -141,7 +141,7 @@ sane_get_option_descriptor (SANE_Handle handle, SANE_Int option)
  */
 static void
 sane_control_option_log (log_ctx *log, const SANE_Option_Descriptor *desc,
-        SANE_Action action, void *value, SANE_Int info)
+        SANE_Int option, SANE_Action action, void *value, SANE_Int info)
 {
     char vbuf[128];
     char ibuf[128] = "";
@@ -211,7 +211,7 @@ sane_control_option_log (log_ctx *log, const SANE_Option_Descriptor *desc,
     }
 
     log_debug(log, "API: %s %s: %s %s", 
-        get ? "get" : "set", desc->name, vbuf, ibuf);
+        get ? "get" : "set", option ? desc->name : "(0)", vbuf, ibuf);
 }
 
 /* Get or set option value
@@ -252,7 +252,7 @@ DONE:
     eloop_mutex_unlock();
 
     if (status == SANE_STATUS_GOOD) {
-        sane_control_option_log(log, desc, action, value,
+        sane_control_option_log(log, desc, option, action, value,
             info ? *info : 0);
     }
 
