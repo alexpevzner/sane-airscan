@@ -344,6 +344,7 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->type = SANE_TYPE_FIXED;
     desc->size = sizeof(SANE_Fixed);
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
+    desc->unit = SANE_UNIT_PERCENT;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
     desc->constraint.range = &devopt_nonnegative_percent_range;
 
@@ -355,6 +356,7 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->type = SANE_TYPE_FIXED;
     desc->size = sizeof(SANE_Fixed);
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
+    desc->unit = SANE_UNIT_PERCENT;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
     desc->constraint.range = &devopt_nonnegative_percent_range;
 
@@ -366,6 +368,7 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->type = SANE_TYPE_FIXED;
     desc->size = sizeof(SANE_Fixed);
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
+    desc->unit = SANE_UNIT_NONE;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
     desc->constraint.range = &devopt_gamma_range;
 
