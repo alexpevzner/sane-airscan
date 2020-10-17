@@ -319,7 +319,7 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->desc = SANE_DESC_BRIGHTNESS;
     desc->type = SANE_TYPE_FIXED;
     desc->size = sizeof(SANE_Fixed);
-    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
+    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT | SANE_CAP_EMULATED;
     desc->unit = SANE_UNIT_PERCENT;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
     desc->constraint.range = &devopt_percent_range;
@@ -331,7 +331,7 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->desc = SANE_DESC_CONTRAST;
     desc->type = SANE_TYPE_FIXED;
     desc->size = sizeof(SANE_Fixed);
-    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
+    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT | SANE_CAP_EMULATED;
     desc->unit = SANE_UNIT_PERCENT;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
     desc->constraint.range = &devopt_percent_range;
@@ -343,7 +343,7 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->desc = SANE_DESC_SHADOW;
     desc->type = SANE_TYPE_FIXED;
     desc->size = sizeof(SANE_Fixed);
-    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
+    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT | SANE_CAP_EMULATED;
     desc->unit = SANE_UNIT_PERCENT;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
     desc->constraint.range = &devopt_nonnegative_percent_range;
@@ -355,7 +355,7 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->desc = SANE_DESC_HIGHLIGHT;
     desc->type = SANE_TYPE_FIXED;
     desc->size = sizeof(SANE_Fixed);
-    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
+    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT | SANE_CAP_EMULATED;
     desc->unit = SANE_UNIT_PERCENT;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
     desc->constraint.range = &devopt_nonnegative_percent_range;
@@ -367,7 +367,7 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->desc = SANE_DESC_ANALOG_GAMMA;
     desc->type = SANE_TYPE_FIXED;
     desc->size = sizeof(SANE_Fixed);
-    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
+    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT | SANE_CAP_EMULATED;
     desc->unit = SANE_UNIT_NONE;
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
     desc->constraint.range = &devopt_gamma_range;
@@ -379,7 +379,7 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->desc = SANE_DESC_NEGATIVE;
     desc->type = SANE_TYPE_BOOL;
     desc->size = sizeof(SANE_Bool);
-    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
+    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT | SANE_CAP_EMULATED;
 }
 
 /* Update scan parameters, according to the currently set
