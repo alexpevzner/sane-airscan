@@ -22,6 +22,9 @@
 static pthread_once_t os_homedir_once = PTHREAD_ONCE_INIT;
 static char os_homedir_buf[PATH_MAX];
 
+static pthread_once_t os_progname_once = PTHREAD_ONCE_INIT;
+static char os_progname_buf[PATH_MAX];
+
 /* Initialize os_homedir_buf. Called once, on demand
  */
 static void
@@ -48,8 +51,8 @@ os_homedir_init (void)
     }
 }
 
-/* Get user's home directory. There is no need to
- * free the returned string
+/* Get user's home directory.
+ * There is no need to free the returned string
  *
  * May return NULL in a case of error
  */
@@ -58,6 +61,38 @@ os_homedir (void)
 {
     pthread_once(&os_homedir_once, os_homedir_init);
     return os_homedir_buf[0] ? os_homedir_buf : NULL;
+}
+
+/* Initialize os_progname_buf. Called once, on demand
+ */
+static void
+os_progname_init (void)
+{
+#ifdef  OS_HAVE_LINUX_PROCFS
+    ssize_t rc;
+
+    rc = readlink("/proc/self/exe", os_progname_buf, sizeof(os_progname_buf));
+    if (rc > 0) {
+        char *s = strrchr(os_progname_buf, '/');
+        if (s != NULL) {
+            memmove(os_progname_buf, s+1, strlen(s+1) + 1);
+        }
+    }
+#else
+#   error FIX ME
+#endif
+}
+
+/* Get base name of the calling program. 
+ * There is no need to free the returned string
+ *
+ * May return NULL in a case of error
+ */
+const char*
+os_progname (void)
+{
+    pthread_once(&os_progname_once, os_progname_init);
+    return os_progname_buf[0] ? os_progname_buf : NULL;
 }
 
 /* Make directory with parents

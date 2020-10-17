@@ -279,7 +279,8 @@ ll_cat (ll_head *list1, ll_head *list2)
  * This function never returns NULL, it panics in a case of
  * memory allocation error.
  */
-#define mem_resize(p,len,extra) __mem_resize(p,len,extra,sizeof(*p),true)
+#define mem_resize(p,len,extra)         \
+        ((__typeof__(p)) __mem_resize(p,len,extra,sizeof(*p),true))
 
 /* Try to resize memory. It works like mem_resize() but may
  * return NULL if memory allocation failed.
@@ -578,17 +579,19 @@ __ptr_array_del (void **a, int i)
 /* The following macros, if defined, indicate that OS
  * has a particular features:
  *
- *   OS_HAVE_EVENTFD   - Linux-like eventfd (2)
- *   OS_HAVE_RTNETLINK - Linux-like rtnetlink (7)
- *   OS_HAVE_AF_ROUTE  - BSD-like AF_ROUTE
+ *   OS_HAVE_EVENTFD      - Linux-like eventfd (2)
+ *   OS_HAVE_RTNETLINK    - Linux-like rtnetlink (7)
+ *   OS_HAVE_AF_ROUTE     - BSD-like AF_ROUTE
+ *   OS_HAVE_LINUX_PROCFS - Linux-style procfs
  */
 #ifdef  __linux__
-#   define OS_HAVE_EVENTFD   1
-#   define OS_HAVE_RTNETLINK 1
+#   define OS_HAVE_EVENTFD      1
+#   define OS_HAVE_RTNETLINK    1
+#   define OS_HAVE_LINUX_PROCFS 1
 #endif
 
 #ifdef BSD
-#   define OS_HAVE_AF_ROUTE  1
+#   define OS_HAVE_AF_ROUTE     1
 #endif
 
 /* Get user's home directory. There is no need to
@@ -598,6 +601,14 @@ __ptr_array_del (void **a, int i)
  */
 const char *
 os_homedir (void);
+
+/* Get base name of the calling program. 
+ * There is no need to free the returned string
+ *
+ * May return NULL in a case of error
+ */
+const char*
+os_progname (void);
 
 /* Make directory with parents
  */
@@ -615,7 +626,7 @@ os_mkdir (const char *path, mode_t mode);
  * by error or string, obtained from an error using the
  * ESTRING() function
  */
-typedef struct {} *error;
+typedef struct error *error;
 
 /* Standard errors
  */
@@ -2063,7 +2074,7 @@ sane_string_array_max_strlen(const SANE_String *a);
 static inline const SANE_Device**
 sane_device_array_new (void)
 {
-    return ptr_array_new(SANE_Device*);
+    return ptr_array_new(const SANE_Device*);
 }
 
 /* Free array of SANE_Device

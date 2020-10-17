@@ -46,25 +46,20 @@ typedef struct {
 
 /* Name of the process' executable
  */
-static char program[PATH_MAX];
+static const char *trace_program;
 
 /* Full block of zero bytes
  */
-static const char zero_block[512];
+static const char trace_zero_block[512];
 
 /* Initialize protocol trace. Called at backend initialization
  */
 SANE_Status
 trace_init (void)
 {
-    ssize_t rc = readlink("/proc/self/exe", program, sizeof(program));
-    if (rc < 0) {
-        strcpy(program, "unknown");
-    } else {
-        char *s = strrchr(program, '/');
-        if (s != NULL) {
-            memmove(program, s+1, strlen(s+1) + 1);
-        }
+    trace_program = os_progname();
+    if (trace_program == NULL) {
+        trace_program = "unknown";
     }
 
     return SANE_STATUS_GOOD;
@@ -101,7 +96,7 @@ trace_open (const char *device_name)
         path[len] = '\0';
     }
 
-    strcat(path, program);
+    strcat(path, trace_program);
     strcat(path, "-");
     strcat(path, device_name);
 
@@ -151,8 +146,8 @@ trace_unref (trace *t)
         if (t->data != NULL) {
             if (t->log != NULL) {
                 /* Normal close - write tar footer */
-                fwrite(zero_block, sizeof(zero_block), 1, t->data);
-                fwrite(zero_block, sizeof(zero_block), 1, t->data);
+                fwrite(trace_zero_block, sizeof(trace_zero_block), 1, t->data);
+                fwrite(trace_zero_block, sizeof(trace_zero_block), 1, t->data);
             }
             fclose(t->data);
         }
@@ -230,7 +225,7 @@ trace_dump_data (trace *t, http_data *data)
     /* Write padding */
     i = data->size & (512-1);
     if (i != 0) {
-        fwrite(zero_block, 512 - i, 1, t->data);
+        fwrite(trace_zero_block, 512 - i, 1, t->data);
     }
 
     /* Put a note into the log file */

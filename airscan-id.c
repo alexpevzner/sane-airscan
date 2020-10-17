@@ -104,7 +104,7 @@ id_source_sane_name (ID_SOURCE id)
 ID_SOURCE
 id_source_by_sane_name (const char *name)
 {
-    return id_by_name(name, strcmp, id_source_sane_name_table);
+    return id_by_name(name, strcasecmp, id_source_sane_name_table);
 }
 
 /******************** ID_COLORMODE ********************/
@@ -133,7 +133,7 @@ id_colormode_sane_name (ID_COLORMODE id)
 ID_COLORMODE
 id_colormode_by_sane_name (const char *name)
 {
-    return id_by_name(name, strcmp, id_colormode_sane_name_table);
+    return id_by_name(name, strcasecmp, id_colormode_sane_name_table);
 }
 
 /******************** ID_FORMAT ********************/
