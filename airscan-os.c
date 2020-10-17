@@ -15,10 +15,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/types.h>
-#include <sys/sysctl.h>
-
 #include <sys/stat.h>
+
+#ifdef __OpenBSD__
+#   include <sys/types.h>
+#   include <sys/sysctl.h>
+#endif
 
 /* Static variables */
 static pthread_once_t os_homedir_once = PTHREAD_ONCE_INIT;
