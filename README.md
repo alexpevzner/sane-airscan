@@ -122,6 +122,7 @@ Legend:
 | HP Officejet 4630                  | Yes                       |                           |
 | HP Officejet Pro 6970              | Yes                       |                           |
 | HP OfficeJet Pro 6978              | Yes                       |                           |
+| HP OfficeJet Pro 8010 series       | Yes                       |                           |
 | HP OfficeJet Pro 8020 Series       | Yes                       |                           |
 | HP OfficeJet Pro 8730              | Yes                       | Yes                       |
 | HP OfficeJet Pro 9010 series       | Yes                       |                           |
