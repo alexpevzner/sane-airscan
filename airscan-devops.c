@@ -14,9 +14,15 @@
 
 /* Static variables */
 static const SANE_Range devopt_percent_range = {
-    .min = SANE_FIX(-100),
-    .max = SANE_FIX(100),
-    .quant = SANE_FIX(1)
+    .min = SANE_FIX(-100.0),
+    .max = SANE_FIX(100.0),
+    .quant = SANE_FIX(1.0)
+};
+
+static const SANE_Range devopt_nonnegative_percent_range = {
+    .min = SANE_FIX(0.0),
+    .max = SANE_FIX(100.0),
+    .quant = SANE_FIX(1.0)
 };
 
 static const SANE_Range devopt_gamma_range = {
@@ -330,6 +336,28 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->constraint_type = SANE_CONSTRAINT_RANGE;
     desc->constraint.range = &devopt_percent_range;
 
+    /* OPT_SHADOW */
+    desc = &opt->desc[OPT_SHADOW];
+    desc->name = SANE_NAME_SHADOW;
+    desc->title = SANE_TITLE_SHADOW;
+    desc->desc = SANE_DESC_SHADOW;
+    desc->type = SANE_TYPE_FIXED;
+    desc->size = sizeof(SANE_Fixed);
+    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
+    desc->constraint_type = SANE_CONSTRAINT_RANGE;
+    desc->constraint.range = &devopt_nonnegative_percent_range;
+
+    /* OPT_HIGHLIGHT */
+    desc = &opt->desc[OPT_HIGHLIGHT];
+    desc->name = SANE_NAME_HIGHLIGHT;
+    desc->title = SANE_TITLE_HIGHLIGHT;
+    desc->desc = SANE_DESC_HIGHLIGHT;
+    desc->type = SANE_TYPE_FIXED;
+    desc->size = sizeof(SANE_Fixed);
+    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
+    desc->constraint_type = SANE_CONSTRAINT_RANGE;
+    desc->constraint.range = &devopt_nonnegative_percent_range;
+
     /* OPT_GAMMA */
     desc = &opt->desc[OPT_GAMMA];
     desc->name = SANE_NAME_ANALOG_GAMMA;
@@ -520,31 +548,38 @@ devopt_set_geom (devopt *opt, SANE_Int option, SANE_Fixed val, SANE_Word *info)
 static SANE_Status
 devopt_set_enh (devopt *opt, SANE_Int option, SANE_Fixed val, SANE_Word *info)
 {
-    SANE_Fixed       *out = NULL;
-    const SANE_Range *range = NULL;
-    SANE_Fixed       val_adjusted;
+    SANE_Fixed *out = NULL;
+    SANE_Range range = *opt->desc[option].constraint.range;
+    SANE_Fixed val_adjusted;
 
     switch (option) {
     case OPT_BRIGHTNESS:
         out = &opt->brightness;
-        range = &devopt_percent_range;
         break;
 
     case OPT_CONTRAST:
         out = &opt->contrast;
-        range = &devopt_percent_range;
+        break;
+
+    case OPT_SHADOW:
+        out = &opt->shadow;
+        range.max = opt->highlight - range.quant;
+        break;
+
+    case OPT_HIGHLIGHT:
+        out = &opt->highlight;
+        range.min = opt->shadow + range.quant;
         break;
 
     case OPT_GAMMA:
         out = &opt->gamma;
-        range = &devopt_gamma_range;
         break;
 
     default:
         log_internal_error(NULL);
     }
 
-    val_adjusted = math_range_fit(range, val);
+    val_adjusted = math_range_fit(&range, val);
     if (val_adjusted != val) {
         *info |= SANE_INFO_INEXACT;
     }
@@ -576,6 +611,8 @@ devopt_set_defaults (devopt *opt)
 
     opt->brightness = SANE_FIX(0.0);
     opt->contrast = SANE_FIX(0.0);
+    opt->shadow = SANE_FIX(0.0);
+    opt->highlight = SANE_FIX(100.0);
     opt->gamma = SANE_FIX(1.0);
 
     devopt_rebuild_opt_desc(opt);
@@ -632,6 +669,8 @@ devopt_set_option (devopt *opt, SANE_Int option, void *value, SANE_Word *info)
 
     case OPT_BRIGHTNESS:
     case OPT_CONTRAST:
+    case OPT_SHADOW:
+    case OPT_HIGHLIGHT:
     case OPT_GAMMA:
         status = devopt_set_enh(opt, option, *(SANE_Fixed*)value, info);
         break;
@@ -702,6 +741,14 @@ devopt_get_option (devopt *opt, SANE_Int option, void *value)
 
     case OPT_CONTRAST:
         *(SANE_Fixed*) value = opt->contrast;
+        break;
+
+    case OPT_SHADOW:
+        *(SANE_Fixed*) value = opt->shadow;
+        break;
+
+    case OPT_HIGHLIGHT:
+        *(SANE_Fixed*) value = opt->highlight;
         break;
 
     case OPT_GAMMA:

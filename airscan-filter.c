@@ -61,9 +61,13 @@ filter_xlat_new (const devopt *opt)
     double      B = SANE_UNFIX(opt->brightness) / 200.0;
     double      C = SANE_UNFIX(opt->contrast) / 100.0 + 1.0;
     double      G = SANE_UNFIX(opt->gamma);
+    uint8_t     shadow = round(2.55 * SANE_UNFIX(opt->shadow));
+    uint8_t     highlight = round(2.55 * SANE_UNFIX(opt->highlight));
 
     if (opt->brightness == SANE_FIX(0.0) &&
         opt->contrast == SANE_FIX(0.0) &&
+        opt->shadow == SANE_FIX(0.0) &&
+        opt->highlight == SANE_FIX(100.0) &&
         opt->gamma == SANE_FIX(1.0) &&
         !opt->negative) {
         return NULL;
@@ -75,7 +79,8 @@ filter_xlat_new (const devopt *opt)
     filt->base.apply = filter_xlat_apply;
 
     for (i = 0; i < 256; i ++) {
-        double v = i / 255.0;
+        double  v = i / 255.0;
+        uint8_t c;
 
         v = C * (v - 0.5) + 0.5 + B;
         v = math_bound_double(v, 0.0, 1.0);
@@ -85,7 +90,14 @@ filter_xlat_new (const devopt *opt)
             v = 1 - v;
         }
 
-        filt->table[i] = round(v * 255.0);
+        c = round(v * 255.0);
+        if (c <= shadow) {
+            c = 0;
+        } else if (c >= highlight) {
+            c = 255;
+        }
+
+        filt->table[i] = c;
     }
 
     return &filt->base;

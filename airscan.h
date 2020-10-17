@@ -2325,6 +2325,8 @@ enum {
     OPT_GROUP_ENHANCEMENT,
     OPT_BRIGHTNESS,
     OPT_CONTRAST,
+    OPT_SHADOW,
+    OPT_HIGHLIGHT,
     OPT_GAMMA,
     OPT_NEGATIVE,
 
@@ -2486,6 +2488,8 @@ typedef struct {
     SANE_String            *sane_colormodes;  /* Color modes in SANE format */
     SANE_Fixed             brightness;        /* -100.0 ... +100.0 */
     SANE_Fixed             contrast;          /* -100.0 ... +100.0 */
+    SANE_Fixed             shadow;            /* 0.0 ... +100.0 */
+    SANE_Fixed             highlight;         /* 0.0 ... +100.0 */
     SANE_Fixed             gamma;             /* Small positive value */
     bool                   negative;          /* Flip black and white */
 } devopt;
