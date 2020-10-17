@@ -79,16 +79,12 @@ filter_xlat_new (const devopt *opt)
     filt->base.apply = filter_xlat_apply;
 
     for (i = 0; i < 256; i ++) {
-        double  v = i / 255.0;
-        uint8_t c;
+        uint8_t c = opt->negative ? (255 - i) : i;
+        double  v = c / 255.0;
 
         v = C * (v - 0.5) + 0.5 + B;
         v = math_bound_double(v, 0.0, 1.0);
         v = pow(v, 1/G);
-
-        if (opt->negative) {
-            v = 1 - v;
-        }
 
         c = round(v * 255.0);
         if (c <= shadow) {
