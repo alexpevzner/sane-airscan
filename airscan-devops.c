@@ -28,7 +28,6 @@ static const SANE_Range devopt_nonnegative_percent_range = {
 static const SANE_Range devopt_gamma_range = {
     .min = SANE_FIX(0.1),
     .max = SANE_FIX(4.0),
-    .quant = SANE_FIX(0.01)
 };
 
 /* Initialize device options
