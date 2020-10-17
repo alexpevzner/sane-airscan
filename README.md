@@ -102,6 +102,7 @@ Legend:
 | HP Color LaserJet Pro M478f-9f     | Yes                       |                           |
 | HP DeskJet 2540                    | Yes                       |                           |
 | HP DeskJet 2600 series             | Yes                       |                           |
+| HP DeskJet 2700 series             | Yes                       |                           |
 | HP DeskJet 5000 series             | Yes                       |                           |
 | HP ENVY 4500                       | Yes                       |                           |
 | HP ENVY 5540                       | Yes                       |                           |
