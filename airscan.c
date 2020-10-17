@@ -141,9 +141,10 @@ sane_get_option_descriptor (SANE_Handle handle, SANE_Int option)
  */
 static void
 sane_control_option_log (log_ctx *log, const SANE_Option_Descriptor *desc,
-        SANE_Action action, void *value)
+        SANE_Action action, void *value, SANE_Int info)
 {
     char vbuf[128];
+    char ibuf[128] = "";
     bool get;
 
     switch (action) {
@@ -185,7 +186,32 @@ sane_control_option_log (log_ctx *log, const SANE_Option_Descriptor *desc,
         return;
     }
 
-    log_debug(log, "API: %s %s: %s", get ? "get" : "set", desc->name, vbuf);
+    if (action == SANE_ACTION_SET_VALUE && info != 0) {
+        strcat(ibuf, " info: ");
+
+        if ((info & SANE_INFO_INEXACT) != 0) {
+            strcat(ibuf, "inexact");
+            info &= ~SANE_INFO_INEXACT;
+            if (info != 0) {
+                strcat(ibuf, ", ");
+            }
+        }
+
+        if ((info & (SANE_INFO_RELOAD_OPTIONS | SANE_INFO_RELOAD_PARAMS)) != 0) {
+            strcat(ibuf, "reload:");
+
+            if ((info & SANE_INFO_RELOAD_OPTIONS) != 0) {
+                strcat(ibuf, " options");
+            }
+
+            if ((info & SANE_INFO_RELOAD_PARAMS) != 0) {
+                strcat(ibuf, " params");
+            }
+        }
+    }
+
+    log_debug(log, "API: %s %s: %s %s", 
+        get ? "get" : "set", desc->name, vbuf, ibuf);
 }
 
 /* Get or set option value
@@ -226,7 +252,8 @@ DONE:
     eloop_mutex_unlock();
 
     if (status == SANE_STATUS_GOOD) {
-        sane_control_option_log(log, desc, action, value);
+        sane_control_option_log(log, desc, action, value,
+            info ? *info : 0);
     }
 
     return status;
