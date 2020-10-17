@@ -553,7 +553,7 @@ run_test_in_eloop_thread (void)
     inifile              *ini;
     size_t               i, len;
 
-    findings = ptr_array_new(zeroconf_finding);
+    findings = ptr_array_new(zeroconf_finding*);
 
     ini = inifile_open(test_file);
     if (ini == NULL) {
