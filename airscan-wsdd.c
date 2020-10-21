@@ -812,6 +812,50 @@ wsdd_message_action_name (const wsdd_message *msg)
     return "UNKNOWN";
 }
 
+/******************** Advanced socket options ********************/
+/* Setup IP_PKTINFO/IP_RECVIF reception for IPv6 sockets
+ */
+static int
+wsdd_sock_enable_pktinfo_ip6 (int fd)
+{
+    static int yes = 1;
+    int        rc;
+
+    rc = setsockopt(fd, IPPROTO_IPV6, IPV6_RECVPKTINFO, &yes, sizeof(yes));
+    if (rc < 0) {
+        log_debug(wsdd_log, "setsockopt(AF_INET6, IPV6_RECVPKTINFO): %s",
+                strerror(errno));
+    }
+
+    return rc;
+}
+
+/* Setup IP_PKTINFO/IP_RECVIF reception for IPv4 sockets
+ */
+static int
+wsdd_sock_enable_pktinfo_ip4 (int fd)
+{
+    static int yes = 1;
+    int        rc;
+
+#ifdef IP_PKTINFO
+    /* Linux version */
+    rc = setsockopt(fd, IPPROTO_IP, IP_PKTINFO, &yes, sizeof(yes));
+#elif defined(IP_RECVIF)
+    /* OpenBSD */
+    rc = setsockopt(fd, IPPROTO_IP, IP_RECVIF, &yes, sizeof(yes));
+#else
+#  error FIX ME
+#endif
+
+    if (rc < 0) {
+        log_debug(wsdd_log, "setsockopt(AF_INET,IP_PKTINFO/IP_RECVIF): %s",
+                  strerror(errno));
+    }
+
+    return rc;
+}
+
 /******************** wsdd_resolver operations ********************/
 /* Dispatch received WSDD message
  */
@@ -947,17 +991,21 @@ wsdd_resolver_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
             ifindex = pkt->ipi6_ifindex;
         }
 #ifdef IP_PKTINFO
+        /* Linux version */
         else if (cmsg->cmsg_level == IPPROTO_IP &&
             cmsg->cmsg_type == IP_PKTINFO) {
             struct in_pktinfo *pkt = (struct in_pktinfo*) CMSG_DATA(cmsg);
             ifindex = pkt->ipi_ifindex;
         }
-#else
+#elif defined(IP_RECVIF)
+        /* OpenBSD */
         else if (cmsg->cmsg_level == IPPROTO_IP &&
             cmsg->cmsg_type == IP_RECVIF) {
             struct sockaddr_dl *pkt = (struct sockaddr_dl *) CMSG_DATA(cmsg);
             ifindex = pkt->sdl_index;
         }
+#else
+#   error FIX ME
 #endif
     }
 
@@ -1060,27 +1108,6 @@ wsdd_resolver_send_probe (wsdd_resolver *resolver)
     wsdd_resolver_timer_set(resolver);
 }
 
-/* Sets IP_PKTINFO or IP_RECVIF, depending on which one is available.
-  */
-static bool
-wsdd_set_socket_opt_pktinfo(int fd)
-{
-    static int yes = 1;
-    const int optname =
-#ifdef IP_PKTINFO
-            IP_PKTINFO;
-#else
-            IP_RECVIF;
-#endif
-    int rc = setsockopt(fd, IPPROTO_IP, optname, &yes, sizeof(yes));
-    if (rc < 0) {
-        log_debug(wsdd_log, "setsockopt(AF_INET,IP_PKTINFO/IP_RECVIF): %s",
-                  strerror(errno));
-        return true;
-    }
-    return false;
-}
-
 /* Create wsdd_resolver
  */
 static wsdd_resolver*
@@ -1090,7 +1117,7 @@ wsdd_resolver_new (const netif_addr *addr, bool initscan)
     int           af = addr->ipv6 ? AF_INET6 : AF_INET;
     const char    *af_name = addr->ipv6 ? "AF_INET6" : "AF_INET";
     int           rc;
-    static int    no = 0, yes = 1;
+    static int    no = 0;
     uint16_t      port;
 
     /* Build resolver structure */
@@ -1115,12 +1142,8 @@ wsdd_resolver_new (const netif_addr *addr, bool initscan)
             goto FAIL;
         }
 
-        rc = setsockopt(resolver->fd, IPPROTO_IPV6, IPV6_RECVPKTINFO,
-                &yes, sizeof(yes));
-
+        rc = wsdd_sock_enable_pktinfo_ip6(resolver->fd);
         if (rc < 0) {
-            log_debug(wsdd_log, "setsockopt(IPPROTO_IPV6,IPV6_RECVPKTINFO): %s",
-                    strerror(errno));
             goto FAIL;
         }
 
@@ -1138,7 +1161,8 @@ wsdd_resolver_new (const netif_addr *addr, bool initscan)
         }
 
 
-        if (wsdd_set_socket_opt_pktinfo(resolver->fd)) {
+        rc = wsdd_sock_enable_pktinfo_ip4(resolver->fd);
+        if (rc < 0) {
             goto FAIL;
         }
 
@@ -1428,14 +1452,13 @@ wsdd_mcsock_open (bool ipv6)
             goto FAIL;
         }
 
-        rc = setsockopt(fd, IPPROTO_IPV6, IPV6_RECVPKTINFO, &yes, sizeof(yes));
+        rc = wsdd_sock_enable_pktinfo_ip6(fd);
         if (rc < 0) {
-            log_debug(wsdd_log, "setsockopt(%s, IPV6_RECVPKTINFO): %s",
-                    af_name, strerror(errno));
             goto FAIL;
         }
     } else {
-        if (wsdd_set_socket_opt_pktinfo(fd)) {
+        rc = wsdd_sock_enable_pktinfo_ip4(fd);
+        if (rc < 0) {
             goto FAIL;
         }
     }
