@@ -18,6 +18,11 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <net/if.h>
+
+#ifdef BSD
+#   include <net/if_dl.h>
+#endif
+
 #include <sys/socket.h>
 
 /* Protocol times, in milliseconds
@@ -940,11 +945,20 @@ wsdd_resolver_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
             cmsg->cmsg_type == IPV6_PKTINFO) {
             struct in6_pktinfo *pkt = (struct in6_pktinfo*) CMSG_DATA(cmsg);
             ifindex = pkt->ipi6_ifindex;
-        } else if (cmsg->cmsg_level == IPPROTO_IP &&
+        }
+#ifdef IP_PKTINFO
+        else if (cmsg->cmsg_level == IPPROTO_IP &&
             cmsg->cmsg_type == IP_PKTINFO) {
             struct in_pktinfo *pkt = (struct in_pktinfo*) CMSG_DATA(cmsg);
             ifindex = pkt->ipi_ifindex;
         }
+#else
+        else if (cmsg->cmsg_level == IPPROTO_IP &&
+            cmsg->cmsg_type == IP_RECVIF) {
+            struct sockaddr_dl *pkt = (struct sockaddr_dl *) CMSG_DATA(cmsg);
+            ifindex = pkt->sdl_index;
+        }
+#endif
     }
 
     str_from = ip_straddr_from_sockaddr((struct sockaddr*) &from, true);
@@ -1046,6 +1060,27 @@ wsdd_resolver_send_probe (wsdd_resolver *resolver)
     wsdd_resolver_timer_set(resolver);
 }
 
+/* Sets IP_PKTINFO or IP_RECVIF, depending on which one is available.
+  */
+static bool
+wsdd_set_socket_opt_pktinfo(int fd)
+{
+    static int yes = 1;
+    const int optname =
+#ifdef IP_PKTINFO
+            IP_PKTINFO;
+#else
+            IP_RECVIF;
+#endif
+    int rc = setsockopt(fd, IPPROTO_IP, optname, &yes, sizeof(yes));
+    if (rc < 0) {
+        log_debug(wsdd_log, "setsockopt(AF_INET,IP_PKTINFO/IP_RECVIF): %s",
+                  strerror(errno));
+        return true;
+    }
+    return false;
+}
+
 /* Create wsdd_resolver
  */
 static wsdd_resolver*
@@ -1102,12 +1137,8 @@ wsdd_resolver_new (const netif_addr *addr, bool initscan)
             goto FAIL;
         }
 
-        rc = setsockopt(resolver->fd, IPPROTO_IP, IP_PKTINFO,
-                &yes, sizeof(yes));
 
-        if (rc < 0) {
-            log_debug(wsdd_log, "setsockopt(AF_INET,IP_PKTINFO): %s",
-                    strerror(errno));
+        if (wsdd_set_socket_opt_pktinfo(resolver->fd)) {
             goto FAIL;
         }
 
@@ -1404,10 +1435,7 @@ wsdd_mcsock_open (bool ipv6)
             goto FAIL;
         }
     } else {
-        rc = setsockopt(fd, IPPROTO_IP, IP_PKTINFO, &yes, sizeof(yes));
-        if (rc < 0) {
-            log_debug(wsdd_log, "setsockopt(%s, IP_PKTINFO): %s",
-                    af_name, strerror(errno));
+        if (wsdd_set_socket_opt_pktinfo(fd)) {
             goto FAIL;
         }
     }
