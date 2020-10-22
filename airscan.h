@@ -628,7 +628,7 @@ os_mkdir (const char *path, mode_t mode);
  * by error or string, obtained from an error using the
  * ESTRING() function
  */
-typedef struct error *error;
+typedef struct error_s *error;
 
 /* Standard errors
  */

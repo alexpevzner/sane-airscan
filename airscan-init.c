@@ -74,12 +74,11 @@ airscan_cleanup (const char *log_msg)
     rand_cleanup();
     eloop_cleanup();
 
-    conf_unload();
-
     if (log_msg != NULL) {
         log_debug(NULL, "%s", log_msg);
     }
 
+    conf_unload();
     trace_cleanup();
     log_cleanup(); /* Must be the last thing to do */
 }
