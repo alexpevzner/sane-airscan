@@ -1952,6 +1952,7 @@ struct http_query {
     uint64_t          eloop_callid;             /* For eloop_call_cancel */
     error             err;                      /* Transport error */
     struct addrinfo   *addrs;                   /* Addresses to connect to */
+    bool              addrs_freeaddrinfo;       /* Use freeaddrinfo(addrs) */
     struct addrinfo   *addr_next;               /* Next address to try */
     int               sock;                     /* HTTP socket */
     gnutls_session_t  tls;                      /* NULL if not TLS */
@@ -2012,11 +2013,11 @@ http_query_reset (http_query *q)
     http_hdr_cleanup(&q->response_header);
 
     if (q->addrs != NULL) {
-        if (q->uri->scheme == HTTP_SCHEME_UNIX) {
+        if (q->addrs_freeaddrinfo) {
+            freeaddrinfo(q->addrs);
+        } else {
             mem_free(q->addrs->ai_addr);
             mem_free(q->addrs);
-        } else {
-            freeaddrinfo(q->addrs);
         }
         q->addrs = NULL;
         q->addr_next = NULL;
@@ -2835,6 +2836,7 @@ http_query_start_processing (void *p)
         hints.ai_socktype = SOCK_STREAM;
         hints.ai_protocol = IPPROTO_TCP;
 
+        q->addrs_freeaddrinfo = true;
         rc = getaddrinfo(host, port, &hints, &q->addrs);
         if (rc != 0) {
             http_query_complete(q, ERROR(gai_strerror(rc)));
@@ -2847,6 +2849,7 @@ http_query_start_processing (void *p)
         sprintf(path, "%s/%s", conf.socket_dir, host);
 
         log_debug(q->client->log, "connecting to local socket %s", path);
+        q->addrs_freeaddrinfo = false;
         q->addrs = mem_new(struct addrinfo, 1);
         q->addrs->ai_family = AF_UNIX;
         q->addrs->ai_socktype = SOCK_STREAM;
