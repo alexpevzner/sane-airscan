@@ -55,6 +55,8 @@ sane_exit (void)
 SANE_Status
 sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
 {
+    log_debug(NULL, "API: sane_get_devices(): called");
+
     if (local_only) {
         /* Note, all our devices are non-local */
         static const SANE_Device *empty_devlist[1] = {0};
@@ -69,6 +71,8 @@ sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
         eloop_mutex_unlock();
     }
 
+    log_debug(NULL, "API: sane_get_devices(): done");
+
     return SANE_STATUS_GOOD;
 }
 
@@ -80,6 +84,8 @@ sane_open (SANE_String_Const name, SANE_Handle *handle)
     SANE_Status         status;
     device              *dev;
     const SANE_Device   **dev_list = NULL;
+
+    log_debug(NULL, "API: sane_open(\"%s\"): called", name ? name : "");
 
     eloop_mutex_lock();
 
@@ -127,12 +133,17 @@ sane_close (SANE_Handle handle)
 const SANE_Option_Descriptor *
 sane_get_option_descriptor (SANE_Handle handle, SANE_Int option)
 {
-    device *dev = (device*) handle;
+    device  *dev = (device*) handle;
+    log_ctx *log = device_log_ctx(dev);
     const SANE_Option_Descriptor *desc;
+
+    log_debug(log, "API: device_get_option_descriptor(): called");
 
     eloop_mutex_lock();
     desc = device_get_option_descriptor(dev, option);
     eloop_mutex_unlock();
+
+    log_debug(log, "API: device_get_option_descriptor(): done");
 
     return desc;
 }
@@ -249,9 +260,7 @@ sane_get_parameters (SANE_Handle handle, SANE_Parameters *params)
         eloop_mutex_unlock();
     }
 
-    if (status != SANE_STATUS_GOOD) {
-        log_debug(log, "API: sane_get_params(): %s", sane_strstatus(status));
-    }
+    log_debug(log, "API: sane_get_params(): done");
 
     return status;
 }
@@ -289,6 +298,10 @@ sane_read (SANE_Handle handle, SANE_Byte *data, SANE_Int max_len, SANE_Int *len)
     status = device_read(dev, data, max_len, len);
     eloop_mutex_unlock();
 
+    /* Note, as a special exception, we don't log every successful
+     * call of sane_read(), because during loading of image there
+     * are a lot of them
+     */
     if (status != SANE_STATUS_GOOD) {
         log_debug(log, "API: sane_read(): %s", sane_strstatus(status));
     }
@@ -303,7 +316,7 @@ sane_cancel (SANE_Handle handle)
 {
     device *dev = handle;
 
-    /* Note, no mutex lock here. We can be called from
+    /* Note, no mutex lock here and no logging. We can be called from
      * signal handler. device_cancel() properly handles it
      */
     device_cancel(dev);
