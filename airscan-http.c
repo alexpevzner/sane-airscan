@@ -334,6 +334,45 @@ http_uri_parse_scheme (const char *str)
     return c == ':' ? i : 0;
 }
 
+/* Return error, if UF_HOST field of URI is present and invalid
+ */
+static error
+http_uri_parse_check_host (http_uri *uri)
+{
+    http_uri_field  field = http_uri_field_get(uri, UF_HOST);
+    char            *host, *zone;
+    int             rc;
+    struct in6_addr in6;
+
+    /* If UF_HOST is present and in square brackets, it must
+     * be valid IPv6 literal. Note, http_parser_parse_url()
+     * doesn't check it
+     */
+    if (field.len == 0 || field.str == uri->str || field.str[-1] != '[') {
+        return NULL;
+    }
+
+    if (field.str[field.len] != ']') {
+        return ERROR("URI: missed ']' in IP6 address literal");
+    }
+
+    host = alloca(field.len + 1);
+    memcpy(host, field.str, field.len);
+    host[field.len] = '\0';
+
+    zone = strchr(host, '%');
+    if (zone != NULL) {
+        *zone = '\0';
+    }
+
+    rc = inet_pton(AF_INET6, host, &in6);
+    if (rc != 1) {
+        return ERROR("URI: invalid IP6 address literal");
+    }
+
+    return NULL;
+}
+
 /* Parse URI in place. The parsed URI doesn't create
  * a copy of URI string, and uses supplied string directly
  */
@@ -345,6 +384,7 @@ http_uri_parse (http_uri *uri, const char *str)
     const char *prefix = NULL;
     size_t     prefix_len = 0;
     size_t     path_skip = 0;
+    error      err;
 
     /* Note, github.com/nodejs/http-parser fails to properly
      * parse relative URLs (URLs without scheme), so prepend
@@ -374,7 +414,7 @@ http_uri_parse (http_uri *uri, const char *str)
     memset(uri, 0, sizeof(*uri));
     if (http_parser_parse_url(normalized, strlen(normalized),
             0, &uri->parsed) != 0) {
-        return ERROR("Invalid URI");
+        return ERROR("URI: parse error");
     }
 
     uri->str = str;
@@ -402,14 +442,23 @@ http_uri_parse (http_uri *uri, const char *str)
     }
 
     /* Decode scheme */
-    if (!strncasecmp(str, "http://", 7)) {
-        uri->scheme = HTTP_SCHEME_HTTP;
-    } else if (!strncasecmp(str, "https://", 8)) {
-        uri->scheme = HTTP_SCHEME_HTTPS;
-    } else if (!strncasecmp(str, "unix://", 7)) {
-        uri->scheme = HTTP_SCHEME_UNIX;
-    } else {
-        uri->scheme = HTTP_SCHEME_UNSET;
+    uri->scheme = HTTP_SCHEME_UNSET; /* For sanity */
+    if (scheme_len != 0) {
+        if (!strncasecmp(str, "http://", 7)) {
+            uri->scheme = HTTP_SCHEME_HTTP;
+        } else if (!strncasecmp(str, "https://", 8)) {
+            uri->scheme = HTTP_SCHEME_HTTPS;
+        } else if (!strncasecmp(str, "unix://", 7)) {
+            uri->scheme = HTTP_SCHEME_UNIX;
+        } else {
+            return ERROR("URI: invalid scheme");
+        }
+    }
+
+    /* Check UF_HOST */
+    err = http_uri_parse_check_host(uri);
+    if (err != NULL) {
+        return err;
     }
 
     return NULL;
@@ -528,14 +577,8 @@ http_uri_new (const char *str, bool strip_fragment)
         goto FAIL;
     }
 
-    /* Allow only http and https schemes */
-    switch (uri->scheme) {
-    case HTTP_SCHEME_HTTP:
-    case HTTP_SCHEME_HTTPS:
-    case HTTP_SCHEME_UNIX:
-        break;
-
-    default:
+    /* Don't allow relative URLs here */
+    if (uri->scheme == HTTP_SCHEME_UNSET) {
         goto FAIL;
     }
 
