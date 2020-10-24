@@ -15,8 +15,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
 #include <sys/stat.h>
+
+#ifdef __OpenBSD__
+#   include <sys/types.h>
+#   include <sys/sysctl.h>
+#endif
 
 /* Static variables */
 static pthread_once_t os_homedir_once = PTHREAD_ONCE_INIT;
@@ -78,7 +82,20 @@ os_progname_init (void)
             memmove(os_progname_buf, s+1, strlen(s+1) + 1);
         }
     }
+#elif defined(__OpenBSD__)
+    struct kinfo_proc kp;
+    const int mib[6] = {CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid(),
+        sizeof(struct kinfo_proc), 1};
+    size_t len = sizeof(kp);
+    int rc = sysctl(mib, 6, &kp, &len, NULL, 0);
+    if (rc == -1) {
+        return;
+    }
+    memmove(os_progname_buf, kp.p_comm, KI_MAXCOMLEN);
 #else
+    /* This is nice to have but not critical. The caller already has
+       to handle os_progname returning NULL. The error is left as a
+       reminder for anyone porting this. */
 #   error FIX ME
 #endif
 }

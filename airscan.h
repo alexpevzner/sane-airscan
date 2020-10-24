@@ -583,11 +583,13 @@ __ptr_array_del (void **a, int i)
  *   OS_HAVE_RTNETLINK    - Linux-like rtnetlink (7)
  *   OS_HAVE_AF_ROUTE     - BSD-like AF_ROUTE
  *   OS_HAVE_LINUX_PROCFS - Linux-style procfs
+ *   OS_HAVE_IP_MREQN     - OS defines struct ip_mreqn
  */
 #ifdef  __linux__
 #   define OS_HAVE_EVENTFD      1
 #   define OS_HAVE_RTNETLINK    1
 #   define OS_HAVE_LINUX_PROCFS 1
+#   define OS_HAVE_IP_MREQN     1
 #endif
 
 #ifdef BSD
@@ -626,7 +628,7 @@ os_mkdir (const char *path, mode_t mode);
  * by error or string, obtained from an error using the
  * ESTRING() function
  */
-typedef struct error *error;
+typedef struct error_s *error;
 
 /* Standard errors
  */
