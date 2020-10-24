@@ -1522,12 +1522,20 @@ wsdd_mcast_update_membership (int fd, netif_addr *addr, bool add)
                     strerror(errno));
         }
     } else {
+#ifdef OS_HAVE_IP_MREQN
         struct ip_mreqn  mreq4;
+#else
+        struct ip_mreq  mreq4;
+#endif
 
         memset(&mreq4, 0, sizeof(mreq4));
         mreq4.imr_multiaddr = wsdd_mcast_ipv4.sin_addr;
+#ifdef OS_HAVE_IP_MREQN
         mreq4.imr_address = addr->ip.v4;
         mreq4.imr_ifindex = addr->ifindex;
+#else
+        mreq4.imr_interface = addr->ip.v4;
+#endif
 
         opt = add ? IP_ADD_MEMBERSHIP : IP_DROP_MEMBERSHIP;
         rc = setsockopt(fd, IPPROTO_IP, opt, &mreq4, sizeof(mreq4));
