@@ -103,6 +103,7 @@ Legend:
 | HP DeskJet 2540                    | Yes                       |                           |
 | HP DeskJet 2600 series             | Yes                       |                           |
 | HP DeskJet 2700 series             | Yes                       |                           |
+| HP DeskJet 3700 series             | Yes                       |                           |
 | HP DeskJet 5000 series             | Yes                       |                           |
 | HP ENVY 4500                       | Yes                       |                           |
 | HP ENVY 5540                       | Yes                       |                           |
