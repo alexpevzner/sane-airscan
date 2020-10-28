@@ -49,6 +49,9 @@
  */
 typedef struct {
     proto_handler proto; /* Base class */
+
+    /* Miscellaneous flags */
+    bool          oki;   /* It's OKI printer */
 } proto_handler_escl;
 
 /* XML namespace for XML writer
@@ -418,7 +421,8 @@ escl_devcaps_compression_parse (xml_rd *xml, devcaps *caps)
  * before calling this function.
  */
 static error
-escl_devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
+escl_devcaps_parse (proto_handler_escl *escl,
+        devcaps *caps, const char *xml_text, size_t xml_len)
 {
     error  err = NULL;
     xml_rd *xml;
@@ -442,6 +446,8 @@ escl_devcaps_parse (devcaps *caps, const char *xml_text, size_t xml_len)
 
             if (!strcmp(m, "Canon iR2625/2630")) {
                 quirk_canon_iR2625_2630 = true;
+            } else if (str_has_prefix(m, "OKI")) {
+                escl->oki = true;
             }
         } else if (xml_rd_node_name_match(xml, "scan:Platen")) {
             xml_rd_enter(xml);
@@ -533,12 +539,13 @@ escl_devcaps_query (const proto_ctx *ctx)
 static error
 escl_devcaps_decode (const proto_ctx *ctx, devcaps *caps)
 {
-    http_data *data = http_query_get_response_data(ctx->query);
+    proto_handler_escl *escl = (proto_handler_escl*) ctx->proto;
+    http_data          *data = http_query_get_response_data(ctx->query);
 
     caps->units = 300;
     caps->protocol = ctx->proto->name;
 
-    return escl_devcaps_parse(caps, data->bytes, data->size);
+    return escl_devcaps_parse(escl, caps, data->bytes, data->size);
 }
 
 /* Fix Location: URL
@@ -557,6 +564,7 @@ escl_scan_fix_location (void *p, http_uri *uri, const http_uri *orig_uri)
 static http_query*
 escl_scan_query (const proto_ctx *ctx)
 {
+    proto_handler_escl      *escl = (proto_handler_escl*) ctx->proto;
     const proto_scan_params *params = &ctx->params;
     const char              *source = NULL;
     const char              *colormode = NULL;
@@ -631,9 +639,14 @@ escl_scan_query (const proto_ctx *ctx)
      * it will not cause problems with other devices. BTW,
      * vuescan does the same, and I believe they have tested
      * many devices.
+     *
+     * Note, this hack doesn't work with OKI printers,
+     * see #92 for details
      */
-    http_query_set_request_header(query, "Host", "localhost");
-    http_query_onredir(query, escl_scan_fix_location);
+    if (!escl->oki) {
+        http_query_set_request_header(query, "Host", "localhost");
+        http_query_onredir(query, escl_scan_fix_location);
+    }
 
     return query;
 }
