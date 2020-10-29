@@ -9,9 +9,9 @@ Driverless scanning comes in two flavors:
 * Microsoft **WSD**, or **WS-Scan** (term WSD means "Web Services for Devices)
 
 This backend implements both protocols, choosing automatically between them.
-It was successfully tested with many devices from **Brother**, **Canon**, **Dell**,
-**Kyocera**, **Lexmark**, **Epson**, **HP**, **Panasonic**, **Ricoh**, **Samsung**
-and **Xerox** both in WSD and eSCL modes.
+It was successfully tested with many devices from **Brother**, **Canon**,
+**Dell**, **Kyocera**, **Lexmark**, **Epson**, **HP**, **OKI**, **Panasonic**,
+**Ricoh**, **Samsung** and **Xerox** both in WSD and eSCL modes.
 
 For eSCL devices, Apple maintains [a comprehensive list](https://support.apple.com/en-us/HT201311)
 of compatible devices, but please note, this list contains not only scanners and MFP,
@@ -135,6 +135,7 @@ Legend:
 | Lexmark CX317dn                    | Yes<sup>[5](#note5)</sup> | Yes<sup>[5](#note5)</sup> |
 | Lexmark MC2535adwe                 | Yes                       |                           |
 | Lexmark MC3224adwe                 | Yes                       |                           |
+| OKI-MC853                          | Yes                       |                           |
 | Panasonic KV-S1058Y                | No                        | Yes                       |
 | Ricoh MP C3003                     | No                        | Yes<sup>[6](#note6)</sup> |
 | Samsung M267x 287x Series          | No                        | Yes                       |
