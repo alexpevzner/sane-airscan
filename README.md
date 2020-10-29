@@ -56,6 +56,7 @@ Legend:
 
 | Device                             | eSCL mode                 | WSD mode                  |
 | ---------------------------------- | :-----------------------: | :-----------------------: |
+| Brother DCP-9020CDW                | No                        | Yes                       |
 | Brother DCP-L2540DW                | No                        | Yes                       |
 | Brother DCP-L2550DN / DCP-L2550DW  | Yes                       |                           |
 | Brother MFC-J485DW                 | Yes                       |                           |
