@@ -9,9 +9,9 @@ Driverless scanning comes in two flavors:
 * Microsoft **WSD**, or **WS-Scan** (term WSD means "Web Services for Devices)
 
 This backend implements both protocols, choosing automatically between them.
-It was successfully tested with many devices from **Brother**, **Canon**, **Dell**,
-**Kyocera**, **Lexmark**, **Epson**, **HP**, **Panasonic**, **Ricoh**, **Samsung**
-and **Xerox** both in WSD and eSCL modes.
+It was successfully tested with many devices from **Brother**, **Canon**,
+**Dell**, **Kyocera**, **Lexmark**, **Epson**, **HP**, **OKI**, **Panasonic**,
+**Ricoh**, **Samsung** and **Xerox** both in WSD and eSCL modes.
 
 For eSCL devices, Apple maintains [a comprehensive list](https://support.apple.com/en-us/HT201311)
 of compatible devices, but please note, this list contains not only scanners and MFP,
@@ -56,6 +56,7 @@ Legend:
 
 | Device                             | eSCL mode                 | WSD mode                  |
 | ---------------------------------- | :-----------------------: | :-----------------------: |
+| Brother DCP-9020CDW                | No                        | Yes                       |
 | Brother DCP-L2540DW                | No                        | Yes                       |
 | Brother DCP-L2550DN / DCP-L2550DW  | Yes                       |                           |
 | Brother MFC-J485DW                 | Yes                       |                           |
@@ -103,10 +104,12 @@ Legend:
 | HP DeskJet 2540                    | Yes                       |                           |
 | HP DeskJet 2600 series             | Yes                       |                           |
 | HP DeskJet 2700 series             | Yes                       |                           |
+| HP DeskJet 3700 series             | Yes                       |                           |
 | HP DeskJet 5000 series             | Yes                       |                           |
 | HP ENVY 4500                       | Yes                       |                           |
 | HP ENVY 5540                       | Yes                       |                           |
 | HP ENVY 5640                       | Yes                       |                           |
+| HP ENVY Photo 6200 series          | Yes                       |                           |
 | HP ENVY Pro 6400 series            | Yes                       |                           |
 | HP LaserJet MFP M130fw             | No                        | Yes                       |
 | HP LaserJet MFP M227sdn            | Yes                       |                           |
@@ -133,6 +136,7 @@ Legend:
 | Lexmark CX317dn                    | Yes<sup>[5](#note5)</sup> | Yes<sup>[5](#note5)</sup> |
 | Lexmark MC2535adwe                 | Yes                       |                           |
 | Lexmark MC3224adwe                 | Yes                       |                           |
+| OKI-MC853                          | Yes                       |                           |
 | Panasonic KV-S1058Y                | No                        | Yes                       |
 | Ricoh MP C3003                     | No                        | Yes<sup>[6](#note6)</sup> |
 | Samsung M267x 287x Series          | No                        | Yes                       |
