@@ -2162,7 +2162,7 @@ http_query_new_len (http_client *client, http_uri *uri, const char *method,
     http_query_set_request_header(q, "Connection", "close");
 
     /* Save request body and set Content-Type */
-    if (body != NULL && body_len != 0) {
+    if (body != NULL) {
         q->request_data = http_data_new(NULL, body, body_len);
         if (content_type != NULL) {
             http_query_set_request_header(q, "Content-Type", content_type);
