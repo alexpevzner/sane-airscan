@@ -28,6 +28,10 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 /******************** Static configuration ********************/
 /* Configuration path in environment
  */
@@ -3221,8 +3225,6 @@ log_panic (log_ctx *log, const char *fmt, ...);
          __builtin_unreachable();                                       \
      } while (0)
 
-#endif
-
 /******************** Initialization/Cleanup ********************/
 /* AIRSCAN_INIT_FLAGS represents airscan_init() flags
  */
@@ -3243,5 +3245,10 @@ airscan_init (AIRSCAN_INIT_FLAGS flags, const char *log_msg);
 void
 airscan_cleanup (const char *log_msg);
 
+#ifdef  __cplusplus
+};
+#endif
+
+#endif
 /* vim:ts=8:sw=4:et
  */
