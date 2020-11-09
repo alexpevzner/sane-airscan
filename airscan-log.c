@@ -171,11 +171,13 @@ log_message (log_ctx *log, bool trace_only, bool force,
     }
 
     required_bytes = vsnprintf(msg + len, sizeof(msg) - len, fmt, ap);
-    // vsnprintf returns the number of bytes required for the whole message,
-    // even if that exceeds the buffer size.
-    // If required_bytes exceeds space remaining in msg, we know msg is full.
-    // Otherwise, we can increment len by required_bytes.
-    if (required_bytes >= sizeof(msg) - len) {
+
+    /* vsnprintf returns the number of bytes required for the whole message,
+     * even if that exceeds the buffer size.
+     * If required_bytes exceeds space remaining in msg, we know msg is full.
+     * Otherwise, we can increment len by required_bytes.
+     */
+    if (required_bytes >= (int) sizeof(msg) - len) {
         len = sizeof(msg) - 1;
     } else {
         len += required_bytes;
