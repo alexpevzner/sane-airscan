@@ -76,7 +76,7 @@ dll_file = configure_file(
   copy: true
 )
 
-foreach fuzzer : ['uri', 'xml']
+foreach fuzzer : ['query', 'uri', 'xml']
   executable(
     'fuzzer-' + fuzzer,
     sources + ['fuzzer/@0@.cc'.format(fuzzer)],
