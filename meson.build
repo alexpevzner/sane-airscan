@@ -1,4 +1,4 @@
-project('sane-airscan', 'c')
+project('sane-airscan', 'c', 'cpp')
 
 sources = [
   'airscan-array.c',
@@ -75,6 +75,17 @@ dll_file = configure_file(
   output: 'airscan',
   copy: true
 )
+
+foreach fuzzer : ['query', 'uri', 'xml']
+  executable(
+    'fuzzer-' + fuzzer,
+    sources + ['fuzzer/@0@.cc'.format(fuzzer)],
+    dependencies: shared_deps,
+    build_by_default: false,
+    cpp_args: ['-fsanitize=address', '-fsanitize=fuzzer-no-link'],
+    link_args: ['-fsanitize=address', '-fsanitize=fuzzer']
+  )
+endforeach
 
 install_man('sane-airscan.5')
 install_man('airscan-discover.1')
