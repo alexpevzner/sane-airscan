@@ -154,7 +154,7 @@ log_message (log_ctx *log, bool trace_only, bool force,
 {
     trace *t = log ? log->trace : NULL;
     char  msg[4096];
-    int   len = 0, namelen = 0;
+    int   len = 0, namelen = 0, required_bytes = 0;
     bool  dont_log = trace_only ||
                      (log_configured && !conf.dbg_enabled && !force);
 
@@ -170,7 +170,18 @@ log_message (log_ctx *log, bool trace_only, bool force,
         namelen = len;
     }
 
-    len += vsnprintf(msg + len, sizeof(msg) - len, fmt, ap);
+    required_bytes = vsnprintf(msg + len, sizeof(msg) - len, fmt, ap);
+
+    /* vsnprintf returns the number of bytes required for the whole message,
+     * even if that exceeds the buffer size.
+     * If required_bytes exceeds space remaining in msg, we know msg is full.
+     * Otherwise, we can increment len by required_bytes.
+     */
+    if (required_bytes >= (int) sizeof(msg) - len) {
+        len = sizeof(msg) - 1;
+    } else {
+        len += required_bytes;
+    }
 
     while (len > 0 && isspace((unsigned char) msg[len-1])) {
         len --;

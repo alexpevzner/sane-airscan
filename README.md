@@ -11,7 +11,7 @@ Driverless scanning comes in two flavors:
 This backend implements both protocols, choosing automatically between them.
 It was successfully tested with many devices from **Brother**, **Canon**,
 **Dell**, **Kyocera**, **Lexmark**, **Epson**, **HP**, **OKI**, **Panasonic**,
-**Ricoh**, **Samsung** and **Xerox** both in WSD and eSCL modes.
+**Pantum**, **Ricoh**, **Samsung** and **Xerox** both in WSD and eSCL modes.
 
 For eSCL devices, Apple maintains [a comprehensive list](https://support.apple.com/en-us/HT201311)
 of compatible devices, but please note, this list contains not only scanners and MFP,
@@ -93,6 +93,7 @@ Legend:
 | Dell C2665dnf Color Laser Printer  | No                        | Yes                       |
 | EPSON ET-2750 Series               | Yes                       |                           |
 | EPSON WF-7710                      | Yes                       |                           |
+| EPSON XP-2100 Series               | No                        | Yes                       |
 | EPSON XP-340 Series                | Yes                       |                           |
 | EPSON XP-442 445 Series            | Yes                       |                           |
 | EPSON XP-7100 Series               | Yes                       |                           |
@@ -138,6 +139,7 @@ Legend:
 | Lexmark MC3224adwe                 | Yes                       |                           |
 | OKI-MC853                          | Yes                       |                           |
 | Panasonic KV-S1058Y                | No                        | Yes                       |
+| Pantum M6500W series               | Yes                       |                           |
 | Ricoh MP C3003                     | No                        | Yes<sup>[6](#note6)</sup> |
 | Samsung M267x 287x Series          | No                        | Yes                       |
 | Samsung M288x Series               | No                        | Yes                       |
