@@ -51,7 +51,7 @@ typedef struct {
     proto_handler proto; /* Base class */
 
     /* Miscellaneous flags */
-    bool          oki;   /* It's OKI printer */
+    bool quirk_hp_laserjet_mfp_m630; /* HP LaserJet MFP M630 detected */
 } proto_handler_escl;
 
 /* XML namespace for XML writer
@@ -446,8 +446,8 @@ escl_devcaps_parse (proto_handler_escl *escl,
 
             if (!strcmp(m, "Canon iR2625/2630")) {
                 quirk_canon_iR2625_2630 = true;
-            } else if (str_has_prefix(m, "OKI")) {
-                escl->oki = true;
+            } else if (!strcmp(m, "HP LaserJet MFP M630")) {
+                escl->quirk_hp_laserjet_mfp_m630 = true;
             }
         } else if (xml_rd_node_name_match(xml, "scan:Platen")) {
             xml_rd_enter(xml);
@@ -635,15 +635,12 @@ escl_scan_query (const proto_ctx *ctx)
      * Host is set to "localhost". It is probably bad and
      * naive attempt to enforce some access security.
      *
-     * So here we forcibly set Host to "localhost". I hope
-     * it will not cause problems with other devices. BTW,
-     * vuescan does the same, and I believe they have tested
-     * many devices.
+     * So here we forcibly set Host to "localhost".
      *
-     * Note, this hack doesn't work with OKI printers,
-     * see #92 for details
+     * Note, this hack doesn't work with some other printers
+     * see #92, #98 for details
      */
-    if (!escl->oki) {
+    if (escl->quirk_hp_laserjet_mfp_m630) {
         http_query_set_request_header(query, "Host", "localhost");
         http_query_onredir(query, escl_scan_fix_location);
     }
