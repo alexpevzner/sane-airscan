@@ -9,6 +9,7 @@
 #include "airscan.h"
 
 #include <string.h>
+#include <stdlib.h>
 #include <arpa/inet.h>
 #include <sys/un.h>
 
@@ -163,7 +164,7 @@ ip_addr_to_straddr (ip_addr addr, bool withzone)
     }
 
     if (sockaddr != NULL) {
-        straddr =  ip_straddr_from_sockaddr_dport(sockaddr, 0, withzone);
+        straddr = ip_straddr_from_sockaddr_dport(sockaddr, 0, withzone);
     }
 
     return straddr;
@@ -305,6 +306,81 @@ ip_addrset_is_intersect (const ip_addrset *set, const ip_addrset *set2)
     }
 
     return false;
+}
+
+/* Compare two ip_addrs, for sorting in ip_addrset_friendly_str()
+ */
+static int
+ip_addrset_friendly_sort_cmp (const void *p1, const void *p2)
+{
+    const ip_addr *a1 = (const ip_addr*) p1;
+    const ip_addr *a2 = (const ip_addr*) p2;
+    bool          ll1 = ip_is_linklocal(a1->af, &a1->ip);
+    bool          ll2 = ip_is_linklocal(a2->af, &a2->ip);
+    ip_straddr    s1, s2;
+
+    /* Prefer normal addresses, rather that link-local */
+    if (ll1 != ll2) {
+        return ll1 ? 1 : -1;
+    }
+
+    /* Put IP4 addresses first, they tell more to humans */
+    if (a1->af != a2->af) {
+        return a1->af == AF_INET6 ? 1 : -1;
+    }
+
+    /* Otherwise, sort lexicographically */
+    s1 = ip_addr_to_straddr(*a1, true);
+    s2 = ip_addr_to_straddr(*a2, true);
+
+    return strcmp(s1.text, s2.text);
+}
+
+/* Create user-friendly string out of set of addresses, containing
+ * in the ip_addrset:
+ *   * addresses are sorted, IP4 addresses goes first
+ *   * link-local addresses are skipped, if there are non-link-local ones
+ */
+char*
+ip_addrset_friendly_str (const ip_addrset *set, char *s)
+{
+    size_t  i, j, len = mem_len(set->addrs);
+    ip_addr *addrs = alloca(sizeof(ip_addr) * len);
+
+    /* Gather addresses */
+    for (i = j = 0; i < len; i ++) {
+        ip_addr *addr = &set->addrs[i];
+        if (!ip_is_linklocal(addr->af, &addr->ip)) {
+            addrs[j ++] = *addr;
+        }
+    }
+
+    if (j != 0) {
+        len = j;
+    } else {
+        memcpy(addrs, set->addrs, sizeof(ip_addr) * len);
+    }
+
+    /* Sort addresses */
+    qsort(addrs, len, sizeof(ip_addr), ip_addrset_friendly_sort_cmp);
+
+    /* And now stringify */
+    for (i = 0; i < len; i ++) {
+        ip_straddr str = ip_addr_to_straddr(addrs[i], true);
+
+        if (i != 0) {
+            s = str_append(s, ", ");
+        }
+
+        if (str.text[0] != '[') {
+            s = str_append(s, str.text);
+        } else {
+            str.text[strlen(str.text) - 1] = '\0';
+            s = str_append(s, str.text + 1);
+        }
+    }
+
+    return s;
 }
 
 /* vim:ts=8:sw=4:et

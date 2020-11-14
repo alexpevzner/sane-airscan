@@ -1150,6 +1150,14 @@ ip_addrset_addresses (const ip_addrset *addrset, size_t *count);
 bool
 ip_addrset_is_intersect (const ip_addrset *set, const ip_addrset *set2);
 
+/* Create user-friendly string out of set of addresses, containing
+ * in the ip_addrset:
+ *   * addresses are sorted, IP4 addresses goes first
+ *   * link-local addresses are skipped, if there are non-link-local ones
+ */
+char*
+ip_addrset_friendly_str (const ip_addrset *set, char *s);
+
 /******************** Network interfaces addresses ********************/
 /* Network interface name, wrapped into structure, so
  * it can be passed by value
@@ -1548,6 +1556,19 @@ http_uri_get_path (const http_uri *uri);
  */
 void
 http_uri_set_path (http_uri *uri, const char *path);
+
+/* Get URI host. It returns only host name, port number is
+ * not included.
+ *
+ * IPv6 literal addresses are returned in square brackets
+ * (i.e., [fe80::217:c8ff:fe7b:6a91%4])
+ *
+ * Note, the subsequent modifications of URI, such as http_uri_fix_host(),
+ * http_uri_fix_ipv6_zone() etc, may make the returned string invalid,
+ * so if you need to keep it for a long time, better make a copy
+ */
+const char*
+http_uri_get_host (const http_uri *uri);
 
 /* Fix URI host: if `match` is NULL or uri's host matches `match`,
  * replace uri's host and port with values taken from the base_uri

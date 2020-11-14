@@ -84,6 +84,7 @@ struct http_uri {
     struct http_parser_url parsed; /* Parsed URI */
     const char             *str;   /* URI string */
     const char             *path;  /* URI path */
+    const char             *host;  /* URI host */
     HTTP_SCHEME            scheme; /* URI scheme */
     union {                 /* Host address*/
         struct sockaddr     sockaddr;
@@ -200,8 +201,6 @@ http_uri_field_equal (const http_uri *uri1, const http_uri *uri2,
     }
 }
 
-
-
 /* Replace particular URI field with val[len] string
  */
 static void
@@ -271,6 +270,8 @@ http_uri_field_replace_len (http_uri *uri, int num, const char *val, size_t len)
 
     mem_free((char*) uri->str);
     mem_free((char*) uri->path);
+    mem_free((char*) uri->host);
+
     *uri = *uri2;
     mem_free(uri2);
 }
@@ -571,6 +572,7 @@ http_uri_new (const char *str, bool strip_fragment)
 {
     http_uri       *uri = mem_new(http_uri, 1);
     char           *buf;
+    http_uri_field field;
 
     /* Parse URI */
     if (http_uri_parse(uri, str) != NULL) {
@@ -592,9 +594,22 @@ http_uri_new (const char *str, bool strip_fragment)
         uri->parsed.field_data[UF_FRAGMENT].len = 0;
     }
 
-    /* Prepare addr, path */
+    /* Prepare addr, path, etc */
     http_uri_parse_addr(uri);
     uri->path = http_uri_field_strdup(uri, UF_PATH);
+
+    field = http_uri_field_get(uri, UF_HOST);
+    if (memchr(field.str, ':', field.len) != NULL) {
+        char *host = mem_resize((char*) NULL, field.len + 2, 1);
+
+        host[0] = '[';
+        memcpy(host + 1, field.str, field.len);
+        host[field.len + 1] = ']';
+        host[field.len + 2] = '\0';
+        uri->host = host;
+    } else {
+        uri->host = http_uri_field_strdup(uri, UF_HOST);
+    }
 
     return uri;
 
@@ -614,6 +629,7 @@ http_uri_clone (const http_uri *old)
     *uri = *old;
     uri->str = str_dup(uri->str);
     uri->path = str_dup(uri->path);
+    uri->host = str_dup(uri->host);
 
     return uri;
 }
@@ -830,6 +846,7 @@ http_uri_free (http_uri *uri)
     if (uri != NULL) {
         mem_free((char*) uri->str);
         mem_free((char*) uri->path);
+        mem_free((char*) uri->host);
         mem_free(uri);
     }
 }
@@ -869,6 +886,22 @@ void
 http_uri_set_path (http_uri *uri, const char *path)
 {
     http_uri_field_replace(uri, UF_PATH, path);
+}
+
+/* Get URI host. It returns only host name, port number is
+ * not included.
+ *
+ * IPv6 literal addresses are returned in square brackets
+ * (i.e., [fe80::217:c8ff:fe7b:6a91%4])
+ *
+ * Note, the subsequent modifications of URI, such as http_uri_fix_host(),
+ * http_uri_fix_ipv6_zone() etc, may make the returned string invalid,
+ * so if you need to keep it for a long time, better make a copy
+ */
+const char*
+http_uri_get_host (const http_uri *uri)
+{
+    return uri->host;
 }
 
 /* Fix URI host: if `match` is NULL or uri's host matches `match`,

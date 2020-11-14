@@ -1037,6 +1037,8 @@ zeroconf_device_list_get (void)
     for (dev_conf = conf.devices; dev_conf != NULL; dev_conf = dev_conf->next) {
         SANE_Device *info;
         const char  *proto;
+        const char  *host;
+        size_t      hostlen;
 
         if (dev_conf->uri == NULL) {
             continue;
@@ -1052,7 +1054,15 @@ zeroconf_device_list_get (void)
             dev_conf->proto);
         info->vendor = str_dup(proto);
         info->model = str_dup(dev_conf->name);
-        info->type = str_printf("%s network scanner", proto);
+
+        host = http_uri_get_host(dev_conf->uri);
+        hostlen = strlen(host);
+        if (host[0] == '[') {
+            host ++;
+            hostlen -= 2;
+        }
+
+        info->type = str_printf("%s (%.*s)", proto, (int) hostlen, host);
     }
 
     dev_count_static = dev_count;
@@ -1100,6 +1110,7 @@ zeroconf_device_list_get (void)
             if ((protocols & (1 << proto)) != 0) {
                 SANE_Device            *info = mem_new(SANE_Device, 1);
                 const char             *proto_name = id_proto_name(proto);
+                char                   *type;
 
                 dev_list = sane_device_array_append(dev_list, info);
                 dev_count ++;
@@ -1107,7 +1118,12 @@ zeroconf_device_list_get (void)
                 info->name = zeroconf_ident_make(name, device->devid, proto);
                 info->vendor = str_dup(proto_name);
                 info->model = str_dup(conf.model_is_netname ? name : model);
-                info->type = str_printf("%s network scanner", proto_name);
+
+                //info->type = str_printf("%s network scanner", proto_name);
+                type = str_printf("%s (", proto_name);
+                type = ip_addrset_friendly_str(device->addrs, type);
+                type = str_append(type, ")");
+                info->type = type;
             }
         }
     }
