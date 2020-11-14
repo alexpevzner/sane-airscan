@@ -159,6 +159,7 @@ main (void)
     test_parse("http://1.2.3.4:8888/",          true);
     test_parse("http://1.2.3.4:8888:9999/",     false);
     test_parse("/",                             false);
+    test_parse("",                              false);
 
     test_parse("http://[::1]/",                 true);
     test_parse("http://[::1%255]/",             true);
