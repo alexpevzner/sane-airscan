@@ -2952,6 +2952,10 @@ struct proto_handler {
     http_query*  (*devcaps_query) (const proto_ctx *ctx);
     error        (*devcaps_decode) (const proto_ctx *ctx, devcaps *caps);
 
+    /* This callback is called before the first scan_query()
+     */
+    void         (*scan_begin) (const proto_ctx *ctx);
+
     /* Initiate scanning and decode result.
      * On success, scan_decode must set ctx->data.location
      */

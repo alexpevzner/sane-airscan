@@ -395,6 +395,17 @@ device_proto_devcaps_decode (device *dev, devcaps *caps)
     return dev->proto_ctx.proto->devcaps_decode(&dev->proto_ctx, caps);
 }
 
+/* Notify protocol handler that we are about to start
+ * new scan job
+ */
+static void
+device_proto_scan_begin (device *dev)
+{
+    if (dev->proto_ctx.proto->scan_begin != NULL) {
+        dev->proto_ctx.proto->scan_begin(&dev->proto_ctx);
+    }
+}
+
 /* Get operation name, for loging
  */
 static const char*
@@ -1105,6 +1116,7 @@ device_stm_start_scan (device *dev)
 
     /* Submit a request */
     device_stm_state_set(dev, DEVICE_STM_SCANNING);
+    device_proto_scan_begin(dev);
     device_proto_op_submit(dev, PROTO_OP_SCAN, device_stm_op_callback);
 }
 
