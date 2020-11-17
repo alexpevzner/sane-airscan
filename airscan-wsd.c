@@ -20,9 +20,6 @@
 #define WSD_ACTION_CREATE_SCAN_JOB      \
         "http://schemas.microsoft.com/windows/2006/08/wdp/scan/CreateScanJob"
 
-#define WSD_ACTION_VALIDATE_SCAN_TICKET \
-        "http://schemas.microsoft.com/windows/2006/08/wdp/scan/ValidateScanTicket"
-
 #define WSD_ACTION_RETRIEVE_IMAGE       \
         "http://schemas.microsoft.com/windows/2006/08/wdp/scan/RetrieveImage"
 
@@ -53,9 +50,6 @@ static const xml_ns wsd_ns_wr[] = {
  */
 typedef struct {
     proto_handler proto; /* Base class */
-
-    /* Miscellaneous flags */
-    bool          validate;
 
     /* Supported formats: JPEG variants */
     bool          exif;
@@ -623,15 +617,6 @@ wsd_fault_decode (const proto_ctx *ctx)
     return result;
 }
 
-/* This callback is called before the first scan_query()
- */
-static void
-wsd_scan_begin (const proto_ctx *ctx)
-{
-    proto_handler_wsd       *wsd = (proto_handler_wsd*) ctx->proto;
-    wsd->validate = true;
-}
-
 /* Initiate scanning
  */
 static http_query*
@@ -670,18 +655,10 @@ wsd_scan_query (const proto_ctx *ctx)
     }
 
     /* Create scan request */
-    if (wsd->validate) {
-        wsd_make_request_header(ctx, xml, WSD_ACTION_VALIDATE_SCAN_TICKET);
-    } else {
-        wsd_make_request_header(ctx, xml, WSD_ACTION_CREATE_SCAN_JOB);
-    }
+    wsd_make_request_header(ctx, xml, WSD_ACTION_CREATE_SCAN_JOB);
 
     xml_wr_enter(xml, "soap:Body");
-    if (wsd->validate) {
-        xml_wr_enter(xml, "sca:ValidateScanTicketRequest");
-    } else {
-        xml_wr_enter(xml, "sca:CreateScanJobRequest");
-    }
+    xml_wr_enter(xml, "sca:CreateScanJobRequest");
     xml_wr_enter(xml, "sca:ScanTicket");
 
     xml_wr_enter(xml, "sca:JobDescription");
@@ -793,24 +770,18 @@ wsd_scan_query (const proto_ctx *ctx)
 static proto_result
 wsd_scan_decode (const proto_ctx *ctx)
 {
-    proto_handler_wsd *wsd = (proto_handler_wsd*) ctx->proto;
-    proto_result      result = {0};
-    error             err = NULL;
-    xml_rd            *xml = NULL;
-    http_data         *data;
-    SANE_Word         job_id = -1;
-    char              *job_token = NULL;
+    proto_result result = {0};
+    error        err = NULL;
+    xml_rd       *xml = NULL;
+    http_data    *data;
+    SANE_Word    job_id = -1;
+    char         *job_token = NULL;
 
     result.next = PROTO_OP_FINISH;
 
     /* Decode error, if any */
     if (http_query_error(ctx->query) != NULL) {
         return wsd_fault_decode(ctx);
-    }
-
-    if (wsd->validate) {
-        result.next = PROTO_OP_SCAN;
-        wsd->validate = false;
     }
 
     /* Decode CreateScanJobResponse */
@@ -1003,8 +974,6 @@ proto_handler_wsd_new (void)
 
     wsd->proto.devcaps_query = wsd_devcaps_query;
     wsd->proto.devcaps_decode = wsd_devcaps_decode;
-
-    wsd->proto.scan_begin = wsd_scan_begin;
 
     wsd->proto.scan_query = wsd_scan_query;
     wsd->proto.scan_decode = wsd_scan_decode;
