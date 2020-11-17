@@ -1062,7 +1062,7 @@ zeroconf_device_list_get (void)
             hostlen -= 2;
         }
 
-        info->type = str_printf("%s (%.*s)", proto, (int) hostlen, host);
+        info->type = str_printf("ip=%.*s", (int) hostlen, host);
     }
 
     dev_count_static = dev_count;
@@ -1120,9 +1120,8 @@ zeroconf_device_list_get (void)
                 info->model = str_dup(conf.model_is_netname ? name : model);
 
                 //info->type = str_printf("%s network scanner", proto_name);
-                type = str_printf("%s (", proto_name);
+                type = str_printf("ip=", proto_name);
                 type = ip_addrset_friendly_str(device->addrs, type);
-                type = str_append(type, ")");
                 info->type = type;
             }
         }
