@@ -51,6 +51,9 @@ static const xml_ns wsd_ns_wr[] = {
 typedef struct {
     proto_handler proto; /* Base class */
 
+    /* Error reasons decoding */
+    char          fault_code[64];
+
     /* Supported formats: JPEG variants */
     bool          exif;
     bool          jfif;
@@ -564,21 +567,20 @@ wsd_devcaps_decode (const proto_ctx *ctx, devcaps *caps)
 static proto_result
 wsd_fault_decode (const proto_ctx *ctx)
 {
-    proto_result result = {0};
-    http_data    *data = http_query_get_response_data(ctx->query);
-    xml_rd       *xml;
-
-    /* Initialize result */
-    result.next = PROTO_OP_CHECK;
-    result.status = SANE_STATUS_IO_ERROR;
+    proto_handler_wsd *wsd = (proto_handler_wsd*) ctx->proto;
+    proto_result      result = {0};
+    http_data         *data = http_query_get_response_data(ctx->query);
+    xml_rd            *xml;
 
     /* Parse XML */
     result.err = xml_rd_begin(&xml, data->bytes, data->size, wsd_ns_rd);
     if (result.err != NULL) {
+        result.next = PROTO_OP_FINISH;
+        result.status = SANE_STATUS_IO_ERROR;
         return result;
     }
 
-    /* Decode XML */
+    /* Decode XML, save fault code */
     while (!xml_rd_end(xml)) {
         const char *path = xml_rd_node_path(xml);
 
@@ -592,21 +594,9 @@ wsd_fault_decode (const proto_ctx *ctx)
                 fault = s + 1;
             }
 
-            /* Decode the status */
+            /* Save the status */
             log_debug(ctx->log, "fault code: %s", fault);
-
-            if (!strcmp(fault, "ServerErrorNotAcceptingJobs")) {
-                result.status = SANE_STATUS_DEVICE_BUSY;
-            } else if (!strcmp(fault, "ClientErrorNoImagesAvailable")) {
-                switch (ctx->params.src) {
-                    case ID_SOURCE_ADF_SIMPLEX:
-                    case ID_SOURCE_ADF_DUPLEX:
-                        result.status = SANE_STATUS_NO_DOCS;
-                        break;
-                    default:
-                        break;
-                }
-            }
+            strncpy(wsd->fault_code, fault, sizeof(wsd->fault_code) - 1);
         }
 
         xml_rd_deep_next(xml, 0);
@@ -614,6 +604,7 @@ wsd_fault_decode (const proto_ctx *ctx)
 
     xml_rd_finish(&xml);
 
+    result.next = PROTO_OP_CHECK;
     return result;
 }
 
@@ -926,11 +917,109 @@ wsd_status_query (const proto_ctx *ctx)
 static proto_result
 wsd_status_decode (const proto_ctx *ctx)
 {
-    proto_result result = {0};
+    proto_handler_wsd *wsd = (proto_handler_wsd*) ctx->proto;
+    proto_result      result = {0};
+    http_data         *data = http_query_get_response_data(ctx->query);
+    xml_rd            *xml;
+    char              scanner_state[64] = {0};
+    bool              adf = ctx->params.src == ID_SOURCE_ADF_SIMPLEX ||
+                            ctx->params.src == ID_SOURCE_ADF_DUPLEX;
 
+    log_debug(ctx->log, "PROTO_OP_CHECK: fault code: %s", wsd->fault_code);
+
+    /* Initialize result */
     result.next = PROTO_OP_FINISH;
+    result.status = SANE_STATUS_GOOD;
 
-    (void) ctx;
+    /* Look to the saved fault code. It it is specific enough, return
+     * error immediately
+     */
+    if (adf) {
+        if (!strcmp(wsd->fault_code, "ClientErrorNoImagesAvailable")) {
+            result.status = SANE_STATUS_NO_DOCS;
+            return result;
+        }
+    }
+
+    /* Parse XML */
+    result.err = xml_rd_begin(&xml, data->bytes, data->size, wsd_ns_rd);
+    if (result.err != NULL) {
+        return result;
+    }
+
+    /* Roll over parsed XML, until fault reason is known */
+    while (!xml_rd_end(xml) && result.status == SANE_STATUS_GOOD) {
+        const char *path = xml_rd_node_path(xml);
+        const char *val;
+
+        if (!strcmp(path, "s:Envelope/s:Body/scan:GetScannerElementsResponse/"
+                "scan:ScannerElements/scan:ElementData/scan:ScannerStatus/"
+                "scan:ScannerState")) {
+
+            val = xml_rd_node_value(xml);
+            log_debug(ctx->log, "PROTO_OP_CHECK: ScannerState: %s", val);
+            strncpy(scanner_state, val, sizeof(scanner_state) - 1);
+        } else if (!strcmp(path, "s:Envelope/s:Body/scan:GetScannerElementsResponse/"
+                "scan:ScannerElements/scan:ElementData/scan:ScannerStatus/"
+                "scan:ScannerStateReasons/scan:ScannerStateReason")) {
+
+            val = xml_rd_node_value(xml);
+            log_debug(ctx->log, "PROTO_OP_CHECK: ScannerStateReason: %s", val);
+
+            if (!strcmp(val, "AttentionRequired")) {
+                result.status = SANE_STATUS_DEVICE_BUSY;
+            } else if (!strcmp(val, "Calibrating")) {
+                result.status = SANE_STATUS_COVER_OPEN;
+            } else if (!strcmp(val, "CoverOpen")) {
+                result.status = SANE_STATUS_COVER_OPEN;
+            } else if (!strcmp(val, "InterlockOpen")) {
+                // Note, I have no idea what is interlock, but
+                // let's assume it's a kind of cover...
+                result.status = SANE_STATUS_COVER_OPEN;
+            } else if (!strcmp(val, "InternalStorageFull")) {
+                result.status = SANE_STATUS_NO_MEM;
+            } else if (!strcmp(val, "LampError")) {
+                result.status = SANE_STATUS_IO_ERROR;
+            } else if (!strcmp(val, "LampWarming")) {
+                result.status = SANE_STATUS_DEVICE_BUSY;
+            } else if (!strcmp(val, "MediaJam")) {
+                result.status = SANE_STATUS_JAMMED;
+            } else if (!strcmp(val, "MultipleFeedError")) {
+                result.status = SANE_STATUS_JAMMED;
+            }
+        }
+
+        xml_rd_deep_next(xml, 0);
+    }
+
+    xml_rd_finish(&xml);
+
+    /* Reason was found? */
+    if (result.status != SANE_STATUS_GOOD) {
+        return result;
+    }
+
+    /* ServerErrorNotAcceptingJobs? */
+    if (!strcmp(wsd->fault_code, "ServerErrorNotAcceptingJobs")) {
+        /* Assume device not accepted jobs because require some
+         * manual action/reconfiguration. For example, Kyocera
+         * in the WSD mode scans only WSD scan is requested from
+         * the front panel, otherwise it returns this kind
+         * of error
+         */
+        result.status = SANE_STATUS_DEVICE_BUSY;
+
+        /* Canon MF410 Series reports ADF empty this way */
+        if (adf && !strcmp(scanner_state, "Idle")) {
+            result.status = SANE_STATUS_NO_DOCS;
+        }
+    }
+
+    /* Still no idea? */
+    if (result.status == SANE_STATUS_GOOD) {
+        result.status = SANE_STATUS_IO_ERROR;
+    }
+
     return result;
 }
 
