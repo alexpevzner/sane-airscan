@@ -924,6 +924,7 @@ wsd_status_decode (const proto_ctx *ctx)
     char              scanner_state[64] = {0};
     bool              adf = ctx->params.src == ID_SOURCE_ADF_SIMPLEX ||
                             ctx->params.src == ID_SOURCE_ADF_DUPLEX;
+    bool              retry = false;
 
     log_debug(ctx->log, "PROTO_OP_CHECK: fault code: %s", wsd->fault_code);
 
@@ -948,7 +949,7 @@ wsd_status_decode (const proto_ctx *ctx)
     }
 
     /* Roll over parsed XML, until fault reason is known */
-    while (!xml_rd_end(xml) && result.status == SANE_STATUS_GOOD) {
+    while (!xml_rd_end(xml) && result.status == SANE_STATUS_GOOD && !retry) {
         const char *path = xml_rd_node_path(xml);
         const char *val;
 
@@ -969,7 +970,7 @@ wsd_status_decode (const proto_ctx *ctx)
             if (!strcmp(val, "AttentionRequired")) {
                 result.status = SANE_STATUS_DEVICE_BUSY;
             } else if (!strcmp(val, "Calibrating")) {
-                result.status = SANE_STATUS_COVER_OPEN;
+                retry = true;
             } else if (!strcmp(val, "CoverOpen")) {
                 result.status = SANE_STATUS_COVER_OPEN;
             } else if (!strcmp(val, "InterlockOpen")) {
@@ -981,7 +982,7 @@ wsd_status_decode (const proto_ctx *ctx)
             } else if (!strcmp(val, "LampError")) {
                 result.status = SANE_STATUS_IO_ERROR;
             } else if (!strcmp(val, "LampWarming")) {
-                result.status = SANE_STATUS_DEVICE_BUSY;
+                retry = true;
             } else if (!strcmp(val, "MediaJam")) {
                 result.status = SANE_STATUS_JAMMED;
             } else if (!strcmp(val, "MultipleFeedError")) {
@@ -993,6 +994,13 @@ wsd_status_decode (const proto_ctx *ctx)
     }
 
     xml_rd_finish(&xml);
+
+    /* Retry? */
+    if (retry) {
+        result.next = PROTO_OP_SCAN;
+        result.delay = 1000;
+        return result;
+    }
 
     /* Reason was found? */
     if (result.status != SANE_STATUS_GOOD) {
