@@ -11,6 +11,9 @@
 #include <stdlib.h>
 
 /* Protocol constants */
+
+/* Miscellaneous strings, used by protocol
+ */
 #define WSD_ADDR_ANONYMOUS              \
         "http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous"
 
@@ -25,6 +28,18 @@
 
 #define WSD_ACTION_CANCEL_JOB           \
         "http://schemas.microsoft.com/windows/2006/08/wdp/scan/CancelJob"
+
+/* Retry parameters
+ *
+ * If CreateScanJobRequest is failed due to temporary reason (Calibrating,
+ * LampWarming), request is retries several times
+ *
+ * WSD_CREATE_SCAN_JOB_RETRY_PAUSE defines pause between retries,
+ * in milliseconds. WSD_CREATE_SCAN_JOB_RETRY_ATTEMPTS defines
+ * an attempt limit
+ */
+#define WSD_CREATE_SCAN_JOB_RETRY_PAUSE         1000
+#define WSD_CREATE_SCAN_JOB_RETRY_ATTEMPTS      30
 
 /* XML namespace translation for XML reader
  */
@@ -996,9 +1011,9 @@ wsd_status_decode (const proto_ctx *ctx)
     xml_rd_finish(&xml);
 
     /* Retry? */
-    if (retry) {
+    if (retry && ctx->failed_attempt < WSD_CREATE_SCAN_JOB_RETRY_ATTEMPTS) {
         result.next = PROTO_OP_SCAN;
-        result.delay = 1000;
+        result.delay = WSD_CREATE_SCAN_JOB_RETRY_PAUSE;
         return result;
     }
 
