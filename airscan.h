@@ -2883,12 +2883,18 @@ filter_chain_apply (filter *chain, uint8_t *line, size_t size);
  */
 typedef enum {
     PROTO_OP_NONE,    /* No operation */
+    PROTO_OP_PRECHECK,/* Pre-scan check */
     PROTO_OP_SCAN,    /* New scan */
     PROTO_OP_LOAD,    /* Load image */
     PROTO_OP_CHECK,   /* Check device status */
     PROTO_OP_CLEANUP, /* Cleanup after scan */
     PROTO_OP_FINISH   /* Finish scanning */
 } PROTO_OP;
+
+/* Get PROTO_OP name, for logging
+ */
+const char*
+proto_op_name (PROTO_OP op);
 
 /* proto_scan_params represents scan parameters
  */
@@ -2908,6 +2914,7 @@ typedef struct {
     log_ctx              *log;            /* Logging context */
     struct proto_handler *proto;          /* Link to proto_handler */
     const devcaps        *devcaps;        /* Device capabilities */
+    PROTO_OP             op;              /* Current operation */
     http_client          *http;           /* HTTP client for sending requests */
     http_uri             *base_uri;       /* HTTP base URI for protocol */
     http_uri             *base_uri_nozone;/* base_uri without IPv6 zone */
@@ -2951,6 +2958,14 @@ struct proto_handler {
      */
     http_query*  (*devcaps_query) (const proto_ctx *ctx);
     error        (*devcaps_decode) (const proto_ctx *ctx, devcaps *caps);
+
+    /* Create pre-scan check query and decode result
+     * These callback are optional, set to NULL, if
+     * they are not implemented by the protocol
+     * handler
+     */
+    http_query*  (*precheck_query) (const proto_ctx *ctx);
+    proto_result (*precheck_decode) (const proto_ctx *ctx);
 
     /* Initiate scanning and decode result.
      * On success, scan_decode must set ctx->data.location

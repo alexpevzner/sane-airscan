@@ -16,6 +16,7 @@
 /* HTTP timeouts, by operation, in milliseconds
  */
 #define DEVICE_HTTP_TIMEOUT_DEVCAPS     5000
+#define DEVICE_HTTP_TIMEOUT_PRECHECK    5000
 #define DEVICE_HTTP_TIMEOUT_SCAN        30000
 #define DEVICE_HTTP_TIMEOUT_LOAD        -1
 #define DEVICE_HTTP_TIMEOUT_CHECK       5000
@@ -113,7 +114,6 @@ struct device {
 
     /* Protocol handling */
     proto_ctx            proto_ctx;        /* Protocol handler context */
-    PROTO_OP             proto_op_current; /* Current operation */
 
     /* I/O handling (AVAHI and HTTP) */
     zeroconf_endpoint    *endpoint_current; /* Current endpoint to probe */
@@ -395,24 +395,6 @@ device_proto_devcaps_decode (device *dev, devcaps *caps)
     return dev->proto_ctx.proto->devcaps_decode(&dev->proto_ctx, caps);
 }
 
-/* Get operation name, for loging
- */
-static const char*
-device_proto_op_name (device *dev, PROTO_OP op)
-{
-    switch (op) {
-    case PROTO_OP_NONE:    return "PROTO_OP_NONE";
-    case PROTO_OP_SCAN:    return "PROTO_OP_SCAN";
-    case PROTO_OP_LOAD:    return "PROTO_OP_LOAD";
-    case PROTO_OP_CHECK:   return "PROTO_OP_CHECK";
-    case PROTO_OP_CLEANUP: return "PROTO_OP_CLEANUP";
-    case PROTO_OP_FINISH:  return "PROTO_OP_FINISH";
-    }
-
-    log_internal_error(dev->log);
-    return NULL;
-}
-
 /* http_query_onrxhdr() callback
  */
 static void
@@ -420,7 +402,7 @@ device_proto_op_onrxhdr (void *p, http_query *q)
 {
     device *dev = p;
 
-    if (dev->proto_op_current == PROTO_OP_LOAD && !dev->stm_cancel_sent) {
+    if (dev->proto_ctx.op == PROTO_OP_LOAD && !dev->stm_cancel_sent) {
         http_query_timeout(q, -1);
     }
 }
@@ -438,6 +420,11 @@ device_proto_op_submit (device *dev, PROTO_OP op,
     switch (op) {
     case PROTO_OP_NONE:    log_internal_error(dev->log); break;
     case PROTO_OP_FINISH:  log_internal_error(dev->log); break;
+
+    case PROTO_OP_PRECHECK:
+        func = dev->proto_ctx.proto->precheck_query;
+        timeout = DEVICE_HTTP_TIMEOUT_PRECHECK;
+        break;
 
     case PROTO_OP_SCAN:
         func = dev->proto_ctx.proto->scan_query;
@@ -463,8 +450,8 @@ device_proto_op_submit (device *dev, PROTO_OP op,
     log_assert(dev->log, func != NULL);
 
     log_debug(dev->log, "%s: submitting: attempt=%d",
-        device_proto_op_name(dev, op), dev->proto_ctx.failed_attempt);
-    dev->proto_op_current = op;
+        proto_op_name(op), dev->proto_ctx.failed_attempt);
+    dev->proto_ctx.op = op;
 
     q = func(&dev->proto_ctx);
     http_query_timeout(q, timeout);
@@ -499,6 +486,7 @@ device_proto_op_decode (device *dev, PROTO_OP op)
 
     switch (op) {
     case PROTO_OP_NONE:    log_internal_error(dev->log); break;
+    case PROTO_OP_PRECHECK:func = dev->proto_ctx.proto->precheck_decode; break;
     case PROTO_OP_SCAN:    func = dev->proto_ctx.proto->scan_decode; break;
     case PROTO_OP_LOAD:    func = dev->proto_ctx.proto->load_decode; break;
     case PROTO_OP_CHECK:   func = dev->proto_ctx.proto->status_decode; break;
@@ -508,12 +496,12 @@ device_proto_op_decode (device *dev, PROTO_OP op)
 
     log_assert(dev->log, func != NULL);
 
-    log_debug(dev->log, "%s: decoding", device_proto_op_name(dev, op));
+    log_debug(dev->log, "%s: decoding", proto_op_name(op));
     result = func(&dev->proto_ctx);
     log_debug(dev->log, "%s: decoded: status=\"%s\" next=%s delay=%d",
-        device_proto_op_name(dev, op),
+        proto_op_name(op),
         sane_strstatus(result.status),
-        device_proto_op_name(dev, result.next),
+        proto_op_name(result.next),
         result.delay);
 
     if (result.next == PROTO_OP_CHECK) {
@@ -857,7 +845,7 @@ device_stm_timer_callback (void *data)
 {
     device *dev = data;
     dev->stm_timer = NULL;
-    device_proto_op_submit(dev, dev->proto_op_current, device_stm_op_callback);
+    device_proto_op_submit(dev, dev->proto_ctx.op, device_stm_op_callback);
 }
 
 /* Operation callback
@@ -866,7 +854,7 @@ static void
 device_stm_op_callback (void *ptr, http_query *q)
 {
     device       *dev = ptr;
-    proto_result result = device_proto_op_decode(dev, dev->proto_op_current);
+    proto_result result = device_proto_op_decode(dev, dev->proto_ctx.op);
 
     (void) q;
 
@@ -875,14 +863,14 @@ device_stm_op_callback (void *ptr, http_query *q)
     }
 
     /* Save useful result, if any */
-    if (dev->proto_op_current == PROTO_OP_SCAN) {
+    if (dev->proto_ctx.op == PROTO_OP_SCAN) {
         if (result.data.location != NULL) {
             mem_free((char*) dev->proto_ctx.location); /* Just in case */
             dev->proto_ctx.location = result.data.location;
             dev->proto_ctx.failed_attempt = 0;
             pthread_cond_broadcast(&dev->stm_cond);
         }
-    } else if (dev->proto_op_current == PROTO_OP_LOAD) {
+    } else if (dev->proto_ctx.op == PROTO_OP_LOAD) {
         if (result.data.image != NULL) {
             http_data_queue_push(dev->read_queue, result.data.image);
             dev->proto_ctx.images_received ++;
@@ -901,7 +889,7 @@ device_stm_op_callback (void *ptr, http_query *q)
      */
     if (dev->stm_cancel_sent) {
         if (result.next == PROTO_OP_CLEANUP ||
-            dev->proto_op_current == PROTO_OP_CHECK) {
+            dev->proto_ctx.op == PROTO_OP_CHECK) {
             result.next = PROTO_OP_FINISH;
         }
     }
@@ -945,7 +933,7 @@ device_stm_op_callback (void *ptr, http_query *q)
         log_assert(dev->log, dev->stm_timer == NULL);
         dev->stm_timer = eloop_timer_new(result.delay,
             device_stm_timer_callback, dev);
-        dev->proto_op_current = result.next;
+        dev->proto_ctx.op = result.next;
         return;
     }
 
@@ -1105,7 +1093,11 @@ device_stm_start_scan (device *dev)
 
     /* Submit a request */
     device_stm_state_set(dev, DEVICE_STM_SCANNING);
-    device_proto_op_submit(dev, PROTO_OP_SCAN, device_stm_op_callback);
+    if (dev->proto_ctx.proto->precheck_query != NULL) {
+        device_proto_op_submit(dev, PROTO_OP_PRECHECK, device_stm_op_callback);
+    } else {
+        device_proto_op_submit(dev, PROTO_OP_SCAN, device_stm_op_callback);
+    }
 }
 
 /* Wait until device leaves the working state

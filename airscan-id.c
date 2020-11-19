@@ -177,5 +177,28 @@ id_format_short_name (ID_FORMAT id)
     return name ? name : mime;
 }
 
+/******************** PROTO_OP ********************/
+/* proto_op_name_table represents PROTO_OP to its
+ * name mappind
+ */
+static id_name_table proto_op_name_table[] = {
+    {PROTO_OP_NONE,     "PROTO_OP_NONE"},
+    {PROTO_OP_PRECHECK, "PROTO_OP_PRECHECK"},
+    {PROTO_OP_SCAN,     "PROTO_OP_SCAN"},
+    {PROTO_OP_LOAD,     "PROTO_OP_LOAD"},
+    {PROTO_OP_CHECK,    "PROTO_OP_CHECK"},
+    {PROTO_OP_CLEANUP,  "PROTO_OP_CLEANUP"},
+    {PROTO_OP_FINISH,   "PROTO_OP_FINISH"},
+    {-1, NULL}
+};
+
+/* Get PROTO_OP name, for logging
+ */
+const char*
+proto_op_name (PROTO_OP op)
+{
+    return id_name(op, proto_op_name_table);
+}
+
 /* vim:ts=8:sw=4:et
  */
