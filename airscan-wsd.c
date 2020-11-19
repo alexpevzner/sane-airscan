@@ -85,6 +85,10 @@ typedef struct {
     bool          dib;
 } proto_handler_wsd;
 
+/* Forward declarations */
+static http_query*
+wsd_status_query (const proto_ctx *ctx);
+
 /* Free WSD protocol handler
  */
 static void
@@ -623,6 +627,29 @@ wsd_fault_decode (const proto_ctx *ctx)
     return result;
 }
 
+/* Create pre-scan check query
+ */
+static http_query*
+wsd_precheck_query (const proto_ctx *ctx)
+{
+    return wsd_status_query(ctx);
+}
+
+/* Decode pre-scan check query results
+ */
+static proto_result
+wsd_precheck_decode (const proto_ctx *ctx)
+{
+    proto_result result = {0};
+
+    (void) ctx;
+
+    result.next = PROTO_OP_SCAN;
+    result.status = SANE_STATUS_GOOD;
+
+    return result;
+}
+
 /* Initiate scanning
  */
 static http_query*
@@ -1086,6 +1113,9 @@ proto_handler_wsd_new (void)
 
     wsd->proto.devcaps_query = wsd_devcaps_query;
     wsd->proto.devcaps_decode = wsd_devcaps_decode;
+
+    wsd->proto.precheck_query = wsd_precheck_query;
+    wsd->proto.precheck_decode = wsd_precheck_decode;
 
     wsd->proto.scan_query = wsd_scan_query;
     wsd->proto.scan_decode = wsd_scan_decode;
