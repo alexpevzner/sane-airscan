@@ -1,5 +1,5 @@
 // Copyright 2020 The Chromium OS Authors. All rights reserved.
-// See LICENSE for license terms and conditions.
+// See the sane-airscan top-level LICENSE for license terms and conditions.
 
 #include <cstddef>
 #include <cstdint>
