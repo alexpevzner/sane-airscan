@@ -6,6 +6,9 @@
  * ESCL protocol handler
  */
 
+#define _GNU_SOURCE
+#include <string.h>
+
 #include "airscan.h"
 
 #include <stdlib.h>
@@ -581,6 +584,51 @@ wsd_devcaps_decode (const proto_ctx *ctx, devcaps *caps)
     return err;
 }
 
+/* Check if response is fault response without decoding it
+ */
+static bool
+wsd_fault_check (const proto_ctx *ctx)
+{
+    http_data         *data;
+    static const char fault[] =
+        "//schemas.xmlsoap.org/ws/2004/08/addressing/fault";
+
+    /* If we have erroneous HTTP status, we expect to see fault message
+     * inside
+     */
+    if (http_query_error(ctx->query) != NULL) {
+        return true;
+    }
+
+    /* Some devices (namely Lexmark MB2236adw and Xerox WorkCentre 3225)
+     * may use HTTP status 200 to return fault response, so check for
+     * the HTTP status code is not enough to distinguish between normal
+     * and fault response
+     *
+     * So we search the response body for the following string:
+     *     "//schemas.xmlsoap.org/ws/2004/08/addressing/fault"
+     *
+     * If this string is found, this is probably a fault response
+     *
+     * Note, the scheme is stripped from this string, because some
+     * devices use "http://", why another may use "https://"
+     *
+     * Note, as optimization and to avoid searching this string
+     * across the image date, we assume that if we have got MIME
+     * multipart response, it is probably not fault.
+     */
+    if (http_query_get_mp_response_count(ctx->query) != 0) {
+        return false;
+    }
+
+    data = http_query_get_response_data(ctx->query);
+    if (memmem(data->bytes, data->size, fault, sizeof(fault) - 1) != NULL) {
+        return true;
+    }
+
+    return false;
+}
+
 /* Decode fault response
  */
 static proto_result
@@ -813,7 +861,7 @@ wsd_scan_decode (const proto_ctx *ctx)
     result.next = PROTO_OP_FINISH;
 
     /* Decode error, if any */
-    if (http_query_error(ctx->query) != NULL) {
+    if (wsd_fault_check(ctx)) {
         return wsd_fault_decode(ctx);
     }
 
@@ -911,7 +959,7 @@ wsd_load_decode (const proto_ctx *ctx)
     http_data    *data;
 
     /* Check HTTP status */
-    if (http_query_error(ctx->query) != NULL) {
+    if (wsd_fault_check(ctx)) {
         return wsd_fault_decode(ctx);
     }
 
