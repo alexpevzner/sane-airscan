@@ -11,14 +11,14 @@
 #   CPPFLAGS                            C preprocessor flags
 #   CFLAGS     -O2 -g -W -Wall -Werror  C compiler flags
 #   LDFLAGS                             Linker flags
-#   COMPRESS   gzip                     Program to compress man page, or ""
+#   COMPRESS   gzip -n                  Program to compress man page, or ""
 #   MANDIR     /usr/share/man/          Where to install man page
 #   STRIP      -s                       Stripping of debug symbols
 #   PKG_CONFIG pkg-config               Program to query dependencies info
 #   INSTALL    install                  Installation program
 
 CC	= gcc
-COMPRESS = gzip
+COMPRESS = gzip -n
 CFLAGS	+= -O2 -g -W -Wall -Werror -pthread $(CPPFLAGS)
 MANDIR	= /usr/share/man/
 PKG_CONFIG = /usr/bin/pkg-config
