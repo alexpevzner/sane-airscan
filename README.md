@@ -103,6 +103,7 @@ Legend:
 | EPSON XP-7100 Series               | Yes                       |                           |
 | EPSON XP-8600 Series               | Yes                       |                           |
 | HP Color Laserjet MFP m178-m181    | Yes                       |                           |
+| HP Color LaserJet MFP M182nw       | Yes                       |                           |
 | HP Color LaserJet MFP M281fdw      | Yes                       |                           |
 | HP Color LaserJet MFP M477fdw      | Yes                       | Yes                       |
 | HP Color LaserJet Pro M478f-9f     | Yes                       |                           |
@@ -148,6 +149,7 @@ Legend:
 | Samsung M267x 287x Series          | No                        | Yes                       |
 | Samsung M288x Series               | No                        | Yes                       |
 | Samsung M337x 387x 407x Series     | No                        | Yes<sup>[7](#note7)</sup> |
+| Xerox B215                         | Yes                       |                           |
 | Xerox VersaLink B405               | Yes                       |                           |
 | Xerox WorkCentre 3025              | No                        | Yes                       |
 | TODO                               |                           |                           |
