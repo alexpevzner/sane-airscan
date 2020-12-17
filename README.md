@@ -96,7 +96,7 @@ Legend:
 | Dell C1765nfw Color MFP            | No                        | Yes                       |
 | Dell C2665dnf Color Laser Printer  | No                        | Yes                       |
 | EPSON ET-2750 Series               | Yes                       |                           |
-| EPSON WF-7710                      | Yes                       |                           |
+| EPSON WF-7710 Series               | No                        | Yes                       |
 | EPSON XP-2100 Series               | No                        | Yes                       |
 | EPSON XP-340 Series                | Yes                       |                           |
 | EPSON XP-442 445 Series            | Yes                       |                           |
