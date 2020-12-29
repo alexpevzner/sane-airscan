@@ -118,6 +118,7 @@ Legend:
 | HP ENVY Photo 6200 series          | Yes                       |                           |
 | HP ENVY Photo 7800 series          | Yes                       |                           |
 | HP ENVY Pro 6400 series            | Yes                       |                           |
+| HP LaserJet 200 colorMFP M276n     | No                        | Yes                       |
 | HP LaserJet MFP M130fw             | No                        | Yes                       |
 | HP LaserJet MFP M227sdn            | Yes                       |                           |
 | HP LaserJet MFP M426dw             | Yes                       |                           |
