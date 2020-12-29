@@ -491,10 +491,20 @@ netif_notifier_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
         }
     }
 #elif defined(OS_HAVE_AF_ROUTE)
-    /* Given the ROUTE_FILTERs, we know that this is a RTM_NEWADDR or
-     * a RTM_DELADDR.
+    /* Note, on OpenBSD we have ROUTE_MSGFILTER, but FreeBSD lacks
+     * this feature, so we have to filter received routing messages
+     * manually, to avoid relatively expensive netif_refresh_ifaddrs()
+     * calls
      */
-    netif_refresh_ifaddrs();
+    struct rt_msghdr *rtm = (struct rt_msghdr*) buf;
+    if (rc >= sizeof(struct rt_msghdr)) {
+        switch (rtm->rtm_type) {
+        case RTM_NEWADDR:
+        case RTM_DELADDR:
+            netif_refresh_ifaddrs();
+            break;
+        }
+    }
 #endif
 }
 
@@ -578,13 +588,17 @@ netif_init (void)
         return SANE_STATUS_IO_ERROR;
     }
 
+#ifdef ROUTE_MSGFILTER
     unsigned int rtfilter =
         ROUTE_FILTER(RTM_NEWADDR) | ROUTE_FILTER(RTM_DELADDR);
     if (setsockopt(netif_rtnetlink_sock, AF_ROUTE, ROUTE_MSGFILTER,
                    &rtfilter, sizeof(rtfilter)) < 0) {
+        /* Note, this error is not fatal for us, it is enough to
+         * log it and continue
+         */
         log_debug(NULL, "can't set ROUTE_MSGFILTER: %s", strerror(errno));
-        return SANE_STATUS_IO_ERROR;
     }
+#endif
 #endif
 
     /* Initialize netif_ifaddrs */
