@@ -11,6 +11,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(OS_HAVE_ENDIAN_H)
+#   include <endian.h>
+#elif defined(OS_HAVE_SYS_ENDIAN_H)
+#   include <sys/endian.h>
+#endif
+
 /* BITMAPFILEHEADER structure, see MSDN for details
  */
 #pragma pack (push,1)

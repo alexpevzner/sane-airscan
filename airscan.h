@@ -588,16 +588,24 @@ __ptr_array_del (void **a, int i)
  *   OS_HAVE_AF_ROUTE     - BSD-like AF_ROUTE
  *   OS_HAVE_LINUX_PROCFS - Linux-style procfs
  *   OS_HAVE_IP_MREQN     - OS defines struct ip_mreqn
+ *   OS_HAVE_ENDIAN_H     - #include <endian.h> works
+ *   OS_HAVE_SYS_ENDIAN_H - #include <sys/endian.h> works
  */
 #ifdef  __linux__
-#   define OS_HAVE_EVENTFD      1
-#   define OS_HAVE_RTNETLINK    1
-#   define OS_HAVE_LINUX_PROCFS 1
-#   define OS_HAVE_IP_MREQN     1
+#   define OS_HAVE_EVENTFD              1
+#   define OS_HAVE_RTNETLINK            1
+#   define OS_HAVE_LINUX_PROCFS         1
+#   define OS_HAVE_IP_MREQN             1
+#   define OS_HAVE_ENDIAN_H             1
 #endif
 
 #ifdef BSD
-#   define OS_HAVE_AF_ROUTE     1
+#   define OS_HAVE_AF_ROUTE             1
+#   ifdef __FreeBSD__
+#       define OS_HAVE_SYS_ENDIAN_H     1
+#   else
+#       define OS_HAVE_ENDIAN_H         1
+#   endif
 #endif
 
 /* Get user's home directory. There is no need to
