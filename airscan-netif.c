@@ -497,7 +497,7 @@ netif_notifier_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
      * calls
      */
     struct rt_msghdr *rtm = (struct rt_msghdr*) buf;
-    if (rc >= sizeof(struct rt_msghdr)) {
+    if (rc >= (int) sizeof(struct rt_msghdr)) {
         switch (rtm->rtm_type) {
         case RTM_NEWADDR:
         case RTM_DELADDR:
