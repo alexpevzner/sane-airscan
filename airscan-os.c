@@ -17,7 +17,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
-#ifdef __OpenBSD__
+#if defined(__OpenBSD__) || defined(__FreeBSD__)
 #   include <sys/types.h>
 #   include <sys/sysctl.h>
 #endif
@@ -92,6 +92,15 @@ os_progname_init (void)
         return;
     }
     memmove(os_progname_buf, kp.p_comm, KI_MAXCOMLEN);
+#elif defined(__FreeBSD__)
+    const int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1};
+    size_t    len = sizeof(os_progname_buf);
+    int       rc = sysctl(mib, 4, os_progname_buf, &len, NULL, 0);
+
+    if (rc < 0) {
+        os_progname_buf[0] = '\0'; /* Just a paranoia */
+    }
+
 #else
     /* This is nice to have but not critical. The caller already has
        to handle os_progname returning NULL. The error is left as a
