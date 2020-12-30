@@ -6,39 +6,67 @@
 #   Name     Default                    Description
 #   ----     -------                    -----------
 #   DESTDIR                             Destination directory for make install
-#   PREFIX           	                Non-standard: appended to DESTDIR
 #   CC         gcc                      C compiler
 #   CPPFLAGS                            C preprocessor flags
 #   CFLAGS     -O2 -g -W -Wall -Werror  C compiler flags
 #   LDFLAGS                             Linker flags
 #   COMPRESS   gzip -n                  Program to compress man page, or ""
-#   MANDIR     /usr/share/man/          Where to install man page
 #   STRIP      -s                       Stripping of debug symbols
 #   PKG_CONFIG pkg-config               Program to query dependencies info
 #   INSTALL    install                  Installation program
+#
+# Variables for Installation Directories
+#   Name         Linux               BSD
+#   ----         -----               ---
+#   prefix       /usr                /usr/local
+#   exec_prefix  $(prefix)           $(prefix)
+#   sysconfdir   /etc                $(prefix)/etc
+#   bindir       $(exec_prefix)/bin  $(exec_prefix)/bin
+#   libdir       $(shell $(PKG_CONFIG) --variable=libdir sane-backends)
+#   datarootdir  $(prefix)/share     $(prefix)/share
+#   mandir       $(datarootdir)/man  $(datarootdir)/man
+#
 
-CC	= gcc
-COMPRESS = gzip -n
-CFLAGS	+= -O2 -g -W -Wall -Werror -pthread $(CPPFLAGS)
-MANDIR	= /usr/share/man/
-PKG_CONFIG = /usr/bin/pkg-config
-STRIP 	= -s
-INSTALL = install
+CC		= gcc
+COMPRESS 	= gzip -n
+CFLAGS		+= -O2 -g -W -Wall -Werror -pthread $(CPPFLAGS)
+MANDIR		= /usr/share/man/
+PKG_CONFIG 	= /usr/bin/pkg-config
+STRIP 		= -s
+INSTALL 	= install
+
+ifeq "$(shell uname -s)" "Linux"
+    prefix	?= /usr
+else
+    prefix	?= /usr/local
+endif
+
+ifeq "$(prefix)" "/usr"
+    sysconfdir	= /etc
+else
+    sysconfdir	= $(prefix)/etc
+endif
+
+exec_prefix	= $(prefix)
+bindir          = $(exec_prefix)/bin
+libdir		= $(shell $(PKG_CONFIG) --variable=libdir sane-backends)
+datarootdir	= $(prefix)/share
+mandir		= $(datarootdir)/man
 
 # These variables are not intended to be user-settable
-OBJDIR  = objs/
-BINDIR 	= /usr/bin
-CONFDIR = /etc/sane.d
-LIBDIR 	:= $(shell $(PKG_CONFIG) --variable=libdir sane-backends)
-BACKEND = libsane-airscan.so.1
-DISCOVER = airscan-discover
-LIBAIRSCAN = $(OBJDIR)/libairscan.a
-MAN_DISCOVER = $(DISCOVER).1
+OBJDIR		= objs/
+CONFDIR		= $(sysconfdir)/sane.d
+BACKEND		= libsane-airscan.so.1
+DISCOVER	= airscan-discover
+LIBAIRSCAN	= $(OBJDIR)/libairscan.a
+MAN_DISCOVER	= $(DISCOVER).1
 MAN_DISCOVER_TITLE = "SANE Scanner Access Now Easy"
-MAN_BACKEND = sane-airscan.5
+MAN_BACKEND	= sane-airscan.5
 MAN_BACKEND_TITLE = "AirScan (eSCL) and WSD SANE backend"
-DEPS_COMMON := avahi-client libxml-2.0 gnutls
-DEPS_CODECS := libjpeg libpng
+DEPS_COMMON	:= avahi-client libxml-2.0 gnutls
+DEPS_CODECS	:= libjpeg libpng
+
+CFLAGS		+= -D CONFIG_SANE_CONFIG_DIR=\"$(CONFDIR)\"
 
 # Sources and object files
 SRC	= $(wildcard airscan-*.c) sane_strstatus.c http_parser.c
@@ -89,31 +117,31 @@ $(LIBAIRSCAN): $(OBJ) Makefile
 	ar cru $(LIBAIRSCAN) $(OBJ)
 
 install: all
-	mkdir -p $(DESTDIR)$(PREFIX)$(BINDIR)
-	mkdir -p $(DESTDIR)$(PREFIX)$(CONFDIR)
-	mkdir -p $(DESTDIR)$(PREFIX)$(CONFDIR)/dll.d
-	$(INSTALL) $(STRIP) -D $(DISCOVER) $(DESTDIR)$(PREFIX)$(BINDIR)
-	[ -e $(DESTDIR)$(PREFIX)$(CONFDIR)/airscan.conf ] || cp airscan.conf $(DESTDIR)$(PREFIX)$(CONFDIR)
-	[ -e $(DESTDIR)$(PREFIX)$(CONFDIR)/dll.d/airscan ] || cp dll.conf $(DESTDIR)$(PREFIX)$(CONFDIR)/dll.d/airscan
-	mkdir -p $(DESTDIR)$(PREFIX)$(LIBDIR)/sane
-	$(INSTALL) $(STRIP) -D $(BACKEND) $(DESTDIR)$(PREFIX)$(LIBDIR)/sane
-	mkdir -p $(DESTDIR)$(PREFIX)/$(MANDIR)/man1
-	mkdir -p $(DESTDIR)$(PREFIX)/$(MANDIR)/man5
-	$(INSTALL) -m 644 $(MAN_DISCOVER) $(DESTDIR)$(PREFIX)$(MANDIR)/man1
-	$(INSTALL) -m 644 $(MAN_BACKEND) $(DESTDIR)$(PREFIX)$(MANDIR)/man5
-	[ "$(COMPRESS)" = "" ] || $(COMPRESS) -f $(DESTDIR)$(PREFIX)$(MANDIR)/man1/$(MAN_DISCOVER)
-	[ "$(COMPRESS)" = "" ] || $(COMPRESS) -f $(DESTDIR)$(PREFIX)$(MANDIR)/man5/$(MAN_BACKEND)
+	mkdir -p $(DESTDIR)/$(bindir)
+	mkdir -p $(DESTDIR)/$(CONFDIR)
+	mkdir -p $(DESTDIR)/$(CONFDIR)/dll.d
+	$(INSTALL) $(STRIP) -D $(DISCOVER) $(DESTDIR)/$(bindir)
+	[ -e $(DESTDIR)/$(CONFDIR)/airscan.conf ] || cp airscan.conf $(DESTDIR)/$(CONFDIR)
+	[ -e $(DESTDIR)/$(CONFDIR)/dll.d/airscan ] || cp dll.conf $(DESTDIR)/$(CONFDIR)/dll.d/airscan
+	mkdir -p $(DESTDIR)/$(libdir)/sane
+	$(INSTALL) $(STRIP) -D $(BACKEND) $(DESTDIR)/$(libdir)/sane
+	mkdir -p $(DESTDIR)/$(mandir)/man1
+	mkdir -p $(DESTDIR)/$(mandir)/man5
+	$(INSTALL) -m 644 $(MAN_DISCOVER) $(DESTDIR)/$(mandir)/man1
+	$(INSTALL) -m 644 $(MAN_BACKEND) $(DESTDIR)/$(mandir)/man5
+	[ "$(COMPRESS)" = "" ] || $(COMPRESS) -f $(DESTDIR)/$(mandir)/man1/$(MAN_DISCOVER)
+	[ "$(COMPRESS)" = "" ] || $(COMPRESS) -f $(DESTDIR)/$(mandir)/man5/$(MAN_BACKEND)
 
 clean:
 	rm -f test test-decode test-multipart test-zeroconf test-uri $(BACKEND) tags
 	rm -rf $(OBJDIR)
 
 uninstall:
-	rm -f $(DESTDIR)$(PREFIX)$(BINDIR)/$(DISCOVER)
-	rm -f $(DESTDIR)$(PREFIX)$(CONFDIR)/dll.d/airscan
-	rm -f $(DESTDIR)$(PREFIX)$(LIBDIR)/sane/$(BACKEND)
-	rm -f $(DESTDIR)$(PREFIX)$(MANDIR)/man1/$(MAN_DISCOVER)*
-	rm -f $(DESTDIR)$(PREFIX)$(MANDIR)/man5/$(MAN_BACKEND)*
+	rm -f $(DESTDIR)/$(bindir)/$(DISCOVER)
+	rm -f $(DESTDIR)/$(CONFDIR)/dll.d/airscan
+	rm -f $(DESTDIR)/$(libdir)/sane/$(BACKEND)
+	rm -f $(DESTDIR)/$(mandir)/man1/$(MAN_DISCOVER)*
+	rm -f $(DESTDIR)/$(mandir)/man5/$(MAN_BACKEND)*
 
 man: $(MAN_DISCOVER) $(MAN_BACKEND)
 

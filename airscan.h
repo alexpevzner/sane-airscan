@@ -39,7 +39,9 @@ extern "C" {
 
 /* Standard SANE configuration directory
  */
-#define CONFIG_SANE_CONFIG_DIR          "/etc/sane.d/"
+#ifndef CONFIG_SANE_CONFIG_DIR
+#    define CONFIG_SANE_CONFIG_DIR      "/etc/sane.d/"
+#endif
 
 /* Sane-airscan configuration file and subdirectory names
  */
