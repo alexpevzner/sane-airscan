@@ -30,8 +30,7 @@
 CC		= gcc
 COMPRESS 	= gzip -n
 CFLAGS		+= -O2 -g -W -Wall -Werror -pthread $(CPPFLAGS)
-MANDIR		= /usr/share/man/
-PKG_CONFIG 	= /usr/bin/pkg-config
+PKG_CONFIG 	= pkg-config
 STRIP 		= -s
 INSTALL 	= install
 
@@ -120,11 +119,11 @@ install: all
 	mkdir -p $(DESTDIR)/$(bindir)
 	mkdir -p $(DESTDIR)/$(CONFDIR)
 	mkdir -p $(DESTDIR)/$(CONFDIR)/dll.d
-	$(INSTALL) $(STRIP) -D $(DISCOVER) $(DESTDIR)/$(bindir)
+	$(INSTALL) $(STRIP) $(DISCOVER) $(DESTDIR)/$(bindir)
 	[ -e $(DESTDIR)/$(CONFDIR)/airscan.conf ] || cp airscan.conf $(DESTDIR)/$(CONFDIR)
 	[ -e $(DESTDIR)/$(CONFDIR)/dll.d/airscan ] || cp dll.conf $(DESTDIR)/$(CONFDIR)/dll.d/airscan
 	mkdir -p $(DESTDIR)/$(libdir)/sane
-	$(INSTALL) $(STRIP) -D $(BACKEND) $(DESTDIR)/$(libdir)/sane
+	$(INSTALL) $(STRIP) $(BACKEND) $(DESTDIR)/$(libdir)/sane
 	mkdir -p $(DESTDIR)/$(mandir)/man1
 	mkdir -p $(DESTDIR)/$(mandir)/man5
 	$(INSTALL) -m 644 $(MAN_DISCOVER) $(DESTDIR)/$(mandir)/man1
