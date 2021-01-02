@@ -72,15 +72,13 @@ os_homedir (void)
 static void
 os_progname_init (void)
 {
+    /* Obtain path to the executable */
 #ifdef  OS_HAVE_LINUX_PROCFS
     ssize_t rc;
 
     rc = readlink("/proc/self/exe", os_progname_buf, sizeof(os_progname_buf));
-    if (rc > 0) {
-        char *s = strrchr(os_progname_buf, '/');
-        if (s != NULL) {
-            memmove(os_progname_buf, s+1, strlen(s+1) + 1);
-        }
+    if (rc < 0) {
+        return;
     }
 #elif defined(__OpenBSD__)
     struct kinfo_proc kp;
@@ -100,13 +98,18 @@ os_progname_init (void)
     if (rc < 0) {
         os_progname_buf[0] = '\0'; /* Just a paranoia */
     }
-
 #else
     /* This is nice to have but not critical. The caller already has
        to handle os_progname returning NULL. The error is left as a
        reminder for anyone porting this. */
 #   error FIX ME
 #endif
+
+    /* Strip the directory, leave only the file name */
+    char *s = strrchr(os_progname_buf, '/');
+    if (s != NULL) {
+        memmove(os_progname_buf, s+1, strlen(s+1) + 1);
+    }
 }
 
 /* Get base name of the calling program. 
