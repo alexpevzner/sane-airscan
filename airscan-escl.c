@@ -51,7 +51,7 @@ typedef struct {
     proto_handler proto; /* Base class */
 
     /* Miscellaneous flags */
-    bool quirk_hp_laserjet_mfp_m630; /* HP LaserJet MFP M630 detected */
+    bool quirk_localhost;            /* Set Host: localhost in ScanJobs rq */
     bool quirk_canon_mf410_series;   /* Canon MF410 Series */
 } proto_handler_escl;
 
@@ -463,7 +463,9 @@ escl_devcaps_parse (proto_handler_escl *escl,
             if (!strcmp(m, "Canon iR2625/2630")) {
                 quirk_canon_iR2625_2630 = true;
             } else if (!strcmp(m, "HP LaserJet MFP M630")) {
-                escl->quirk_hp_laserjet_mfp_m630 = true;
+                escl->quirk_localhost = true;
+            } else if (!strcmp(m, "HP Color LaserJet FlowMFP M578")) {
+                escl->quirk_localhost = true;
             } else if (!strcmp(m, "MF410 Series")) {
                 escl->quirk_canon_mf410_series = true;
             }
@@ -709,16 +711,17 @@ escl_scan_query (const proto_ctx *ctx)
 
     /* It's a dirty hack
      *
-     * HP LaserJet MFP M630 doesn't allow eSCL scan, unless
-     * Host is set to "localhost". It is probably bad and
-     * naive attempt to enforce some access security.
+     * HP LaserJet MFP M630, HP Color LaserJet FlowMFP M578 and
+     * probably some other HP devices don't allow eSCL scan, unless
+     * Host is set to "localhost". It is probably bad and naive attempt
+     * to enforce some access security.
      *
      * So here we forcibly set Host to "localhost".
      *
      * Note, this hack doesn't work with some other printers
      * see #92, #98 for details
      */
-    if (escl->quirk_hp_laserjet_mfp_m630) {
+    if (escl->quirk_localhost) {
         http_query_set_request_header(query, "Host", "localhost");
         http_query_onredir(query, escl_scan_fix_location);
     }
