@@ -163,31 +163,31 @@ Legend:
 scanning on its web console: Home->Menu->Preferences->Network->TCP/IP
 Settings->Network Link Scan Settings->On.
 
-<a name="note2"><sup>[1]</sup></a>: WS-Scan needs to be manually enabled on this device:
+<a name="note2"><sup>[2]</sup></a>: WS-Scan needs to be manually enabled on this device:
 Home->Menu->Preferences->Network->TCP/IP Settings->WSD Settings->Use WSD Scanning->ON
 
-<a name="note3"><sup>[2]</sup></a>: this device is USB-only, but it works well with the
+<a name="note3"><sup>[3]</sup></a>: this device is USB-only, but it works well with the
 IPP-over-USB daemon.
 
-<a name="note4"><sup>[3]</sup></a>: by default, WS-Scan is disabled on this
+<a name="note4"><sup>[4]</sup></a>: by default, WS-Scan is disabled on this
 device and needs to be enabled before use: open web console, Click `[Settings/Registration]`,
 Click `[Network Settings]`->`[TCP/IP Settings]`, Click `[Edit]` in `[WSD Settings]`,
 enable `[Use WSD Scanning]` checkbox, Click `[OK]`
 
-<a name="note5"><sup>[4]</sup></a>: this device requires manual action on its front
+<a name="note5"><sup>[5]</sup></a>: this device requires manual action on its front
 panel to initiate WSD scan: Send->WSD Scan->From Computer
 
-<a name="note6"><sup>[5]</sup></a>: when low in memory, this device may scan at 400 DPI
+<a name="note6"><sup>[6]</sup></a>: when low in memory, this device may scan at 400 DPI
 instead of requested 600 DPI. As sane-airscan reports image parameters to SANE before actual
 image is received, and then adjust actual image to reported parameters, image will
 be scaled down by the factor 2/3 at this case. Lower resolutions works well.
 
-<a name="note7"><sup>[6]</sup></a>: by default, WS-Scan is disabled on this
+<a name="note7"><sup>[7]</sup></a>: by default, WS-Scan is disabled on this
 device and needs to be enabled before use: open web console, Click `[Configuration]`, click `[Initial Settings]`
 under `[Scanner]`, and then set `[Prohibit WSD Scan Command]` to `[Do not Prohibit]` (from
 http://support.ricoh.com/bb_v1oi/pub_e/oi_view/0001047/0001047003/view/scanner/int/0095.htm)
 
-<a name="note8"><sup>[7]</sup></a>: with old firmware (tested with
+<a name="note8"><sup>[8]</sup></a>: with old firmware (tested with
 V4.00.01.04 APR-09-2013) ADF scan causes device reboot. Firmware update
 helps, version V4.00.02.20 MAY-27-2020 known to work.
 
