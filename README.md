@@ -72,14 +72,14 @@ Legend:
 | Canon imageRUNNER ADVANCE 4545/4551| Yes                       | Yes                       |
 | Canon imageRUNNER ADV C5550/5560   | Yes                       |                           |
 | Canon imageRUNNER C3120L           | Yes                       | Yes                       |
-| Canon i-SENSYS MF4780w             | No                        | Yes<sup>[3](#note3)</sup> |
-| Canon i-SENSYS MF641C              | No                        | Yes                       |
-| Canon LiDE 300                     | Yes<sup>[2](#note2)</sup> |                           |
-| Canon LiDE 400                     | Yes<sup>[2](#note2)</sup> |                           |
+| Canon i-SENSYS MF4780w             | No                        | Yes<sup>[4](#note4)</sup> |
+| Canon i-SENSYS MF641C              | No                        | Yes<sup>[2](#note2)</sup> |
+| Canon LiDE 300                     | Yes<sup>[3](#note3)</sup> |                           |
+| Canon LiDE 400                     | Yes<sup>[3](#note3)</sup> |                           |
 | Canon MB5100 series                | Yes                       |                           |
 | Canon MB5400 series                | Yes                       | Yes                       |
-| Canon MF240 Series                 | No                        | Yes<sup>[3](#note3)</sup> |
-| Canon MF260 Series                 | Yes                       | Yes<sup>[3](#note3)</sup> |
+| Canon MF240 Series                 | No                        | Yes<sup>[4](#note4)</sup> |
+| Canon MF260 Series                 | Yes                       | Yes<sup>[4](#note4)</sup> |
 | Canon MF410 Series                 | Yes                       | Yes                       |
 | Canon MF440 Series                 | Yes                       | Yes                       |
 | Canon MF745C/746C                  | Yes                       | Yes                       |
@@ -125,7 +125,7 @@ Legend:
 | HP LaserJet MFP M227sdn            | Yes                       |                           |
 | HP LaserJet MFP M426dw             | Yes                       |                           |
 | HP LaserJet MFP M630               | Yes                       |                           |
-| HP LaserJet Pro M28a               | Yes<sup>[2](#note2)</sup> |                           |
+| HP LaserJet Pro M28a               | Yes<sup>[3](#note3)</sup> |                           |
 | HP LaserJet Pro M28w               | Yes                       | Yes                       |
 | HP LaserJet Pro MFP 148fdw         | Yes                       |                           |
 | HP LaserJet Pro MFP M125 series    | No                        | Yes                       |
@@ -141,18 +141,18 @@ Legend:
 | HP OfficeJet Pro 8730              | Yes                       | Yes                       |
 | HP OfficeJet Pro 9010 series       | Yes                       |                           |
 | HP Smart Tank Plus 550 series      | Yes                       |                           |
-| Kyocera ECOSYS M2040dn             | Yes                       | Yes<sup>[4](#note4)</sup> |
+| Kyocera ECOSYS M2040dn             | Yes                       | Yes<sup>[5](#note5)</sup> |
 | Kyocera ECOSYS M5526cdw            | Yes                       |                           |
-| Lexmark CX317dn                    | Yes<sup>[5](#note5)</sup> | Yes<sup>[5](#note5)</sup> |
+| Lexmark CX317dn                    | Yes<sup>[6](#note6)</sup> | Yes<sup>[6](#note6)</sup> |
 | Lexmark MC2535adwe                 | Yes                       |                           |
 | Lexmark MC3224adwe                 | Yes                       |                           |
 | OKI-MC853                          | Yes                       |                           |
 | Panasonic KV-S1058Y                | No                        | Yes                       |
 | Pantum M6500W series               | Yes                       |                           |
-| Ricoh MP C3003                     | No                        | Yes<sup>[6](#note6)</sup> |
+| Ricoh MP C3003                     | No                        | Yes<sup>[7](#note7)</sup> |
 | Samsung M267x 287x Series          | No                        | Yes                       |
 | Samsung M288x Series               | No                        | Yes                       |
-| Samsung M337x 387x 407x Series     | No                        | Yes<sup>[7](#note7)</sup> |
+| Samsung M337x 387x 407x Series     | No                        | Yes<sup>[8](#note8)</sup> |
 | Xerox B215                         | Yes                       |                           |
 | Xerox VersaLink B405               | Yes                       |                           |
 | Xerox WorkCentre 3025              | No                        | Yes                       |
@@ -163,28 +163,31 @@ Legend:
 scanning on its web console: Home->Menu->Preferences->Network->TCP/IP
 Settings->Network Link Scan Settings->On.
 
-<a name="note2"><sup>[2]</sup></a>: this device is USB-only, but it works well with the
+<a name="note2"><sup>[1]</sup></a>: WS-Scan needs to be manually enabled on this device:
+Home->Menu->Preferences->Network->TCP/IP Settings->WSD Settings->Use WSD Scanning->ON
+
+<a name="note3"><sup>[2]</sup></a>: this device is USB-only, but it works well with the
 IPP-over-USB daemon.
 
-<a name="note3"><sup>[3]</sup></a>: by default, WS-Scan is disabled on this
+<a name="note4"><sup>[3]</sup></a>: by default, WS-Scan is disabled on this
 device and needs to be enabled before use: open web console, Click `[Settings/Registration]`,
 Click `[Network Settings]`->`[TCP/IP Settings]`, Click `[Edit]` in `[WSD Settings]`,
 enable `[Use WSD Scanning]` checkbox, Click `[OK]`
 
-<a name="note4"><sup>[4]</sup></a>: this device requires manual action on its front
+<a name="note5"><sup>[4]</sup></a>: this device requires manual action on its front
 panel to initiate WSD scan: Send->WSD Scan->From Computer
 
-<a name="note5"><sup>[5]</sup></a>: when low in memory, this device may scan at 400 DPI
+<a name="note6"><sup>[5]</sup></a>: when low in memory, this device may scan at 400 DPI
 instead of requested 600 DPI. As sane-airscan reports image parameters to SANE before actual
 image is received, and then adjust actual image to reported parameters, image will
 be scaled down by the factor 2/3 at this case. Lower resolutions works well.
 
-<a name="note6"><sup>[6]</sup></a>: by default, WS-Scan is disabled on this
+<a name="note7"><sup>[6]</sup></a>: by default, WS-Scan is disabled on this
 device and needs to be enabled before use: open web console, Click `[Configuration]`, click `[Initial Settings]`
 under `[Scanner]`, and then set `[Prohibit WSD Scan Command]` to `[Do not Prohibit]` (from
 http://support.ricoh.com/bb_v1oi/pub_e/oi_view/0001047/0001047003/view/scanner/int/0095.htm)
 
-<a name="note7"><sup>[7]</sup></a>: with old firmware (tested with
+<a name="note8"><sup>[7]</sup></a>: with old firmware (tested with
 V4.00.01.04 APR-09-2013) ADF scan causes device reboot. Firmware update
 helps, version V4.00.02.20 MAY-27-2020 known to work.
 
