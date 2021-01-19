@@ -230,7 +230,7 @@ image_decoder_bmp_read_line (image_decoder *decoder, void *buffer)
     int               i, wid = bmp->info_header.biWidth;
     uint8_t           *out = buffer;
 
-    if (bmp->next_line == labs(bmp->info_header.biHeight)) {
+    if (bmp->next_line == (unsigned int) labs(bmp->info_header.biHeight)) {
         return ERROR("BMP: end of file");
     }
 
