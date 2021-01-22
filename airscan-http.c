@@ -2563,10 +2563,16 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
             return;
         }
 
+        log_debug(q->client->log, "HTTP done TLS handshake");
+
         q->handshake = false;
         eloop_fdpoll_set_mask(q->fdpoll, ELOOP_FDPOLL_BOTH);
     } else if (q->sending) {
         rc = http_query_sock_send(q, q->rq_buf + q->rq_off, len);
+
+        if (rc > 0) {
+            log_debug(q->client->log, "HTTP %d bytes sent", (int) rc);
+        }
 
         if (rc < 0) {
             error err = http_query_sock_err(q, rc);
@@ -2594,6 +2600,8 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
         q->rq_off += rc;
 
         if (q->rq_off == mem_len(q->rq_buf)) {
+            log_debug(q->client->log, "HTTP done request sending");
+
             q->sending = false;
             eloop_fdpoll_set_mask(q->fdpoll, ELOOP_FDPOLL_BOTH);
 
@@ -2605,6 +2613,9 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
         static char io_buf[HTTP_IOBUF_SIZE];
 
         rc = http_query_sock_recv(q, io_buf, sizeof(io_buf));
+        if (rc > 0) {
+            log_debug(q->client->log, "HTTP %d bytes received", (int) rc);
+        }
 
         if (rc < 0) {
             error err = http_query_sock_err(q, rc);
@@ -2625,6 +2636,7 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
             }
             http_query_complete(q, err);
         } else if (q->http_parser_done) {
+            log_debug(q->client->log, "HTTP done response reception");
             http_query_complete(q, NULL);
         } else if (rc == 0) {
             error err = ERROR("connection closed by device");
