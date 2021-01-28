@@ -767,7 +767,6 @@ escl_scan_decode (const proto_ctx *ctx)
     http_uri_free(uri);
 
     result.next = PROTO_OP_LOAD;
-    result.delay = 5000;
 
     return result;
 
