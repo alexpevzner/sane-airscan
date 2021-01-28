@@ -561,9 +561,19 @@ escl_devcaps_decode (const proto_ctx *ctx, devcaps *caps)
 {
     proto_handler_escl *escl = (proto_handler_escl*) ctx->proto;
     http_data          *data = http_query_get_response_data(ctx->query);
+    const char         *s;
 
     caps->units = 300;
     caps->protocol = ctx->proto->name;
+
+    /* Most of devices that have Server: HP_Compact_Server
+     * in their HTTP response header, require this quirk
+     * (see #116)
+     */
+    s = http_query_get_response_header(ctx->query, "server");
+    if (s != NULL && !strcmp(s, "HP_Compact_Server")) {
+        escl->quirk_localhost = true;
+    }
 
     return escl_devcaps_parse(escl, caps, data->bytes, data->size);
 }
