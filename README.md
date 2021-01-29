@@ -109,6 +109,7 @@ Legend:
 | HP Color LaserJet MFP M281fdw      | Yes                       |                           |
 | HP Color LaserJet MFP M477fdw      | Yes                       | Yes                       |
 | HP Color LaserJet Pro M478f-9f     | Yes                       |                           |
+| HP Color LaserJet Pro MFP M277dw   | Yes                       |                           |
 | HP DeskJet 2540                    | Yes                       |                           |
 | HP DeskJet 2600 series             | Yes                       |                           |
 | HP DeskJet 2700 series             | Yes                       |                           |
