@@ -138,6 +138,30 @@ eloop_poll_func (struct pollfd *ufds, unsigned int nfds, int timeout,
     rc = poll(ufds, nfds, timeout);
     pthread_mutex_lock(&eloop_mutex);
 
+    /* Avahi multithreading support is semi-broken. Though new
+     * AvahiWatch could be added from a context of any thread
+     * (Avahi internal structures are properly interlocked, and
+     * event loop thread is properly woken by poll->watch_new()),
+     * Avahi internal indices are only rebuild in the beginning
+     * of the avahi_simple_poll_iterate(), when avahi_simple_poll_prepare()
+     * is called. So when Avahi returns from the poll() syscall
+     * and calls avahi_simple_poll_dispatch(), it asserts, if new
+     * AvahiWatch, which causes process to crash.
+     *
+     * To work around this crash, we force avahi_simple_poll_iterate()
+     * to exit before calling of avahi_simple_poll_dispatch() by
+     * returning error code from here. The subsequent call of
+     * avahi_simple_poll_iterate() fixes the situation by calling
+     * avahi_simple_poll_prepare() first.
+     *
+     * The returned error code cannot be EINTR, because interrupted
+     * system call errors are ignored by Avahi (it simply restarts
+     * the operation) and needs to be distinguished by a "normal"
+     * errors, so event loop in the eloop_thread_func() will handle
+     * it in appropriate manner.
+     *
+     * For now we use EBUSY error code for this purpose
+     */
     if (eloop_poll_restart) {
         /* We have to return an error other than EINTR to restart the
            avahi loop. */
