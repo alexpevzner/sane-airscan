@@ -2531,6 +2531,16 @@ http_query_callbacks = {
     .on_message_complete = http_query_on_message_complete
 };
 
+/* Set http_query::fdpoll event mask
+ */
+static void
+http_query_fdpoll_set_mask (http_query *q, ELOOP_FDPOLL_MASK mask)
+{
+    ELOOP_FDPOLL_MASK old_mask = eloop_fdpoll_set_mask(q->fdpoll, mask);
+    log_debug(q->client->log, "HTTP fdpoll: %s -> %s",
+        eloop_fdpoll_mask_str(old_mask), eloop_fdpoll_mask_str(mask));
+}
+
 /* http_query::fdpoll callback
  */
 static void
@@ -2566,7 +2576,7 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
         log_debug(q->client->log, "HTTP done TLS handshake");
 
         q->handshake = false;
-        eloop_fdpoll_set_mask(q->fdpoll, ELOOP_FDPOLL_BOTH);
+        http_query_fdpoll_set_mask(q, ELOOP_FDPOLL_BOTH);
     } else if (q->sending) {
         rc = http_query_sock_send(q, q->rq_buf + q->rq_off, len);
 
@@ -2603,7 +2613,7 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
             log_debug(q->client->log, "HTTP done request sending");
 
             q->sending = false;
-            eloop_fdpoll_set_mask(q->fdpoll, ELOOP_FDPOLL_BOTH);
+            http_query_fdpoll_set_mask(q, ELOOP_FDPOLL_BOTH);
 
             /* Initialize HTTP parser */
             http_parser_init(&q->http_parser, HTTP_RESPONSE);
@@ -2730,7 +2740,7 @@ AGAIN:
         q->handshake = true;
     }
     q->sending = true;
-    eloop_fdpoll_set_mask(q->fdpoll, ELOOP_FDPOLL_WRITE);
+    http_query_fdpoll_set_mask(q, ELOOP_FDPOLL_WRITE);
 }
 
 /* Close connection to the server, if any
@@ -2838,7 +2848,7 @@ http_query_sock_err (http_query *q, int rc)
     }
 
     if (mask != 0) {
-        eloop_fdpoll_set_mask(q->fdpoll, mask);
+        http_query_fdpoll_set_mask(q, mask);
     }
 
     return err;

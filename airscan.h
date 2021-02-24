@@ -1474,6 +1474,11 @@ typedef enum {
     ELOOP_FDPOLL_BOTH  = ELOOP_FDPOLL_READ | ELOOP_FDPOLL_WRITE
 } ELOOP_FDPOLL_MASK;
 
+/* Convert ELOOP_FDPOLL_MASK to string. Used for logging.
+ */
+const char*
+eloop_fdpoll_mask_str (ELOOP_FDPOLL_MASK mask);
+
 /* Create eloop_fdpoll
  *
  * Callback will be called, when file will be ready for read/write/both,
@@ -1491,9 +1496,9 @@ eloop_fdpoll_new (int fd,
 void
 eloop_fdpoll_free (eloop_fdpoll *fdpoll);
 
-/* Set eloop_fdpoll event mask
+/* Set eloop_fdpoll event mask. It returns a previous value of event mask
  */
-void
+ELOOP_FDPOLL_MASK
 eloop_fdpoll_set_mask (eloop_fdpoll *fdpoll, ELOOP_FDPOLL_MASK mask);
 
 /* Format error string, as printf() does and save result

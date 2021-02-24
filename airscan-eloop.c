@@ -437,6 +437,21 @@ eloop_timer_cancel (eloop_timer *timer)
     mem_free(timer);
 }
 
+/* Convert ELOOP_FDPOLL_MASK to string. Used for logging.
+ */
+const char*
+eloop_fdpoll_mask_str (ELOOP_FDPOLL_MASK mask)
+{
+    switch (mask & ELOOP_FDPOLL_BOTH) {
+    case 0:                  return "{--}";
+    case ELOOP_FDPOLL_READ:  return "{r-}";
+    case ELOOP_FDPOLL_WRITE: return "{-w}";
+    case ELOOP_FDPOLL_BOTH:  return "{rw}";
+    }
+
+    return "{??}"; /* Should never happen indeed */
+}
+
 /* eloop_fdpoll notifies user when file becomes
  * readable, writable or both, depending on its
  * event mask
@@ -508,12 +523,14 @@ eloop_fdpoll_free (eloop_fdpoll *fdpoll)
     mem_free(fdpoll);
 }
 
-/* Set eloop_fdpoll event mask
+/* Set eloop_fdpoll event mask. It returns a previous value of event mask
  */
-void
+ELOOP_FDPOLL_MASK
 eloop_fdpoll_set_mask (eloop_fdpoll *fdpoll, ELOOP_FDPOLL_MASK mask)
 {
-    if (fdpoll->mask != mask) {
+    ELOOP_FDPOLL_MASK old_mask = fdpoll->mask;
+
+    if (old_mask != mask) {
         const AvahiPoll *poll = eloop_poll_get();
         AvahiWatchEvent events = 0;
 
@@ -528,6 +545,8 @@ eloop_fdpoll_set_mask (eloop_fdpoll *fdpoll, ELOOP_FDPOLL_MASK mask)
         fdpoll->mask = mask;
         poll->watch_update(fdpoll->watch, events);
     }
+
+    return old_mask;
 }
 
 /* Format error string, as printf() does and save result
