@@ -11,6 +11,7 @@
 #include <arpa/inet.h>
 #include <net/if.h>
 
+#include <fnmatch.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -352,6 +353,41 @@ zeroconf_device_find_by_ident (const char *ident, ID_PROTO *proto)
     /* Check that device supports requested protocol */
     if ((device->protocols & (1 << *proto)) != 0) {
         return device;
+    }
+
+    return NULL;
+}
+
+/* Check if device is blacklisted
+ *
+ * Returns reason string, if device is blacklisted, NULL, if not
+ */
+static const char*
+zeroconf_device_is_blacklisted (zeroconf_device *device)
+{
+    conf_blacklist *ent;
+    const char     *name, *model;
+
+    if (conf.blacklist == NULL) {
+        return NULL;
+    }
+
+    name = zeroconf_device_name(device);
+    model = zeroconf_device_model(device);
+
+    for (ent = conf.blacklist; ent != NULL; ent = ent->next) {
+        if (ent->name != NULL && !fnmatch(ent->name, name, 0)) {
+            return "name";
+        }
+
+        if (ent->model != NULL && !fnmatch(ent->model, model, 0)) {
+            return "model";
+        }
+
+        if (ent->net.addr.af != AF_UNSPEC &&
+            ip_addrset_on_network(device->addrs, ent->net)) {
+            return "address";
+        }
     }
 
     return NULL;
@@ -1070,7 +1106,7 @@ zeroconf_device_list_get (void)
     for (LL_FOR_EACH(node, &zeroconf_device_list)) {
         zeroconf_device *device;
         ID_PROTO        proto;
-        const char      *name, *model;
+        const char      *name, *model, *blacklisted;
         unsigned int    protocols;
 
         device = OUTER_STRUCT(node, zeroconf_device, node_list);
@@ -1085,6 +1121,14 @@ zeroconf_device_list_get (void)
             log_debug(zeroconf_log,
                 "%s (%d): skipping, device clashes statically configured",
                 name, device->devid);
+            continue;
+        }
+
+        blacklisted = zeroconf_device_is_blacklisted(device);
+        if (blacklisted != NULL) {
+            log_debug(zeroconf_log,
+                "%s (%d): skipping, device is blacklisted by %s",
+                name, device->devid, blacklisted);
             continue;
         }
 
