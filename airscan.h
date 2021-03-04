@@ -1116,6 +1116,12 @@ ip_addrset_addresses (const ip_addrset *addrset, size_t *count);
 bool
 ip_addrset_is_intersect (const ip_addrset *set, const ip_addrset *set2);
 
+/* Check if some of addresses in the address set is on the
+ * given network
+ */
+bool
+ip_addrset_on_network (const ip_addrset *set, ip_network net);
+
 /* Create user-friendly string out of set of addresses, containing
  * in the ip_addrset:
  *   * addresses are sorted, IP4 addresses goes first

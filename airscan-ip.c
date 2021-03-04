@@ -9,9 +9,16 @@
 #include "airscan.h"
 
 #include <string.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <arpa/inet.h>
 #include <sys/un.h>
+
+#if defined(OS_HAVE_ENDIAN_H)
+#   include <endian.h>
+#elif defined(OS_HAVE_SYS_ENDIAN_H)
+#   include <sys/endian.h>
+#endif
 
 /* Format ip_straddr from IP address (struct in_addr or struct in6_addr)
  * af must be AF_INET or AF_INET6
@@ -185,6 +192,51 @@ ip_network_to_straddr (ip_network net)
     return straddr;
 }
 
+/* Check if ip_network contains ip_addr
+ */
+bool
+ip_network_contains (ip_network net, ip_addr addr)
+{
+    struct in_addr a4, m4;
+    uint64_t       a6[2], m6[2];
+
+    if (net.addr.af != addr.af) {
+        return false;
+    }
+
+    switch (net.addr.af) {
+    case AF_INET:
+        a4.s_addr = net.addr.ip.v4.s_addr & addr.ip.v4.s_addr;
+        m4.s_addr = htonl(0xffffffff >> (32 - net.mask));
+        return (a4.s_addr & m4.s_addr) == 0;
+
+    case AF_INET6:
+        /* a6 = net.addr.ip.v6 ^ addr.ip.v6 */
+        memcpy(a6, &addr.ip.v6, 16);
+        memcpy(m6, &net.addr.ip.v6, 16);
+        a6[0] ^= m6[0];
+        a6[1] ^= m6[1];
+
+        /* Compute and apply netmask */
+        memset(m6, 0, 16);
+        if (net.mask <= 64) {
+            m6[0] = htobe64(UINT64_MAX >> (64 - net.mask));
+            m6[1] = 0;
+        } else {
+            m6[1] = UINT64_MAX;
+            m6[0] = htobe64(UINT64_MAX >> (128 - net.mask));
+        }
+
+        a6[0] &= m6[0];
+        a6[1] &= m6[1];
+
+        /* Check result */
+        return (a6[0] | a6[1]) == 0;
+    }
+
+    return false;
+}
+
 /* ip_addr_set represents a set of IP addresses
  */
 struct ip_addrset {
@@ -316,6 +368,23 @@ ip_addrset_is_intersect (const ip_addrset *set, const ip_addrset *set2)
 
     for (i = 0; i < len; i ++) {
         if (ip_addrset_lookup(set2, set->addrs[i])) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/* Check if some of addresses in the address set is on the
+ * given network
+ */
+bool
+ip_addrset_on_network (const ip_addrset *set, ip_network net)
+{
+    size_t i, len = mem_len(set->addrs);
+
+    for (i = 0; i < len; i ++) {
+        if (ip_network_contains(net, set->addrs[i])) {
             return true;
         }
     }
