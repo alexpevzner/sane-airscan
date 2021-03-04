@@ -1,7 +1,7 @@
 .\" generated with Ronn/v0.7.3
 .\" http://github.com/rtomayko/ronn/tree/0.7.3
 .
-.TH "SANE\-AIRSCAN" "5" "August 2020" "" "AirScan (eSCL) and WSD SANE backend"
+.TH "SANE\-AIRSCAN" "5" "March 2021" "" "AirScan (eSCL) and WSD SANE backend"
 .
 .SH "NAME"
 \fBsane\-airscan\fR \- SANE backend for AirScan (eSCL) and WSD scanners and MFP
@@ -141,6 +141,29 @@ socket_dir = /path/to/directory
 .fi
 .
 .IP "" 0
+.
+.SH "BLACKLISTING DEVICES"
+This feature may be useful, if you are on a very big network and have a lot of devices around you, while interesting only in a few of them\.
+.
+.IP "" 4
+.
+.nf
+
+[blacklist]
+model = "Xerox*"       ; blacklist by model name
+name  = "HP*"          ; blacklist by network name
+ip    = 192\.168\.0\.1    ; blacklist by address
+ip    = 192\.168\.0\.0/24 ; blacklist the whole subnet
+.
+.fi
+.
+.IP "" 0
+.
+.P
+Note, model and network names come from DNS\-SD, WS\-Discovery doesn\'t provide this information\. For filtering by model/network name to work, Avahi must be enabled and device must be discoverable via DNS\-SD (not necessarily as a scanner, it\'s enough if WSD scanner is discoverable as a printer via DNS\-SD)\.
+.
+.P
+Blacklisting only affects automatic discovery, and doesn\'t affect manually configured devices
 .
 .SH "DEBUGGING"
 sane\-airscan provides very good instrumentation for troubleshooting without physical access to the problemmatic device\.

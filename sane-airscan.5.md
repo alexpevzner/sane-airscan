@@ -113,6 +113,27 @@ the following options are supported:
     ; directory specified here. The default is /var/run.
     socket_dir = /path/to/directory
 
+## BLACKLISTING DEVICES
+
+This feature can be useful, if you are on a very big network and have
+a lot of devices around you, while interesting only in a few of them.
+
+    [blacklist]
+    model = "Xerox*"       ; blacklist by model name
+    name  = "HP*"          ; blacklist by network name
+    ip    = 192.168.0.1    ; blacklist by address
+    ip    = 192.168.0.0/24 ; blacklist the whole subnet
+
+Note, model and network names come from DNS-SD, WS-Discovery
+doesn't provide this information. For filtering by
+model/network name to work, Avahi must be enabled and
+device must be discoverable via DNS-SD (not necessarily
+as a scanner, it's enough if WSD scanner is discoverable
+as a printer via DNS-SD).
+
+Blacklisting only affects automatic discovery, and doesn't
+affect manually configured devices
+
 ## DEBUGGING
 
 sane-airscan provides very good instrumentation for troubleshooting
