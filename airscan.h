@@ -929,17 +929,34 @@ typedef enum {
     WSDD_OFF    /* Disable WSDD */
 } WSDD_MODE;
 
+/* Device blacklist entry
+ */
+typedef struct conf_blacklist conf_blacklist;
+struct conf_blacklist {
+    const char     *model;   /* If not NULL, match by model */
+    const char     *name;    /* If not NULL, match by network name */
+    int            net_af;   /* AF_INET/AF_INET6 or AF_UNSPEC if unset */
+    union {
+        struct in_addr  v4;  /* IPv4 address */
+        struct in6_addr v6;  /* IPv4 address */
+    } net_addr;
+    int            net_mask; /* Network mask */
+
+    conf_blacklist *next;    /* Next entry in the list */
+};
+
 /* Backend configuration
  */
 typedef struct {
-    bool        dbg_enabled;      /* Debugging enabled */
-    const char  *dbg_trace;       /* Trace directory */
-    conf_device *devices;         /* Manually configured devices */
-    bool        discovery;        /* Scanners discovery enabled */
-    bool        model_is_netname; /* Use network name instead of model */
-    bool        proto_auto;       /* Auto protocol selection */
-    WSDD_MODE   wsdd_mode;        /* WS-Discovery mode */
-    const char  *socket_dir;      /* Directory for AF_UNIX sockets */
+    bool           dbg_enabled;      /* Debugging enabled */
+    const char     *dbg_trace;       /* Trace directory */
+    conf_device    *devices;         /* Manually configured devices */
+    bool           discovery;        /* Scanners discovery enabled */
+    bool           model_is_netname; /* Use network name instead of model */
+    bool           proto_auto;       /* Auto protocol selection */
+    WSDD_MODE      wsdd_mode;        /* WS-Discovery mode */
+    const char     *socket_dir;      /* Directory for AF_UNIX sockets */
+    conf_blacklist *blacklist;       /* Devices blacklisted for discovery */
 } conf_data;
 
 #define CONF_INIT {                     \

@@ -12,6 +12,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <arpa/inet.h>
+
 /* Configuration data
  */
 conf_data conf = CONF_INIT;
@@ -76,6 +78,37 @@ conf_device_list_lookup (const char *name) {
         dev = dev->next;
     }
     return dev;
+}
+
+/* Revert conf.blacklist list
+ */
+static void
+conf_blacklist_revert (void)
+{
+    conf_blacklist *list = conf.blacklist, *prev = NULL, *next;
+
+    while (list != NULL) {
+        next = list->next;
+        list->next = prev;
+        prev = list;
+        list = next;
+    }
+
+    conf.blacklist = prev;
+}
+/* Free conf.blacklist
+ */
+static void
+conf_blacklist_free (void)
+{
+    while (conf.blacklist != NULL) {
+        conf_blacklist *next = conf.blacklist->next;
+
+        mem_free((char*) conf.blacklist->name);
+        mem_free((char*) conf.blacklist->model);
+
+        conf.blacklist = next;
+    }
 }
 
 /* Expand path name. The returned string must be eventually
@@ -162,6 +195,65 @@ conf_load_bool (const inifile_record *rec, bool *out,
     }
 }
 
+/* Parse network address with mask
+ */
+static void
+conf_load_netaddr (const inifile_record *rec,
+                   int *afp, void *netaddr, int *netmask)
+{
+    char *addr, *mask;
+    int  af;
+    int  maxmask;
+
+    /* Split into address and mask */
+    addr = alloca(strlen(rec->value) + 1);
+    strcpy(addr, rec->value);
+
+    mask = strchr(addr, '/');
+    if (mask != NULL) {
+        *mask = '\0';
+        mask ++;
+    }
+
+    /* Parse address */
+    if (strchr(addr, ':') == NULL) {
+        af = AF_INET;
+        maxmask = 32;
+    } else {
+        af = AF_INET6;
+        maxmask = 128;
+    }
+
+    if (inet_pton(af, addr, netaddr) != 1) {
+        conf_perror(rec, "invalid IP address %s", addr);
+        return;
+    }
+
+    /* Parse mask, if any */
+    if (mask != NULL) {
+        unsigned long l;
+        char          *end;
+
+        l = strtoul(mask, &end, 10);
+        if (end == mask || *end != '\0') {
+            conf_perror(rec, "invalid network mask %s", mask);
+            return;
+        }
+
+        if (l == 0 || l > (unsigned long) maxmask) {
+            conf_perror(rec, "network mask out of range");
+            return;
+        }
+
+        *netmask = (int) l;
+    } else {
+        *netmask = maxmask;
+    }
+
+    /* Indicate success; all other return values already filled */
+    *afp = af;
+}
+
 /* Load configuration from opened inifile
  */
 static void
@@ -212,6 +304,32 @@ conf_load_from_ini (inifile *ini)
                     }
                 } else if (inifile_match_name(rec->variable, "enable")) {
                     conf_load_bool(rec, &conf.dbg_enabled, "true", "false");
+                }
+            } else if (inifile_match_name(rec->section, "blacklist")) {
+                conf_blacklist *ent = NULL;
+
+                if (inifile_match_name(rec->variable, "name")) {
+                    ent = mem_new(conf_blacklist, 1);
+                    ent->name = str_dup(rec->value);
+                } else if (inifile_match_name(rec->variable, "model")) {
+                    ent = mem_new(conf_blacklist, 1);
+                    ent->model = str_dup(rec->value);
+                } else if (inifile_match_name(rec->variable, "ip")) {
+                    int af = AF_UNSPEC, mask;
+                    union { struct in_addr v4; struct in6_addr v6; } ip;
+
+                    conf_load_netaddr(rec, &af, &ip, &mask);
+                    if (af != AF_UNSPEC) {
+                        ent = mem_new(conf_blacklist, 1);
+                        ent->net_af = af;
+                        memcpy(&ent->net_addr, &ip, 16);
+                        ent->net_mask = mask;
+                    }
+                }
+
+                if (ent != NULL) {
+                    ent->next = conf.blacklist;
+                    conf.blacklist = ent;
                 }
             }
             break;
@@ -352,6 +470,7 @@ conf_load (void)
 
     /* Cleanup and exit */
     conf_device_list_revert();
+    conf_blacklist_revert();
 
     mem_free(dir_list);
     mem_free(path);
@@ -364,6 +483,7 @@ void
 conf_unload (void)
 {
     conf_device_list_free();
+    conf_blacklist_free();
     mem_free((char*) conf.dbg_trace);
     mem_free((char*) conf.socket_dir);
     conf = conf_init;

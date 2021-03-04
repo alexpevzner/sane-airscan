@@ -1354,10 +1354,31 @@ zeroconf_init (void)
 
         for (dev = conf.devices; dev != NULL; dev = dev->next) {
             if (dev->uri != NULL) {
-                log_debug(zeroconf_log, "  %s = %s, %s", dev->name,
+                log_trace(zeroconf_log, "  %s = %s, %s", dev->name,
                     http_uri_str(dev->uri), id_proto_name(dev->proto));
             } else {
-                log_debug(zeroconf_log, "  %s = disable", dev->name);
+                log_trace(zeroconf_log, "  %s = disable", dev->name);
+            }
+        }
+    }
+
+    if (conf.blacklist != NULL) {
+        conf_blacklist *ent;
+
+        log_trace(zeroconf_log, "blacklist:");
+        for (ent = conf.blacklist; ent != NULL; ent = ent->next) {
+            if (ent->model != NULL) {
+                log_trace(zeroconf_log, "  model = %s", ent->model);
+            }
+
+            if (ent->name != NULL) {
+                log_trace(zeroconf_log, "  name = %s", ent->name);
+            }
+
+            if (ent->net_af != AF_UNSPEC) {
+                char buf[128];
+                inet_ntop(ent->net_af, &ent->net_addr, buf, sizeof(buf));
+                log_trace(zeroconf_log, "  ip = %s/%d", buf, ent->net_mask);
             }
         }
     }
