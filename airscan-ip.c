@@ -206,8 +206,8 @@ ip_network_contains (ip_network net, ip_addr addr)
 
     switch (net.addr.af) {
     case AF_INET:
-        a4.s_addr = net.addr.ip.v4.s_addr & addr.ip.v4.s_addr;
-        m4.s_addr = htonl(0xffffffff >> (32 - net.mask));
+        a4.s_addr = net.addr.ip.v4.s_addr ^ addr.ip.v4.s_addr;
+        m4.s_addr = htonl(0xffffffff << (32 - net.mask));
         return (a4.s_addr & m4.s_addr) == 0;
 
     case AF_INET6:
@@ -220,11 +220,11 @@ ip_network_contains (ip_network net, ip_addr addr)
         /* Compute and apply netmask */
         memset(m6, 0, 16);
         if (net.mask <= 64) {
-            m6[0] = htobe64(UINT64_MAX >> (64 - net.mask));
+            m6[0] = htobe64(UINT64_MAX << (64 - net.mask));
             m6[1] = 0;
         } else {
-            m6[1] = UINT64_MAX;
-            m6[0] = htobe64(UINT64_MAX >> (128 - net.mask));
+            m6[0] = UINT64_MAX;
+            m6[1] = htobe64(UINT64_MAX << (128 - net.mask));
         }
 
         a6[0] &= m6[0];
