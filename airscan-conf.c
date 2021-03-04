@@ -198,12 +198,13 @@ conf_load_bool (const inifile_record *rec, bool *out,
 /* Parse network address with mask
  */
 static void
-conf_load_netaddr (const inifile_record *rec,
-                   int *afp, void *netaddr, int *netmask)
+conf_load_netaddr (const inifile_record *rec, ip_network *net)
 {
     char *addr, *mask;
     int  af;
     int  maxmask;
+
+    memset(net, 0, sizeof(*net));
 
     /* Split into address and mask */
     addr = alloca(strlen(rec->value) + 1);
@@ -224,7 +225,7 @@ conf_load_netaddr (const inifile_record *rec,
         maxmask = 128;
     }
 
-    if (inet_pton(af, addr, netaddr) != 1) {
+    if (inet_pton(af, addr, &net->addr.ip) != 1) {
         conf_perror(rec, "invalid IP address %s", addr);
         return;
     }
@@ -245,13 +246,13 @@ conf_load_netaddr (const inifile_record *rec,
             return;
         }
 
-        *netmask = (int) l;
+        net->mask = (int) l;
     } else {
-        *netmask = maxmask;
+        net->mask = maxmask;
     }
 
     /* Indicate success; all other return values already filled */
-    *afp = af;
+    net->addr.af = af;
 }
 
 /* Load configuration from opened inifile
@@ -315,15 +316,12 @@ conf_load_from_ini (inifile *ini)
                     ent = mem_new(conf_blacklist, 1);
                     ent->model = str_dup(rec->value);
                 } else if (inifile_match_name(rec->variable, "ip")) {
-                    int af = AF_UNSPEC, mask;
-                    union { struct in_addr v4; struct in6_addr v6; } ip;
+                    ip_network net;
 
-                    conf_load_netaddr(rec, &af, &ip, &mask);
-                    if (af != AF_UNSPEC) {
+                    conf_load_netaddr(rec, &net);
+                    if (net.addr.af != AF_UNSPEC) {
                         ent = mem_new(conf_blacklist, 1);
-                        ent->net_af = af;
-                        memcpy(&ent->net_addr, &ip, 16);
-                        ent->net_mask = mask;
+                        ent->net = net;
                     }
                 }
 

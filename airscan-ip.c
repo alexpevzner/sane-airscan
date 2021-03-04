@@ -170,6 +170,21 @@ ip_addr_to_straddr (ip_addr addr, bool withzone)
     return straddr;
 }
 
+/* Format ip_network into ip_straddr
+ */
+ip_straddr
+ip_network_to_straddr (ip_network net)
+{
+    ip_straddr straddr = {""};
+    size_t len;
+
+    inet_ntop(net.addr.af, &net.addr.ip, straddr.text, sizeof(straddr.text));
+    len = strlen(straddr.text);
+    sprintf(straddr.text + len, "/%d", net.mask);
+
+    return straddr;
+}
+
 /* ip_addr_set represents a set of IP addresses
  */
 struct ip_addrset {

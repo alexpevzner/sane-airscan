@@ -1375,10 +1375,9 @@ zeroconf_init (void)
                 log_trace(zeroconf_log, "  name = %s", ent->name);
             }
 
-            if (ent->net_af != AF_UNSPEC) {
-                char buf[128];
-                inet_ntop(ent->net_af, &ent->net_addr, buf, sizeof(buf));
-                log_trace(zeroconf_log, "  ip = %s/%d", buf, ent->net_mask);
+            if (ent->net.addr.af != AF_UNSPEC) {
+                ip_straddr straddr = ip_network_to_straddr(ent->net);
+                log_trace(zeroconf_log, "  ip = %s", straddr.text);
             }
         }
     }

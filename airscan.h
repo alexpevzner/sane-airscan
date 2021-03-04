@@ -905,84 +905,6 @@ inifile_read (inifile *file);
 bool
 inifile_match_name (const char *n1, const char *n2);
 
-/******************** Configuration file loader ********************/
-/* Device URI for manually disabled device
- */
-#define CONF_DEVICE_DISABLE     "disable"
-
-/* Device configuration, for manually added devices
- */
-typedef struct conf_device conf_device;
-struct conf_device {
-    unsigned int devid; /* Device ident */
-    const char   *name; /* Device name */
-    ID_PROTO     proto; /* Protocol to use */
-    http_uri     *uri;  /* Device URI, parsed; NULL if device disabled */
-    conf_device  *next; /* Next device in the list */
-};
-
-/* WSDD_MODE represents WS-Discovery mode
- */
-typedef enum {
-    WSDD_FAST,  /* Use hints from DNS-SD to speed up WSDD */
-    WSDD_FULL,  /* Full discovery, slow and fair */
-    WSDD_OFF    /* Disable WSDD */
-} WSDD_MODE;
-
-/* Device blacklist entry
- */
-typedef struct conf_blacklist conf_blacklist;
-struct conf_blacklist {
-    const char     *model;   /* If not NULL, match by model */
-    const char     *name;    /* If not NULL, match by network name */
-    int            net_af;   /* AF_INET/AF_INET6 or AF_UNSPEC if unset */
-    union {
-        struct in_addr  v4;  /* IPv4 address */
-        struct in6_addr v6;  /* IPv4 address */
-    } net_addr;
-    int            net_mask; /* Network mask */
-
-    conf_blacklist *next;    /* Next entry in the list */
-};
-
-/* Backend configuration
- */
-typedef struct {
-    bool           dbg_enabled;      /* Debugging enabled */
-    const char     *dbg_trace;       /* Trace directory */
-    conf_device    *devices;         /* Manually configured devices */
-    bool           discovery;        /* Scanners discovery enabled */
-    bool           model_is_netname; /* Use network name instead of model */
-    bool           proto_auto;       /* Auto protocol selection */
-    WSDD_MODE      wsdd_mode;        /* WS-Discovery mode */
-    const char     *socket_dir;      /* Directory for AF_UNIX sockets */
-    conf_blacklist *blacklist;       /* Devices blacklisted for discovery */
-} conf_data;
-
-#define CONF_INIT {                     \
-        .dbg_enabled = false,           \
-        .dbg_trace = NULL,              \
-        .devices = NULL,                \
-        .discovery = true,              \
-        .model_is_netname = true,       \
-        .proto_auto = true,             \
-        .wsdd_mode = WSDD_FAST,         \
-        .socket_dir = NULL              \
-    }
-
-extern conf_data conf;
-
-/* Load configuration. It updates content of a global conf variable
- */
-void
-conf_load (void);
-
-/* Free resources, allocated by conf_load, and reset configuration
- * data into initial state
- */
-void
-conf_unload (void);
-
 /******************** Utility functions for IP addresses ********************/
 /* Address string, wrapped into structure so can
  * be passed by value
@@ -1120,6 +1042,23 @@ ip_addr_equal (ip_addr a1, ip_addr a2)
 
     return false;
 }
+
+/* ip_network represents IPv4 or IPv6 network (i.e., address with mask)
+ */
+typedef struct {
+    ip_addr addr; /* Network address */
+    int     mask; /* Network mask */
+} ip_network;
+
+/* Format ip_network into ip_straddr
+ */
+ip_straddr
+ip_network_to_straddr (ip_network net);
+
+/* Check if ip_network contains ip_addr
+ */
+bool
+ip_network_contains (ip_network net, ip_addr addr);
 
 /* ip_addr_set represents a set of IP addresses
  */
@@ -1311,6 +1250,78 @@ netif_init (void);
  */
 void
 netif_cleanup (void);
+
+/******************** Configuration file loader ********************/
+/* Device URI for manually disabled device
+ */
+#define CONF_DEVICE_DISABLE     "disable"
+
+/* Device configuration, for manually added devices
+ */
+typedef struct conf_device conf_device;
+struct conf_device {
+    unsigned int devid; /* Device ident */
+    const char   *name; /* Device name */
+    ID_PROTO     proto; /* Protocol to use */
+    http_uri     *uri;  /* Device URI, parsed; NULL if device disabled */
+    conf_device  *next; /* Next device in the list */
+};
+
+/* WSDD_MODE represents WS-Discovery mode
+ */
+typedef enum {
+    WSDD_FAST,  /* Use hints from DNS-SD to speed up WSDD */
+    WSDD_FULL,  /* Full discovery, slow and fair */
+    WSDD_OFF    /* Disable WSDD */
+} WSDD_MODE;
+
+/* Device blacklist entry
+ */
+typedef struct conf_blacklist conf_blacklist;
+struct conf_blacklist {
+    const char     *model;   /* If not NULL, match by model */
+    const char     *name;    /* If not NULL, match by network name */
+    ip_network     net;      /* if net.addr.af != AF_UNSPEC, match by net */
+    conf_blacklist *next;    /* Next entry in the list */
+};
+
+/* Backend configuration
+ */
+typedef struct {
+    bool           dbg_enabled;      /* Debugging enabled */
+    const char     *dbg_trace;       /* Trace directory */
+    conf_device    *devices;         /* Manually configured devices */
+    bool           discovery;        /* Scanners discovery enabled */
+    bool           model_is_netname; /* Use network name instead of model */
+    bool           proto_auto;       /* Auto protocol selection */
+    WSDD_MODE      wsdd_mode;        /* WS-Discovery mode */
+    const char     *socket_dir;      /* Directory for AF_UNIX sockets */
+    conf_blacklist *blacklist;       /* Devices blacklisted for discovery */
+} conf_data;
+
+#define CONF_INIT {                     \
+        .dbg_enabled = false,           \
+        .dbg_trace = NULL,              \
+        .devices = NULL,                \
+        .discovery = true,              \
+        .model_is_netname = true,       \
+        .proto_auto = true,             \
+        .wsdd_mode = WSDD_FAST,         \
+        .socket_dir = NULL              \
+    }
+
+extern conf_data conf;
+
+/* Load configuration. It updates content of a global conf variable
+ */
+void
+conf_load (void);
+
+/* Free resources, allocated by conf_load, and reset configuration
+ * data into initial state
+ */
+void
+conf_unload (void);
 
 /******************** Pollable events ********************/
 /* The pollable event
