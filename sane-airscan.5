@@ -143,7 +143,7 @@ socket_dir = /path/to/directory
 .IP "" 0
 .
 .SH "BLACKLISTING DEVICES"
-This feature may be useful, if you are on a very big network and have a lot of devices around you, while interesting only in a few of them\.
+This feature can be useful, if you are on a very big network and have a lot of devices around you, while interesting only in a few of them\.
 .
 .IP "" 4
 .
@@ -160,7 +160,7 @@ ip    = 192\.168\.0\.0/24 ; blacklist the whole subnet
 .IP "" 0
 .
 .P
-Note, model and network names come from DNS\-SD, WS\-Discovery doesn\'t provide this information\. For filtering by model/network name to work, Avahi must be enabled and device must be discoverable via DNS\-SD (not necessarily as a scanner, it\'s enough if WSD scanner is discoverable as a printer via DNS\-SD)\.
+Network names come from DNS\-SD, WS\-Discovery doesn\'t provide this information\. For filtering by network name to work, Avahi must be enabled and device must be discoverable via DNS\-SD (not necessarily as a scanner, it\'s enough if WSD scanner is discoverable as a printer via DNS\-SD)\.
 .
 .P
 Blacklisting only affects automatic discovery, and doesn\'t affect manually configured devices

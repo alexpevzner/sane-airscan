@@ -124,12 +124,11 @@ a lot of devices around you, while interesting only in a few of them.
     ip    = 192.168.0.1    ; blacklist by address
     ip    = 192.168.0.0/24 ; blacklist the whole subnet
 
-Note, model and network names come from DNS-SD, WS-Discovery
-doesn't provide this information. For filtering by
-model/network name to work, Avahi must be enabled and
-device must be discoverable via DNS-SD (not necessarily
-as a scanner, it's enough if WSD scanner is discoverable
-as a printer via DNS-SD).
+Network names come from DNS-SD, WS-Discovery doesn't provide this
+information. For filtering by network name to work, Avahi must be
+enabled and device must be discoverable via DNS-SD (not necessarily
+as a scanner, it's enough if WSD scanner is discoverable as a printer
+via DNS-SD).
 
 Blacklisting only affects automatic discovery, and doesn't
 affect manually configured devices
