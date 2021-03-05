@@ -16,6 +16,7 @@
 
 #include <string.h>
 #include <stdarg.h>
+#include <stdlib.h>
 
 /******************** Constants *********************/
 /* If failed, AVAHI client will be automatically
@@ -82,32 +83,29 @@ mdns_avahi_client_restart_defer (void);
 /* Print debug message
  */
 static void
-mdns_debug (const char *name, AvahiProtocol protocol, const char *action,
-        const char *fmt, ...)
+mdns_debug (const char *action, AvahiProtocol protocol,
+        const char *in_type, const char *in_name, const char *out)
 {
-    char       prefix[128], message[1024];
-    va_list    ap;
     const char *af = protocol == AVAHI_PROTO_INET ? "ipv4" : "ipv6";
-    int        n;
+    char       buf[512];
 
-    n = snprintf(prefix, sizeof(prefix), "%s/%s", action, af);
-    if (name != NULL) {
-        snprintf(prefix + n, sizeof(prefix) - n, " \"%s\"", name);
+    if (in_name == NULL) {
+        snprintf(buf, sizeof(buf), "\"%s\"", in_type);
+    } else {
+        snprintf(buf, sizeof(buf), "\"%s\", \"%s\"", in_type, in_name);
     }
 
-    va_start(ap, fmt);
-    vsnprintf(message, sizeof(message) - n, fmt, ap);
-    va_end(ap);
-
-    log_debug(mdns_log, "%s: %s", prefix, message);
+    log_debug(mdns_log, "%s-%s(%s): %s",
+        action, af, buf, out);
 }
 
 /* Print error message
  */
 static void
-mdns_perror (const char *name, AvahiProtocol protocol, const char *action)
+mdns_perror (const char *action, AvahiProtocol protocol,
+        const char *in_type, const char *in_name)
 {
-    mdns_debug(name, protocol, action,
+    mdns_debug(action, protocol, in_type, in_name,
             avahi_strerror(avahi_client_errno(mdns_avahi_client)));
 }
 
@@ -545,16 +543,23 @@ mdns_avahi_resolver_callback (AvahiServiceResolver *r,
     (void) flags;
 
     /* Print debug message */
-    mdns_debug(name, protocol, "resolve", "%s %s",
-            mdns_avahi_resolver_event_name(event), type);
+    mdns_debug("resolve", protocol, type, name,
+        mdns_avahi_resolver_event_name(event));
+
+    if (event == AVAHI_RESOLVER_FOUND) {
+        char buf[128];
+        avahi_address_snprint(buf, sizeof(buf), addr);
+        sprintf(buf + strlen(buf), ":%d", port);
+        mdns_debug("resolve", protocol, type, name, buf);
+    }
 
     if (event == AVAHI_RESOLVER_FAILURE) {
-        mdns_perror(name, protocol, "resolve");
+        mdns_perror("resolve", protocol, type, name);
     }
 
     /* Remove resolver from list of pending ones */
     if (!ptr_array_del(mdns->resolvers, ptr_array_find(mdns->resolvers, r))) {
-        mdns_debug(name, protocol, "resolve", "spurious avahi callback");
+        mdns_debug("resolve", protocol, type, name, "spurious avahi callback");
         return;
     }
 
@@ -632,11 +637,16 @@ mdns_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
     (void) flags;
 
     /* Print debug message */
-    mdns_debug(name, protocol, "browse", "%s %s",
-            mdns_avahi_browser_event_name(event), type);
+    mdns_debug("browse", protocol, type, NULL, mdns_avahi_browser_event_name(event));
+    if (event == AVAHI_BROWSER_NEW) {
+        size_t len = strlen(name);
+        char   *buf = alloca(len + 3);
+        buf[0] = '"';
+        memcpy(buf + 1, name, len);
+        buf[len + 1] = '"';
+        buf[len + 2] = '\0';
 
-    if (event == AVAHI_BROWSER_FAILURE) {
-        mdns_perror(name, protocol, "browse");
+        mdns_debug("browse", protocol, type, NULL, buf);
     }
 
     switch (event) {
@@ -651,7 +661,7 @@ mdns_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
                 mdns_avahi_resolver_callback, mdns);
 
         if (r == NULL) {
-            mdns_perror(name, protocol, "resolve");
+            mdns_perror("resolve", protocol, type, name);
             mdns_avahi_client_restart_defer();
             break;
         }
@@ -668,6 +678,7 @@ mdns_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
         break;
 
     case AVAHI_BROWSER_FAILURE:
+        mdns_perror("browse", protocol, type, NULL);
         mdns_avahi_client_restart_defer();
         break;
 
