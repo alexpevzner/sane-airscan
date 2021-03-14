@@ -102,6 +102,7 @@ Legend:
 | EPSON XP-2100 Series               | No                        | Yes                       |
 | EPSON XP-340 Series                | Yes                       |                           |
 | EPSON XP-442 445 Series            | Yes                       |                           |
+| EPSON XP-6100 Series               | Yes                       |                           |
 | EPSON XP-7100 Series               | Yes                       |                           |
 | EPSON XP-8600 Series               | Yes                       |                           |
 | HP Color Laserjet MFP m178-m181    | Yes                       |                           |
