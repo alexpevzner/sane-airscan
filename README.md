@@ -95,6 +95,7 @@ Legend:
 | Canon TS 3300                      | Yes                       |                           |
 | Canon TS 6151                      | Yes                       |                           |
 | Canon TS 6200 series               | Yes                       | Yes                       |
+| Canon TS 6400 series               | Yes                       |                           |
 | Dell C1765nfw Color MFP            | No                        | Yes                       |
 | Dell C2665dnf Color Laser Printer  | No                        | Yes                       |
 | EPSON ET-2750 Series               | Yes                       |                           |
