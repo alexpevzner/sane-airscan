@@ -70,7 +70,7 @@ main (int argc, char **argv)
         if (!strcmp(argv[i], "-d")) {
             conf.dbg_enabled = true;
         } else if (!strcmp(argv[i], "-t")) {
-            conf.dbg_trace = "./";
+            conf.dbg_trace = str_dup("./");
         } else if (!strcmp(argv[i], "-h")) {
             usage(argv);
         } else {
