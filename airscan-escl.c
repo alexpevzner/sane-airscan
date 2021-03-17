@@ -440,9 +440,11 @@ static error
 escl_devcaps_parse (proto_handler_escl *escl,
         devcaps *caps, const char *xml_text, size_t xml_len)
 {
-    error  err = NULL;
-    xml_rd *xml;
-    bool   quirk_canon_iR2625_2630 = false;
+    error     err = NULL;
+    xml_rd    *xml;
+    bool      quirk_canon_iR2625_2630 = false;
+    ID_SOURCE id_src;
+    bool      src_ok = false;
 
     /* Parse capabilities XML */
     err = xml_rd_begin(&xml, xml_text, xml_len, NULL);
@@ -502,9 +504,6 @@ escl_devcaps_parse (proto_handler_escl *escl,
     }
 
     /* Check that we have at least one source */
-    ID_SOURCE id_src;
-    bool      src_ok = false;
-
     for (id_src = (ID_SOURCE) 0; id_src < NUM_ID_SOURCE; id_src ++) {
         if (caps->src[id_src] != NULL) {
             src_ok = true;
