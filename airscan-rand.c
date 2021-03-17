@@ -24,7 +24,10 @@ void
 rand_bytes (void *buf, size_t n)
 {
     log_assert(NULL, rand_fp != NULL);
-    fread(buf, 1, n, rand_fp);
+
+    /* Read from /dev/urandom never fails
+     * */
+    (void) fread(buf, 1, n, rand_fp);
 }
 
 /* Initialize random bytes generator

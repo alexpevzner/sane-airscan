@@ -141,7 +141,12 @@ os_mkdir (const char *path, mode_t mode)
 
     for (s = strchr(p + 1, '/'); s != NULL; s = strchr(s + 1, '/')) {
         *s = '\0';
-        mkdir(p, mode);
+
+        /* Note, we have nothing to do with errors in creation of
+         * intermediate directories, but status of creation of the
+         * final directory in the path is checked below
+         */
+        (void) mkdir(p, mode);
         *s = '/';
     }
 

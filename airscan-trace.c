@@ -85,7 +85,7 @@ trace_open (const char *device_name)
         return NULL;
     }
 
-    os_mkdir(conf.dbg_trace, 0755);
+    (void) os_mkdir(conf.dbg_trace, 0755);
     t = mem_new(trace, 1);
     t->refcnt = 1;
 

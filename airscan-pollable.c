@@ -92,7 +92,7 @@ pollable_reset (pollable *p)
 {
     uint64_t unused;
 
-    read(p->efd, &unused, sizeof(unused));
+    (void) read(p->efd, &unused, sizeof(unused));
 }
 
 /* Wait until pollable event is ready

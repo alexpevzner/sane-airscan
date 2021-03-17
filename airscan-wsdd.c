@@ -1010,7 +1010,7 @@ wsdd_resolver_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
     }
 
     str_from = ip_straddr_from_sockaddr((struct sockaddr*) &from, true);
-    getsockname(fd, (struct sockaddr*) &to, &tolen);
+    (void) getsockname(fd, (struct sockaddr*) &to, &tolen);
     str_to = ip_straddr_from_sockaddr((struct sockaddr*) &to, true);
 
     log_trace(wsdd_log, "%d bytes received: %s->%s", rc,
@@ -1148,7 +1148,7 @@ wsdd_resolver_new (const netif_addr *addr, bool initscan)
         }
 
         /* Note: error is not a problem here */
-        setsockopt(resolver->fd, IPPROTO_IPV6, IPV6_MULTICAST_LOOP,
+        (void) setsockopt(resolver->fd, IPPROTO_IPV6, IPV6_MULTICAST_LOOP,
                 &no, sizeof(no));
     } else {
         rc = setsockopt(resolver->fd, IPPROTO_IP, IP_MULTICAST_IF,
@@ -1167,7 +1167,7 @@ wsdd_resolver_new (const netif_addr *addr, bool initscan)
         }
 
         /* Note: error is not a problem here */
-        setsockopt(resolver->fd, IPPROTO_IP, IP_MULTICAST_LOOP,
+        (void) setsockopt(resolver->fd, IPPROTO_IP, IP_MULTICAST_LOOP,
                 &no, sizeof(no));
     }
 
@@ -1184,7 +1184,7 @@ wsdd_resolver_new (const netif_addr *addr, bool initscan)
 
         rc = bind(resolver->fd, (struct sockaddr*) &a, sizeof(a));
 
-        getsockname(resolver->fd, (struct sockaddr*) &a, &alen);
+        (void) getsockname(resolver->fd, (struct sockaddr*) &a, &alen);
         port = a.sin6_port;
         resolver->str_sockaddr = ip_straddr_from_sockaddr(
                 (struct sockaddr*) &a, true);
@@ -1201,7 +1201,7 @@ wsdd_resolver_new (const netif_addr *addr, bool initscan)
 
         rc = bind(resolver->fd, (struct sockaddr*) &a, sizeof(a));
 
-        getsockname(resolver->fd, (struct sockaddr*) &a, &alen);
+        (void) getsockname(resolver->fd, (struct sockaddr*) &a, &alen);
         port = a.sin_port;
         resolver->str_sockaddr = ip_straddr_from_sockaddr(
                 (struct sockaddr*) &a, true);
