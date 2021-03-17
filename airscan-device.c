@@ -1767,7 +1767,9 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
     SANE_Status   status = SANE_STATUS_GOOD;
     image_decoder *decoder = dev->decoders[dev->proto_ctx.params.format];
 
-    *len_out = 0; /* Must return 0, if status is not GOOD */
+    if (len_out != NULL) {
+        *len_out = 0; /* Must return 0, if status is not GOOD */
+    }
 
     log_assert(dev->log, decoder != NULL);
 
