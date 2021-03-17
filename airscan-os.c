@@ -76,7 +76,10 @@ os_progname_init (void)
 #ifdef  OS_HAVE_LINUX_PROCFS
     ssize_t rc;
 
-    rc = readlink("/proc/self/exe", os_progname_buf, sizeof(os_progname_buf));
+    memset(os_progname_buf, 0, sizeof(os_progname_buf));
+    rc = readlink("/proc/self/exe", os_progname_buf,
+        sizeof(os_progname_buf) - 1);
+
     if (rc < 0) {
         return;
     }
