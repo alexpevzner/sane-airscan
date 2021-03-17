@@ -352,6 +352,14 @@ str_dup (const char *s1)
     return s;
 }
 
+/* Get string length in bytes, not including terminating '\0'
+ */
+static inline size_t
+str_len (const char *s)
+{
+    return mem_len(s);
+}
+
 /* Create new string as a lowercase copy of existent string
  */
 char*
@@ -398,7 +406,7 @@ str_resize (char *s, size_t len)
 static inline char*
 str_append_mem (char *s1, const char *s2, size_t l2)
 {
-    size_t l1 = mem_len(s1);
+    size_t l1 = str_len(s1);
 
     s1 = mem_resize(s1, l1 + l2, 1);
     memcpy(s1 + l1, s2, l2);
@@ -472,7 +480,7 @@ str_concat (const char *s, ...);
 static inline char*
 str_terminate (char *s, char c)
 {
-    if (s[0] != '\0' && s[mem_len(s) - 1] != c) {
+    if (s[0] != '\0' && s[str_len(s) - 1] != c) {
         s = str_append_c(s, c);
     }
 

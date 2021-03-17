@@ -78,7 +78,7 @@ trace*
 trace_open (const char *device_name)
 {
     trace  *t;
-    char   path[PATH_MAX];
+    char   *path;
     size_t len;
 
     if (conf.dbg_trace == NULL) {
@@ -89,16 +89,14 @@ trace_open (const char *device_name)
     t = mem_new(trace, 1);
     t->refcnt = 1;
 
-    strcpy(path, conf.dbg_trace);
-    len = strlen(path);
-    if (len != 0 && path[len - 1] != '/') {
-        path[len ++] = '/';
-        path[len] = '\0';
-    }
+    path = str_dup(conf.dbg_trace);
+    path = str_terminate(path, '/');
 
-    strcat(path, trace_program);
-    strcat(path, "-");
-    strcat(path, device_name);
+    len = strlen(path);
+
+    path = str_append(path, trace_program);
+    path = str_append(path, "-");
+    path = str_append(path, device_name);
 
     for (; path[len] != '\0'; len ++) {
         switch (path[len]) {
@@ -109,11 +107,13 @@ trace_open (const char *device_name)
         }
     }
 
-    strcpy(path + len, ".log");
+    path = str_append(path, ".log");
     t->log = fopen(path, "w");
 
-    strcpy(path + len, ".tar");
+    strcpy(path + str_len(path) - 4, ".tar");
     t->data = fopen(path, "wb");
+
+    mem_free(path);
 
     if (t->log != NULL && t->data != NULL) {
         return t;
