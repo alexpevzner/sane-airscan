@@ -98,6 +98,8 @@ test_fix_end_slash (const char *s)
     if (!str_has_suffix(path, "/")) {
         fail("fix_end_slash failed: %s, path=%s", s, path);
     }
+
+    http_uri_free(uri);
 }
 
 /* Test http_uri_set_path
@@ -144,6 +146,9 @@ test_relative (const char *base, const char *ref, const char *expected)
     if (strcmp(s, expected)) {
         fail("URI base=%s ref=%s: %s != %s", base, ref, s, expected);
     }
+
+    http_uri_free(uri_base);
+    http_uri_free(uri_rel);
 }
 
 /* The main function
