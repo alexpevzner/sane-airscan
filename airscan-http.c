@@ -1258,7 +1258,7 @@ http_hdr_parse (http_hdr *hdr, const char *data, size_t size, bool skip_line)
         .on_header_value     = http_hdr_on_header_value,
         .on_headers_complete = http_hdr_on_headers_complete
     };
-    http_parser parser;
+    http_parser parser = {0};
     static char prefix[] = "HTTP/1.1 200 OK\r\n";
 
     /* Skip first line, if requested */
