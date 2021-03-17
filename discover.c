@@ -104,6 +104,11 @@ main (int argc, char **argv)
         }
     }
 
+    zeroconf_device_list_free(devices);
+
+    eloop_thread_stop();
+    airscan_cleanup(NULL);
+
     return 0;
 }
 
