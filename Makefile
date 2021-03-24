@@ -124,6 +124,7 @@ install: all
 	[ -e $(DESTDIR)/$(CONFDIR)/dll.d/airscan ] || cp dll.conf $(DESTDIR)/$(CONFDIR)/dll.d/airscan
 	mkdir -p $(DESTDIR)/$(libdir)/sane
 	$(INSTALL) $(STRIP) $(BACKEND) $(DESTDIR)/$(libdir)/sane
+	ln -s $(BACKEND) $(DESTDIR)/$(libdir)/sane/$(BACKEND:.1=)
 	mkdir -p $(DESTDIR)/$(mandir)/man1
 	mkdir -p $(DESTDIR)/$(mandir)/man5
 	$(INSTALL) -m 644 $(MAN_DISCOVER) $(DESTDIR)/$(mandir)/man1
@@ -139,6 +140,7 @@ uninstall:
 	rm -f $(DESTDIR)/$(bindir)/$(DISCOVER)
 	rm -f $(DESTDIR)/$(CONFDIR)/dll.d/airscan
 	rm -f $(DESTDIR)/$(libdir)/sane/$(BACKEND)
+	rm -f $(DESTDIR)/$(libdir)/sane/$(BACKEND:.1=)
 	rm -f $(DESTDIR)/$(mandir)/man1/$(MAN_DISCOVER)*
 	rm -f $(DESTDIR)/$(mandir)/man5/$(MAN_BACKEND)*
 
