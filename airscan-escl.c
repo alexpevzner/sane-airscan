@@ -120,11 +120,6 @@ escl_devcaps_source_parse_color_modes (xml_rd *xml, devcaps_source *src)
     }
     xml_rd_leave(xml);
 
-    src->colormodes &= DEVCAPS_COLORMODES_SUPPORTED;
-    if (src->colormodes == 0) {
-        return ERROR("no color modes detected");
-    }
-
     return NULL;
 }
 
@@ -288,10 +283,6 @@ escl_devcaps_source_parse_resolutions (xml_rd *xml, devcaps_source *src)
         src->flags &= ~DEVCAPS_SOURCE_RES_RANGE;
     }
 
-    if (!(src->flags & (DEVCAPS_SOURCE_RES_DISCRETE|DEVCAPS_SOURCE_RES_RANGE))){
-        err = ERROR("scan resolutions are not defined");
-    }
-
     return err;
 }
 
@@ -302,6 +293,7 @@ escl_devcaps_source_parse_setting_profiles (xml_rd *xml, devcaps_source *src)
 {
     error err = NULL;
 
+    /* Parse setting profiles */
     xml_rd_enter(xml);
     for (; err == NULL && !xml_rd_end(xml); xml_rd_next(xml)) {
         if (xml_rd_node_name_match(xml, "scan:SettingProfile")) {
@@ -321,6 +313,24 @@ escl_devcaps_source_parse_setting_profiles (xml_rd *xml, devcaps_source *src)
         }
     }
     xml_rd_leave(xml);
+
+    /* Validate results */
+    if (err == NULL) {
+        src->colormodes &= DEVCAPS_COLORMODES_SUPPORTED;
+        if (src->colormodes == 0) {
+            return ERROR("no color modes detected");
+        }
+
+        src->formats &= DEVCAPS_FORMATS_SUPPORTED;
+        if (src->formats == 0) {
+            return ERROR("no image formats detected");
+        }
+
+        if (!(src->flags & (DEVCAPS_SOURCE_RES_DISCRETE|
+                            DEVCAPS_SOURCE_RES_RANGE))){
+            return ERROR("scan resolutions are not defined");
+        }
+    }
 
     return err;
 }
