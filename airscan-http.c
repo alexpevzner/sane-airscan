@@ -990,6 +990,7 @@ http_uri_strip_zone_suffux (http_uri *uri)
 
     /* Update host */
     host = alloca(len + 1);
+    memcpy(host, field.str, len);
     host[len] = '\0';
 
     http_uri_field_replace(uri, UF_HOST, host);
