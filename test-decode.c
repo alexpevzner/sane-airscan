@@ -221,7 +221,9 @@ main (int argc, char **argv)
     }
 
     mem_free(line);
+    mem_free(data);
     save_close(save);
+    image_decoder_free(decoder);
 
     return 0;
 }
