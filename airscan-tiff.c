@@ -19,11 +19,18 @@ typedef struct {
     image_decoder          decoder;         /* Base class */
     TIFF*                  tif;             /* libtiff decoder */
     uint32_t               current_line;    /* Current line */
-    unsigned char         *mem_file;        /* Position of the beginning
+    unsigned char          *mem_file;       /* Position of the beginning
                                                of the tiff file. */
     toff_t                 offset_file;     /* Moving the start position
                                                of the tiff file. */
     tsize_t                size_file;       /* Size of the tiff file. */
+
+    /* JPEG-in-TIFF handling */
+    image_decoder          *jpeg_decoder;   /* JPEG decoder */
+    const void             *jpeg_data;      /* JPEG data withing TIFF file */
+    size_t                 jpeg_size;       /* JPEG data size */
+
+    /* Image parameters */
     uint16_t               bytes_per_pixel; /* Bytes per pixel */
     uint32_t               image_width;     /* Image width */
     uint32_t               image_height;    /* Image height */
@@ -32,6 +39,9 @@ typedef struct {
 /***** Forward declarations *****/
 static void
 image_decoder_tiff_reset (image_decoder *decoder);
+
+static error
+image_decoder_tiff_setup_old_jpeg (image_decoder_tiff *tiff);
 
 /****** I/O callbacks for TIFFClientOpen() *****/
 
@@ -177,6 +187,7 @@ image_decoder_tiff_free (image_decoder *decoder)
        TIFFClose(tiff->tif);
     }
 
+    image_decoder_free(tiff->jpeg_decoder);
     mem_free(tiff);
 }
 
@@ -188,6 +199,7 @@ image_decoder_tiff_begin (image_decoder *decoder, const void *data,
 {
     image_decoder_tiff *tiff = (image_decoder_tiff*) decoder;
     error              err = NULL;
+    uint16_t           compression;
 
     /* Set the TiffClientOpen interface to read a file from memory. */
     tiff->mem_file = (unsigned char*)data;
@@ -225,6 +237,26 @@ image_decoder_tiff_begin (image_decoder *decoder, const void *data,
         goto FAIL;
     }
 
+    if (!TIFFGetField(tiff->tif, TIFFTAG_COMPRESSION, &compression)) {
+        err = ERROR("TIFF: can't get TIFFTAG_COMPRESSION");
+        goto FAIL;
+    }
+
+    switch (compression) {
+    case COMPRESSION_OJPEG:
+        err = image_decoder_tiff_setup_old_jpeg(tiff);
+        break;
+    }
+
+    if (err == NULL && tiff->jpeg_data != NULL) {
+        err = image_decoder_begin(tiff->jpeg_decoder,
+            tiff->jpeg_data, tiff->jpeg_size);
+    }
+
+    if (err != NULL) {
+        goto FAIL;
+    }
+
     return NULL;
 
     /* Error: cleanup and exit */
@@ -244,6 +276,12 @@ image_decoder_tiff_reset (image_decoder *decoder)
         TIFFClose(tiff->tif);
         tiff->tif = NULL;
     }
+
+    if (tiff->jpeg_data != NULL) {
+        image_decoder_reset(tiff->jpeg_decoder);
+        tiff->jpeg_data = NULL;
+        tiff->jpeg_size = 0;
+    }
 }
 
 /* Get bytes count per pixel
@@ -252,6 +290,11 @@ static int
 image_decoder_tiff_get_bytes_per_pixel (image_decoder *decoder)
 {
     image_decoder_tiff *tiff = (image_decoder_tiff*) decoder;
+
+    if (tiff->jpeg_data != NULL) {
+        return image_decoder_get_bytes_per_pixel(tiff->jpeg_decoder);
+    }
+
     return (int) tiff->bytes_per_pixel;
 }
 
@@ -261,6 +304,11 @@ static void
 image_decoder_tiff_get_params (image_decoder *decoder, SANE_Parameters *params)
 {
     image_decoder_tiff *tiff = (image_decoder_tiff*) decoder;
+
+    if (tiff->jpeg_data != NULL) {
+        image_decoder_get_params(tiff->jpeg_decoder, params);
+        return;
+    }
 
     params->last_frame = SANE_TRUE;
     params->pixels_per_line = (SANE_Int) tiff->image_width;
@@ -283,6 +331,10 @@ image_decoder_tiff_set_window (image_decoder *decoder, image_window *win)
 {
     image_decoder_tiff *tiff = (image_decoder_tiff*) decoder;
 
+    if (tiff->jpeg_data != NULL) {
+        return image_decoder_set_window(tiff->jpeg_decoder, win);
+    }
+
     win->x_off = win->y_off = 0;
     win->wid = (int) tiff->image_width;
     win->hei = (int) tiff->image_height;
@@ -296,13 +348,16 @@ static error
 image_decoder_tiff_read_line (image_decoder *decoder, void *buffer)
 {
     image_decoder_tiff *tiff = (image_decoder_tiff*) decoder;
-    tdata_t buf = (tdata_t) buffer;
+
+    if (tiff->jpeg_data != NULL) {
+        return image_decoder_read_line(tiff->jpeg_decoder, buffer);
+    }
 
     if (tiff->current_line >= tiff->image_height) {
         return ERROR("TIFF: end of file");
     }
 
-    if (TIFFReadScanline(tiff->tif, buf, tiff->current_line, 0) == -1) {
+    if (TIFFReadScanline(tiff->tif, buffer, tiff->current_line, 0) == -1) {
        return ERROR("TIFF: read scanline error");
     }
 
@@ -325,12 +380,43 @@ image_decoder_tiff_new (void)
     tiff->decoder.get_params = image_decoder_tiff_get_params;
     tiff->decoder.set_window = image_decoder_tiff_set_window;
     tiff->decoder.read_line = image_decoder_tiff_read_line;
-    tiff->mem_file = NULL;
-    tiff->offset_file = 0;
-    tiff->size_file = 0;
-    tiff->current_line = 0;
+    tiff->jpeg_decoder = image_decoder_jpeg_new();
 
     return &tiff->decoder;
+}
+
+/***** JPEG-in-TIFF handling *****/
+/* Prepare decoder to handle OLD JPEG format
+ *
+ * Note, libtiff doesn't correctly decode OLD JPEG in line-by-line
+ * mode (using TIFFReadScanline() interface), so we have to delegate
+ * this work directly to the JPEG decoder
+ */
+static error
+image_decoder_tiff_setup_old_jpeg (image_decoder_tiff *tiff)
+{
+    uint64_t jpeg_off, jpeg_size;
+
+    /* Try TIFFTAG_JPEGIFOFFSET/TIFFTAG_JPEGIFBYTECOUNT first
+     *
+     * Note, libtiff validates these tags by itself, and
+     * if they are not present or invalid, returned value
+     * for TIFFTAG_JPEGIFOFFSET will be 0
+     */
+    TIFFGetField(tiff->tif, TIFFTAG_JPEGIFOFFSET, &jpeg_off);
+    TIFFGetField(tiff->tif, TIFFTAG_JPEGIFBYTECOUNT, &jpeg_size);
+
+    if (jpeg_off != 0) {
+        tiff->jpeg_data = tiff->mem_file + (size_t) jpeg_off;
+        tiff->jpeg_size = (size_t) jpeg_size;
+        return NULL;
+    }
+
+    /* FIXME: we can still try to guess JPEG stream position,
+     * using TIFFTAG_JPEGQTABLES/TIFFTAG_JPEGDCTABLES/TIFFTAG_JPEGIFBYTECOUNT
+     * tags
+     */
+    return ERROR("TIFF: unsupported old JPEG compression");
 }
 
 /* vim:ts=8:sw=4:et
