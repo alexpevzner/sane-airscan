@@ -624,6 +624,10 @@ device_scanner_capabilities_callback (void *ptr, http_query *q)
                 dev->decoders[i] = image_decoder_png_new();
                 break;
 
+            case ID_FORMAT_TIFF:
+                dev->decoders[i] = image_decoder_tiff_new();
+                break;
+
             case ID_FORMAT_BMP:
                 dev->decoders[i] = image_decoder_bmp_new();
                 break;
@@ -1010,20 +1014,20 @@ device_geom_compute (SANE_Fixed tl, SANE_Fixed br,
 static ID_FORMAT
 device_choose_format (device *dev, devcaps_source *src)
 {
-    unsigned int formats = src->formats;
+    unsigned int           formats = src->formats & DEVCAPS_FORMATS_SUPPORTED;
+    size_t                 i;
+    static const ID_FORMAT use[] = {
+        ID_FORMAT_PNG,
+        ID_FORMAT_JPEG,
+        ID_FORMAT_TIFF,
+        ID_FORMAT_BMP
+    };
 
-    formats &= DEVCAPS_FORMATS_SUPPORTED;
-
-    if ((formats & (1 << ID_FORMAT_PNG)) != 0) {
-        return ID_FORMAT_PNG;
-    }
-
-    if ((formats & (1 << ID_FORMAT_JPEG)) != 0) {
-        return ID_FORMAT_JPEG;
-    }
-
-    if ((formats & (1 << ID_FORMAT_BMP)) != 0) {
-        return ID_FORMAT_BMP;
+    for (i = 0; i < sizeof(use)/sizeof(use[0]); i ++) {
+        ID_FORMAT fmt = use[i];
+        if ((formats & (1 << fmt)) != 0) {
+            return fmt;
+        }
     }
 
     log_internal_error(dev->log);

@@ -2482,6 +2482,7 @@ enum {
 #define DEVCAPS_FORMATS_SUPPORTED       \
     ((1 << ID_FORMAT_JPEG) |            \
      (1 << ID_FORMAT_PNG)  |            \
+     (1 << ID_FORMAT_TIFF) |            \
      (1 << ID_FORMAT_BMP))
 
 /* Supported color modes
@@ -3108,6 +3109,11 @@ image_decoder_jpeg_new (void);
  */
 image_decoder*
 image_decoder_png_new (void);
+
+/* Create TIFF image decoder
+ */
+image_decoder*
+image_decoder_tiff_new (void);
 
 /* Create BMP image decoder
  */

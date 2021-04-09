@@ -154,6 +154,8 @@ main (int argc, char **argv)
     /* Create decoder */
     if (!strcmp(ext, "jpeg") || !strcmp(ext, "jpg")) {
         decoder = image_decoder_jpeg_new();
+    } else if (!strcmp(ext, "tiff") || !strcmp(ext, "tif")) {
+        decoder = image_decoder_tiff_new();
     } else if (!strcmp(ext, "png")) {
         decoder = image_decoder_png_new();
     } else if (!strcmp(ext, "bmp")) {

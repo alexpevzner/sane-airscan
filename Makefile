@@ -63,7 +63,7 @@ MAN_DISCOVER_TITLE = "SANE Scanner Access Now Easy"
 MAN_BACKEND	= sane-airscan.5
 MAN_BACKEND_TITLE = "AirScan (eSCL) and WSD SANE backend"
 DEPS_COMMON	:= avahi-client libxml-2.0 gnutls
-DEPS_CODECS	:= libjpeg libpng
+DEPS_CODECS	:= libjpeg libpng libtiff-4
 
 CFLAGS		+= -D CONFIG_SANE_CONFIG_DIR=\"$(CONFDIR)\"
 

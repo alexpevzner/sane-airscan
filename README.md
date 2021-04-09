@@ -248,7 +248,7 @@ As root, execute the following commands:
 dnf install gcc git make pkgconf-pkg-config
 dnf install avahi-devel
 dnf install libxml2-devel
-dnf install libjpeg-turbo-devel libpng-devel
+dnf install libjpeg-turbo-devel libpng-devel libtiff-devel
 dnf install gnutls-devel
 dnf install sane-backends-devel
 ```
@@ -258,7 +258,7 @@ As root, execute the following commands:
 apt-get install gcc git make pkg-config
 apt-get install libavahi-client-dev
 apt-get install libxml2-dev
-apt-get install libjpeg-dev libpng-dev
+apt-get install libjpeg-dev libpng-dev libtiff5-dev
 apt-get install libsane-dev
 apt-get install gnutls-dev
 ```

@@ -27,6 +27,7 @@ sources = [
   'airscan-pollable.c',
   'airscan-rand.c',
   'airscan-trace.c',
+  'airscan-tiff.c',
   'airscan-uuid.c',
   'airscan-wsd.c',
   'airscan-wsdd.c',
@@ -46,6 +47,7 @@ shared_deps = [
   dependency('gnutls'),
   dependency('libjpeg'),
   dependency('libpng'),
+  ependency('libtiff-4'),
   dependency('libxml-2.0'),
   dependency('threads'),
 ]
