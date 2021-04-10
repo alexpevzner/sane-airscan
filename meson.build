@@ -47,7 +47,7 @@ shared_deps = [
   dependency('gnutls'),
   dependency('libjpeg'),
   dependency('libpng'),
-  ependency('libtiff-4'),
+  dependency('libtiff-4'),
   dependency('libxml-2.0'),
   dependency('threads'),
 ]
