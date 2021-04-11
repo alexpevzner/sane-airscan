@@ -142,6 +142,10 @@ uninstall:
 	rm -f $(DESTDIR)/$(mandir)/man1/$(MAN_DISCOVER)*
 	rm -f $(DESTDIR)/$(mandir)/man5/$(MAN_BACKEND)*
 
+check: all
+	./test-uri
+	./test-zeroconf
+
 man: $(MAN_DISCOVER) $(MAN_BACKEND)
 
 $(MAN_DISCOVER): $(MAN_DISCOVER).md
