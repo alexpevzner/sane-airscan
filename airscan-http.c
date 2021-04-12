@@ -1971,6 +1971,7 @@ struct http_query {
     http_hdr          request_header;           /* Request header */
     http_hdr          response_header;          /* Response header */
     bool              host_inserted;            /* Host: auto-inserted */
+    bool              force_port;               /* Host: always includes port */
 
     /* HTTP redirects */
     int               redirect_count;           /* Count of redirects */
@@ -2126,6 +2127,9 @@ http_query_set_host (http_query *q)
             dport = -1;
             break;
         }
+        if (q->force_port) {
+            dport = -1;
+        }
 
         s = ip_straddr_from_sockaddr_dport(addr, dport, false);
         http_query_set_request_header(q, "Host", s.text);
@@ -2270,6 +2274,16 @@ http_query_timeout_cancel (http_query *q)
         eloop_timer_cancel(q->timeout_timer);
         q->timeout_timer = NULL;
     }
+}
+
+/* Set forcing port to be added to the Host header for this query.
+ *
+ * This function may be called multiple times (each subsequent call overrides
+ * a previous one).
+ */
+void
+http_query_force_port(http_query *q, bool force_port) {
+    q->force_port = force_port;
 }
 
 /* For this particular query override on-error callback, previously

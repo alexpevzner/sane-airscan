@@ -53,6 +53,7 @@ typedef struct {
     /* Miscellaneous flags */
     bool quirk_localhost;            /* Set Host: localhost in ScanJobs rq */
     bool quirk_canon_mf410_series;   /* Canon MF410 Series */
+    bool quirk_port_in_host;         /* Always set port in Host: header */
 } proto_handler_escl;
 
 /* XML namespace for XML writer
@@ -85,8 +86,13 @@ static http_query*
 escl_http_query (const proto_ctx *ctx, const char *path,
         const char *method, char *body)
 {
-    return http_query_new_relative(ctx->http, ctx->base_uri, path,
+    proto_handler_escl *escl = (proto_handler_escl*) ctx->proto;
+    http_query *query = http_query_new_relative(ctx->http, ctx->base_uri, path,
         method, body, "text/xml");
+    if (escl->quirk_port_in_host) {
+        http_query_force_port(query, true);
+    }
+    return query;
 }
 
 /* Create HTTP get query
@@ -480,6 +486,14 @@ escl_devcaps_parse (proto_handler_escl *escl,
                 escl->quirk_localhost = true;
             } else if (!strcmp(m, "MF410 Series")) {
                 escl->quirk_canon_mf410_series = true;
+            } else if (!strncasecmp(m, "EPSON ", 6)) {
+                escl->quirk_port_in_host = true;
+            }
+        } else if (xml_rd_node_name_match(xml, "scan:Manufacturer")) {
+            const char *m = xml_rd_node_value(xml);
+
+            if (!strcasecmp(m, "EPSON")) {
+                escl->quirk_port_in_host = true;
             }
         } else if (xml_rd_node_name_match(xml, "scan:Platen")) {
             xml_rd_enter(xml);

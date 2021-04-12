@@ -1798,6 +1798,14 @@ http_query_new_relative(http_client *client,
 void
 http_query_timeout (http_query *q, int timeout);
 
+/* Set forcing port to be added to the Host header for this query.
+ *
+ * This function may be called multiple times (each subsequent call overrides
+ * a previous one).
+ */
+void
+http_query_force_port(http_query *q, bool force_port);
+
 /* For this particular query override on-error callback, previously
  * set by http_client_onerror()
  *
