@@ -110,6 +110,9 @@ trace_open (const char *device_name)
     path = str_append(path, ".log");
     t->log = fopen(path, "w");
 
+    // work around gcc 11 warning
+    log_assert(NULL, str_len(path) >= 4);
+
     strcpy(path + str_len(path) - 4, ".tar");
     t->data = fopen(path, "wb");
 
