@@ -142,7 +142,7 @@ Legend:
 | HP Officejet 4630                  | Yes                       |                           |
 | HP Officejet Pro 6970              | Yes                       |                           |
 | HP OfficeJet Pro 6978              | Yes                       |                           |
-| HP OfficeJet Pro 7740              | Yes                       |                           |
+| HP OfficeJet Pro 7740              | Yes                       | No                        |
 | HP OfficeJet Pro 8010 series       | Yes                       |                           |
 | HP OfficeJet Pro 8020 Series       | Yes                       |                           |
 | HP OfficeJet Pro 8730              | Yes                       | Yes                       |
@@ -207,8 +207,14 @@ The following distros (in alphabetical order) include `sane-airscan`
 officially:
 * ALT Linux (Sisyphus and p9)
 * Arch Linux (in extra repository)
+* Debian 10+
 * Fedora 32+
 * NixOS
+* Ubuntu 20.10+
+
+This list is constantly growing and may be very incomplete.
+
+Also, `sane-airscan` works on BSD and included into FreeBSD, NetBSD and OpenBSD ports.
 
 ### Installation from pre-build binaries
 

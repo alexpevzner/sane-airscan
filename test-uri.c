@@ -16,7 +16,7 @@ fail (const char *fmt, ...)
     va_start(ap, fmt);
     vprintf(fmt, ap);
     putchar('\n');
-    exit(0);
+    exit(1);
 }
 
 /* Test URI parser
