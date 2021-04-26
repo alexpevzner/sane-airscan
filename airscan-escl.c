@@ -342,6 +342,29 @@ escl_devcaps_source_parse_setting_profiles (xml_rd *xml, devcaps_source *src)
 }
 
 
+/* Parse ADF justification
+ */
+static void
+escl_devcaps_parse_justification (xml_rd *xml, unsigned int *val) {
+    xml_rd_enter(xml); 
+
+    *val = SANE_CAP_INACTIVE;
+    for (; !xml_rd_end(xml); xml_rd_next(xml)) {
+        /* Currently only care about width justification */
+        if(xml_rd_node_name_match(xml, "pwg:XImagePosition")){
+            const char *v = xml_rd_node_value(xml);
+            if (!strcmp(v, "Right")){
+                *val = ID_JUSTIFICATION_X_RIGHT;
+            } else if (!strcmp(v, "Center")) {
+                *val = ID_JUSTIFICATION_X_CENTER;
+            } else if (!strcmp(v, "Left")) {
+                *val = ID_JUSTIFICATION_X_LEFT;
+            }
+        }
+    }
+    xml_rd_leave(xml);
+}
+
 /* Parse source capabilities. Returns NULL on success, error string otherwise
  */
 static error
@@ -461,6 +484,7 @@ escl_devcaps_parse (proto_handler_escl *escl,
     bool      quirk_canon_iR2625_2630 = false;
     ID_SOURCE id_src;
     bool      src_ok = false;
+    unsigned int justification_x_val = -1;
 
     /* Parse capabilities XML */
     err = xml_rd_begin(&xml, xml_text, xml_len, NULL);
@@ -512,6 +536,12 @@ escl_devcaps_parse (proto_handler_escl *escl,
                         "scan:AdfDuplexInputCaps")) {
                     err = escl_devcaps_source_parse(xml,
                         &caps->src[ID_SOURCE_ADF_DUPLEX]);
+                } 
+                else if (xml_rd_node_name_match(xml, "scan:Justification")) {
+                    escl_devcaps_parse_justification(xml, &justification_x_val);
+                    if (justification_x_val != -1) {
+                        caps->justification_x = justification_x_val;
+                    } 
                 }
                 xml_rd_next(xml);
             }
@@ -558,6 +588,7 @@ escl_devcaps_parse (proto_handler_escl *escl,
             }
         }
     }
+  
 
 DONE:
     if (err != NULL) {
