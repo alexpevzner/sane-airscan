@@ -186,6 +186,7 @@ main (void)
 
     test_get_path("http://1.2.3.4/",            "/");
     test_get_path("http://1.2.3.4/xxx",         "/xxx");
+    test_get_path("http://1.2.3.4",             "");
 
     test_set_path("/xxx",                       "http://user@host:123/xxx?q#frag");
 
