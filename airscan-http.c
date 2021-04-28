@@ -873,6 +873,9 @@ http_uri_addr (http_uri *uri)
 }
 
 /* Get URI path
+ *
+ * Note, if URL has empty path (i.e., "http://1.2.3.4"), the
+ * empty string will be returned
  */
 const char*
 http_uri_get_path (const http_uri *uri)
@@ -2877,6 +2880,7 @@ http_query_start_processing (void *p)
     http_query      *q = (http_query*) p;
     http_uri_field  field;
     char            *host, *port;
+    const char      *path;
     struct addrinfo hints;
     int             rc;
 
@@ -2945,10 +2949,18 @@ http_query_start_processing (void *p)
         http_query_set_host(q);
     }
 
+    /* Obtain path. Note, URL format allows path to be empty,
+     * while HTTP request requires non-empty string
+     */
+    path = http_uri_get_path(q->uri);
+    if (*path == '\0') {
+        path = "/";
+    }
+
     /* Format HTTP request */
     str_trunc(q->rq_buf);
     q->rq_buf = str_append_printf(q->rq_buf, "%s %s HTTP/1.1\r\n",
-        q->method, http_uri_get_path(q->uri));
+        q->method, path);
 
     if (q->request_data != NULL) {
         char buf[64];

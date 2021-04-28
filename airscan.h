@@ -1605,6 +1605,9 @@ http_uri_af (http_uri *uri)
 }
 
 /* Get URI path
+ *
+ * Note, if URL has empty path (i.e., "http://1.2.3.4"), the
+ * empty string will be returned
  */
 const char*
 http_uri_get_path (const http_uri *uri);
