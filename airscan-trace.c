@@ -327,7 +327,7 @@ trace_hexdump (trace *t, char prefix, const void *data, size_t size)
         for( i = 0; i < av; i ++ )
         {
             unsigned char c = dp[ i ];
-            buf = str_append_c(buf, !safe_iscntrl( c ) ? c : '.' );
+            buf = str_append_c(buf, safe_isprint( c ) ? c : '.' );
         }
 
         buf = str_append_c(buf, '\n');

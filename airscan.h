@@ -587,6 +587,7 @@ __ptr_array_del (void **a, int i)
 #define safe_isspace(c)         isspace((unsigned char) c)
 #define safe_isxdigit(c)        isxdigit((unsigned char) c)
 #define safe_iscntrl(c)         iscntrl((unsigned char) c)
+#define safe_isprint(c)         isprint((unsigned char) c)
 #define safe_toupper(c)         toupper((unsigned char) c)
 #define safe_tolower(c)         tolower((unsigned char) c)
 
