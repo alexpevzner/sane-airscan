@@ -296,7 +296,7 @@ trace_hexdump (trace *t, char prefix, const void *data, size_t size)
     unsigned int  off = 0;
     char          *buf;
 
-    if (t == NULL) {
+    if (t == NULL || !conf.dbg_hexdump) {
         return;
     }
 
