@@ -286,6 +286,61 @@ trace_dump_body (trace *t, http_data *data)
     putc('\n', t->log);
 }
 
+/* Dump binary data (as hex dump)
+ * Each line is prefixed with the `prefix` character
+ */
+void
+trace_hexdump (trace *t, char prefix, const void *data, size_t size)
+{
+    const uint8_t *dp = data;
+    unsigned int  off = 0;
+    char          *buf;
+
+    if (t == NULL) {
+        return;
+    }
+
+    buf = str_new();
+    while (size != 0) {
+        size_t       av = size > 16 ? 16 : size;
+        unsigned int i;
+
+        str_trunc(buf);
+        buf = str_append_printf(buf, "%c %4.4x: ", prefix, off);
+
+        for(i = 0; i < 16; i ++) {
+            buf = str_append_printf(buf, i < av ? "%2.2x" : "  ", dp[ i ]);
+
+            switch(i) {
+            case 3: case 11:
+                buf = str_append_c(buf, i < av ? ':' : ' ');
+                break;
+            case 7:
+                buf = str_append_c(buf, i < av ? '-' : ' ');
+                break;
+            default:
+                buf = str_append_c(buf, ' ');
+            }
+        }
+
+        buf = str_append(buf,  "  ");
+        for( i = 0; i < av; i ++ )
+        {
+            unsigned char c = dp[ i ];
+            buf = str_append_c(buf, !safe_iscntrl( c ) ? c : '.' );
+        }
+
+        buf = str_append_c(buf, '\n');
+        fwrite(buf, str_len(buf), 1, t->log);
+
+        off += av;
+        dp += av;
+        size -= av;
+    }
+
+    mem_free(buf);
+}
+
 /* This hook is called on every http_query completion
  */
 void

@@ -1,7 +1,7 @@
 .\" generated with Ronn/v0.7.3
 .\" http://github.com/rtomayko/ronn/tree/0.7.3
 .
-.TH "SANE\-AIRSCAN" "5" "March 2021" "" "AirScan (eSCL) and WSD SANE backend"
+.TH "SANE\-AIRSCAN" "5" "May 2021" "" "AirScan (eSCL) and WSD SANE backend"
 .
 .SH "NAME"
 \fBsane\-airscan\fR \- SANE backend for AirScan (eSCL) and WSD scanners and MFP
@@ -169,7 +169,7 @@ Blacklisting only affects automatic discovery, and doesn\'t affect manually conf
 sane\-airscan provides very good instrumentation for troubleshooting without physical access to the problemmatic device\.
 .
 .P
-Debuggung facilities can be controlled using the \fB[debug]\fR section of the configuration file:
+Debugging facilities can be controlled using the \fB[debug]\fR section of the configuration file:
 .
 .IP "" 4
 .
@@ -185,6 +185,9 @@ enable = false | true
 ; by slash, i\.e\., "~/airscan/trace"\. The directory will
 ; be created automatically\.
 trace = path
+
+; Hex dump all traffic to the trace file (very verbose!)
+hexdump = false | true
 .
 .fi
 .

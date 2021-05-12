@@ -2600,6 +2600,8 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
 
         if (rc > 0) {
             log_debug(q->client->log, "HTTP %d bytes sent", (int) rc);
+            trace_hexdump(log_ctx_trace(q->client->log), '>',
+                q->rq_buf + q->rq_off, rc);
         }
 
         if (rc < 0) {
@@ -2643,6 +2645,7 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
         rc = http_query_sock_recv(q, io_buf, sizeof(io_buf));
         if (rc > 0) {
             log_debug(q->client->log, "HTTP %d bytes received", (int) rc);
+            trace_hexdump(log_ctx_trace(q->client->log), '<', io_buf, rc);
         }
 
         if (rc < 0) {
