@@ -1554,9 +1554,9 @@ wsdd_mcast_update_membership (int fd, netif_addr *addr, bool add)
 static void
 wsdd_netif_dump_addresses (const char *prefix, netif_addr *list)
 {
-    char suffix[32] = "";
-
     while (list != NULL) {
+        char suffix[32] = "";
+
         if (list->ipv6 && ip_is_linklocal(AF_INET6, &list->ip)) {
             sprintf(suffix, "%%%d", list->ifindex);
         }
