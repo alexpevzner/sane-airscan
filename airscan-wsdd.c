@@ -127,34 +127,34 @@ static ip_addrset          *wsdd_addrs_probing;
  */
 static const char *wsdd_probe_template =
     "<?xml version=\"1.0\"?>"
-    "<s:Envelope xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\" xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:wsdp=\"http://schemas.xmlsoap.org/ws/2006/02/devprof\">"
-    "<s:Header>"
-      "<a:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</a:Action>"
-      "<a:MessageID>%s</a:MessageID>"
-      "<a:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</a:To>"
-    "</s:Header>"
-    "<s:Body>"
-      "<d:Probe>"
-        "<d:Types>wsdp:Device</d:Types>"
-      "</d:Probe>"
-    "</s:Body>"
-    "</s:Envelope>";
+    "<soap:Envelope xmlns:wsa=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:wsd=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\" xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\" xmlns:wsdp=\"http://schemas.xmlsoap.org/ws/2006/02/devprof\">"
+    "<soap:Header>"
+      "<wsa:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</wsa:Action>"
+      "<wsa:MessageID>%s</wsa:MessageID>"
+      "<wsa:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</wsa:To>"
+    "</soap:Header>"
+    "<soap:Body>"
+      "<wsd:Probe>"
+        "<wsd:Types>wsdp:Device</wsd:Types>"
+      "</wsd:Probe>"
+    "</soap:Body>"
+    "</soap:Envelope>";
 
 /* WS-DD Get (metadata) template
  */
 static const char *wsdd_get_metadata_template =
     "<?xml version=\"1.0\"?>"
-    "<s:Envelope xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\">"
-      "<s:Header>"
-        "<a:Action>http://schemas.xmlsoap.org/ws/2004/09/transfer/Get</a:Action>"
-        "<a:MessageID>%s</a:MessageID>"
-        "<a:To>%s</a:To>"
-        "<a:ReplyTo>"
-          "<a:Address>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:Address>"
-        "</a:ReplyTo>"
-      "</s:Header>"
-      "<s:Body/>"
-    "</s:Envelope>";
+    "<soap:Envelope xmlns:wsa=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" xmlns:soap=\"http://www.w3.org/2003/05/soap-envelope\">"
+      "<soap:Header>"
+        "<wsa:Action>http://schemas.xmlsoap.org/ws/2004/09/transfer/Get</wsa:Action>"
+        "<wsa:MessageID>%s</wsa:MessageID>"
+        "<wsa:To>%s</wsa:To>"
+        "<wsa:ReplyTo>"
+          "<wsa:Address>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</wsa:Address>"
+        "</wsa:ReplyTo>"
+      "</soap:Header>"
+      "<soap:Body/>"
+    "</soap:Envelope>";
 
 /* XML namespace translation
  */
@@ -497,8 +497,8 @@ wsdd_finding_list_purge (void)
 /* Parse endpoint addresses from the devprof:Hosted section of the
  * device metadata:
  *   <devprof:Hosted>
- *     <a:EndpointReference>
- *       <a:Address>http://192.168.1.102:5358/WSDScanner</a:Address>
+ *     <wsa:EndpointReference>
+ *       <wsa:Address>http://192.168.1.102:5358/WSDScanner</wsa:Address>
  *     </addressing:EndpointReference>
  *     <devprof:Types>scan:ScannerServiceType</devprof:Types>
  *     <devprof:ServiceId>uri:4509a320-00a0-008f-00b6-002507510eca/WSDScanner</devprof:ServiceId>
@@ -1554,9 +1554,9 @@ wsdd_mcast_update_membership (int fd, netif_addr *addr, bool add)
 static void
 wsdd_netif_dump_addresses (const char *prefix, netif_addr *list)
 {
-    char suffix[32] = "";
-
     while (list != NULL) {
+        char suffix[32] = "";
+
         if (list->ipv6 && ip_is_linklocal(AF_INET6, &list->ip)) {
             sprintf(suffix, "%%%d", list->ifindex);
         }
