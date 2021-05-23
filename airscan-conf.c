@@ -305,6 +305,8 @@ conf_load_from_ini (inifile *ini)
                     }
                 } else if (inifile_match_name(rec->variable, "enable")) {
                     conf_load_bool(rec, &conf.dbg_enabled, "true", "false");
+                } else if (inifile_match_name(rec->variable, "hexdump")) {
+                    conf_load_bool(rec, &conf.dbg_hexdump, "true", "false");
                 }
             } else if (inifile_match_name(rec->section, "blacklist")) {
                 conf_blacklist *ent = NULL;

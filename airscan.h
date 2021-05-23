@@ -586,6 +586,8 @@ __ptr_array_del (void **a, int i)
 /******************** Safe ctype macros ********************/
 #define safe_isspace(c)         isspace((unsigned char) c)
 #define safe_isxdigit(c)        isxdigit((unsigned char) c)
+#define safe_iscntrl(c)         iscntrl((unsigned char) c)
+#define safe_isprint(c)         isprint((unsigned char) c)
 #define safe_toupper(c)         toupper((unsigned char) c)
 #define safe_tolower(c)         tolower((unsigned char) c)
 
@@ -1304,6 +1306,7 @@ struct conf_blacklist {
 typedef struct {
     bool           dbg_enabled;      /* Debugging enabled */
     const char     *dbg_trace;       /* Trace directory */
+    bool           dbg_hexdump;      /* Hexdump all traffic to the trace */
     conf_device    *devices;         /* Manually configured devices */
     bool           discovery;        /* Scanners discovery enabled */
     bool           model_is_netname; /* Use network name instead of model */
@@ -1316,6 +1319,7 @@ typedef struct {
 #define CONF_INIT {                     \
         .dbg_enabled = false,           \
         .dbg_trace = NULL,              \
+        .dbg_hexdump = false,           \
         .devices = NULL,                \
         .discovery = true,              \
         .model_is_netname = true,       \
@@ -2058,6 +2062,12 @@ trace_error (trace *t, error err);
  */
 void
 trace_dump_body (trace *t, http_data *data);
+
+/* Dump binary data (as hex dump)
+ * Each line is prefixed with the `prefix` character
+ */
+void
+trace_hexdump (trace *t, char prefix, const void *data, size_t size);
 
 /******************** SANE_Word/SANE_String arrays ********************/
 /* Create array of SANE_Word

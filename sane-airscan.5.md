@@ -138,7 +138,7 @@ affect manually configured devices
 sane-airscan provides very good instrumentation for troubleshooting
 without physical access to the problemmatic device.
 
-Debuggung facilities can be controlled using the ``[debug]`` section
+Debugging facilities can be controlled using the ``[debug]`` section
 of the configuration file:
 
     [debug]
@@ -151,6 +151,9 @@ of the configuration file:
     ; by slash, i.e., "~/airscan/trace". The directory will
     ; be created automatically.
     trace = path
+
+    ; Hex dump all traffic to the trace file (very verbose!)
+    hexdump = false | true
 
 ## FILES
 
