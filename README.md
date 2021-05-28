@@ -99,6 +99,7 @@ Legend:
 | Canon TS 6400 series               | Yes                       |                           |
 | Dell C1765nfw Color MFP            | No                        | Yes                       |
 | Dell C2665dnf Color Laser Printer  | No                        | Yes                       |
+| Dell C3765dnf Color MFP            | No                        | Yes                       |
 | EPSON ET-2750 Series               | Yes                       |                           |
 | EPSON Stylus SX535WD               | No                        | Yes                       |
 | EPSON WF-7710 Series               | No                        | Yes                       |
