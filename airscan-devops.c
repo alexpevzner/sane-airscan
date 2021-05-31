@@ -11,7 +11,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-
 /* Static variables */
 static const SANE_Range devopt_percent_range = {
     .min = SANE_FIX(-100.0),
@@ -379,6 +378,15 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->type = SANE_TYPE_BOOL;
     desc->size = sizeof(SANE_Bool);
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT | SANE_CAP_EMULATED;
+
+    /* OPT_JUSTIFICATION */
+    desc = &opt->desc[OPT_JUSTIFICATION_X];
+    desc->name = SANE_NAME_ADF_JUSTIFICATION_X;
+    desc->title = SANE_TITLE_ADF_JUSTIFICATION_X;
+    desc->desc = SANE_DESC_ADF_JUSTIFICATION_X;
+    desc->type = SANE_TYPE_STRING;
+    desc->size = sane_string_array_max_strlen(opt->sane_sources) + 1;
+    desc->cap = SANE_CAP_SOFT_DETECT;
 }
 
 /* Update scan parameters, according to the currently set
@@ -617,6 +625,7 @@ devopt_set_defaults (devopt *opt)
     opt->highlight = SANE_FIX(100.0);
     opt->gamma = SANE_FIX(1.0);
 
+
     devopt_rebuild_opt_desc(opt);
     devopt_update_params(opt);
 }
@@ -759,6 +768,10 @@ devopt_get_option (devopt *opt, SANE_Int option, void *value)
 
     case OPT_NEGATIVE:
         *(SANE_Bool*)value = opt->negative;
+        break;
+
+    case OPT_JUSTIFICATION_X:
+        strcpy(value, id_justification_x_sane_name(opt->caps.justification_x));
         break;
 
     default:

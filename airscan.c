@@ -120,7 +120,16 @@ void
 sane_close (SANE_Handle handle)
 {
     device  *dev = (device*) handle;
-
+    
+    //TODO: erase; temp for checking devcaps
+    log_debug(device_log_ctx(dev), "API: justifi called: start");
+    char justval[256] = ""; // TODO: fix :) 
+    device_get_option(dev, OPT_JUSTIFICATION_X, &justval);
+    log_debug(device_log_ctx(dev), "API: justifi called, value: ");
+    // if(justval == OPTVAL_JUSTIFICATION_X_NONE){
+        log_debug(device_log_ctx(dev), justval);
+    // }
+    
     log_debug(device_log_ctx(dev), "API: sane_close(): called");
 
     eloop_mutex_lock();

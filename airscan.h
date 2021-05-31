@@ -81,6 +81,12 @@ typedef struct http_uri http_uri;
 #define OUTER_STRUCT(member_p,struct_t,field)                            \
     ((struct_t*)((char*)(member_p) - ((ptrdiff_t) &(((struct_t*) 0)->field))))
 
+/* Define option not included in saneopts */
+#define SANE_NAME_ADF_JUSTIFICATION_X       "adf-justification-x"
+#define SANE_TITLE_ADF_JUSTIFICATION_X      SANE_I18N("ADF Width Justification")
+#define SANE_DESC_ADF_JUSTIFICATION_X       SANE_I18N("Width justification options for ADF")
+
+
 /******************** Circular Linked Lists ********************/
 /* ll_node represents a linked data node.
  * Data nodes are embedded into the corresponding data structures:
@@ -719,6 +725,27 @@ id_source_sane_name (ID_SOURCE id);
  */
 ID_SOURCE
 id_source_by_sane_name (const char *name);
+
+/* ID_JUSTIFICATION_X represents potential ADF justification
+ */
+typedef enum {
+    ID_JUSTIFICATION_X_LEFT,
+    ID_JUSTIFICATION_X_CENTER,
+    ID_JUSTIFICATION_X_RIGHT,
+
+    NUM_ID_JUSTIFICATION_X
+} ID_JUSTIFICATION_X;
+
+/* id_justification_x_sane_name returns SANE name for the width justification
+ * For unknown ID returns NULL
+ */
+const char* 
+id_justification_x_sane_name (ID_JUSTIFICATION_X id);
+
+/* id_justification_x_by_sane_name returns ID_JUSTIFICATION_X by its SANE name
+ */
+ID_JUSTIFICATION_X
+id_justification_x_by_sane_name (const char *name);
 
 /* ID_COLORMODE represents color mode
  */
@@ -2446,6 +2473,9 @@ enum {
     OPT_GAMMA,
     OPT_NEGATIVE,
 
+    /* Option specific to some ADF scans */
+    OPT_JUSTIFICATION_X,
+
     /* Total count of options, computed by compiler */
     NUM_OPTIONS
 };
@@ -2453,9 +2483,14 @@ enum {
 /* String constants for certain SANE options values
  * (missed from sane/sameopt.h)
  */
-#define OPTVAL_SOURCE_PLATEN      "Flatbed"
-#define OPTVAL_SOURCE_ADF_SIMPLEX "ADF"
-#define OPTVAL_SOURCE_ADF_DUPLEX  "ADF Duplex"
+#define OPTVAL_SOURCE_PLATEN        "Flatbed"
+#define OPTVAL_SOURCE_ADF_SIMPLEX   "ADF"
+#define OPTVAL_SOURCE_ADF_DUPLEX    "ADF Duplex"
+#define OPTVAL_JUSTIFICATION_X_LEFT   "Left"
+#define OPTVAL_JUSTIFICATION_X_CENTER "Center"
+#define OPTVAL_JUSTIFICATION_X_RIGHT  "Right"
+#define OPTVAL_JUSTIFICATION_X_NONE   "None"
+
 
 /* Check if option belongs to image enhancement group
  */
@@ -2526,6 +2561,7 @@ typedef struct {
     SANE_Range   res_range;              /* Resolutions range, in DPI */
     SANE_Range   win_x_range_mm;         /* Window x range, in mm */
     SANE_Range   win_y_range_mm;         /* Window y range, in mm */
+    
 } devcaps_source;
 
 /* Allocate devcaps_source
@@ -2565,6 +2601,10 @@ typedef struct {
 
     /* Sources */
     devcaps_source *src[NUM_ID_SOURCE];  /* Missed sources are NULL */
+
+    /* ADF X Justification */
+    unsigned int justification_x;  /*Current ADF width justification*/
+
 } devcaps;
 
 /* Initialize Device Capabilities
@@ -2608,6 +2648,7 @@ typedef struct {
     SANE_Fixed             highlight;         /* 0.0 ... +100.0 */
     SANE_Fixed             gamma;             /* Small positive value */
     bool                   negative;          /* Flip black and white */
+
 } devopt;
 
 /* Initialize device options
