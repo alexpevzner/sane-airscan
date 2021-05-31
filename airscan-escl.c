@@ -346,7 +346,7 @@ escl_devcaps_source_parse_setting_profiles (xml_rd *xml, devcaps_source *src)
  */
 static void
 escl_devcaps_parse_justification (xml_rd *xml, ID_JUSTIFICATION_X *val) {
-    xml_rd_enter(xml); 
+    xml_rd_enter(xml);
 
     *val = SANE_CAP_INACTIVE;
     for (; !xml_rd_end(xml); xml_rd_next(xml)) {
@@ -536,12 +536,12 @@ escl_devcaps_parse (proto_handler_escl *escl,
                         "scan:AdfDuplexInputCaps")) {
                     err = escl_devcaps_source_parse(xml,
                         &caps->src[ID_SOURCE_ADF_DUPLEX]);
-                } 
+                }
                 else if (xml_rd_node_name_match(xml, "scan:Justification")) {
                     escl_devcaps_parse_justification(xml, &justification_x_val);
                     if (justification_x_val != ID_JUSTIFICATION_X_UNKNOWN) {
                         caps->justification_x = justification_x_val;
-                    } 
+                    }
                 }
                 xml_rd_next(xml);
             }
@@ -588,7 +588,6 @@ escl_devcaps_parse (proto_handler_escl *escl,
             }
         }
     }
-  
 
 DONE:
     if (err != NULL) {

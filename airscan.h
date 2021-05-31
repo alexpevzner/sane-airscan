@@ -634,7 +634,7 @@ __ptr_array_del (void **a, int i)
 const char *
 os_homedir (void);
 
-/* Get base name of the calling program. 
+/* Get base name of the calling program.
  * There is no need to free the returned string
  *
  * May return NULL in a case of error
@@ -740,7 +740,7 @@ typedef enum {
 /* id_justification_x_sane_name returns SANE name for the width justification
  * For unknown ID returns NULL
  */
-const char* 
+const char*
 id_justification_x_sane_name (ID_JUSTIFICATION_X id);
 
 /* id_justification_x_by_sane_name returns ID_JUSTIFICATION_X by its SANE name
@@ -2562,7 +2562,6 @@ typedef struct {
     SANE_Range   res_range;              /* Resolutions range, in DPI */
     SANE_Range   win_x_range_mm;         /* Window x range, in mm */
     SANE_Range   win_y_range_mm;         /* Window y range, in mm */
-    
 } devcaps_source;
 
 /* Allocate devcaps_source
