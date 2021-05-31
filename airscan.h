@@ -729,6 +729,7 @@ id_source_by_sane_name (const char *name);
 /* ID_JUSTIFICATION_X represents potential ADF justification
  */
 typedef enum {
+    ID_JUSTIFICATION_X_UNKNOWN = -1,
     ID_JUSTIFICATION_X_LEFT,
     ID_JUSTIFICATION_X_CENTER,
     ID_JUSTIFICATION_X_RIGHT,

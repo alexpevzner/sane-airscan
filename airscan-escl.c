@@ -345,7 +345,7 @@ escl_devcaps_source_parse_setting_profiles (xml_rd *xml, devcaps_source *src)
 /* Parse ADF justification
  */
 static void
-escl_devcaps_parse_justification (xml_rd *xml, unsigned int *val) {
+escl_devcaps_parse_justification (xml_rd *xml, ID_JUSTIFICATION_X *val) {
     xml_rd_enter(xml); 
 
     *val = SANE_CAP_INACTIVE;
@@ -484,7 +484,7 @@ escl_devcaps_parse (proto_handler_escl *escl,
     bool      quirk_canon_iR2625_2630 = false;
     ID_SOURCE id_src;
     bool      src_ok = false;
-    unsigned int justification_x_val = -1;
+    ID_JUSTIFICATION_X justification_x_val = ID_JUSTIFICATION_X_UNKNOWN;
 
     /* Parse capabilities XML */
     err = xml_rd_begin(&xml, xml_text, xml_len, NULL);
@@ -539,7 +539,7 @@ escl_devcaps_parse (proto_handler_escl *escl,
                 } 
                 else if (xml_rd_node_name_match(xml, "scan:Justification")) {
                     escl_devcaps_parse_justification(xml, &justification_x_val);
-                    if (justification_x_val != -1) {
+                    if (justification_x_val != ID_JUSTIFICATION_X_UNKNOWN) {
                         caps->justification_x = justification_x_val;
                     } 
                 }
