@@ -353,7 +353,6 @@ escl_devcaps_parse_justification (xml_rd *xml,
     *x = *y = ID_JUSTIFICATION_UNKNOWN;
 
     for (; !xml_rd_end(xml); xml_rd_next(xml)) {
-        /* Currently only care about width justification */
         if(xml_rd_node_name_match(xml, "pwg:XImagePosition")){
             const char *v = xml_rd_node_value(xml);
             if (!strcmp(v, "Right")){

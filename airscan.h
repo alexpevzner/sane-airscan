@@ -2608,7 +2608,7 @@ typedef struct {
     /* Sources */
     devcaps_source *src[NUM_ID_SOURCE];  /* Missed sources are NULL */
 
-    /* ADF X Justification */
+    /* ADF Justification */
     ID_JUSTIFICATION justification_x;   /* Width justification*/
     ID_JUSTIFICATION justification_y;   /* Height justification*/
 

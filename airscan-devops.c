@@ -645,7 +645,6 @@ devopt_set_defaults (devopt *opt)
     opt->highlight = SANE_FIX(100.0);
     opt->gamma = SANE_FIX(1.0);
 
-
     devopt_rebuild_opt_desc(opt);
     devopt_update_params(opt);
 }
