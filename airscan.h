@@ -81,12 +81,6 @@ typedef struct http_uri http_uri;
 #define OUTER_STRUCT(member_p,struct_t,field)                            \
     ((struct_t*)((char*)(member_p) - ((ptrdiff_t) &(((struct_t*) 0)->field))))
 
-/* Define option not included in saneopts */
-#define SANE_NAME_ADF_JUSTIFICATION_X       "adf-justification-x"
-#define SANE_TITLE_ADF_JUSTIFICATION_X      SANE_I18N("ADF Width Justification")
-#define SANE_DESC_ADF_JUSTIFICATION_X       SANE_I18N("Width justification options for ADF")
-
-
 /******************** Circular Linked Lists ********************/
 /* ll_node represents a linked data node.
  * Data nodes are embedded into the corresponding data structures:
@@ -742,11 +736,6 @@ typedef enum {
  */
 const char*
 id_justification_x_sane_name (ID_JUSTIFICATION_X id);
-
-/* id_justification_x_by_sane_name returns ID_JUSTIFICATION_X by its SANE name
- */
-ID_JUSTIFICATION_X
-id_justification_x_by_sane_name (const char *name);
 
 /* ID_COLORMODE represents color mode
  */
@@ -2487,11 +2476,15 @@ enum {
 #define OPTVAL_SOURCE_PLATEN        "Flatbed"
 #define OPTVAL_SOURCE_ADF_SIMPLEX   "ADF"
 #define OPTVAL_SOURCE_ADF_DUPLEX    "ADF Duplex"
-#define OPTVAL_JUSTIFICATION_X_LEFT   "Left"
-#define OPTVAL_JUSTIFICATION_X_CENTER "Center"
-#define OPTVAL_JUSTIFICATION_X_RIGHT  "Right"
-#define OPTVAL_JUSTIFICATION_X_NONE   "None"
+#define OPTVAL_JUSTIFICATION_X_LEFT   "left"
+#define OPTVAL_JUSTIFICATION_X_CENTER "center"
+#define OPTVAL_JUSTIFICATION_X_RIGHT  "right"
+#define OPTVAL_JUSTIFICATION_X_NONE   "none"
 
+/* Define options not included in saneopts.h */
+#define SANE_NAME_ADF_JUSTIFICATION_X       "adf-justification-x"
+#define SANE_TITLE_ADF_JUSTIFICATION_X      SANE_I18N("ADF Width Justification")
+#define SANE_DESC_ADF_JUSTIFICATION_X       SANE_I18N("Width justification options for ADF")
 
 /* Check if option belongs to image enhancement group
  */
@@ -2603,7 +2596,7 @@ typedef struct {
     devcaps_source *src[NUM_ID_SOURCE];  /* Missed sources are NULL */
 
     /* ADF X Justification */
-    unsigned int justification_x;  /*Current ADF width justification*/
+    ID_JUSTIFICATION_X justification_x;  /* ADF width justification*/
 
 } devcaps;
 

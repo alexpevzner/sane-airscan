@@ -198,15 +198,6 @@ id_justification_x_sane_name (ID_JUSTIFICATION_X id)
     return id_name(id, id_justification_x_sane_name_table);
 }
 
-/* id_justification_x_by_sane_name returns ID_JUSTIFICATION_X by its SANE name
- * For unknown name returns ID_JUSTIFICATION_UNKNOWN
- */
-ID_JUSTIFICATION_X
-id_justification_x_by_sane_name (const char *name)
-{
-    return id_by_name(name, strcasecmp, id_justification_x_sane_name_table);
-}
-
 /******************** PROTO_OP ********************/
 /* proto_op_name_table represents PROTO_OP to its
  * name mappind

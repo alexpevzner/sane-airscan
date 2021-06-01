@@ -348,7 +348,7 @@ static void
 escl_devcaps_parse_justification (xml_rd *xml, ID_JUSTIFICATION_X *val) {
     xml_rd_enter(xml);
 
-    *val = SANE_CAP_INACTIVE;
+    *val = ID_JUSTIFICATION_X_UNKNOWN;
     for (; !xml_rd_end(xml); xml_rd_next(xml)) {
         /* Currently only care about width justification */
         if(xml_rd_node_name_match(xml, "pwg:XImagePosition")){
@@ -484,7 +484,6 @@ escl_devcaps_parse (proto_handler_escl *escl,
     bool      quirk_canon_iR2625_2630 = false;
     ID_SOURCE id_src;
     bool      src_ok = false;
-    ID_JUSTIFICATION_X justification_x_val = ID_JUSTIFICATION_X_UNKNOWN;
 
     /* Parse capabilities XML */
     err = xml_rd_begin(&xml, xml_text, xml_len, NULL);
@@ -538,10 +537,8 @@ escl_devcaps_parse (proto_handler_escl *escl,
                         &caps->src[ID_SOURCE_ADF_DUPLEX]);
                 }
                 else if (xml_rd_node_name_match(xml, "scan:Justification")) {
-                    escl_devcaps_parse_justification(xml, &justification_x_val);
-                    if (justification_x_val != ID_JUSTIFICATION_X_UNKNOWN) {
-                        caps->justification_x = justification_x_val;
-                    }
+                    escl_devcaps_parse_justification(xml,
+                        &caps->justification_x);
                 }
                 xml_rd_next(xml);
             }
@@ -618,6 +615,7 @@ escl_devcaps_decode (const proto_ctx *ctx, devcaps *caps)
 
     caps->units = 300;
     caps->protocol = ctx->proto->name;
+    caps->justification_x = ID_JUSTIFICATION_X_UNKNOWN;
 
     /* Most of devices that have Server: HP_Compact_Server
      * in their HTTP response header, require this quirk

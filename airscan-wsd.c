@@ -578,7 +578,7 @@ wsd_devcaps_decode (const proto_ctx *ctx, devcaps *caps)
 
     caps->units = 1000;
     caps->protocol = ctx->proto->name;
-    caps->justification_x = SANE_CAP_INACTIVE;
+    caps->justification_x = ID_JUSTIFICATION_X_UNKNOWN;
 
     err = wsd_devcaps_parse(wsd, caps, data->bytes, data->size);
 

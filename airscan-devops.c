@@ -169,6 +169,7 @@ devopt_rebuild_opt_desc (devopt *opt)
     devcaps_source          *src = opt->caps.src[opt->src];
     unsigned int            colormodes = devopt_available_colormodes(src);
     int                     i;
+    const char              *s;
 
     memset(opt->desc, 0, sizeof(opt->desc));
 
@@ -379,14 +380,19 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->size = sizeof(SANE_Bool);
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT | SANE_CAP_EMULATED;
 
-    /* OPT_JUSTIFICATION */
+    /* OPT_JUSTIFICATION_X */
     desc = &opt->desc[OPT_JUSTIFICATION_X];
     desc->name = SANE_NAME_ADF_JUSTIFICATION_X;
     desc->title = SANE_TITLE_ADF_JUSTIFICATION_X;
     desc->desc = SANE_DESC_ADF_JUSTIFICATION_X;
     desc->type = SANE_TYPE_STRING;
-    desc->size = sane_string_array_max_strlen(opt->sane_sources) + 1;
     desc->cap = SANE_CAP_SOFT_DETECT;
+    if (opt->caps.justification_x == ID_JUSTIFICATION_X_UNKNOWN) {
+        desc->cap |= SANE_CAP_INACTIVE;
+    }
+
+    s = id_justification_x_sane_name(opt->caps.justification_x);
+    desc->size = (s ? strlen(s) : 0) + 1;
 }
 
 /* Update scan parameters, according to the currently set
@@ -712,6 +718,7 @@ SANE_Status
 devopt_get_option (devopt *opt, SANE_Int option, void *value)
 {
     SANE_Status status = SANE_STATUS_GOOD;
+    const char  *s;
 
     switch (option) {
     case OPT_NUM_OPTIONS:
@@ -771,7 +778,8 @@ devopt_get_option (devopt *opt, SANE_Int option, void *value)
         break;
 
     case OPT_JUSTIFICATION_X:
-        strcpy(value, id_justification_x_sane_name(opt->caps.justification_x));
+        s = id_justification_x_sane_name(opt->caps.justification_x);
+        strcpy(value, s ? s : "");
         break;
 
     default:
