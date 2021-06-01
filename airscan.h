@@ -720,22 +720,27 @@ id_source_sane_name (ID_SOURCE id);
 ID_SOURCE
 id_source_by_sane_name (const char *name);
 
-/* ID_JUSTIFICATION_X represents potential ADF justification
+/* ID_JUSTIFICATION represents hardware-defined ADF justification
+ * This value exposed to the SANE API as a couple of read-only
+ * options, separate for width and height justification.
+ * Not all scanners provide this information
  */
 typedef enum {
-    ID_JUSTIFICATION_X_UNKNOWN = -1,
-    ID_JUSTIFICATION_X_LEFT,
-    ID_JUSTIFICATION_X_CENTER,
-    ID_JUSTIFICATION_X_RIGHT,
+    ID_JUSTIFICATION_UNKNOWN = -1,
+    ID_JUSTIFICATION_LEFT,
+    ID_JUSTIFICATION_CENTER,
+    ID_JUSTIFICATION_RIGHT,
+    ID_JUSTIFICATION_TOP,
+    ID_JUSTIFICATION_BOTTOM,
 
-    NUM_ID_JUSTIFICATION_X
-} ID_JUSTIFICATION_X;
+    NUM_ID_JUSTIFICATION
+} ID_JUSTIFICATION;
 
-/* id_justification_x_sane_name returns SANE name for the width justification
+/* id_justification_sane_name returns SANE name for the width justification
  * For unknown ID returns NULL
  */
 const char*
-id_justification_x_sane_name (ID_JUSTIFICATION_X id);
+id_justification_sane_name (ID_JUSTIFICATION id);
 
 /* ID_COLORMODE represents color mode
  */
@@ -2463,8 +2468,9 @@ enum {
     OPT_GAMMA,
     OPT_NEGATIVE,
 
-    /* Option specific to some ADF scans */
+    /* Read-only options for ADF justification */
     OPT_JUSTIFICATION_X,
+    OPT_JUSTIFICATION_Y,
 
     /* Total count of options, computed by compiler */
     NUM_OPTIONS
@@ -2476,15 +2482,22 @@ enum {
 #define OPTVAL_SOURCE_PLATEN        "Flatbed"
 #define OPTVAL_SOURCE_ADF_SIMPLEX   "ADF"
 #define OPTVAL_SOURCE_ADF_DUPLEX    "ADF Duplex"
-#define OPTVAL_JUSTIFICATION_X_LEFT   "left"
-#define OPTVAL_JUSTIFICATION_X_CENTER "center"
-#define OPTVAL_JUSTIFICATION_X_RIGHT  "right"
-#define OPTVAL_JUSTIFICATION_X_NONE   "none"
+#define OPTVAL_JUSTIFICATION_LEFT   "left"
+#define OPTVAL_JUSTIFICATION_CENTER "center"
+#define OPTVAL_JUSTIFICATION_RIGHT  "right"
+#define OPTVAL_JUSTIFICATION_TOP    "top"
+#define OPTVAL_JUSTIFICATION_BOTTOM "bottom"
 
 /* Define options not included in saneopts.h */
-#define SANE_NAME_ADF_JUSTIFICATION_X       "adf-justification-x"
-#define SANE_TITLE_ADF_JUSTIFICATION_X      SANE_I18N("ADF Width Justification")
-#define SANE_DESC_ADF_JUSTIFICATION_X       SANE_I18N("Width justification options for ADF")
+#define SANE_NAME_ADF_JUSTIFICATION_X  "adf-justification-x"
+#define SANE_TITLE_ADF_JUSTIFICATION_X SANE_I18N("ADF Width Justification")
+#define SANE_DESC_ADF_JUSTIFICATION_X  \
+        SANE_I18N("ADF width justification (left/right/center)")
+
+#define SANE_NAME_ADF_JUSTIFICATION_Y  "adf-justification-y"
+#define SANE_TITLE_ADF_JUSTIFICATION_Y SANE_I18N("ADF Height Justification")
+#define SANE_DESC_ADF_JUSTIFICATION_X  \
+        SANE_I18N("ADF height justification (top/bottom/center)")
 
 /* Check if option belongs to image enhancement group
  */
@@ -2596,7 +2609,8 @@ typedef struct {
     devcaps_source *src[NUM_ID_SOURCE];  /* Missed sources are NULL */
 
     /* ADF X Justification */
-    ID_JUSTIFICATION_X justification_x;  /* ADF width justification*/
+    ID_JUSTIFICATION justification_x;   /* Width justification*/
+    ID_JUSTIFICATION justification_y;   /* Height justification*/
 
 } devcaps;
 

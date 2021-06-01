@@ -387,11 +387,11 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->desc = SANE_DESC_ADF_JUSTIFICATION_X;
     desc->type = SANE_TYPE_STRING;
     desc->cap = SANE_CAP_SOFT_DETECT;
-    if (opt->caps.justification_x == ID_JUSTIFICATION_X_UNKNOWN) {
+    if (opt->caps.justification_x == ID_JUSTIFICATION_UNKNOWN) {
         desc->cap |= SANE_CAP_INACTIVE;
     }
 
-    s = id_justification_x_sane_name(opt->caps.justification_x);
+    s = id_justification_sane_name(opt->caps.justification_x);
     desc->size = (s ? strlen(s) : 0) + 1;
 }
 
@@ -778,7 +778,12 @@ devopt_get_option (devopt *opt, SANE_Int option, void *value)
         break;
 
     case OPT_JUSTIFICATION_X:
-        s = id_justification_x_sane_name(opt->caps.justification_x);
+        s = id_justification_sane_name(opt->caps.justification_x);
+        strcpy(value, s ? s : "");
+        break;
+
+    case OPT_JUSTIFICATION_Y:
+        s = id_justification_sane_name(opt->caps.justification_y);
         strcpy(value, s ? s : "");
         break;
 

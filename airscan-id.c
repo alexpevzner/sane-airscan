@@ -178,24 +178,25 @@ id_format_short_name (ID_FORMAT id)
 }
 
 
-/******************** ID_JUSTIFICATION_X ********************/
-/* id_justification_x_sane_name_table represents ID_JUSTIFICATION_X to
+/******************** ID_JUSTIFICATION ********************/
+/* id_justification_sane_name_table represents ID_JUSTIFICATION to
  * SANE name mapping
  */
-static id_name_table id_justification_x_sane_name_table[] = {
-    {ID_JUSTIFICATION_X_LEFT,     OPTVAL_JUSTIFICATION_X_LEFT},
-    {ID_JUSTIFICATION_X_CENTER,   OPTVAL_JUSTIFICATION_X_CENTER},
-    {ID_JUSTIFICATION_X_RIGHT,    OPTVAL_JUSTIFICATION_X_RIGHT},
-    {SANE_CAP_INACTIVE,           OPTVAL_JUSTIFICATION_X_NONE}
+static id_name_table id_justification_sane_name_table[] = {
+    {ID_JUSTIFICATION_LEFT,     OPTVAL_JUSTIFICATION_LEFT},
+    {ID_JUSTIFICATION_CENTER,   OPTVAL_JUSTIFICATION_CENTER},
+    {ID_JUSTIFICATION_RIGHT,    OPTVAL_JUSTIFICATION_RIGHT},
+    {ID_JUSTIFICATION_TOP,      OPTVAL_JUSTIFICATION_TOP},
+    {ID_JUSTIFICATION_BOTTOM,   OPTVAL_JUSTIFICATION_BOTTOM},
 };
 
-/* id_justification_x_sane_name returns SANE name for the justification
+/* id_justification_sane_name returns SANE name for the justification
  * For unknown ID returns NULL
  */
 const char*
-id_justification_x_sane_name (ID_JUSTIFICATION_X id)
+id_justification_sane_name (ID_JUSTIFICATION id)
 {
-    return id_name(id, id_justification_x_sane_name_table);
+    return id_name(id, id_justification_sane_name_table);
 }
 
 /******************** PROTO_OP ********************/

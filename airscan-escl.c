@@ -345,20 +345,32 @@ escl_devcaps_source_parse_setting_profiles (xml_rd *xml, devcaps_source *src)
 /* Parse ADF justification
  */
 static void
-escl_devcaps_parse_justification (xml_rd *xml, ID_JUSTIFICATION_X *val) {
+escl_devcaps_parse_justification (xml_rd *xml,
+        ID_JUSTIFICATION *x, ID_JUSTIFICATION *y)
+{
     xml_rd_enter(xml);
 
-    *val = ID_JUSTIFICATION_X_UNKNOWN;
+    *x = *y = ID_JUSTIFICATION_UNKNOWN;
+
     for (; !xml_rd_end(xml); xml_rd_next(xml)) {
         /* Currently only care about width justification */
         if(xml_rd_node_name_match(xml, "pwg:XImagePosition")){
             const char *v = xml_rd_node_value(xml);
             if (!strcmp(v, "Right")){
-                *val = ID_JUSTIFICATION_X_RIGHT;
+                *x = ID_JUSTIFICATION_RIGHT;
             } else if (!strcmp(v, "Center")) {
-                *val = ID_JUSTIFICATION_X_CENTER;
+                *x = ID_JUSTIFICATION_CENTER;
             } else if (!strcmp(v, "Left")) {
-                *val = ID_JUSTIFICATION_X_LEFT;
+                *x = ID_JUSTIFICATION_LEFT;
+            }
+        } else if(xml_rd_node_name_match(xml, "pwg:YImagePosition")){
+            const char *v = xml_rd_node_value(xml);
+            if (!strcmp(v, "Top")){
+                *y = ID_JUSTIFICATION_TOP;
+            } else if (!strcmp(v, "Center")) {
+                *y = ID_JUSTIFICATION_CENTER;
+            } else if (!strcmp(v, "Bottom")) {
+                *y = ID_JUSTIFICATION_BOTTOM;
             }
         }
     }
@@ -538,7 +550,7 @@ escl_devcaps_parse (proto_handler_escl *escl,
                 }
                 else if (xml_rd_node_name_match(xml, "scan:Justification")) {
                     escl_devcaps_parse_justification(xml,
-                        &caps->justification_x);
+                        &caps->justification_x, &caps->justification_y);
                 }
                 xml_rd_next(xml);
             }
@@ -615,7 +627,7 @@ escl_devcaps_decode (const proto_ctx *ctx, devcaps *caps)
 
     caps->units = 300;
     caps->protocol = ctx->proto->name;
-    caps->justification_x = ID_JUSTIFICATION_X_UNKNOWN;
+    caps->justification_x = caps->justification_y = ID_JUSTIFICATION_UNKNOWN;
 
     /* Most of devices that have Server: HP_Compact_Server
      * in their HTTP response header, require this quirk
