@@ -2496,7 +2496,7 @@ enum {
 
 #define SANE_NAME_ADF_JUSTIFICATION_Y  "adf-justification-y"
 #define SANE_TITLE_ADF_JUSTIFICATION_Y SANE_I18N("ADF Height Justification")
-#define SANE_DESC_ADF_JUSTIFICATION_X  \
+#define SANE_DESC_ADF_JUSTIFICATION_Y  \
         SANE_I18N("ADF height justification (top/bottom/center)")
 
 /* Check if option belongs to image enhancement group

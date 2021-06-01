@@ -393,6 +393,20 @@ devopt_rebuild_opt_desc (devopt *opt)
 
     s = id_justification_sane_name(opt->caps.justification_x);
     desc->size = (s ? strlen(s) : 0) + 1;
+
+    /* OPT_JUSTIFICATION_Y */
+    desc = &opt->desc[OPT_JUSTIFICATION_Y];
+    desc->name = SANE_NAME_ADF_JUSTIFICATION_Y;
+    desc->title = SANE_TITLE_ADF_JUSTIFICATION_Y;
+    desc->desc = SANE_DESC_ADF_JUSTIFICATION_Y;
+    desc->type = SANE_TYPE_STRING;
+    desc->cap = SANE_CAP_SOFT_DETECT;
+    if (opt->caps.justification_y == ID_JUSTIFICATION_UNKNOWN) {
+        desc->cap |= SANE_CAP_INACTIVE;
+    }
+
+    s = id_justification_sane_name(opt->caps.justification_y);
+    desc->size = (s ? strlen(s) : 0) + 1;
 }
 
 /* Update scan parameters, according to the currently set
