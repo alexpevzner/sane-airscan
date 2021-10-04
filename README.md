@@ -141,6 +141,7 @@ Legend:
 | HP LaserJet Pro M28w               | Yes                       | Yes                       |
 | HP LaserJet Pro MFP 148fdw         | Yes                       |                           |
 | HP LaserJet Pro MFP M125 series    | No                        | Yes                       |
+| HP LaserJet Pro MFP M225dn         | No                        | Yes                       |
 | HP LaserJet Pro MFP M428dw         | Yes                       |                           |
 | HP LaserJet Pro MFP M521 series    | No                        | Yes                       |
 | HP Laser MFP 131 133 135-138       | Yes                       |                           |
