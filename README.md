@@ -61,6 +61,7 @@ Legend:
 | Brother DCP-L2540DW                | No                        | Yes                       |
 | Brother DCP-L2550DN / DCP-L2550DW  | Yes                       |                           |
 | Brother HL-L2395DW series          | Yes                       |                           |
+| Brother MFC-J1300DW                | Yes                       |                           |
 | Brother MFC-J485DW                 | Yes                       |                           |
 | Brother MFC-L2700DW                | No                        | Yes                       |
 | Brother MFC-L2710DW                | Yes                       | Yes                       |
