@@ -154,6 +154,7 @@ Legend:
 | HP OfficeJet Pro 8020 Series       | Yes                       |                           |
 | HP OfficeJet Pro 8730              | Yes                       | Yes                       |
 | HP OfficeJet Pro 9010 series       | Yes                       |                           |
+| HP ScanJet Pro 3500 fn1            | Yes<sup>[3](#note3)</sup> |                           |
 | HP ScanJet Pro 4500 fn1            | Yes                       |                           |
 | HP Smart Tank Plus 550 series      | Yes                       |                           |
 | Kyocera ECOSYS M2040dn             | Yes                       | Yes<sup>[5](#note5)</sup> |
