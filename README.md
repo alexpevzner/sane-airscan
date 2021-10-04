@@ -79,6 +79,7 @@ Legend:
 | Canon LiDE 400                     | Yes<sup>[3](#note3)</sup> |                           |
 | Canon MB5100 series                | Yes                       |                           |
 | Canon MB5400 series                | Yes                       | Yes                       |
+| Canon MF110/91                     | Yes                       |                           |
 | Canon MF240 Series                 | No                        | Yes<sup>[4](#note4)</sup> |
 | Canon MF260 Series                 | Yes                       | Yes<sup>[4](#note4)</sup> |
 | Canon MF410 Series                 | Yes                       | Yes                       |
