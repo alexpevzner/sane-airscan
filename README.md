@@ -106,6 +106,7 @@ Legend:
 | Dell C3765dnf Color MFP            | No                        | Yes                       |
 | EPSON ET-2750 Series               | Yes                       |                           |
 | EPSON ET-2760 Series               | Yes                       |                           |
+| EPSON ET-3750 Series               | Yes                       |                           |
 | EPSON Stylus SX535WD               | No                        | Yes                       |
 | EPSON WF-7710 Series               | No                        | Yes                       |
 | EPSON XP-2100 Series               | No                        | Yes                       |
