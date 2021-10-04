@@ -63,6 +63,7 @@ Legend:
 | Brother HL-L2395DW series          | Yes                       |                           |
 | Brother MFC-J1300DW                | Yes                       |                           |
 | Brother MFC-J485DW                 | Yes                       |                           |
+| Brother MFC-J625DW                 | No                        | Yes                       |
 | Brother MFC-L2700DW                | No                        | Yes                       |
 | Brother MFC-L2710DW                | Yes                       | Yes                       |
 | Brother MFC-L2720DW                | No                        | Yes                       |
@@ -116,6 +117,7 @@ Legend:
 | HP Color Laserjet MFP m178-m181    | Yes                       |                           |
 | HP Color LaserJet MFP M182nw       | Yes                       |                           |
 | HP Color LaserJet MFP M281fdw      | Yes                       |                           |
+| HP Color LaserJet MFP M283fdw      | Yes                       |                           |
 | HP Color LaserJet MFP M477fdw      | Yes                       | Yes                       |
 | HP Color LaserJet Pro M478f-9f     | Yes                       |                           |
 | HP Color LaserJet Pro MFP M277dw   | Yes                       |                           |
