@@ -7,6 +7,7 @@
 #   ----     -------                    -----------
 #   DESTDIR                             Destination directory for make install
 #   CC         gcc                      C compiler
+#   AR         ar                       Archiver
 #   CPPFLAGS                            C preprocessor flags
 #   CFLAGS     -O2 -g -W -Wall -Werror  C compiler flags
 #   LDFLAGS                             Linker flags
@@ -28,6 +29,7 @@
 #
 
 CC		= gcc
+AR		= ar
 COMPRESS 	= gzip -n
 CFLAGS		+= -O2 -g -W -Wall -Werror -pthread $(CPPFLAGS)
 PKG_CONFIG 	= pkg-config
@@ -99,9 +101,11 @@ $(OBJDIR)%.o: %.c Makefile airscan.h
 	mkdir -p $(OBJDIR)
 	$(CC) -c -o $@ $< $(CPPFLAGS) $(common_CFLAGS)
 
-.PHONY: all clean install man
+.PHONY: default all clean install man
 
-all:	tags $(BACKEND) $(DISCOVER) test test-decode test-multipart test-zeroconf test-uri
+default: tags all
+
+all:	$(BACKEND) $(DISCOVER) test test-decode test-multipart test-zeroconf test-uri
 
 tags: $(SRC) airscan.h test.c test-decode.c test-multipart.c test-zeroconf.c test-uri.c
 	-ctags -R .
@@ -113,7 +117,7 @@ $(DISCOVER): $(OBJDIR)discover.o $(LIBAIRSCAN)
 	 $(CC) -o $(DISCOVER) discover.c $(CPPFLAGS) $(common_CFLAGS) $(LIBAIRSCAN) $(tools_LDFLAGS)
 
 $(LIBAIRSCAN): $(OBJ) Makefile
-	ar cru $(LIBAIRSCAN) $(OBJ)
+	$(AR) cru $(LIBAIRSCAN) $(OBJ)
 
 install: all
 	mkdir -p $(DESTDIR)/$(bindir)
