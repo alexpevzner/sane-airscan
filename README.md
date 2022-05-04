@@ -180,6 +180,7 @@ Legend:
 | Lexmark MB2236adw                  | Yes                       |                           |
 | Lexmark MC2535adwe                 | Yes                       |                           |
 | Lexmark MC3224adwe                 | Yes                       |                           |
+| Lexmark MC3326adwe                 | Yes                       |                           |
 | OKI-MC853                          | Yes                       |                           |
 | Panasonic KV-S1058Y                | No                        | Yes                       |
 | Pantum M6500W series               | Yes                       |                           |
