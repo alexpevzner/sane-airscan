@@ -189,6 +189,7 @@ Legend:
 | Samsung M267x 287x Series          | No                        | Yes                       |
 | Samsung M288x Series               | No                        | Yes                       |
 | Samsung M337x 387x 407x Series     | No                        | Yes<sup>[8](#note8)</sup> |
+| Samsung SCX-3400 Series            | No                        | Yes                       |
 | Xerox B205                         | Yes                       | Yes                       |
 | Xerox B215                         | Yes                       |                           |
 | Xerox C235                         | Yes                       |                           |
