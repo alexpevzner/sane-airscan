@@ -52,6 +52,7 @@ Legend:
 
 * **Yes** - device works perfectly
 * **No** - protocol not supported by device
+* **?** - device works with `sane-airscan`, but protocol is not reported by user
 * Space - author has no information on this mode/device combination
 
 | Device                             | eSCL mode                 | WSD mode                  |
@@ -151,6 +152,7 @@ Legend:
 | HP LaserJet Pro MFP M428dw         | Yes                       |                           |
 | HP LaserJet Pro MFP M521 series    | No                        | Yes                       |
 | HP Laser MFP 131 133 135-138       | Yes                       |                           |
+| HP Neverstop Laser MFP 1202nw      | ?                         | ?                         |
 | HP OfficeJet 3830 series           | Yes                       |                           |
 | HP Officejet 4630                  | Yes                       |                           |
 | HP Officejet Pro 6970              | Yes                       |                           |
