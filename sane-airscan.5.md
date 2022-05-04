@@ -61,12 +61,12 @@ format `protocol:Device Name:URL`.  The examples above could be written as
 `wsd:Kyocera WSD:http://192.168.1.102:5358/WSDScanner`.
 
 To figure out URLs of available devices, the simplest way is to
-run a supplied `airscan-discover` tool on a computer connected with
+run the supplied `airscan-discover(1)` tool on a computer connected with
 scanner to the same LAN segment. On success, this program will
 dump to its standard output a list of discovered devices in a
 format suitable for inclusion into the configuration file.
 
-If running `airscan-discover` on same LAN segment as a scanner is not
+If running `airscan-discover(1)` on the same LAN segment as a scanner is not
 possible, you will have to follow a hard way. Your administrator must know
 device IP address, consult your device manual for the eSCL port, and
 the URL path component most likely is the "/eSCL", though on some
@@ -104,7 +104,7 @@ the following options are supported:
     ; Discovery of WSD devices may be "fast" or "full". The "fast"
     ; mode works as fast as DNS-SD discovery, but in some cases
     ; may be unreliable. The "full" mode is slow and reliable.
-    ; This is also possible to disable automatic discovery
+    ; It is also possible to disable automatic discovery
     ; of WSD devices. The default is "fast".
     ws-discovery = fast | full | off
 
