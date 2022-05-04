@@ -187,6 +187,7 @@ Legend:
 | Samsung M337x 387x 407x Series     | No                        | Yes<sup>[8](#note8)</sup> |
 | Xerox B205                         | Yes                       | Yes                       |
 | Xerox B215                         | Yes                       |                           |
+| Xerox C235                         | Yes                       |                           |
 | Xerox VersaLink B405               | Yes                       |                           |
 | Xerox WorkCentre 3025              | No                        | Yes                       |
 | TODO                               |                           |                           |
