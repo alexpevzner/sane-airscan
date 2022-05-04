@@ -60,6 +60,7 @@ Legend:
 | Brother ADS-2700W                  | No                        | Yes                       |
 | Brother DCP-7055W                  | No                        | Yes                       |
 | Brother DCP-9020CDW                | No                        | Yes                       |
+| Brother DCP-J552DW                 | No                        | Yes                       |
 | Brother DCP-L2540DW                | No                        | Yes                       |
 | Brother DCP-L2550DN / DCP-L2550DW  | Yes                       |                           |
 | Brother HL-L2380DW series          | No                        | Yes                       |
