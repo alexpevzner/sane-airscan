@@ -135,6 +135,7 @@ Legend:
 | HP DeskJet 5000 series             | Yes                       |                           |
 | HP DeskJet 5200 series             | Yes                       |                           |
 | HP ENVY 4500                       | Yes                       |                           |
+| HP ENVY 5055 series                | Yes                       |                           |
 | HP ENVY 5530 series                | Yes                       |                           |
 | HP ENVY 5540                       | Yes                       |                           |
 | HP ENVY 5640                       | Yes                       |                           |
