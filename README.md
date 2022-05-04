@@ -108,6 +108,7 @@ Legend:
 | EPSON ET-2710 Series               | No                        | Yes                       |
 | EPSON ET-2750 Series               | Yes                       |                           |
 | EPSON ET-2760 Series               | Yes                       |                           |
+| EPSON ET-2850 Series               | Yes                       |                           |
 | EPSON ET-3750 Series               | Yes                       |                           |
 | EPSON ET-4850 Series               | Yes                       |                           |
 | EPSON Stylus SX535WD               | No                        | Yes                       |
