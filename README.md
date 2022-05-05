@@ -107,6 +107,7 @@ Legend:
 | Canon TR7500 Series                | No                        | Yes                       |
 | Canon TS 3100                      | Yes                       |                           |
 | Canon TS 3300                      | Yes                       |                           |
+| Canon TS 3400                      | Yes                       |                           |
 | Canon TS 6151                      | Yes                       |                           |
 | Canon TS 6200 series               | Yes                       | Yes                       |
 | Canon TS 6400 series               | Yes                       |                           |
