@@ -70,17 +70,17 @@ Miscellaneous options all goes to the \fB[options]\fR section\. Currently the fo
 [options]
 ; If there are a lot of scanners around and you are only
 ; interested in few of them, disable auto discovery and
-; configure scanners manually
+; configure scanners manually\.
 discovery = enable | disable
 
 ; Choose what SANE apps will show in a list of devices:
-; scanner network name (the default) or hardware model name
+; scanner network name (the default) or hardware model name\.
 model = network | hardware
 
 ; If device supports both eSCL and WSD protocol, sane\-airscan
 ; may either choose the "best" protocol automatically, or
 ; expose all variants for user, allowing manual protocol selection\.
-; The default is "auto"
+; The default is "auto"\.
 protocol = auto | manual
 
 ; Discovery of WSD devices may be "fast" or "full"\. The "fast"
@@ -110,7 +110,7 @@ ip    = 192\.168\.0\.0/24 ; blacklist the whole subnet
 .P
 Network names come from DNS\-SD, WS\-Discovery doesn\'t provide this information\. For filtering by network name to work, Avahi must be enabled and device must be discoverable via DNS\-SD (not necessarily as a scanner, it\'s enough if WSD scanner is discoverable as a printer via DNS\-SD)\.
 .P
-Blacklisting only affects automatic discovery, and doesn\'t affect manually configured devices
+Blacklisting only affects automatic discovery, and doesn\'t affect manually configured devices\.
 .SH "DEBUGGING"
 sane\-airscan provides very good instrumentation for troubleshooting without physical access to the problemmatic device\.
 .P
@@ -149,6 +149,6 @@ This variable alters the search path for configuration files\. This is a colon\-
 .SH "BUGS AND SUPPORT"
 If you have found a bug, please file a GitHub issue on a GitHub project page: \fBhttps://github\.com/alexpevzner/sane\-airscan\fR
 .SH "SEE ALSO"
-sane(7), scanimage(1), xsane(1), airscan\-discover(1)
+\fBsane(7), scanimage(1), xsane(1), airscan\-discover(1)\fR
 .SH "AUTHOR"
 Alexander Pevzner <pzz@apevzner\.com>

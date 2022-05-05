@@ -88,17 +88,17 @@ the following options are supported:
     [options]
     ; If there are a lot of scanners around and you are only
     ; interested in few of them, disable auto discovery and
-    ; configure scanners manually
+    ; configure scanners manually.
     discovery = enable | disable
 
     ; Choose what SANE apps will show in a list of devices:
-    ; scanner network name (the default) or hardware model name
+    ; scanner network name (the default) or hardware model name.
     model = network | hardware
 
     ; If device supports both eSCL and WSD protocol, sane-airscan
     ; may either choose the "best" protocol automatically, or
     ; expose all variants for user, allowing manual protocol selection.
-    ; The default is "auto"
+    ; The default is "auto".
     protocol = auto | manual
 
     ; Discovery of WSD devices may be "fast" or "full". The "fast"
@@ -131,7 +131,7 @@ as a scanner, it's enough if WSD scanner is discoverable as a printer
 via DNS-SD).
 
 Blacklisting only affects automatic discovery, and doesn't
-affect manually configured devices
+affect manually configured devices.
 
 ## DEBUGGING
 
@@ -182,7 +182,7 @@ project page: **https://github.com/alexpevzner/sane-airscan**
 
 ## SEE ALSO
 
-sane(7), scanimage(1), xsane(1), airscan-discover(1)
+**sane(7), scanimage(1), xsane(1), airscan-discover(1)**
 
 ## AUTHOR
 Alexander Pevzner <pzz@apevzner.com\>
