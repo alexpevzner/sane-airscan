@@ -781,6 +781,17 @@ escl_scan_query (const proto_ctx *ctx)
     query = escl_http_query(ctx, "ScanJobs", "POST",
         xml_wr_finish_compact(xml));
 
+    /* Kyocera ECOSYS M6526cdn drops TLS connection after sending
+     * response HTTP headers, but before the body transfer is completed.
+     *
+     * As for this request we are only interested in the response
+     * headers, we can ignore this kind of error
+     *
+     * See here for details:
+     *   https://github.com/alexpevzner/sane-airscan/issues/163
+     */
+    http_query_no_need_response_body(query);
+
     /* It's a dirty hack
      *
      * HP LaserJet MFP M630, HP Color LaserJet FlowMFP M578 and

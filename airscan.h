@@ -1827,6 +1827,17 @@ http_query_new_relative(http_client *client,
 void
 http_query_timeout (http_query *q, int timeout);
 
+/* Set 'no_need_response_body' flag
+ *
+ * This flag notifies, that http_query issued is only interested
+ * in the HTTP response headers, not body
+ *
+ * If this flag is set, after successful reception of response
+ * HTTP header, errors in fetching response body is ignored
+ */
+void
+http_query_no_need_response_body (http_query *q);
+
 /* Set forcing port to be added to the Host header for this query.
  *
  * This function may be called multiple times (each subsequent call overrides
