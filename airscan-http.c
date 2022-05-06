@@ -1985,6 +1985,9 @@ struct http_query {
     eloop_timer       *timeout_timer;           /* Timeout timer */
     int               timeout_value;            /* In milliseconds */
 
+    /* Miscellaneous options */
+    bool              no_need_response_body;    /* Response body not needed */
+
     /* Low-level I/O */
     bool              submitted;                /* http_query_submit() called */
     uint64_t          eloop_callid;             /* For eloop_call_cancel */
@@ -2004,6 +2007,7 @@ struct http_query {
 
     /* HTTP parser */
     http_parser       http_parser;              /* HTTP parser structure */
+    bool              http_headers_received;    /* HTTP headers received */
     bool              http_parser_done;         /* Message parsing done */
 
     /* Data handling */
@@ -2068,6 +2072,7 @@ http_query_reset (http_query *q)
     str_trunc(q->rq_buf);
     q->rq_off = 0;
 
+    q->http_headers_received = false;
     q->http_parser_done = false;
 
     http_data_unref(q->response_data);
@@ -2268,6 +2273,20 @@ http_query_timeout (http_query *q, int timeout)
     }
 }
 
+/* Set 'no_need_response_body' flag
+ *
+ * This flag notifies, that http_query issued is only interested
+ * in the HTTP response headers, not body
+ *
+ * If this flag is set, after successful reception of response
+ * HTTP header, errors in fetching response body is ignored
+ */
+void
+http_query_no_need_response_body (http_query *q)
+{
+    q->no_need_response_body = true;
+}
+
 /* Cancel query timeout timer
  */
 static void
@@ -2408,6 +2427,29 @@ http_query_redirect (http_query *q, const char *method)
     return NULL;
 }
 
+/* Check if I/O error should be ignored for this query
+ */
+static bool
+http_query_ignore_error (http_query *q)
+{
+    int status;
+
+    /* Headers must be received */
+    if (!q->http_headers_received) {
+        return false;
+    }
+
+    /* Depending on HTTP status, response body may be irrelevant */
+    status = q->http_parser.status_code;
+    switch (status / 100) {
+        case 1: case 3: case 4: case 5:
+            return true;
+    }
+
+    /* If `no_need_response_body' is set, ignore the error */
+    return q->no_need_response_body;
+}
+
 /* Complete query processing
  */
 static void
@@ -2420,6 +2462,13 @@ http_query_complete (http_query *q, error err)
 
     /* Unlink query from a client */
     ll_del(&q->chain);
+
+    /* In some cases, I/O error can be ignored. Check for that */
+    if (err != NULL && http_query_ignore_error(q)) {
+        log_debug(client->log, "HTTP %s %s: %s (ignored)", q->method,
+                http_uri_str(q->uri), ESTRING(err));
+        err = NULL;
+    }
 
     /* Issue log messages */
     q->err = err;
@@ -2505,6 +2554,8 @@ http_query_on_headers_complete (http_parser *parser)
                 q->method,
                 http_uri_str(q->uri),
                 http_query_status(q));
+
+        q->http_headers_received = true;
 
         if (q->onrxhdr != NULL) {
             q->onrxhdr(q->client->ptr, q);

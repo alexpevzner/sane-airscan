@@ -61,12 +61,12 @@ format `protocol:Device Name:URL`.  The examples above could be written as
 `wsd:Kyocera WSD:http://192.168.1.102:5358/WSDScanner`.
 
 To figure out URLs of available devices, the simplest way is to
-run a supplied `airscan-discover` tool on a computer connected with
+run the supplied `airscan-discover(1)` tool on a computer connected with
 scanner to the same LAN segment. On success, this program will
 dump to its standard output a list of discovered devices in a
 format suitable for inclusion into the configuration file.
 
-If running `airscan-discover` on same LAN segment as a scanner is not
+If running `airscan-discover(1)` on the same LAN segment as a scanner is not
 possible, you will have to follow a hard way. Your administrator must know
 device IP address, consult your device manual for the eSCL port, and
 the URL path component most likely is the "/eSCL", though on some
@@ -88,23 +88,23 @@ the following options are supported:
     [options]
     ; If there are a lot of scanners around and you are only
     ; interested in few of them, disable auto discovery and
-    ; configure scanners manually
+    ; configure scanners manually.
     discovery = enable | disable
 
     ; Choose what SANE apps will show in a list of devices:
-    ; scanner network name (the default) or hardware model name
+    ; scanner network name (the default) or hardware model name.
     model = network | hardware
 
     ; If device supports both eSCL and WSD protocol, sane-airscan
     ; may either choose the "best" protocol automatically, or
     ; expose all variants for user, allowing manual protocol selection.
-    ; The default is "auto"
+    ; The default is "auto".
     protocol = auto | manual
 
     ; Discovery of WSD devices may be "fast" or "full". The "fast"
     ; mode works as fast as DNS-SD discovery, but in some cases
     ; may be unreliable. The "full" mode is slow and reliable.
-    ; This is also possible to disable automatic discovery
+    ; It is also possible to disable automatic discovery
     ; of WSD devices. The default is "fast".
     ws-discovery = fast | full | off
 
@@ -131,7 +131,7 @@ as a scanner, it's enough if WSD scanner is discoverable as a printer
 via DNS-SD).
 
 Blacklisting only affects automatic discovery, and doesn't
-affect manually configured devices
+affect manually configured devices.
 
 ## DEBUGGING
 
@@ -182,7 +182,7 @@ project page: **https://github.com/alexpevzner/sane-airscan**
 
 ## SEE ALSO
 
-sane(7), scanimage(1), xsane(1), airscan-discover(1)
+**sane(7), scanimage(1), xsane(1), airscan-discover(1)**
 
 ## AUTHOR
 Alexander Pevzner <pzz@apevzner.com\>

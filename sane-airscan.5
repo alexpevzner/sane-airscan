@@ -1,135 +1,92 @@
-.\" generated with Ronn/v0.7.3
-.\" http://github.com/rtomayko/ronn/tree/0.7.3
-.
-.TH "SANE\-AIRSCAN" "5" "May 2021" "" "AirScan (eSCL) and WSD SANE backend"
-.
+.\" generated with Ronn-NG/v0.9.1
+.\" http://github.com/apjanke/ronn-ng/tree/0.9.1
+.TH "SANE\-AIRSCAN" "5" "May 2022" "" "AirScan (eSCL) and WSD SANE backend"
 .SH "NAME"
 \fBsane\-airscan\fR \- SANE backend for AirScan (eSCL) and WSD scanners and MFP
-.
 .SH "DESCRIPTION"
 The \fBsane\-airscan\fR is the universal backend for "driverless" document scanning\. Currently it supports two protocols:
-.
 .IP "" 4
-.
 .nf
-
 1\. eSCL, also known as AirScan or AirPrint scan
 2\. WSD, also known as WS\-Scan
-.
 .fi
-.
 .IP "" 0
-.
 .SH "CONFIGURATION"
 The sane\-airscan loads its configuration files from the following places:
-.
 .IP "" 4
-.
 .nf
-
 1\. /etc/sane\.d/airscan\.conf
 2\. /etc/sane\.d/airscan\.d/*
-.
 .fi
-.
 .IP "" 0
-.
 .P
 The configuration file syntax is very similar to the \.INI file syntax\. It consist of sections, each section contains some variables\. Comments are started from # or ; characters and continies until end of line
-.
 .IP "" 4
-.
 .nf
-
 # This is a comment
 [section 1]
 variable 1 = value 1  ; and another comment
 variable 2 = value 2
-.
 .fi
-.
 .IP "" 0
-.
 .P
 Leading and trailing spaces of variable name and value are striped\. If you want to preserve them, put name or value into quotes ("like this")\.
-.
 .SH "CONFIGURATION OF DEVICES"
 If scanner and computer are connected to the same LAN segment, everything expected to "just work" out of box, without any need of manual configuration\.
-.
 .P
 However, in some cases manual configuration can be useful\. For example:
-.
 .IP "" 4
-.
 .nf
-
 1\. If computer and scanner are connected via IP router
 2\. There are a lot of devices on a corporate network, but
    only few of them are interesting
 3\. Automatic discovery works unreliable
-.
 .fi
-.
 .IP "" 0
-.
 .P
 To manually configure a device, add the following section to the configuration file:
-.
 .IP "" 4
-.
 .nf
-
 [devices]
 "Kyocera eSCL" = http://192\.168\.1\.102:9095/eSCL, eSCL
 "Kyocera WSD" = http://192\.168\.1\.102:5358/WSDScanner, WSD
 "Device I do not want to see" = disable
-.
 .fi
-.
 .IP "" 0
-.
 .P
 The \fB[devices]\fR section contains all manually configured devices, one line per device, and each line contains a device name on a left side of equation and device URL on a rights side, followed by protocol (eSCL or WSD)\. If protocol is omitted, eSCL is assumed\. You may also disable particular device by using the \fBdisable\fR keyword instead of URL\.
-.
 .P
 In addition, you can manually configure a device by directly passing its URL in a device name without adding it to the configuration file\. This takes the format \fBprotocol:Device Name:URL\fR\. The examples above could be written as \fBescl:Kyocera eSCL:http://192\.168\.1\.102:9095/eSCL\fR and \fBwsd:Kyocera WSD:http://192\.168\.1\.102:5358/WSDScanner\fR\.
-.
 .P
-To figure out URLs of available devices, the simplest way is to run a supplied \fBairscan\-discover\fR tool on a computer connected with scanner to the same LAN segment\. On success, this program will dump to its standard output a list of discovered devices in a format suitable for inclusion into the configuration file\.
-.
+To figure out URLs of available devices, the simplest way is to run the supplied \fBairscan\-discover(1)\fR tool on a computer connected with scanner to the same LAN segment\. On success, this program will dump to its standard output a list of discovered devices in a format suitable for inclusion into the configuration file\.
 .P
-If running \fBairscan\-discover\fR on same LAN segment as a scanner is not possible, you will have to follow a hard way\. Your administrator must know device IP address, consult your device manual for the eSCL port, and the URL path component most likely is the "/eSCL", though on some devices it may differ\. Discovering WSD URLs doing this way is much harder, because it is very difficult to guess TCP port and URL path, that in a case of eSCL\.
-.
+If running \fBairscan\-discover(1)\fR on the same LAN segment as a scanner is not possible, you will have to follow a hard way\. Your administrator must know device IP address, consult your device manual for the eSCL port, and the URL path component most likely is the "/eSCL", though on some devices it may differ\. Discovering WSD URLs doing this way is much harder, because it is very difficult to guess TCP port and URL path, that in a case of eSCL\.
 .P
 For eSCL devices, the URL can also use the unix:// scheme, such as unix://scanner\.sock/eSCL\. The "host" from the URL is a file name that will be searched for in the directory specified by socket_dir (see below)\. When connecting to the scanner, all traffic will be sent to the specified UNIX socket instead of a TCP connection\.
-.
 .SH "CONFIGURATION OPTIONS"
 Miscellaneous options all goes to the \fB[options]\fR section\. Currently the following options are supported:
-.
 .IP "" 4
-.
 .nf
-
 [options]
 ; If there are a lot of scanners around and you are only
 ; interested in few of them, disable auto discovery and
-; configure scanners manually
+; configure scanners manually\.
 discovery = enable | disable
 
 ; Choose what SANE apps will show in a list of devices:
-; scanner network name (the default) or hardware model name
+; scanner network name (the default) or hardware model name\.
 model = network | hardware
 
 ; If device supports both eSCL and WSD protocol, sane\-airscan
 ; may either choose the "best" protocol automatically, or
 ; expose all variants for user, allowing manual protocol selection\.
-; The default is "auto"
+; The default is "auto"\.
 protocol = auto | manual
 
 ; Discovery of WSD devices may be "fast" or "full"\. The "fast"
 ; mode works as fast as DNS\-SD discovery, but in some cases
 ; may be unreliable\. The "full" mode is slow and reliable\.
-; This is also possible to disable automatic discovery
+; It is also possible to disable automatic discovery
 ; of WSD devices\. The default is "fast"\.
 ws\-discovery = fast | full | off
 
@@ -137,44 +94,29 @@ ws\-discovery = fast | full | off
 ; socket name (not a full path)\.  The name will be searched for in the
 ; directory specified here\. The default is /var/run\.
 socket_dir = /path/to/directory
-.
 .fi
-.
 .IP "" 0
-.
 .SH "BLACKLISTING DEVICES"
 This feature can be useful, if you are on a very big network and have a lot of devices around you, while interesting only in a few of them\.
-.
 .IP "" 4
-.
 .nf
-
 [blacklist]
 model = "Xerox*"       ; blacklist by model name
 name  = "HP*"          ; blacklist by network name
 ip    = 192\.168\.0\.1    ; blacklist by address
 ip    = 192\.168\.0\.0/24 ; blacklist the whole subnet
-.
 .fi
-.
 .IP "" 0
-.
 .P
 Network names come from DNS\-SD, WS\-Discovery doesn\'t provide this information\. For filtering by network name to work, Avahi must be enabled and device must be discoverable via DNS\-SD (not necessarily as a scanner, it\'s enough if WSD scanner is discoverable as a printer via DNS\-SD)\.
-.
 .P
-Blacklisting only affects automatic discovery, and doesn\'t affect manually configured devices
-.
+Blacklisting only affects automatic discovery, and doesn\'t affect manually configured devices\.
 .SH "DEBUGGING"
 sane\-airscan provides very good instrumentation for troubleshooting without physical access to the problemmatic device\.
-.
 .P
 Debugging facilities can be controlled using the \fB[debug]\fR section of the configuration file:
-.
 .IP "" 4
-.
 .nf
-
 [debug]
 ; Enable or disable console logging
 enable = false | true
@@ -188,36 +130,25 @@ trace = path
 
 ; Hex dump all traffic to the trace file (very verbose!)
 hexdump = false | true
-.
 .fi
-.
 .IP "" 0
-.
 .SH "FILES"
-.
 .TP
 \fB/etc/sane\.d/airscan\.conf\fR, \fB/etc/sane\.d/airscan\.d/*\fR
 The backend configuration files
-.
 .TP
 \fB/usr/LIBDIR/sane/libsane\-airscan\.so\fR
 The shared library implementing this backend
-.
 .SH "ENVIRONMENT"
-.
 .TP
 \fBSANE_DEBUG_AIRSCAN\fR
 This variable if set to \fBtrue\fR or non\-zero numerical value, enables debug messages, that are printed to stdout
-.
 .TP
 \fBSANE_CONFIG_DIR\fR
 This variable alters the search path for configuration files\. This is a colon\-separated list of directories\. These directories are searched for the airscan\.conf configuration file and for the airscan\.d subdirectory, before the standard path (/etc/sane\.d) is searched\.
-.
 .SH "BUGS AND SUPPORT"
 If you have found a bug, please file a GitHub issue on a GitHub project page: \fBhttps://github\.com/alexpevzner/sane\-airscan\fR
-.
 .SH "SEE ALSO"
-sane(7), scanimage(1), xsane(1), airscan\-discover(1)
-.
+\fBsane(7), scanimage(1), xsane(1), airscan\-discover(1)\fR
 .SH "AUTHOR"
 Alexander Pevzner <pzz@apevzner\.com>

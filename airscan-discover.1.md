@@ -39,7 +39,7 @@ file, that can be directly added to `/etc/sane.d/airscan.conf`
 
 ## SEE ALSO
 
-sane(7), sane-airscan(5)
+**sane(7), sane-airscan(5)**
 
 ## AUTHOR
 Alexander Pevzner <pzz@apevzner.com\>

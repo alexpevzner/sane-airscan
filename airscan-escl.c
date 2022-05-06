@@ -342,6 +342,40 @@ escl_devcaps_source_parse_setting_profiles (xml_rd *xml, devcaps_source *src)
 }
 
 
+/* Parse ADF justification
+ */
+static void
+escl_devcaps_parse_justification (xml_rd *xml,
+        ID_JUSTIFICATION *x, ID_JUSTIFICATION *y)
+{
+    xml_rd_enter(xml);
+
+    *x = *y = ID_JUSTIFICATION_UNKNOWN;
+
+    for (; !xml_rd_end(xml); xml_rd_next(xml)) {
+        if(xml_rd_node_name_match(xml, "pwg:XImagePosition")){
+            const char *v = xml_rd_node_value(xml);
+            if (!strcmp(v, "Right")){
+                *x = ID_JUSTIFICATION_RIGHT;
+            } else if (!strcmp(v, "Center")) {
+                *x = ID_JUSTIFICATION_CENTER;
+            } else if (!strcmp(v, "Left")) {
+                *x = ID_JUSTIFICATION_LEFT;
+            }
+        } else if(xml_rd_node_name_match(xml, "pwg:YImagePosition")){
+            const char *v = xml_rd_node_value(xml);
+            if (!strcmp(v, "Top")){
+                *y = ID_JUSTIFICATION_TOP;
+            } else if (!strcmp(v, "Center")) {
+                *y = ID_JUSTIFICATION_CENTER;
+            } else if (!strcmp(v, "Bottom")) {
+                *y = ID_JUSTIFICATION_BOTTOM;
+            }
+        }
+    }
+    xml_rd_leave(xml);
+}
+
 /* Parse source capabilities. Returns NULL on success, error string otherwise
  */
 static error
@@ -513,6 +547,10 @@ escl_devcaps_parse (proto_handler_escl *escl,
                     err = escl_devcaps_source_parse(xml,
                         &caps->src[ID_SOURCE_ADF_DUPLEX]);
                 }
+                else if (xml_rd_node_name_match(xml, "scan:Justification")) {
+                    escl_devcaps_parse_justification(xml,
+                        &caps->justification_x, &caps->justification_y);
+                }
                 xml_rd_next(xml);
             }
             xml_rd_leave(xml);
@@ -588,6 +626,7 @@ escl_devcaps_decode (const proto_ctx *ctx, devcaps *caps)
 
     caps->units = 300;
     caps->protocol = ctx->proto->name;
+    caps->justification_x = caps->justification_y = ID_JUSTIFICATION_UNKNOWN;
 
     /* Most of devices that have Server: HP_Compact_Server
      * in their HTTP response header, require this quirk
@@ -741,6 +780,17 @@ escl_scan_query (const proto_ctx *ctx)
     /* Send request to device */
     query = escl_http_query(ctx, "ScanJobs", "POST",
         xml_wr_finish_compact(xml));
+
+    /* Kyocera ECOSYS M6526cdn drops TLS connection after sending
+     * response HTTP headers, but before the body transfer is completed.
+     *
+     * As for this request we are only interested in the response
+     * headers, we can ignore this kind of error
+     *
+     * See here for details:
+     *   https://github.com/alexpevzner/sane-airscan/issues/163
+     */
+    http_query_no_need_response_body(query);
 
     /* It's a dirty hack
      *

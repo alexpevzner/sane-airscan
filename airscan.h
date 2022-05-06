@@ -628,7 +628,7 @@ __ptr_array_del (void **a, int i)
 const char *
 os_homedir (void);
 
-/* Get base name of the calling program. 
+/* Get base name of the calling program.
  * There is no need to free the returned string
  *
  * May return NULL in a case of error
@@ -719,6 +719,28 @@ id_source_sane_name (ID_SOURCE id);
  */
 ID_SOURCE
 id_source_by_sane_name (const char *name);
+
+/* ID_JUSTIFICATION represents hardware-defined ADF justification
+ * This value exposed to the SANE API as a couple of read-only
+ * options, separate for width and height justification.
+ * Not all scanners provide this information
+ */
+typedef enum {
+    ID_JUSTIFICATION_UNKNOWN = -1,
+    ID_JUSTIFICATION_LEFT,
+    ID_JUSTIFICATION_CENTER,
+    ID_JUSTIFICATION_RIGHT,
+    ID_JUSTIFICATION_TOP,
+    ID_JUSTIFICATION_BOTTOM,
+
+    NUM_ID_JUSTIFICATION
+} ID_JUSTIFICATION;
+
+/* id_justification_sane_name returns SANE name for the width justification
+ * For unknown ID returns NULL
+ */
+const char*
+id_justification_sane_name (ID_JUSTIFICATION id);
 
 /* ID_COLORMODE represents color mode
  */
@@ -1805,6 +1827,17 @@ http_query_new_relative(http_client *client,
 void
 http_query_timeout (http_query *q, int timeout);
 
+/* Set 'no_need_response_body' flag
+ *
+ * This flag notifies, that http_query issued is only interested
+ * in the HTTP response headers, not body
+ *
+ * If this flag is set, after successful reception of response
+ * HTTP header, errors in fetching response body is ignored
+ */
+void
+http_query_no_need_response_body (http_query *q);
+
 /* Set forcing port to be added to the Host header for this query.
  *
  * This function may be called multiple times (each subsequent call overrides
@@ -2446,6 +2479,10 @@ enum {
     OPT_GAMMA,
     OPT_NEGATIVE,
 
+    /* Read-only options for ADF justification */
+    OPT_JUSTIFICATION_X,
+    OPT_JUSTIFICATION_Y,
+
     /* Total count of options, computed by compiler */
     NUM_OPTIONS
 };
@@ -2453,9 +2490,25 @@ enum {
 /* String constants for certain SANE options values
  * (missed from sane/sameopt.h)
  */
-#define OPTVAL_SOURCE_PLATEN      "Flatbed"
-#define OPTVAL_SOURCE_ADF_SIMPLEX "ADF"
-#define OPTVAL_SOURCE_ADF_DUPLEX  "ADF Duplex"
+#define OPTVAL_SOURCE_PLATEN        "Flatbed"
+#define OPTVAL_SOURCE_ADF_SIMPLEX   "ADF"
+#define OPTVAL_SOURCE_ADF_DUPLEX    "ADF Duplex"
+#define OPTVAL_JUSTIFICATION_LEFT   "left"
+#define OPTVAL_JUSTIFICATION_CENTER "center"
+#define OPTVAL_JUSTIFICATION_RIGHT  "right"
+#define OPTVAL_JUSTIFICATION_TOP    "top"
+#define OPTVAL_JUSTIFICATION_BOTTOM "bottom"
+
+/* Define options not included in saneopts.h */
+#define SANE_NAME_ADF_JUSTIFICATION_X  "adf-justification-x"
+#define SANE_TITLE_ADF_JUSTIFICATION_X SANE_I18N("ADF Width Justification")
+#define SANE_DESC_ADF_JUSTIFICATION_X  \
+        SANE_I18N("ADF width justification (left/right/center)")
+
+#define SANE_NAME_ADF_JUSTIFICATION_Y  "adf-justification-y"
+#define SANE_TITLE_ADF_JUSTIFICATION_Y SANE_I18N("ADF Height Justification")
+#define SANE_DESC_ADF_JUSTIFICATION_Y  \
+        SANE_I18N("ADF height justification (top/bottom/center)")
 
 /* Check if option belongs to image enhancement group
  */
@@ -2566,6 +2619,11 @@ typedef struct {
 
     /* Sources */
     devcaps_source *src[NUM_ID_SOURCE];  /* Missed sources are NULL */
+
+    /* ADF Justification */
+    ID_JUSTIFICATION justification_x;   /* Width justification*/
+    ID_JUSTIFICATION justification_y;   /* Height justification*/
+
 } devcaps;
 
 /* Initialize Device Capabilities
@@ -2609,6 +2667,7 @@ typedef struct {
     SANE_Fixed             highlight;         /* 0.0 ... +100.0 */
     SANE_Fixed             gamma;             /* Small positive value */
     bool                   negative;          /* Flip black and white */
+
 } devopt;
 
 /* Initialize device options

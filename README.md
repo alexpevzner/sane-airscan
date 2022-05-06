@@ -52,21 +52,31 @@ Legend:
 
 * **Yes** - device works perfectly
 * **No** - protocol not supported by device
+* **?** - device works with `sane-airscan`, but protocol is not reported by user
 * Space - author has no information on this mode/device combination
 
 | Device                             | eSCL mode                 | WSD mode                  |
 | ---------------------------------- | :-----------------------: | :-----------------------: |
 | Brother ADS-2700W                  | No                        | Yes                       |
+| Brother DCP-7055W                  | No                        | Yes                       |
 | Brother DCP-9020CDW                | No                        | Yes                       |
+| Brother DCP-J552DW                 | No                        | Yes                       |
 | Brother DCP-L2540DW                | No                        | Yes                       |
 | Brother DCP-L2550DN / DCP-L2550DW  | Yes                       |                           |
+| Brother HL-L2380DW series          | No                        | Yes                       |
 | Brother HL-L2395DW series          | Yes                       |                           |
+| Brother MFC-7360N                  | No                        | Yes                       |
+| Brother MFC-8710DW                 | No                        | Yes                       |
+| Brother MFC-J1300DW                | Yes                       |                           |
+| Brother MFC-J4410DW                | No                        | Yes                       |
 | Brother MFC-J485DW                 | Yes                       |                           |
+| Brother MFC-J625DW                 | No                        | Yes                       |
 | Brother MFC-L2700DW                | No                        | Yes                       |
 | Brother MFC-L2710DW                | Yes                       | Yes                       |
 | Brother MFC-L2720DW                | No                        | Yes                       |
 | Brother MFC-L2750DW                | Yes                       | Yes                       |
 | Canon D570                         | Yes                       |                           |
+| Canon G600 series                  | Yes                       |                           |
 | Canon imageCLASS MF642C/643C/644C  | Yes                       |                           |
 | Canon imageCLASS MF743cdw          | Yes<sup>[1](#note1)</sup> |                           |
 | Canon imageRUNNER 2625/2630        | Yes                       | Yes                       |
@@ -79,11 +89,14 @@ Legend:
 | Canon LiDE 400                     | Yes<sup>[3](#note3)</sup> |                           |
 | Canon MB5100 series                | Yes                       |                           |
 | Canon MB5400 series                | Yes                       | Yes                       |
+| Canon MF110/910                    | Yes                       |                           |
 | Canon MF240 Series                 | No                        | Yes<sup>[4](#note4)</sup> |
 | Canon MF260 Series                 | Yes                       | Yes<sup>[4](#note4)</sup> |
 | Canon MF410 Series                 | Yes                       | Yes                       |
 | Canon MF440 Series                 | Yes                       | Yes                       |
+| Canon MF645Cx                      | Yes                       |                           |
 | Canon MF745C/746C                  | Yes                       | Yes                       |
+| Canon MG5300 series                | No                        | Yes                       |
 | Canon PIXMA G3000 series           | No                        | Yes                       |
 | Canon PIXMA MG3600 series          | Yes                       |                           |
 | Canon PIXMA MG5500 Series          | No                        | Yes                       |
@@ -94,23 +107,34 @@ Legend:
 | Canon TR7500 Series                | No                        | Yes                       |
 | Canon TS 3100                      | Yes                       |                           |
 | Canon TS 3300                      | Yes                       |                           |
+| Canon TS 3400                      | Yes                       |                           |
 | Canon TS 6151                      | Yes                       |                           |
 | Canon TS 6200 series               | Yes                       | Yes                       |
 | Canon TS 6400 series               | Yes                       |                           |
 | Dell C1765nfw Color MFP            | No                        | Yes                       |
 | Dell C2665dnf Color Laser Printer  | No                        | Yes                       |
+| Dell C3765dnf Color MFP            | No                        | Yes                       |
+| EPSON ET-2710 Series               | No                        | Yes                       |
 | EPSON ET-2750 Series               | Yes                       |                           |
+| EPSON ET-2760 Series               | Yes                       |                           |
+| EPSON ET-2810 Series               | No                        | Yes                       |
+| EPSON ET-2850 Series               | Yes                       |                           |
+| EPSON ET-3750 Series               | Yes                       |                           |
+| EPSON ET-4850 Series               | Yes                       |                           |
+| EPSON ET-M2170 Series              | Yes                       |                           |
 | EPSON Stylus SX535WD               | No                        | Yes                       |
 | EPSON WF-7710 Series               | No                        | Yes                       |
 | EPSON XP-2100 Series               | No                        | Yes                       |
 | EPSON XP-340 Series                | Yes                       |                           |
 | EPSON XP-442 445 Series            | Yes                       |                           |
+| EPSON XP-5100 Series               | Yes                       |                           |
 | EPSON XP-6100 Series               | Yes                       |                           |
 | EPSON XP-7100 Series               | Yes                       |                           |
 | EPSON XP-8600 Series               | Yes                       |                           |
 | HP Color Laserjet MFP m178-m181    | Yes                       |                           |
 | HP Color LaserJet MFP M182nw       | Yes                       |                           |
 | HP Color LaserJet MFP M281fdw      | Yes                       |                           |
+| HP Color LaserJet MFP M283fdw      | Yes                       |                           |
 | HP Color LaserJet MFP M477fdw      | Yes                       | Yes                       |
 | HP Color LaserJet Pro M478f-9f     | Yes                       |                           |
 | HP Color LaserJet Pro MFP M277dw   | Yes                       |                           |
@@ -121,6 +145,7 @@ Legend:
 | HP DeskJet 5000 series             | Yes                       |                           |
 | HP DeskJet 5200 series             | Yes                       |                           |
 | HP ENVY 4500                       | Yes                       |                           |
+| HP ENVY 5055 series                | Yes                       |                           |
 | HP ENVY 5530 series                | Yes                       |                           |
 | HP ENVY 5540                       | Yes                       |                           |
 | HP ENVY 5640                       | Yes                       |                           |
@@ -128,6 +153,7 @@ Legend:
 | HP ENVY Photo 7800 series          | Yes                       |                           |
 | HP ENVY Pro 6400 series            | Yes                       |                           |
 | HP LaserJet 200 colorMFP M276n     | No                        | Yes                       |
+| HP LaserJet MFP E62655             | Yes                       |                           |
 | HP LaserJet MFP M130fw             | No                        | Yes                       |
 | HP LaserJet MFP M227sdn            | Yes                       |                           |
 | HP LaserJet MFP M426dw             | Yes                       |                           |
@@ -136,9 +162,11 @@ Legend:
 | HP LaserJet Pro M28w               | Yes                       | Yes                       |
 | HP LaserJet Pro MFP 148fdw         | Yes                       |                           |
 | HP LaserJet Pro MFP M125 series    | No                        | Yes                       |
+| HP LaserJet Pro MFP M225dn         | No                        | Yes                       |
 | HP LaserJet Pro MFP M428dw         | Yes                       |                           |
 | HP LaserJet Pro MFP M521 series    | No                        | Yes                       |
 | HP Laser MFP 131 133 135-138       | Yes                       |                           |
+| HP Neverstop Laser MFP 1202nw      | ?                         | ?                         |
 | HP OfficeJet 3830 series           | Yes                       |                           |
 | HP Officejet 4630                  | Yes                       |                           |
 | HP Officejet Pro 6970              | Yes                       |                           |
@@ -148,8 +176,10 @@ Legend:
 | HP OfficeJet Pro 8020 Series       | Yes                       |                           |
 | HP OfficeJet Pro 8730              | Yes                       | Yes                       |
 | HP OfficeJet Pro 9010 series       | Yes                       |                           |
+| HP ScanJet Pro 3500 fn1            | Yes<sup>[3](#note3)</sup> |                           |
 | HP ScanJet Pro 4500 fn1            | Yes                       |                           |
 | HP Smart Tank Plus 550 series      | Yes                       |                           |
+| Kyocera ECOSYS M2035dn             | Yes                       | Yes<sup>[5](#note5)</sup> |
 | Kyocera ECOSYS M2040dn             | Yes                       | Yes<sup>[5](#note5)</sup> |
 | Kyocera ECOSYS M5521cdw            | Yes                       | Yes<sup>[5](#note5)</sup> |
 | Kyocera ECOSYS M5526cdw            | Yes                       |                           |
@@ -157,6 +187,7 @@ Legend:
 | Lexmark MB2236adw                  | Yes                       |                           |
 | Lexmark MC2535adwe                 | Yes                       |                           |
 | Lexmark MC3224adwe                 | Yes                       |                           |
+| Lexmark MC3326adwe                 | Yes                       |                           |
 | OKI-MC853                          | Yes                       |                           |
 | Panasonic KV-S1058Y                | No                        | Yes                       |
 | Pantum M6500W series               | Yes                       |                           |
@@ -165,8 +196,10 @@ Legend:
 | Samsung M267x 287x Series          | No                        | Yes                       |
 | Samsung M288x Series               | No                        | Yes                       |
 | Samsung M337x 387x 407x Series     | No                        | Yes<sup>[8](#note8)</sup> |
+| Samsung SCX-3400 Series            | No                        | Yes                       |
 | Xerox B205                         | Yes                       | Yes                       |
 | Xerox B215                         | Yes                       |                           |
+| Xerox C235                         | Yes                       |                           |
 | Xerox VersaLink B405               | Yes                       |                           |
 | Xerox WorkCentre 3025              | No                        | Yes                       |
 | TODO                               |                           |                           |

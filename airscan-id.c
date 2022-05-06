@@ -177,6 +177,28 @@ id_format_short_name (ID_FORMAT id)
     return name ? name : mime;
 }
 
+
+/******************** ID_JUSTIFICATION ********************/
+/* id_justification_sane_name_table represents ID_JUSTIFICATION to
+ * SANE name mapping
+ */
+static id_name_table id_justification_sane_name_table[] = {
+    {ID_JUSTIFICATION_LEFT,     OPTVAL_JUSTIFICATION_LEFT},
+    {ID_JUSTIFICATION_CENTER,   OPTVAL_JUSTIFICATION_CENTER},
+    {ID_JUSTIFICATION_RIGHT,    OPTVAL_JUSTIFICATION_RIGHT},
+    {ID_JUSTIFICATION_TOP,      OPTVAL_JUSTIFICATION_TOP},
+    {ID_JUSTIFICATION_BOTTOM,   OPTVAL_JUSTIFICATION_BOTTOM},
+};
+
+/* id_justification_sane_name returns SANE name for the justification
+ * For unknown ID returns NULL
+ */
+const char*
+id_justification_sane_name (ID_JUSTIFICATION id)
+{
+    return id_name(id, id_justification_sane_name_table);
+}
+
 /******************** PROTO_OP ********************/
 /* proto_op_name_table represents PROTO_OP to its
  * name mappind

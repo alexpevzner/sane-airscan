@@ -11,7 +11,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-
 /* Static variables */
 static const SANE_Range devopt_percent_range = {
     .min = SANE_FIX(-100.0),
@@ -170,6 +169,7 @@ devopt_rebuild_opt_desc (devopt *opt)
     devcaps_source          *src = opt->caps.src[opt->src];
     unsigned int            colormodes = devopt_available_colormodes(src);
     int                     i;
+    const char              *s;
 
     memset(opt->desc, 0, sizeof(opt->desc));
 
@@ -379,6 +379,34 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->type = SANE_TYPE_BOOL;
     desc->size = sizeof(SANE_Bool);
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT | SANE_CAP_EMULATED;
+
+    /* OPT_JUSTIFICATION_X */
+    desc = &opt->desc[OPT_JUSTIFICATION_X];
+    desc->name = SANE_NAME_ADF_JUSTIFICATION_X;
+    desc->title = SANE_TITLE_ADF_JUSTIFICATION_X;
+    desc->desc = SANE_DESC_ADF_JUSTIFICATION_X;
+    desc->type = SANE_TYPE_STRING;
+    desc->cap = SANE_CAP_SOFT_DETECT;
+    if (opt->caps.justification_x == ID_JUSTIFICATION_UNKNOWN) {
+        desc->cap |= SANE_CAP_INACTIVE;
+    }
+
+    s = id_justification_sane_name(opt->caps.justification_x);
+    desc->size = (s ? strlen(s) : 0) + 1;
+
+    /* OPT_JUSTIFICATION_Y */
+    desc = &opt->desc[OPT_JUSTIFICATION_Y];
+    desc->name = SANE_NAME_ADF_JUSTIFICATION_Y;
+    desc->title = SANE_TITLE_ADF_JUSTIFICATION_Y;
+    desc->desc = SANE_DESC_ADF_JUSTIFICATION_Y;
+    desc->type = SANE_TYPE_STRING;
+    desc->cap = SANE_CAP_SOFT_DETECT;
+    if (opt->caps.justification_y == ID_JUSTIFICATION_UNKNOWN) {
+        desc->cap |= SANE_CAP_INACTIVE;
+    }
+
+    s = id_justification_sane_name(opt->caps.justification_y);
+    desc->size = (s ? strlen(s) : 0) + 1;
 }
 
 /* Update scan parameters, according to the currently set
@@ -703,6 +731,7 @@ SANE_Status
 devopt_get_option (devopt *opt, SANE_Int option, void *value)
 {
     SANE_Status status = SANE_STATUS_GOOD;
+    const char  *s;
 
     switch (option) {
     case OPT_NUM_OPTIONS:
@@ -759,6 +788,16 @@ devopt_get_option (devopt *opt, SANE_Int option, void *value)
 
     case OPT_NEGATIVE:
         *(SANE_Bool*)value = opt->negative;
+        break;
+
+    case OPT_JUSTIFICATION_X:
+        s = id_justification_sane_name(opt->caps.justification_x);
+        strcpy(value, s ? s : "");
+        break;
+
+    case OPT_JUSTIFICATION_Y:
+        s = id_justification_sane_name(opt->caps.justification_y);
+        strcpy(value, s ? s : "");
         break;
 
     default:

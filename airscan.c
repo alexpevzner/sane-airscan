@@ -221,7 +221,7 @@ sane_control_option_log (log_ctx *log, const SANE_Option_Descriptor *desc,
         }
     }
 
-    log_debug(log, "API: %s %s: %s %s", 
+    log_debug(log, "API: %s %s: %s %s",
         get ? "get" : "set", option ? desc->name : "(0)", vbuf, ibuf);
 }
 
