@@ -111,7 +111,7 @@ Legend:
 | Canon TS 6151                      | Yes                       |                           |
 | Canon TS 6200 series               | Yes                       | Yes                       |
 | Canon TS 6400 series               | Yes                       |                           |
-| Canon TS 8230 series               |                           | Yes                       |
+| Canon TS 8230 series               | No                        | Yes                       |
 | Dell C1765nfw Color MFP            | No                        | Yes                       |
 | Dell C2665dnf Color Laser Printer  | No                        | Yes                       |
 | Dell C3765dnf Color MFP            | No                        | Yes                       |
