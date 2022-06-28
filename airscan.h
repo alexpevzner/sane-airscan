@@ -28,6 +28,67 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
+#ifdef __APPLE__
+#include <machine/endian.h>
+#include <libkern/OSByteOrder.h>
+
+#define htobe16(x) OSSwapHostToBigInt16(x)
+#define htole16(x) OSSwapHostToLittleInt16(x)
+#define be16toh(x) OSSwapBigToHostInt16(x)
+#define le16toh(x) OSSwapLittleToHostInt16(x)
+
+#define htobe32(x) OSSwapHostToBigInt32(x)
+#define htole32(x) OSSwapHostToLittleInt32(x)
+#define be32toh(x) OSSwapBigToHostInt32(x)
+#define le32toh(x) OSSwapLittleToHostInt32(x)
+
+#define htobe64(x) OSSwapHostToBigInt64(x)
+#define htole64(x) OSSwapHostToLittleInt64(x)
+#define be64toh(x) OSSwapBigToHostInt64(x)
+#define le64toh(x) OSSwapLittleToHostInt64(x)
+
+#define __BIG_ENDIAN    BIG_ENDIAN
+#define __LITTLE_ENDIAN LITTLE_ENDIAN
+#define __BYTE_ORDER    BYTE_ORDER
+
+#endif /* __APPLE__ */
+
+#ifndef HAVE_MEMRCHR
+
+#include <sys/types.h>
+
+#ifndef SOCK_NONBLOCK
+#include <fcntl.h>
+# define SOCK_NONBLOCK O_NONBLOCK
+#endif
+
+#ifndef SOCK_CLOEXEC
+#include <fcntl.h>
+# define SOCK_CLOEXEC O_CLOEXEC
+#endif
+
+
+/*
+ * Reverse memchr()
+ * Find the last occurrence of 'c' in the buffer 's' of size 'n'.
+ */
+static inline void *
+memrchr(const void *s, int c, size_t n)
+{
+    const unsigned char *cp;
+
+    if (n != 0) {
+       cp = (unsigned char *)s + n;
+       do {
+           if (*(--cp) == (unsigned char)c)
+               return (void *)cp;
+       } while (--n != 0);
+    }
+    return (void *)0;
+}
+#endif /* HAVE_MEMRCHR */
+
+
 #ifdef  __cplusplus
 extern "C" {
 #endif

@@ -15,6 +15,9 @@
 
 SANE_Handle handle;
 
+extern int sigaction(int, const struct sigaction * __restrict,
+        struct sigaction * __restrict);
+
 void
 sigint_handler (int unused)
 {

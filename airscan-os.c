@@ -20,6 +20,8 @@
 #if defined(__OpenBSD__) || defined(__FreeBSD__)
 #   include <sys/types.h>
 #   include <sys/sysctl.h>
+#elif defined(__APPLE__)
+#   include <mach-o/dyld.h>
 #endif
 
 /* Static variables */
@@ -97,6 +99,13 @@ os_progname_init (void)
     const int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1};
     size_t    len = sizeof(os_progname_buf);
     int       rc = sysctl(mib, 4, os_progname_buf, &len, NULL, 0);
+
+    if (rc < 0) {
+        os_progname_buf[0] = '\0'; /* Just a paranoia */
+    }
+#elif defined(__APPLE__)
+    uint32_t  len = sizeof(os_progname_buf);
+    int       rc = _NSGetExecutablePath(os_progname_buf, &len);
 
     if (rc < 0) {
         os_progname_buf[0] = '\0'; /* Just a paranoia */

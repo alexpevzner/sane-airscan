@@ -34,6 +34,10 @@ pollable_new (void)
 {
 #ifdef OS_HAVE_EVENTFD
     int efd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+#elif __APPLE__
+    int fds[2];
+    int r = pipe(fds);
+    int efd = r < 0 ? r : fds[0];
 #else
     int fds[2];
     int r = pipe2(fds, O_CLOEXEC | O_NONBLOCK);
