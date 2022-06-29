@@ -69,6 +69,7 @@ Legend:
 | Brother MFC-8710DW                 | No                        | Yes                       |
 | Brother MFC-J1300DW                | Yes                       |                           |
 | Brother MFC-J4410DW                | No                        | Yes                       |
+| Brother MFC-J4620DW                | No                        | Yes                       |
 | Brother MFC-J485DW                 | Yes                       |                           |
 | Brother MFC-J625DW                 | No                        | Yes                       |
 | Brother MFC-L2700DW                | No                        | Yes                       |
