@@ -199,6 +199,7 @@ Legend:
 | Samsung M288x Series               | No                        | Yes                       |
 | Samsung M337x 387x 407x Series     | No                        | Yes<sup>[8](#note8)</sup> |
 | Samsung SCX-3400 Series            | No                        | Yes                       |
+| SHARP MX-3060N                     | Yes<sup>[9](#note8)</sup> |                           |
 | Xerox B205                         | Yes                       | Yes                       |
 | Xerox B215                         | Yes                       |                           |
 | Xerox C235                         | Yes                       |                           |
@@ -238,6 +239,9 @@ http://support.ricoh.com/bb_v1oi/pub_e/oi_view/0001047/0001047003/view/scanner/i
 <a name="note8"><sup>[8]</sup></a>: with old firmware (tested with
 V4.00.01.04 APR-09-2013) ADF scan causes device reboot. Firmware update
 helps, version V4.00.02.20 MAY-27-2020 known to work.
+
+<a name="note8"><sup>[8]</sup></a>: eSCL needs to be manually enabled on this device:
+System-settings->Network settings->Airprint settings->Airscan
 
 ### Distros that come with sane-airscan
 
