@@ -106,6 +106,7 @@ Legend:
 | Canon PIXMA TS 9550 Series         | Yes                       |                           |
 | Canon TR4529 (PIXMA TR4500 Series) | Yes                       | Yes                       |
 | Canon TR7500 Series                | No                        | Yes                       |
+| Canon TR8600 Scanner               | Yes                       |                           |
 | Canon TS 3100                      | Yes                       |                           |
 | Canon TS 3300                      | Yes                       |                           |
 | Canon TS 3400                      | Yes                       |                           |
