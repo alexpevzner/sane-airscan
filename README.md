@@ -67,6 +67,7 @@ Legend:
 | Brother HL-L2395DW series          | Yes                       |                           |
 | Brother MFC-7360N                  | No                        | Yes                       |
 | Brother MFC-8710DW                 | No                        | Yes                       |
+| Brother MFC-J1012DW                | Yes                       |                           |
 | Brother MFC-J1300DW                | Yes                       |                           |
 | Brother MFC-J4410DW                | No                        | Yes                       |
 | Brother MFC-J4620DW                | No                        | Yes                       |
