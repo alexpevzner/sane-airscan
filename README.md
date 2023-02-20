@@ -9,7 +9,7 @@ I'm a Russian citizen. Due to sanctions, it seems I've lost control
 over my domain, ***apevzner.com***
 
 As result, I've also lost access to my primary e-mail address,
-mailto:pzz@apevzner.com, under which I'm known to the open source
+pzz@apevzner.com, under which I'm known to the open source
 community.
 
 My e-mail is hosted by Google Workspace and my domain was registered
@@ -32,12 +32,12 @@ distros. Also, Google ChromeOS uses my `sane-airscan` for scanning and
 their IPP over USB implementation was greatly inspired my `ipp-usb`.
 
 My connection to the open source community was always done via
-pzz@gmail.com e-mail address. But now it doesn't work, so I'm in the
+pzz@apevzner.com e-mail address. But now it doesn't work, so I'm in the
 isolation.
 
 If somebody from Google or GoDaddy can read it, please, help!
 
-For now, my backup e-mail address is mailto:apevzner@gmail.com
+For now, my backup e-mail address is apevzner@gmail.com
 
 ### About
 
