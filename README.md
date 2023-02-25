@@ -205,10 +205,11 @@ Legend:
 | HP LaserJet MFP M630               | Yes                       |                           |
 | HP LaserJet Pro M28a               | Yes<sup>[3](#note3)</sup> |                           |
 | HP LaserJet Pro M28w               | Yes                       | Yes                       |
+| HP LaserJet Pro M329               | Yes<sup>[9](#note3)</sup> |                           |
 | HP LaserJet Pro MFP 148fdw         | Yes                       |                           |
 | HP LaserJet Pro MFP M125 series    | No                        | Yes                       |
 | HP LaserJet Pro MFP M225dn         | No                        | Yes                       |
-| HP LaserJet Pro MFP M428dw         | Yes                       |                           |
+| HP LaserJet Pro MFP M428dw         | Yes<sup>[9](#note3)</sup> |                           |
 | HP LaserJet Pro MFP M521 series    | No                        | Yes                       |
 | HP Laser MFP 131 133 135-138       | Yes                       |                           |
 | HP Neverstop Laser MFP 1202nw      | Yes                       |                           |
@@ -285,6 +286,11 @@ helps, version V4.00.02.20 MAY-27-2020 known to work.
 
 <a name="note8"><sup>[8]</sup></a>: eSCL needs to be manually enabled on this device:
 System-settings->Network settings->Airprint settings->Airscan
+
+<a name="note8"><sup>[9]</sup></a>: Scanning remotely and with IPP-over-USB
+active is disabled by default. In the Embedded Web Server:
+Settings->Security->Administrator Settings->Enable Scan from a Computer or
+Mobile Device->Apply
 
 ### Distros that come with sane-airscan
 
