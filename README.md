@@ -1,46 +1,5 @@
 # sane-airscan -- SANE backend for AirScan (eSCL) and WSD document scanners
 
-## THE NEED FOR HELP FROM COMMUNITY
-
-Sorry for bothering you with my personal problems, but I need a help
-from community.
-
-I'm a Russian citizen. Due to sanctions, it seems I've lost control
-over my domain, ***apevzner.com***
-
-As result, I've also lost access to my primary e-mail address,
-pzz@apevzner.com, under which I'm known to the open source
-community.
-
-My e-mail is hosted by Google Workspace and my domain was registered
-at GoDaddy via Google. Currently I have no way to pay for my domain,
-so my domain was expired.
-
-After long conversation with Google I was able to switch my Workspace
-account to the "free plan", available for people who use the account for
-personal purposes only, thanks Google for that!
-
-But now my DNS console is not accessible, so I can't initiate domain
-transfer to some local registrant. And in the same time, e-mail/chat
-technical support from Workspace team also is not available, as it is
-not included into the "free plan". And without human technical support
-my problem seems unsolvable.
-
-I'm the author and I manage two important packages, `sane-airscan` (this
-one) and `ipp-usb`. These packages included into all major Linux
-distros. Also, Google ChromeOS uses my `sane-airscan` for scanning and
-their IPP over USB implementation was greatly inspired my `ipp-usb`.
-
-My connection to the open source community was always done via
-pzz@apevzner.com e-mail address. But now it doesn't work, so I'm in the
-isolation.
-
-If somebody from Google or GoDaddy can read it, please, help!
-
-For now, my backup e-mail address is apevzner@gmail.com
-
-### About
-
 Similar to how most modern network printers support "driverless" printing,
 using the universal vendor-neutral printing protocol, many modern network
 scanners and MFPs support "driverless" scanning.
