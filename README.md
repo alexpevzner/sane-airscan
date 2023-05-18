@@ -186,6 +186,7 @@ Legend:
 | HP Smart Tank Plus 550 series      | Yes                       |                           |
 | Kyocera ECOSYS M2035dn             | No                        | Yes<sup>[5](#note5)</sup> |
 | Kyocera ECOSYS M2040dn             | Yes                       | Yes<sup>[5](#note5)</sup> |
+| Kyocera ECOSYS M2640idw            | Yes                       | Yes<sup>[5](#note5)</sup> |
 | Kyocera ECOSYS M5521cdw            | Yes                       | Yes<sup>[5](#note5)</sup> |
 | Kyocera ECOSYS M5526cdw            | Yes                       |                           |
 | Lexmark CX317dn                    | Yes<sup>[6](#note6)</sup> | Yes<sup>[6](#note6)</sup> |
