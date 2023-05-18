@@ -48,7 +48,14 @@ airscan_init (AIRSCAN_INIT_FLAGS flags, const char *log_msg)
         status = mdns_init();
     }
     if (status == SANE_STATUS_GOOD) {
-        status = wsdd_init();
+        /* We can work without WSD being not initialized,
+         * but cannot work without other parts.
+         * Most scanners support both eSCL and WSD, fallback to eSCL-only.
+         * Useful when port 3702 is used by https://github.com/christgau/wsdd
+         */
+        if (wsdd_init() != SANE_STATUS_GOOD) {
+		    conf.wsdd_mode = WSDD_OFF;
+        }
     }
 
     if (status != SANE_STATUS_GOOD) {
