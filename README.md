@@ -102,19 +102,22 @@ Legend:
 | Canon MG5200 series                | No                        | Yes                       |
 | Canon MG5300 series                | No                        | Yes                       |
 | Canon PIXMA G3000 series           | No                        | Yes                       |
+| Canon PIXMA G4010 series           | Yes<sup>[3](#note3)</sup> |                           |
 | Canon PIXMA MG3600 series          | Yes                       |                           |
 | Canon PIXMA MG5500 Series          | No                        | Yes                       |
 | Canon PIXMA MG7700 Series          | Yes                       |                           |
 | Canon PIXMA TS5000 Series          | Yes                       |                           |
 | Canon PIXMA TS 9550 Series         | Yes                       |                           |
 | Canon TR4529 (PIXMA TR4500 Series) | Yes                       | Yes                       |
+| Canon TR4700 series                | Yes                       |                           |
 | Canon TR7500 Series                | No                        | Yes                       |
 | Canon TR8600 Scanner               | Yes                       |                           |
 | Canon TS 3100                      | Yes                       |                           |
 | Canon TS 3300                      | Yes                       |                           |
-| Canon TS 3400                      | Yes                       |                           |
+| Canon TS 3400 series               | Yes                       |                           |
 | Canon TS 6151                      | Yes                       |                           |
 | Canon TS 6200 series               | Yes                       | Yes                       |
+| Canon TS 6300 series               | Yes                       |                           |
 | Canon TS 6400 series               | Yes                       |                           |
 | Canon TS 8230 series               | No                        | Yes                       |
 | Dell C1765nfw Color MFP            | No                        | Yes                       |
@@ -140,7 +143,7 @@ Legend:
 | EPSON XP-6100 Series               | Yes                       |                           |
 | EPSON XP-7100 Series               | Yes                       |                           |
 | EPSON XP-8600 Series               | Yes                       |                           |
-| HP Color Laserjet MFP m178-m181    | Yes                       |                           |
+| HP Color Laserjet MFP 178 178      | Yes                       |                           |
 | HP Color LaserJet MFP M182nw       | Yes                       |                           |
 | HP Color LaserJet MFP M281fdw      | Yes                       |                           |
 | HP Color LaserJet MFP M283fdw      | Yes                       |                           |
@@ -160,6 +163,7 @@ Legend:
 | HP ENVY 5530 series                | Yes                       |                           |
 | HP ENVY 5540                       | Yes                       |                           |
 | HP ENVY 5640                       | Yes                       |                           |
+| HP ENVY 6000 series                | Yes                       |                           |
 | HP ENVY Photo 6200 series          | Yes                       |                           |
 | HP ENVY Photo 7800 series          | Yes                       |                           |
 | HP ENVY Pro 6400 series            | Yes                       |                           |
@@ -174,6 +178,7 @@ Legend:
 | HP LaserJet Pro M329               | Yes<sup>[9](#note3)</sup> |                           |
 | HP LaserJet Pro MFP 148fdw         | Yes                       |                           |
 | HP LaserJet Pro MFP M125 series    | No                        | Yes                       |
+| HP LaserJet Pro MFP M127fn         | No                        | Yes                       |
 | HP LaserJet Pro MFP M225dn         | No                        | Yes                       |
 | HP LaserJet Pro MFP M428dw         | Yes<sup>[9](#note3)</sup> |                           |
 | HP LaserJet Pro MFP M521 series    | No                        | Yes                       |
@@ -189,6 +194,7 @@ Legend:
 | HP OfficeJet Pro 8020 Series       | Yes                       |                           |
 | HP OfficeJet Pro 8730              | Yes                       | Yes                       |
 | HP OfficeJet Pro 9010 series       | Yes                       |                           |
+| HP ScanJet Pro 2000 s2             | Yes<sup>[3](#note3)</sup> |                           |
 | HP ScanJet Pro 3500 fn1            | Yes<sup>[3](#note3)</sup> |                           |
 | HP ScanJet Pro 4500 fn1            | Yes                       |                           |
 | HP Smart Tank 5100 series          | Yes                       |                           |
