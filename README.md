@@ -70,7 +70,9 @@ Legend:
 | Brother MFC-J1012DW                | Yes                       |                           |
 | Brother MFC-J1300DW                | Yes                       |                           |
 | Brother MFC-J4410DW                | No                        | Yes                       |
+| Brother MFC-J4540DW                | Yes                       |                           |
 | Brother MFC-J4620DW                | No                        | Yes                       |
+| Brother MFC-J470DW                 | No                        | Yes                       |
 | Brother MFC-J485DW                 | Yes                       |                           |
 | Brother MFC-J625DW                 | No                        | Yes                       |
 | Brother MFC-L2700DW                | No                        | Yes                       |
@@ -97,7 +99,9 @@ Legend:
 | Canon MF410 Series                 | Yes                       | Yes                       |
 | Canon MF440 Series                 | Yes                       | Yes                       |
 | Canon MF645Cx                      | Yes                       |                           |
+| Canon MF650C Series                | Yes                       |                           |
 | Canon MF745C/746C                  | Yes                       | Yes                       |
+| Canon MG5200 series                | No                        | Yes                       |
 | Canon MG5300 series                | No                        | Yes                       |
 | Canon PIXMA G3000 series           | No                        | Yes                       |
 | Canon PIXMA MG3600 series          | Yes                       |                           |
@@ -124,12 +128,15 @@ Legend:
 | EPSON ET-2810 Series               | No                        | Yes                       |
 | EPSON ET-2850 Series               | Yes                       |                           |
 | EPSON ET-3750 Series               | Yes                       |                           |
+| EPSON ET-4750 Series               | No                        | Yes                       |
 | EPSON ET-4850 Series               | Yes                       |                           |
 | EPSON ET-M2170 Series              | Yes                       |                           |
 | EPSON Stylus SX535WD               | No                        | Yes                       |
+| EPSON WF-3620 Series               | No                        | Yes                       |
 | EPSON WF-7710 Series               | No                        | Yes                       |
 | EPSON XP-2100 Series               | No                        | Yes                       |
 | EPSON XP-340 Series                | Yes                       |                           |
+| EPSON XP-352 355 Series            | No                        | Yes                       |
 | EPSON XP-442 445 Series            | Yes                       |                           |
 | EPSON XP-5100 Series               | Yes                       |                           |
 | EPSON XP-6100 Series               | Yes                       |                           |
@@ -145,7 +152,9 @@ Legend:
 | HP DeskJet 2540                    | Yes                       |                           |
 | HP DeskJet 2600 series             | Yes                       |                           |
 | HP DeskJet 2700 series             | Yes                       |                           |
+| HP Deskjet 3520 series             | Yes                       |                           |
 | HP DeskJet 3700 series             | Yes                       |                           |
+| HP DeskJet 4100 series             | Yes                       |                           |
 | HP DeskJet 5000 series             | Yes                       |                           |
 | HP DeskJet 5200 series             | Yes                       |                           |
 | HP ENVY 4500                       | Yes                       |                           |
@@ -174,6 +183,7 @@ Legend:
 | HP Neverstop Laser MFP 1202nw      | Yes                       |                           |
 | HP OfficeJet 3830 series           | Yes                       |                           |
 | HP Officejet 4630                  | Yes                       |                           |
+| HP Officejet 5740 series           | Yes                       |                           |
 | HP Officejet Pro 6970              | Yes                       |                           |
 | HP OfficeJet Pro 6978              | Yes                       |                           |
 | HP OfficeJet Pro 7740              | Yes                       | No                        |
@@ -183,6 +193,7 @@ Legend:
 | HP OfficeJet Pro 9010 series       | Yes                       |                           |
 | HP ScanJet Pro 3500 fn1            | Yes<sup>[3](#note3)</sup> |                           |
 | HP ScanJet Pro 4500 fn1            | Yes                       |                           |
+| HP Smart Tank 5100 series          | Yes                       |                           |
 | HP Smart Tank Plus 550 series      | Yes                       |                           |
 | Kyocera ECOSYS M2035dn             | No                        | Yes<sup>[5](#note5)</sup> |
 | Kyocera ECOSYS M2040dn             | Yes                       | Yes<sup>[5](#note5)</sup> |
