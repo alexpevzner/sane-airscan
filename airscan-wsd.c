@@ -1150,7 +1150,7 @@ wsd_cancel_query (const proto_ctx *ctx)
     return wsd_http_post(ctx, xml_wr_finish_compact(xml));
 }
 
-/* proto_handler_wsd_new creates new eSCL protocol handler
+/* proto_handler_wsd_new creates new WSD protocol handler
  */
 proto_handler*
 proto_handler_wsd_new (void)
