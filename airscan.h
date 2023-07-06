@@ -3042,7 +3042,7 @@ typedef struct {
     int           x_res, y_res; /* X/Y resolution */
     ID_SOURCE     src;          /* Desired source */
     ID_COLORMODE  colormode;    /* Desired color mode */
-    ID_FORMAT     format;       /* Image format */
+    ID_FORMAT     format;       /* Desired image format */
 } proto_scan_params;
 
 /* proto_ctx represents request context
@@ -3067,6 +3067,9 @@ typedef struct {
     PROTO_OP             failed_op;          /* Failed operation */
     int                  failed_http_status; /* Its HTTP status */
     int                  failed_attempt;     /* Retry count, 0-based */
+
+    /* Extra context for image decoding */
+    ID_FORMAT            format_detected; /* Actual image format */
 } proto_ctx;
 
 /* proto_result represents decoded query results
@@ -3180,6 +3183,11 @@ struct image_decoder {
     error (*read_line) (image_decoder *decoder, void *buffer);
 };
 
+/* Detect image format by image data
+ */
+ID_FORMAT
+image_format_detect (const void *data, size_t size);
+
 /* Create JPEG image decoder
  */
 image_decoder*
@@ -3278,6 +3286,49 @@ static inline error
 image_decoder_read_line (image_decoder *decoder, void *buffer)
 {
     return decoder->read_line(decoder, buffer);
+}
+
+/* image_decoder_create_all creates all decoders
+ * and fills array of decoders, indexed by ID_FORMAT
+ *
+ * Note, it is not guaranteed, that for all ID_FORMAT
+ * decoder will be created. Missed entries will be set
+ * to NULL. Be aware when using the filled array!
+ */
+static inline void
+image_decoder_create_all (image_decoder *decoders[NUM_ID_FORMAT])
+{
+    int i;
+
+    /* Fill entire array with NULLs
+     */
+    for (i = 0; i < NUM_ID_FORMAT; i ++) {
+        decoders[i] = NULL;
+    }
+
+    /* Create known decoders
+     */
+    decoders[ID_FORMAT_BMP] = image_decoder_bmp_new();
+    decoders[ID_FORMAT_JPEG] = image_decoder_jpeg_new();
+    decoders[ID_FORMAT_PNG] = image_decoder_png_new();
+    decoders[ID_FORMAT_TIFF] = image_decoder_tiff_new();
+}
+
+/* image_decoder_free_all destroys all decoders, previously
+ * created by image_decoder_create_all
+ */
+static inline void
+image_decoder_free_all (image_decoder *decoders[NUM_ID_FORMAT])
+{
+    int i;
+
+    for (i = 0; i < NUM_ID_FORMAT; i ++) {
+        image_decoder *decoder = decoders[i];
+        if (decoder != NULL) {
+            image_decoder_free(decoder);
+            decoders[i] = NULL; /* For sanity */
+        }
+    }
 }
 
 /******************** Mathematical Functions ********************/

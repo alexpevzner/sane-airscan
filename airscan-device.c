@@ -203,7 +203,8 @@ device_management_start_stop (bool start);
 static device*
 device_new (zeroconf_devinfo *devinfo)
 {
-    device            *dev;
+    device *dev;
+    int    i;
 
     /* Create device */
     dev = mem_new(device, 1);
@@ -225,6 +226,26 @@ device_new (zeroconf_devinfo *devinfo)
     dev->read_pollable = pollable_new();
     dev->read_queue = http_data_queue_new();
 
+    /* Setup decoders
+     *
+     * Note, unfortunately, some devices lies in their supported
+     * image formats list and may return image in different format,
+     * that requested. See, for example, #281 for details
+     *
+     * So we must instantiate all supported decoders and dynamically
+     * choose between them, based on the actual image content
+     *
+     * The previous approach, when we instantiated only decoders
+     * that we are about to use, doesn't work anymore
+     */
+    image_decoder_create_all(dev->decoders);
+    for (i = 0; i < NUM_ID_FORMAT; i ++) {
+        if (dev->decoders[i] != NULL) {
+            log_debug(dev->log, "added image decoder: \"%s\"",
+                id_format_short_name(i));
+        }
+    }
+
     /* Add to the table */
     device_table = ptr_array_append(device_table, dev);
 
@@ -236,8 +257,6 @@ device_new (zeroconf_devinfo *devinfo)
 static void
 device_free (device *dev, const char *log_msg)
 {
-    int i;
-
     /* Remove device from table */
     log_debug(dev->log, "removed from device table");
     ptr_array_del(device_table, ptr_array_find(device_table, dev));
@@ -264,15 +283,7 @@ device_free (device *dev, const char *log_msg)
     mem_free((char*) dev->proto_ctx.location);
 
     pthread_cond_destroy(&dev->stm_cond);
-
-    for (i = 0; i < NUM_ID_FORMAT; i ++) {
-        image_decoder *decoder = dev->decoders[i];
-        if (decoder != NULL) {
-            image_decoder_free(decoder);
-            log_debug(dev->log, "closed decoder: %s", id_format_short_name(i));
-        }
-    }
-
+    image_decoder_free_all(dev->decoders);
     http_data_queue_free(dev->read_queue);
     pollable_free(dev->read_pollable);
     device_read_filters_cleanup(dev);
@@ -583,8 +594,6 @@ device_scanner_capabilities_callback (void *ptr, http_query *q)
 {
     error        err   = NULL;
     device       *dev = ptr;
-    int          i;
-    unsigned int formats;
 
     /* Check request status */
     err = http_query_error(q);
@@ -602,43 +611,6 @@ device_scanner_capabilities_callback (void *ptr, http_query *q)
 
     devcaps_dump(dev->log, &dev->opt.caps);
     devopt_set_defaults(&dev->opt);
-
-    /* Setup decoders */
-    formats = 0;
-    for (i = 0; i < NUM_ID_SOURCE; i ++) {
-        devcaps_source *src = dev->opt.caps.src[i];
-        if (src != NULL) {
-            formats |= src->formats;
-        }
-    }
-
-    formats &= DEVCAPS_FORMATS_SUPPORTED;
-    for (i = 0; i < NUM_ID_FORMAT; i ++) {
-        if ((formats & (1 << i)) != 0) {
-            switch (i) {
-            case ID_FORMAT_JPEG:
-                dev->decoders[i] = image_decoder_jpeg_new();
-                break;
-
-            case ID_FORMAT_PNG:
-                dev->decoders[i] = image_decoder_png_new();
-                break;
-
-            case ID_FORMAT_TIFF:
-                dev->decoders[i] = image_decoder_tiff_new();
-                break;
-
-            case ID_FORMAT_BMP:
-                dev->decoders[i] = image_decoder_bmp_new();
-                break;
-
-            default:
-                log_internal_error(dev->log);
-            }
-
-            log_debug(dev->log, "new decoder: %s", id_format_short_name(i));
-        }
-    }
 
     /* Update endpoint address in case of HTTP redirection */
     if (!http_uri_equal(http_query_uri(q), http_query_real_uri(q))) {
@@ -1533,15 +1505,30 @@ device_read_next (device *dev)
     error           err;
     size_t          line_capacity;
     SANE_Parameters params;
-    image_decoder   *decoder = dev->decoders[dev->proto_ctx.params.format];
+    image_decoder   *decoder;
     int             wid, hei;
     int             skip_lines = 0;
 
-    log_assert(dev->log, decoder != NULL);
-
+    /* Pull next image out of the queue */
     dev->read_image = http_data_queue_pull(dev->read_queue);
     if (dev->read_image == NULL) {
         return SANE_STATUS_EOF;
+    }
+
+    /* Guess format and choose decoder */
+    dev->proto_ctx.format_detected =
+        image_format_detect(dev->read_image->bytes, dev->read_image->size);
+
+    if (dev->proto_ctx.format_detected  == ID_FORMAT_UNKNOWN) {
+        err = eloop_eprintf("Can't detect image format");
+        goto DONE;
+    }
+
+    decoder = dev->decoders[dev->proto_ctx.format_detected];
+    if (decoder == NULL) {
+        err = eloop_eprintf("Unsupported image format \"%s\"",
+            id_format_short_name(dev->proto_ctx.format_detected));
+        goto DONE;
     }
 
     /* Start new image decoding */
@@ -1557,6 +1544,8 @@ device_read_next (device *dev)
 
     log_trace(dev->log, "==============================");
     log_trace(dev->log, "Image received with the following parameters:");
+    log_trace(dev->log, "  format:         %s",
+            id_format_short_name(dev->proto_ctx.format_detected));
     log_trace(dev->log, "  content type:   %s", image_content_type(decoder));
     log_trace(dev->log, "  frame format:   %s",
             params.format == SANE_FRAME_GRAY ? "Gray" : "RGB" );
@@ -1573,7 +1562,7 @@ device_read_next (device *dev)
         log_trace(dev->log, "resampling: RGB24->Grayscale8");
     } else if (params.format != dev->opt.params.format) {
         /* This is what we cannot handle */
-        err = ERROR("Unexpected image format");
+        err = ERROR("Unexpected frame format");
         goto DONE;
     }
 
@@ -1729,7 +1718,7 @@ static SANE_Status
 device_read_decode_line (device *dev)
 {
     const SANE_Int n = dev->read_line_num;
-    image_decoder  *decoder = dev->decoders[dev->proto_ctx.params.format];
+    image_decoder  *decoder = dev->decoders[dev->proto_ctx.format_detected];
 
     log_assert(dev->log, decoder != NULL);
 
@@ -1769,7 +1758,7 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
 {
     SANE_Int      len = 0;
     SANE_Status   status = SANE_STATUS_GOOD;
-    image_decoder *decoder = dev->decoders[dev->proto_ctx.params.format];
+    image_decoder *decoder = dev->decoders[dev->proto_ctx.format_detected];
 
     if (len_out != NULL) {
         *len_out = 0; /* Must return 0, if status is not GOOD */

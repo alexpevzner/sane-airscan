@@ -132,6 +132,8 @@ int
 main (int argc, char **argv)
 {
     const char      *file, *ext;
+    ID_FORMAT       format;
+    image_decoder   *decoders[NUM_ID_FORMAT];
     image_decoder   *decoder = NULL;
     FILE            *fp;
     long            size;
@@ -150,21 +152,6 @@ main (int argc, char **argv)
     file = argv[1];
     ext = strrchr(file, '.');
     ext = ext ? ext + 1 : "";
-
-    /* Create decoder */
-    if (!strcmp(ext, "jpeg") || !strcmp(ext, "jpg")) {
-        decoder = image_decoder_jpeg_new();
-    } else if (!strcmp(ext, "tiff") || !strcmp(ext, "tif")) {
-        decoder = image_decoder_tiff_new();
-    } else if (!strcmp(ext, "png")) {
-        decoder = image_decoder_png_new();
-    } else if (!strcmp(ext, "bmp")) {
-        decoder = image_decoder_bmp_new();
-    }
-
-    if (decoder == NULL) {
-        die("can't guess image format");
-    }
 
     /* Load the file */
     fp = fopen(file, "rb");
@@ -193,6 +180,18 @@ main (int argc, char **argv)
     }
 
     fclose(fp);
+
+    /* Create decoder */
+    format = image_format_detect(data, size);
+    if (format == ID_FORMAT_UNKNOWN) {
+        die("Unknown image format");
+    }
+
+    image_decoder_create_all(decoders);
+    decoder = decoders[format];
+    if (decoder == NULL) {
+        die("Unsupported image format %s", id_format_short_name(format));
+    }
 
     /* Decode the image */
     err = image_decoder_begin(decoder, data, size);
@@ -223,7 +222,7 @@ main (int argc, char **argv)
     mem_free(line);
     mem_free(data);
     save_close(save);
-    image_decoder_free(decoder);
+    image_decoder_free_all(decoders);
 
     return 0;
 }
