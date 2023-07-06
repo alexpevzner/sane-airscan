@@ -42,11 +42,9 @@ In most cases, devices were tested with network connection. However, most (all?)
 the **eSCL** devices will also work over **USB**, if **IPP-over-USB** daemon is installed on
 your computer. WSD-only devices cannot be used with the IPP-over-USB daemon.
 
-Currently, there is a choice of two **IPP-over-USB** implementations:
-* [ippusbxd](https://github.com/OpenPrinting/ippusbxd), which comes with some distros
-* [ipp-usb](https://github.com/OpenPrinting/ipp-usb), a modern replacement of the `ippusbxd`.
-The `ipp-usb` works better, binary packages available for many popular distros (see link from
-a project page).
+The **IPP-over-USB** comes with the `ipp-usb` package and often installed by default.
+If your distro comes without `ipp-usb`, please visit the project page to figure out
+alternative ways to obtain it: [ipp-usb](https://github.com/OpenPrinting/ipp-usb)
 
 Legend:
 
