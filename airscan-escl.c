@@ -702,7 +702,18 @@ escl_precheck_decode (const proto_ctx *ctx)
 
 /* Fix Location: URL
  *
- * Can be used as http_query_onredir() callback
+ * It replaces host part of uri with the host part from `orig_uri` and
+ * used for two purposes:
+ *   1) To fix URL in the Location: header. We don't trust the device
+ *      and only allow it to specify path, not host (host is preserved
+ *      from the `orig_uri` -- the URL used to initiate scanning
+ *   2) As redirection callback, together with the quirk_localhost.
+ *      At this case, Host: is purposely invalid, which makes
+ *      redirection unreliable (most likely, redirection will
+ *      use "localhost" from the Host: header as the host part
+ *      of URL).
+ *
+ * Can be directly used as http_query_onredir() callback
  */
 static void
 escl_scan_fix_location (void *p, http_uri *uri, const http_uri *orig_uri)
