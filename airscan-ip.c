@@ -39,18 +39,22 @@ ip_straddr_from_ip (int af, const void *addr)
 ip_straddr
 ip_straddr_from_sockaddr (const struct sockaddr *addr, bool withzone)
 {
-     return ip_straddr_from_sockaddr_dport(addr, -1, withzone);
+     return ip_straddr_from_sockaddr_dport(addr, -1, withzone, false);
 }
 
 /* Format ip_straddr from struct sockaddr.
  * AF_INET, AF_INET6, and AF_UNIX are supported
  *
  * Port will not be appended, if it matches provided default port
+ *
  * If `withzone' is true, zone suffix will be appended, when appropriate
+ *
+ * If `withlocalhost` is true and address is 127.0.0.1 or ::1,
+ * "localhost" will be used instead of the IP address literal
  */
 ip_straddr
 ip_straddr_from_sockaddr_dport (const struct sockaddr *addr,
-        int dport, bool withzone)
+        int dport, bool withzone, bool withlocalhost)
 {
     ip_straddr straddr = {""};
     struct sockaddr_in  *addr_in = (struct sockaddr_in*) addr;
@@ -60,19 +64,29 @@ ip_straddr_from_sockaddr_dport (const struct sockaddr *addr,
 
     switch (addr->sa_family) {
     case AF_INET:
-        inet_ntop(AF_INET, &addr_in->sin_addr,
-            straddr.text, sizeof(straddr.text));
+        if (withlocalhost && ip_is_loopback(AF_INET, &addr_in->sin_addr)) {
+            strcpy(straddr.text, "localhost");
+        } else {
+            inet_ntop(AF_INET, &addr_in->sin_addr,
+                straddr.text, sizeof(straddr.text));
+        }
+
         port = addr_in->sin_port;
         break;
     case AF_INET6:
-        straddr.text[0] = '[';
-        inet_ntop(AF_INET6, &addr_in6->sin6_addr,
-            straddr.text + 1, sizeof(straddr.text) - 2);
-        if (withzone && addr_in6->sin6_scope_id != 0) {
-            sprintf(straddr.text + strlen(straddr.text), "%%%d",
-                addr_in6->sin6_scope_id);
+        if (withlocalhost && ip_is_loopback(AF_INET6, &addr_in6->sin6_addr)) {
+            strcpy(straddr.text, "localhost");
+        } else {
+            straddr.text[0] = '[';
+                inet_ntop(AF_INET6, &addr_in6->sin6_addr,
+                    straddr.text + 1, sizeof(straddr.text) - 2);
+                if (withzone && addr_in6->sin6_scope_id != 0) {
+                    sprintf(straddr.text + strlen(straddr.text), "%%%d",
+                        addr_in6->sin6_scope_id);
+                }
+                strcat(straddr.text, "]");
         }
-        strcat(straddr.text, "]");
+
         port = addr_in6->sin6_port;
         break;
     case AF_UNIX:
@@ -171,7 +185,7 @@ ip_addr_to_straddr (ip_addr addr, bool withzone)
     }
 
     if (sockaddr != NULL) {
-        straddr = ip_straddr_from_sockaddr_dport(sockaddr, 0, withzone);
+        straddr = ip_straddr_from_sockaddr_dport(sockaddr, 0, withzone, false);
     }
 
     return straddr;

@@ -964,11 +964,15 @@ ip_straddr_from_sockaddr(const struct sockaddr *addr, bool withzone);
  * AF_INET, AF_INET6, and AF_UNIX are supported
  *
  * Port will not be appended, if it matches provided default port
+ *
  * If `withzone' is true, zone suffix will be appended, when appropriate
+ *
+ * If `withlocalhost` is true and address is 127.0.0.1 or ::1,
+ * "localhost" will be used instead of the IP address literal
  */
 ip_straddr
 ip_straddr_from_sockaddr_dport (const struct sockaddr *addr,
-        int dport, bool withzone);
+        int dport, bool withzone, bool withlocalhost);
 
 /* Check if address is link-local
  * af must be AF_INET or AF_INET6
@@ -1618,16 +1622,45 @@ http_uri_str (http_uri *uri);
 /* Get URI's host address. If Host address is not literal, returns NULL
  */
 const struct sockaddr*
-http_uri_addr (http_uri *uri);
+http_uri_addr (const http_uri *uri);
 
 /* Get URI's address family. May return AF_UNSPEC,
  * if host address is not literal
  */
 static inline int
-http_uri_af (http_uri *uri)
+http_uri_af (const http_uri *uri)
 {
     const struct sockaddr *addr = http_uri_addr(uri);
     return addr ? addr->sa_family : AF_UNSPEC;
+}
+
+/* Tell if URI IP address is loopback
+ */
+static inline bool
+http_uri_is_loopback (const http_uri *uri)
+{
+    const struct sockaddr *addr = http_uri_addr(uri);
+    const void            *ip = NULL;
+
+    if (addr == NULL) {
+        return false;
+    }
+
+    switch (addr->sa_family) {
+    case AF_INET:
+        ip = &(((struct sockaddr_in*) addr)->sin_addr);
+        break;
+
+    case AF_INET6:
+        ip = &(((struct sockaddr_in6*) addr)->sin6_addr);
+        break;
+    }
+
+    if (ip != NULL) {
+        return ip_is_loopback(addr->sa_family, ip);
+    }
+
+    return false;
 }
 
 /* Get URI path

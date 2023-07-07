@@ -815,7 +815,7 @@ escl_scan_query (const proto_ctx *ctx)
      * Note, this hack doesn't work with some other printers
      * see #92, #98 for details
      */
-    if (escl->quirk_localhost) {
+    if (escl->quirk_localhost && !http_uri_is_loopback(ctx->base_uri)) {
         http_query_set_request_header(query, "Host", "localhost");
         http_query_onredir(query, escl_scan_fix_location);
     }

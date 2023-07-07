@@ -863,7 +863,7 @@ http_uri_str (http_uri *uri)
 /* Get URI's host address. If Host address is not literal, returns NULL
  */
 const struct sockaddr*
-http_uri_addr (http_uri *uri)
+http_uri_addr (const http_uri *uri)
 {
     if (uri->addr.sockaddr.sa_family == AF_UNSPEC) {
         return NULL;
@@ -2139,7 +2139,7 @@ http_query_set_host (http_query *q)
             dport = -1;
         }
 
-        s = ip_straddr_from_sockaddr_dport(addr, dport, false);
+        s = ip_straddr_from_sockaddr_dport(addr, dport, false, true);
         http_query_set_request_header(q, "Host", s.text);
 
         return;
