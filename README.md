@@ -74,6 +74,7 @@ Legend:
 | Brother MFC-J485DW                 | Yes                       |                           |
 | Brother MFC-J625DW                 | No                        | Yes                       |
 | Brother MFC-L2700DW                | No                        | Yes                       |
+| Brother MFC-L2710DN series         | No                        | Yes                       |
 | Brother MFC-L2710DW                | Yes                       | Yes                       |
 | Brother MFC-L2720DW                | No                        | Yes                       |
 | Brother MFC-L2750DW                | Yes                       | Yes                       |
