@@ -222,7 +222,7 @@ Legend:
 | Samsung SCX-3400 Series            | No                        | Yes                       |
 | SHARP MX-3060N                     | Yes<sup>[9](#note9)</sup> |                           |
 | Xerox B205                         | Yes                       | Yes                       |
-| Xerox B215                         | Yes                       | Yes<sup>[10](#node10)</sup>|
+| Xerox B215                         | Yes                       | Yes<sup>[10](#note10)</sup>|
 | Xerox C235                         | Yes                       |                           |
 | Xerox VersaLink B405               | Yes                       |                           |
 | Xerox WorkCentre 3025              | No                        | Yes                       |
