@@ -220,9 +220,9 @@ Legend:
 | Samsung M288x Series               | No                        | Yes                       |
 | Samsung M337x 387x 407x Series     | No                        | Yes<sup>[8](#note8)</sup> |
 | Samsung SCX-3400 Series            | No                        | Yes                       |
-| SHARP MX-3060N                     | Yes<sup>[9](#note8)</sup> |                           |
+| SHARP MX-3060N                     | Yes<sup>[9](#note9)</sup> |                           |
 | Xerox B205                         | Yes                       | Yes                       |
-| Xerox B215                         | Yes                       |                           |
+| Xerox B215                         | Yes                       | Yes<sup>[10](#node10)</sup>|
 | Xerox C235                         | Yes                       |                           |
 | Xerox VersaLink B405               | Yes                       |                           |
 | Xerox WorkCentre 3025              | No                        | Yes                       |
@@ -264,10 +264,13 @@ helps, version V4.00.02.20 MAY-27-2020 known to work.
 <a name="note8"><sup>[8]</sup></a>: eSCL needs to be manually enabled on this device:
 System-settings->Network settings->Airprint settings->Airscan
 
-<a name="note8"><sup>[9]</sup></a>: Scanning remotely and with IPP-over-USB
+<a name="note9"><sup>[9]</sup></a>: Scanning remotely and with IPP-over-USB
 active is disabled by default. In the Embedded Web Server:
 Settings->Security->Administrator Settings->Enable Scan from a Computer or
 Mobile Device->Apply
+
+<a name="note10"><sup>[10]</sup></a>: WSD scan is disabled by default. In the
+Embedded Web Server: Properties->Connectivity->Protocols->WSD->Enable
 
 ### Distros that come with sane-airscan
 
