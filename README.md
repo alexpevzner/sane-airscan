@@ -171,6 +171,7 @@ Legend:
 | HP LaserJet 200 colorMFP M276n     | No                        | Yes                       |
 | HP LaserJet MFP E62655             | Yes                       |                           |
 | HP LaserJet MFP M130fw             | No                        | Yes                       |
+| HP LaserJet MFP M140w              | Yes                       |                           |
 | HP LaserJet MFP M227sdn            | Yes                       |                           |
 | HP LaserJet MFP M426dw             | Yes                       |                           |
 | HP LaserJet MFP M630               | Yes                       |                           |
