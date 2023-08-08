@@ -227,6 +227,7 @@ Legend:
 | Xerox C235                         | Yes                       |                           |
 | Xerox VersaLink B405               | Yes                       |                           |
 | Xerox WorkCentre 3025              | No                        | Yes                       |
+| Xerox WorkCentre 6027              | No                        | Yes<sup>[10](#note10)</sup>|
 | TODO                               |                           |                           |
 
 ---
