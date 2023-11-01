@@ -59,7 +59,7 @@ log_cleanup (void)
 static void
 log_flush (void)
 {
-    int rc = write(1, log_buffer, mem_len(log_buffer));
+    int rc = write(2, log_buffer, mem_len(log_buffer));
     (void) rc;
     str_trunc(log_buffer);
 }
