@@ -214,6 +214,7 @@ Legend:
 | Lexmark MC3326adwe                 | Yes                       |                           |
 | OKI-MC853                          | Yes                       |                           |
 | Panasonic KV-S1058Y                | No                        | Yes                       |
+| Pantum BM5100ADW series            | Yes                       | Yes                       |
 | Pantum M6500W series               | Yes                       |                           |
 | Ricoh MP C3003                     | No                        | Yes<sup>[7](#note7)</sup> |
 | Samsung M2070 Series               | No                        | Yes                       |
