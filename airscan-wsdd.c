@@ -397,7 +397,7 @@ wsdd_finding_get (int ifindex, const char *address)
     ll_node      *node;
     wsdd_finding *wsdd;
 
-    /* Check for duplicates */
+    /* Lookup existent finding */
     for (LL_FOR_EACH(node, &wsdd_finding_list)) {
         wsdd = OUTER_STRUCT(node, wsdd_finding, list_node);
         if (wsdd->finding.ifindex == ifindex &&
@@ -423,10 +423,11 @@ wsdd_finding_by_address (ip_addr addr)
     wsdd_xaddr            *xaddr;
     const struct sockaddr *sockaddr;
 
-    /* Check for duplicates */
+    /* Roll over all findings */
     for (LL_FOR_EACH(node, &wsdd_finding_list)) {
         wsdd = OUTER_STRUCT(node, wsdd_finding, list_node);
 
+        /* Roll over all xaddrs */
         for (LL_FOR_EACH(node2, &wsdd->xaddrs)) {
             xaddr = OUTER_STRUCT(node2, wsdd_xaddr, list_node);
             sockaddr = http_uri_addr(xaddr->uri);
