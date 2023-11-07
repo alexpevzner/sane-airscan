@@ -702,8 +702,14 @@ wsdd_message_parse_endpoint (wsdd_message *msg, xml_rd *xml)
 
         if (!strcmp(path, "/d:Types")) {
             val = xml_rd_node_value(xml);
-            msg->is_scanner = !!strstr(val, "ScanDeviceType");
-            msg->is_printer = !!strstr(val, "PrintDeviceType");
+
+            if (strstr(val, "ScanDeviceType")) {
+                msg->is_scanner = true;
+            }
+
+            if (strstr(val, "PrintDeviceType") != NULL) {
+                msg->is_printer = true;
+            }
         } else if (!strcmp(path, "/d:XAddrs")) {
             mem_free(xaddrs_text);
             xaddrs_text = str_dup(xml_rd_node_value(xml));
