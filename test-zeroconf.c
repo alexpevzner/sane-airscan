@@ -342,6 +342,9 @@ finding_free (zeroconf_finding *finding)
  *
  *   endpoint = URL                               HTTP url of device endpoint,
  *                                                may be used multiple times
+ *
+ * Note, for [del] section records, only method, ifindex name and uuid
+ * parameters are used
  */
 static const inifile_record*
 test_section_add_del (inifile *ini, const inifile_record *rec, bool add)
