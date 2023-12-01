@@ -321,6 +321,27 @@ finding_free (zeroconf_finding *finding)
 }
 
 /* Parse and execute [add] or [del] section
+ *
+ * These sections contains zeroconf_finding-s (one per section)
+ * to be added or deleted (as if they were actually discovered)
+ *
+ * Parameters are:
+ *   method = MDNS_HINT |                         discovery method,
+ *            USCAN_TCP |                         maps to ZEROCONF_METHOD
+ *            USCANS_TCP |
+ *            WSD
+ *
+ *   name = "device name"                         DNS-SD device name, ignored
+ *                                                for WSD
+ *
+ *   model = "model name"                         model name
+ *
+ *   uuid = 00000000-0000-0000-0000-000000000001  device UUID
+ *
+ *   ifindex = N                                  network interface index
+ *
+ *   endpoint = URL                               HTTP url of device endpoint,
+ *                                                may be used multiple times
  */
 static const inifile_record*
 test_section_add_del (inifile *ini, const inifile_record *rec, bool add)
@@ -470,7 +491,28 @@ test_section_add_del (inifile *ini, const inifile_record *rec, bool add)
     return rec;
 }
 
-/* Parse and execute [expect] section
+/* Parse and execute [expect] or [merged] section
+ *
+ * These sections contains the final expected state of the zeroconf
+ * engine
+ *
+ * After running the test, list of "discovered" devices is
+ * compared against content of these sections.
+ *
+ * List of "disciveder" devices is defined in the form, similar to
+ * the airscan-discover output:
+ *
+ *   [expect]
+ *     "device 1" = escl, http://192.168.0.1/eSCL
+ *     "device 1" = wsd, http://192.168.0.1/wsd
+ *
+ * The difference between [expect] and [merged] sections is in
+ * representation of the multi-protocol (i.e. eSCL+WSD) devices.
+ * [expect] section will contain all found instances, while
+ * [merged] section will only contain the instances with the
+ * "best" (i.e., automatically chosen) protocol. The difference
+ * is exactly the same as between protocol = auto and prococol = manual
+ * discovery modes of sane-airscan
  */
 static const inifile_record*
 test_section_expect (inifile *ini, const inifile_record *rec, bool merged)
