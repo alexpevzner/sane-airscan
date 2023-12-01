@@ -133,6 +133,9 @@ netif_has_non_link_local_addr (int af, int ifindex)
 }
 
 /* Get list of network interfaces addresses
+ *
+ * The returned memory is owned by caller and must be freed
+ * using netif_addr_list_free/netif_addr_free_single
  */
 netif_addr*
 netif_addr_list_get (void)
