@@ -3578,6 +3578,8 @@ log_panic (log_ctx *log, const char *fmt, ...);
 
 /******************** Initialization/Cleanup ********************/
 /* AIRSCAN_INIT_FLAGS represents airscan_init() flags
+ *
+ * These flags are mostly used for testing
  */
 typedef enum {
     AIRSCAN_INIT_NO_CONF        = (1 << 0),     // Don't load configuration
@@ -3595,6 +3597,11 @@ airscan_init (AIRSCAN_INIT_FLAGS flags, const char *log_msg);
  */
 void
 airscan_cleanup (const char *log_msg);
+
+/* Get init flags from the airscan_init call
+ */
+AIRSCAN_INIT_FLAGS
+airscan_get_init_flags (void);
 
 #ifdef  __cplusplus
 };

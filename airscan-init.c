@@ -8,12 +8,19 @@
 
 #include "airscan.h"
 
+/* Saved init flags
+ */
+static AIRSCAN_INIT_FLAGS airscan_init_flags;
+
 /* Initialize airscan
  */
 SANE_Status
 airscan_init (AIRSCAN_INIT_FLAGS flags, const char *log_msg)
 {
     SANE_Status status;
+
+    /* Save init flags */
+    airscan_init_flags = flags;
 
     /* Initialize logging -- do it early */
     log_init();
@@ -81,6 +88,14 @@ airscan_cleanup (const char *log_msg)
     conf_unload();
     trace_cleanup();
     log_cleanup(); /* Must be the last thing to do */
+}
+
+/* Get init flags from the airscan_init call
+ */
+AIRSCAN_INIT_FLAGS
+airscan_get_init_flags (void)
+{
+    return airscan_init_flags;
 }
 
 /* vim:ts=8:sw=4:et
