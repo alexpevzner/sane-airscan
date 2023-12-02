@@ -124,7 +124,7 @@ xml_rd_parse (xmlDoc **doc, const char *xml_text, size_t xml_len)
         goto DONE;
     }
 
-    ctxt->sax->serror = xml_rd_error_callback;
+    ctxt->sax->serror = (xmlStructuredErrorFunc) xml_rd_error_callback;
 
     /* Parse the document */
     if (xmlCtxtResetPush(ctxt, xml_text, xml_len, NULL, NULL)) {
