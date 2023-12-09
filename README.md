@@ -102,6 +102,7 @@ Legend:
 | Canon MF745C/746C                  | Yes                       | Yes                       |
 | Canon MG5200 series                | No                        | Yes                       |
 | Canon MG5300 series                | No                        | Yes                       |
+| Canon MX470 series                 | No                        | Yes                       |
 | Canon PIXMA G3000 series           | No                        | Yes                       |
 | Canon PIXMA G4010 series           | Yes<sup>[3](#note3)</sup> |                           |
 | Canon PIXMA MG3600 series          | Yes                       |                           |
