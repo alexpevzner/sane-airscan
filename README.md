@@ -230,7 +230,7 @@ Legend:
 | Xerox VersaLink B405               | Yes                       |                           |
 | Xerox WorkCentre 3025              | No                        | Yes                       |
 | Xerox WorkCentre 6027              | No                        | Yes<sup>[10](#note10)</sup>|
-| Xerox WorkCentre 6515              | n                         | Yes                       |
+| Xerox WorkCentre 6515              |                           | Yes                       |
 | TODO                               |                           |                           |
 
 ---
