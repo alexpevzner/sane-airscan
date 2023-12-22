@@ -13,6 +13,7 @@ sources = [
   'airscan-filter.c',
   'airscan-http.c',
   'airscan-id.c',
+  'airscan-image.c',
   'airscan-inifile.c',
   'airscan-init.c',
   'airscan-ip.c',
