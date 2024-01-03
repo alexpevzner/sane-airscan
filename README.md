@@ -78,6 +78,7 @@ Legend:
 | Brother MFC-L2710DW                | Yes                       | Yes                       |
 | Brother MFC-L2720DW                | No                        | Yes                       |
 | Brother MFC-L2750DW                | Yes                       | Yes                       |
+| Brother MFC-L3750CDW               | No                        | Yes                       |
 | Canon D570                         | Yes                       |                           |
 | Canon G600 series                  | Yes                       |                           |
 | Canon imageCLASS MF642C/643C/644C  | Yes                       |                           |
