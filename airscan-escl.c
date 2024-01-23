@@ -856,7 +856,19 @@ escl_scan_decode (const proto_ctx *ctx)
         goto ERROR;
     }
 
-    escl_scan_fix_location(NULL, uri, http_query_uri(ctx->query));
+    /* Don't trust hostname in Location, replace it with hostname
+     * from the ctx->query (which represents scan request)
+     *
+     * The initial idea behind this approach is that scanner may
+     * not have a strong knowledge of its own host name so hostname
+     * supplied by device may be inaccurate.
+     *
+     * At least one device, HP Deskjet 3520 series, has demonstrated
+     * this behavior when scanning via IPP over USB. Instead of (expected)
+     * localhost host name, it returns CN26F178X605SZ.03f011b0.hpLedmUSB
+     */
+    http_uri_fix_host(uri, http_query_uri(ctx->query), NULL);
+
     result.data.location = str_dup(http_uri_str(uri));
     http_uri_free(uri);
 
