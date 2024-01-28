@@ -709,10 +709,24 @@ mdns_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
         /* Add a device (or lookup for already added) */
         mdns = mdns_finding_get(method, interface, name, initscan);
 
-        /* Initiate resolver */
+        /* Initiate resolver -- look for IPv4 addresses */
         AvahiServiceResolver *r;
+
         r = avahi_service_resolver_new(mdns_avahi_client, interface,
-                protocol, name, type, domain, AVAHI_PROTO_UNSPEC, 0,
+                protocol, name, type, domain, AVAHI_PROTO_INET, 0,
+                mdns_avahi_resolver_callback, mdns);
+
+        if (r == NULL) {
+            mdns_perror(MDNS_ACTION_RESOLVE, interface, protocol, type, name);
+            mdns_avahi_client_restart_defer();
+            break;
+        }
+
+        mdns->resolvers = ptr_array_append(mdns->resolvers, r);
+
+        /* Initiate resolver -- look for IPv6 addresses */
+        r = avahi_service_resolver_new(mdns_avahi_client, interface,
+                protocol, name, type, domain, AVAHI_PROTO_INET6, 0,
                 mdns_avahi_resolver_callback, mdns);
 
         if (r == NULL) {
