@@ -640,17 +640,14 @@ wsdd_finding_list_purge (void)
  *
  * It ignores all endpoints except ScannerServiceType, extracts endpoint
  * URLs and prepends them to the wsdd->finding.endpoints
- *
- * Returns true if some endpoints were extracted, false otherwise
  */
-static bool
+static void
 wsdd_finding_parse_endpoints (wsdd_finding *wsdd, xml_rd *xml)
 {
     unsigned int      level = xml_rd_depth(xml);
     size_t            prefixlen = strlen(xml_rd_node_path(xml));
     bool              is_scanner = false;
     zeroconf_endpoint *endpoints = NULL;
-    bool              ok = false;
 
     while (!xml_rd_end(xml)) {
         const char *path = xml_rd_node_path(xml) + prefixlen;
@@ -680,10 +677,8 @@ wsdd_finding_parse_endpoints (wsdd_finding *wsdd, xml_rd *xml)
 
     if (!is_scanner) {
         zeroconf_endpoint_list_free(endpoints);
-        return false;
+        return;
     }
-
-    ok = endpoints != NULL;
 
     while (endpoints != NULL) {
         zeroconf_endpoint     *ep = endpoints;
@@ -710,8 +705,6 @@ wsdd_finding_parse_endpoints (wsdd_finding *wsdd, xml_rd *xml)
             zeroconf_endpoint_free_single(ep);
         }
     }
-
-    return ok;
 }
 
 /* Get metadata callback
@@ -724,7 +717,6 @@ wsdd_finding_get_metadata_callback (void *ptr, http_query *q)
     http_data    *data;
     wsdd_finding *wsdd = ptr;
     char         *model = NULL, *manufacturer = NULL;
-    bool         ok = false;
 
     /* Check query status */
     err = http_query_error(q);
@@ -752,7 +744,7 @@ wsdd_finding_get_metadata_callback (void *ptr, http_query *q)
 
         if (!strcmp(path, "s:Envelope/s:Body/mex:Metadata/mex:MetadataSection"
                 "/devprof:Relationship/devprof:Hosted")) {
-            ok = wsdd_finding_parse_endpoints(wsdd, xml) || ok;
+            wsdd_finding_parse_endpoints(wsdd, xml);
         } else if (!strcmp(path, "s:Envelope/s:Body/mex:Metadata/mex:MetadataSection"
                 "/devprof:ThisModel/devprof:Manufacturer")) {
             if (manufacturer == NULL) {
