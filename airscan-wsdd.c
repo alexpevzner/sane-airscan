@@ -1276,7 +1276,6 @@ wsdd_resolver_new (const netif_addr *addr, bool initscan)
     int           af = addr->ipv6 ? AF_INET6 : AF_INET;
     const char    *af_name = addr->ipv6 ? "AF_INET6" : "AF_INET";
     int           rc;
-    static int    no = 0;
     uint16_t      port;
 
     /* Build resolver structure */
@@ -1305,10 +1304,6 @@ wsdd_resolver_new (const netif_addr *addr, bool initscan)
         if (rc < 0) {
             goto FAIL;
         }
-
-        /* Note: error is not a problem here */
-        (void) setsockopt(resolver->fd, IPPROTO_IPV6, IPV6_MULTICAST_LOOP,
-                &no, sizeof(no));
     } else {
         rc = setsockopt(resolver->fd, IPPROTO_IP, IP_MULTICAST_IF,
                 &addr->ip.v4, sizeof(addr->ip.v4));
@@ -1324,10 +1319,6 @@ wsdd_resolver_new (const netif_addr *addr, bool initscan)
         if (rc < 0) {
             goto FAIL;
         }
-
-        /* Note: error is not a problem here */
-        (void) setsockopt(resolver->fd, IPPROTO_IP, IP_MULTICAST_LOOP,
-                &no, sizeof(no));
     }
 
     /* Bind the socket */
