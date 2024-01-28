@@ -45,28 +45,33 @@
 /* wsdd_resolver represents a per-interface WSDD resolver
  */
 typedef struct {
-    int          fd;           /* File descriptor */
-    int          ifindex;      /* Interface index */
-    bool         ipv6;         /* We are on IPv6 */
-    eloop_fdpoll *fdpoll;      /* Socket fdpoll */
-    eloop_timer  *timer;       /* Retransmit timer */
-    uint32_t     total_time;   /* Total elapsed time */
-    ip_straddr   str_ifaddr;   /* Interface address */
-    ip_straddr   str_sockaddr; /* Per-interface socket address */
-    bool         initscan;     /* Initial scan in progress */
+    int           fd;             /* File descriptor */
+    int           ifindex;        /* Interface index */
+    bool          ipv6;           /* We are on IPv6 */
+    eloop_fdpoll  *fdpoll;        /* Socket fdpoll */
+    eloop_timer   *timer;         /* Retransmit timer */
+    uint32_t      total_time;     /* Total elapsed time */
+    ip_straddr    str_ifaddr;     /* Interface address */
+    ip_straddr    str_sockaddr;   /* Per-interface socket address */
+    bool          initscan;       /* Initial scan in progress */
 } wsdd_resolver;
 
 /* wsdd_finding represents zeroconf_finding for WSD
  * device discovery
  */
 typedef struct {
-    zeroconf_finding  finding;        /* Base class */
-    const char        *address;       /* Device "address" in WS-SD sense */
-    ll_head           xaddrs;         /* List of wsdd_xaddr */
-    http_client       *http_client;   /* HTTP client */
-    ll_node           list_node;      /* In wsdd_finding_list */
-    eloop_timer       *publish_timer; /* WSDD_PUBLISH_DELAY timer */
-    bool              published;      /* This finding is published */
+    zeroconf_finding  finding;               /* Base class */
+    const char        *address;              /* Device WS-SD "address" */
+    ll_head           xaddrs;                /* List of wsdd_xaddr */
+    ll_head           xaddrs_unresolved;     /* wsdd_xaddr to be resolved */
+    zeroconf_endpoint *endpoints_unresolved; /* endpoints to be resolved */
+    mdns_resolver     *mdns_resolver;        /* MDNS resolver */
+    http_client       *http_client;          /* HTTP client */
+    ll_node           list_node;             /* In wsdd_finding_list */
+    eloop_timer       *publish_timer;        /* WSDD_PUBLISH_DELAY timer */
+    bool              is_printer;            /* Device is printer */
+    bool              is_scanner;            /* Device is scanner */
+    bool              published;             /* This finding is published */
 } wsdd_finding;
 
 /* wsdd_xaddr represents device transport address
@@ -97,6 +102,12 @@ typedef struct {
 
 /* Forward declarations
  */
+static void
+wsdd_finding_add_xaddr (wsdd_finding *wsdd, wsdd_xaddr *xaddr);
+
+static void
+wsdd_finding_get_metadata (wsdd_finding *wsdd, int ifindex, wsdd_xaddr *xaddr);
+
 static void
 wsdd_message_free(wsdd_message *msg);
 
@@ -264,6 +275,9 @@ wsdd_finding_new (int ifindex, const char *address)
 
     wsdd->address = str_dup(address);
     ll_init(&wsdd->xaddrs);
+    ll_init(&wsdd->xaddrs_unresolved);
+
+    wsdd->mdns_resolver = mdns_resolver_new(ifindex);
     wsdd->http_client = http_client_new(wsdd_log, wsdd);
 
     return wsdd;
@@ -278,6 +292,9 @@ wsdd_finding_free (wsdd_finding *wsdd)
         zeroconf_finding_withdraw(&wsdd->finding);
     }
 
+    mdns_resolver_cancel(wsdd->mdns_resolver);
+    mdns_resolver_free(wsdd->mdns_resolver);
+
     http_client_cancel(wsdd->http_client);
     http_client_free(wsdd->http_client);
 
@@ -288,6 +305,8 @@ wsdd_finding_free (wsdd_finding *wsdd)
     zeroconf_endpoint_list_free(wsdd->finding.endpoints);
     mem_free((char*) wsdd->address);
     wsdd_xaddr_list_purge(&wsdd->xaddrs);
+    wsdd_xaddr_list_purge(&wsdd->xaddrs_unresolved);
+    zeroconf_endpoint_list_free(wsdd->endpoints_unresolved);
     ip_addrset_free(wsdd->finding.addrs);
     mem_free((char*) wsdd->finding.model);
     mem_free((char*) wsdd->finding.name);
@@ -316,6 +335,16 @@ wsdd_finding_publish (wsdd_finding *wsdd)
     }
 
     zeroconf_finding_publish(&wsdd->finding);
+}
+
+/* wsdd_finding_has_pending_queries checks if wsdd_finding
+ * has pending MDNS or HTTP queries
+ */
+static bool
+wsdd_finding_has_pending_queries (wsdd_finding *wsdd)
+{
+    return mdns_resolver_has_pending(wsdd->mdns_resolver) ||
+           http_client_has_pending(wsdd->http_client);
 }
 
 /* WSDD_PUBLISH_DELAY timer callback
@@ -460,7 +489,109 @@ wsdd_finding_has_xaddr (wsdd_finding *wsdd, const wsdd_xaddr *xaddr)
         }
     }
 
+    for (LL_FOR_EACH(node, &wsdd->xaddrs_unresolved)) {
+        xaddr2 = OUTER_STRUCT(node, wsdd_xaddr, list_node);
+
+        if (http_uri_equal(xaddr->uri, xaddr2->uri)) {
+            return true;
+        }
+    }
+
     return false;
+}
+
+/* mdns_resolver callback for resolving non-literal
+ * hostnames in xaddrs
+ */
+static void
+wsdd_finding_mdns_resolver_xaddr_callback (const mdns_query *query)
+{
+    wsdd_finding     *wsdd = mdns_query_get_ptr(query);
+    const char       *host = mdns_query_get_name(query);
+    const ip_addrset *answer = mdns_query_get_answer(query);
+    size_t           count;
+    const ip_addr    *addrs = ip_addrset_addresses(answer, &count);
+    ll_node          *node;
+
+    for (LL_FOR_EACH(node, &wsdd->xaddrs_unresolved)) {
+        wsdd_xaddr *xaddr = OUTER_STRUCT(node, wsdd_xaddr, list_node);
+
+        if (http_uri_host_is(xaddr->uri, host)) {
+            size_t i;
+
+            for (i = 0; i < count; i ++) {
+                ip_addr    addr = addrs[i];
+                http_uri   *uri = http_uri_clone(xaddr->uri);
+                wsdd_xaddr *xaddr_resolved;
+
+                http_uri_set_host_addr(uri, addr);
+                xaddr_resolved = wsdd_xaddr_new(uri);
+
+                wsdd_finding_add_xaddr(wsdd, xaddr_resolved);
+            }
+        }
+    }
+}
+
+/* mdns_resolver callback for resolving non-literal
+ * hostnames in endpoints
+ */
+static void
+wsdd_finding_mdns_resolver_endpoint_callback (const mdns_query *query)
+{
+    wsdd_finding      *wsdd = mdns_query_get_ptr(query);
+    const char        *host = mdns_query_get_name(query);
+    const ip_addrset  *answer = mdns_query_get_answer(query);
+    size_t            count;
+    const ip_addr     *addrs = ip_addrset_addresses(answer, &count);
+    zeroconf_endpoint *ep;
+
+    for (ep = wsdd->endpoints_unresolved; ep != NULL; ep = ep->next) {
+        if (http_uri_host_is(ep->uri, host)) {
+            size_t i;
+
+            for (i = 0; i < count; i ++) {
+                ip_addr           addr = addrs[i];
+                http_uri          *uri = http_uri_clone(ep->uri);
+                zeroconf_endpoint *ep_resolved;
+
+                http_uri_set_host_addr(uri, addr);
+                ip_addrset_add(wsdd->finding.addrs, addr);
+
+                ep_resolved = zeroconf_endpoint_new(ID_PROTO_WSD, uri);
+                ep_resolved->next = wsdd->finding.endpoints;
+                wsdd->finding.endpoints = ep_resolved;
+            }
+        }
+    }
+}
+
+/* Add newly discovered xaddr and optionally initiate metadata query
+ * This function takes ownership over xaddr
+ */
+static void
+wsdd_finding_add_xaddr (wsdd_finding *wsdd, wsdd_xaddr *xaddr)
+{
+    /* xaddr already known? */
+    if (wsdd_finding_has_xaddr(wsdd, xaddr)) {
+        wsdd_xaddr_free(xaddr);
+        return;
+    }
+
+    if (http_uri_is_literal(xaddr->uri)) {
+        ll_push_end(&wsdd->xaddrs, &xaddr->list_node);
+        if (wsdd->is_scanner) {
+            wsdd_finding_get_metadata(wsdd, wsdd->finding.ifindex, xaddr);
+        }
+    } else {
+        ll_push_end(&wsdd->xaddrs_unresolved, &xaddr->list_node);
+        mdns_query_submit(
+            wsdd->mdns_resolver,
+            http_uri_get_host(xaddr->uri),
+            wsdd_finding_mdns_resolver_xaddr_callback,
+            wsdd
+        );
+    }
 }
 
 /* Delete wsdd_finding from the wsdd_finding_list
@@ -558,12 +689,26 @@ wsdd_finding_parse_endpoints (wsdd_finding *wsdd, xml_rd *xml)
         zeroconf_endpoint     *ep = endpoints;
         const struct sockaddr *addr = http_uri_addr(ep->uri);
 
+        endpoints = endpoints->next;
+
         if (addr != NULL) {
             ip_addrset_add(wsdd->finding.addrs, ip_addr_from_sockaddr(addr));
+            ep->next = wsdd->finding.endpoints;
+            wsdd->finding.endpoints = ep;
+        } else if (!zeroconf_endpoint_list_contains(wsdd->endpoints_unresolved,
+                ep)) {
+            ep->next = wsdd->endpoints_unresolved;
+            wsdd->endpoints_unresolved = ep;
+
+            mdns_query_submit(
+                wsdd->mdns_resolver,
+                http_uri_get_host(ep->uri),
+                wsdd_finding_mdns_resolver_endpoint_callback,
+                wsdd
+            );
+        } else {
+            zeroconf_endpoint_free_single(ep);
         }
-        endpoints = endpoints->next;
-        ep->next = wsdd->finding.endpoints;
-        wsdd->finding.endpoints = ep;
     }
 
     return ok;
@@ -580,8 +725,6 @@ wsdd_finding_get_metadata_callback (void *ptr, http_query *q)
     wsdd_finding *wsdd = ptr;
     char         *model = NULL, *manufacturer = NULL;
     bool         ok = false;
-
-    (void) ptr;
 
     /* Check query status */
     err = http_query_error(q);
@@ -645,15 +788,19 @@ wsdd_finding_get_metadata_callback (void *ptr, http_query *q)
         }
     }
 
-    /* Cancel cancel all unnecessary metadata requests.
+    /* Cancel all unnecessary metadata requests
      *
-     * Note, we consider request is unnecessary if:
-     *   * it has the same address family
-     *   * it belongs to the same network interface
+     * Depending on the device, metadata request may either return all
+     * endpoints, or metadata request sent to IPv4 address may return
+     * only IPv4 endpoints and visa versa
+     *
+     * But if we have both IPv4/IPv6 endpoints, seems waiting for completion
+     * of more metadata requests is not unnecessary. So lets cancel them,
+     * if any.
      */
-    if (ok) {
-        http_client_cancel_af_uintptr(wsdd->http_client,
-            http_uri_af(http_query_uri(q)), http_query_get_uintptr(q));
+    if (ip_addrset_has_af(wsdd->finding.addrs, AF_INET) &&
+        ip_addrset_has_af(wsdd->finding.addrs, AF_INET6)) {
+        http_client_cancel(wsdd->http_client);
     }
 
     /* Cleanup and exit */
@@ -662,7 +809,7 @@ DONE:
     mem_free(model);
     mem_free(manufacturer);
 
-    if (http_client_has_pending(wsdd->http_client) == 0) {
+    if (!wsdd_finding_has_pending_queries(wsdd)) {
         wsdd_finding_publish_delay(wsdd);
     }
 }
@@ -874,12 +1021,6 @@ wsdd_resolver_message_dispatch (wsdd_resolver *resolver,
     wsdd_xaddr   *xaddr;
     ll_node      *node;
 
-    /* Fixup ipv6 zones */
-    for (LL_FOR_EACH(node, &msg->xaddrs)) {
-        xaddr = OUTER_STRUCT(node, wsdd_xaddr, list_node);
-        http_uri_fix_ipv6_zone(xaddr->uri, resolver->ifindex);
-    }
-
     /* Write trace messages */
     log_trace(wsdd_log, "%s message received from %s:",
         wsdd_message_action_name(msg), from);
@@ -891,10 +1032,8 @@ wsdd_resolver_message_dispatch (wsdd_resolver *resolver,
         log_trace(wsdd_log, "  xaddr:      %s", http_uri_str(xaddr->uri));
     }
 
-    /* Handle the message */
-    switch (msg->action) {
-    case WSDD_ACTION_HELLO:
-    case WSDD_ACTION_PROBEMATCHES:
+    /* Handle some special cases */
+    if (msg->action != WSDD_ACTION_BYE) {
         /* Ignore devices that are neither scanner not printer */
         if (!(msg->is_scanner || msg->is_printer)) {
             log_trace(wsdd_log,
@@ -902,24 +1041,37 @@ wsdd_resolver_message_dispatch (wsdd_resolver *resolver,
             goto DONE;
         }
 
+        /* Ignore messages with no xaddrs */
+        if (ll_empty(&msg->xaddrs)) {
+            log_trace(wsdd_log,
+                "skipped: no xaddrs in the message");
+            goto DONE;
+        }
+    }
+
+    /* Fixup ipv6 zones */
+    for (LL_FOR_EACH(node, &msg->xaddrs)) {
+        xaddr = OUTER_STRUCT(node, wsdd_xaddr, list_node);
+        http_uri_fix_ipv6_zone(xaddr->uri, resolver->ifindex);
+    }
+
+    /* Handle the message */
+    switch (msg->action) {
+    case WSDD_ACTION_HELLO:
+    case WSDD_ACTION_PROBEMATCHES:
         /* Add a finding or get existent one */
         wsdd = wsdd_finding_get(resolver->ifindex, msg->address);
+
+        /* Update is_printer/is_scanner flags */
+        wsdd->is_printer = wsdd->is_printer || msg->is_printer;
+        wsdd->is_scanner = wsdd->is_scanner || msg->is_scanner;
 
         /* Import newly discovered xaddrs and initiate metadata
          * query
          */
         while ((node = ll_pop_beg(&msg->xaddrs)) != NULL) {
             xaddr = OUTER_STRUCT(node, wsdd_xaddr, list_node);
-
-            if (wsdd_finding_has_xaddr(wsdd, xaddr)) {
-                wsdd_xaddr_free(xaddr);
-                continue;
-            }
-
-            ll_push_end(&wsdd->xaddrs, &xaddr->list_node);
-            if (msg->is_scanner) {
-                wsdd_finding_get_metadata(wsdd, resolver->ifindex, xaddr);
-            }
+            wsdd_finding_add_xaddr(wsdd, xaddr);
         }
 
         /* If there is no pending metadata queries, it may mean
@@ -932,8 +1084,8 @@ wsdd_resolver_message_dispatch (wsdd_resolver *resolver,
          *
          * At this case we can publish device now
          */
-        if (http_client_has_pending(wsdd->http_client) == 0) {
-            if (msg->is_scanner) {
+        if (!wsdd_finding_has_pending_queries(wsdd)) {
+            if (wsdd->is_scanner) {
                 wsdd_finding_publish_delay(wsdd);
             } else {
                 wsdd_finding_publish(wsdd);

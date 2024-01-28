@@ -22,6 +22,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include <avahi-common/domain.h>
 #include <gnutls/gnutls.h>
 
 /******************** Constants ********************/
@@ -905,6 +906,60 @@ const char*
 http_uri_get_host (const http_uri *uri)
 {
     return uri->host;
+}
+
+/* http_uri_host_is checks if URI's host name is equal to the
+ * specified string.
+ *
+ * It does its best to compare domain names correctly, taking
+ * in account only significant difference (for example, the difference
+ * in upper/lower case * in domain names is not significant).
+ */
+bool
+http_uri_host_is (const http_uri *uri, const char *host)
+{
+    const char *uri_host = http_uri_get_host(uri);
+
+    if (http_uri_host_is_literal(uri)) {
+        return !strcasecmp(uri_host, host);
+    }
+
+    if (!avahi_is_valid_domain_name(uri_host)) {
+        return false;
+    }
+
+    if (!avahi_is_valid_domain_name(host)) {
+        return false;
+    }
+
+    return avahi_domain_equal(uri_host, host);
+}
+
+/* http_uri_host_is_literal returns true if URI uses literal
+ * IP address
+ */
+bool
+http_uri_host_is_literal (const http_uri *uri)
+{
+    return http_uri_addr(uri) != NULL;
+}
+
+/* Set URI host into the literal IP address.
+ */
+void
+http_uri_set_host_addr (http_uri *uri, ip_addr addr)
+{
+    ip_straddr straddr = ip_addr_to_straddr(addr, true);
+    char       *host = straddr.text;
+
+    /* Remove square brackets around IPv6 address */
+    if (host[0] == '[' && host[strlen(host) - 1] == ']') {
+        host[strlen(host) - 1] = '\0';
+        host ++;
+    }
+
+    /* Set the host */
+    http_uri_field_replace(uri, UF_HOST, host);
 }
 
 /* Fix URI host: if `match` is NULL or uri's host matches `match`,
@@ -1927,30 +1982,6 @@ http_client_timeout (http_client *client, int timeout)
          q = http_query_by_ll_node(node);
          http_query_timeout(q, timeout);
     }
-}
-
-/* Cancel all pending queries with matching address family and uintptr
- */
-void
-http_client_cancel_af_uintptr (http_client *client, int af, uintptr_t uintptr)
-{
-    ll_head leftover;
-    ll_node *node;
-
-    ll_init(&leftover);
-
-    while ((node = ll_pop_beg(&client->pending)) != NULL) {
-        http_query *q = http_query_by_ll_node(node);
-
-        if (uintptr == http_query_get_uintptr(q) &&
-            af == http_uri_af(http_query_uri(q))) {
-            http_query_cancel(q);
-        } else {
-            ll_push_end(&leftover, node);
-        }
-    }
-
-    ll_cat(&client->pending, &leftover);
 }
 
 /* Check if client has pending queries

@@ -406,6 +406,23 @@ ip_addrset_on_network (const ip_addrset *set, ip_network net)
     return false;
 }
 
+/* Check if address set has some addresses of the specified
+ * address family
+ */
+bool
+ip_addrset_has_af (const ip_addrset *set, int af)
+{
+    size_t i, len = mem_len(set->addrs);
+
+    for (i = 0; i < len; i ++) {
+        if (set->addrs[i].af == af) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 /* Compare two ip_addrs, for sorting in ip_addrset_friendly_str()
  */
 static int
@@ -438,6 +455,9 @@ ip_addrset_friendly_sort_cmp (const void *p1, const void *p2)
  * in the ip_addrset:
  *   * addresses are sorted, IP4 addresses goes first
  *   * link-local addresses are skipped, if there are non-link-local ones
+ *
+ * Caller must use mem_free to release the returned string when
+ * it is not needed anymore
  */
 char*
 ip_addrset_friendly_str (const ip_addrset *set, char *s)

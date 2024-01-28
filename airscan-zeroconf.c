@@ -576,7 +576,7 @@ zeroconf_endpoint_copy_single (const zeroconf_endpoint *endpoint)
 
 /* Free single zeroconf_endpoint
  */
-static void
+void
 zeroconf_endpoint_free_single (zeroconf_endpoint *endpoint)
 {
     http_uri_free(endpoint->uri);
@@ -744,6 +744,25 @@ zeroconf_endpoint_list_sort_dedup (zeroconf_endpoint *list)
     }
 
     return list;
+}
+
+/* Check if list of endpoints already contains the given
+ * endpoint (i.e., endpoint with the same URI and protocol)
+ */
+bool
+zeroconf_endpoint_list_contains (const zeroconf_endpoint *list,
+        const zeroconf_endpoint *endpoint)
+{
+    while (list != NULL) {
+        if (list->proto == endpoint->proto &&
+            http_uri_equal(list->uri, endpoint->uri)) {
+            return true;
+        }
+
+        list = list->next;
+    }
+
+    return false;
 }
 
 /* Check if endpoints list contains a non-link-local address

@@ -9,9 +9,11 @@
 #include "airscan.h"
 
 #include <arpa/inet.h>
+#include <net/if.h>
 
 #include <avahi-client/client.h>
 #include <avahi-client/lookup.h>
+#include <avahi-common/domain.h>
 #include <avahi-common/error.h>
 
 #include <string.h>
@@ -43,6 +45,12 @@ typedef enum {
 
     NUM_MDNS_SERVICE
 } MDNS_SERVICE;
+
+/* Action names for mdns_debug/mdns_perror messages
+ */
+#define MDNS_ACTION_BROWSE      "browse"
+#define MDNS_ACTION_RESOLVE     "resolve"
+#define MDNS_ACTION_LOOKUP      "lookup"
 
 /******************** Local Types *********************/
 /* mdns_finding represents zeroconf_finding for MDNS
@@ -83,29 +91,73 @@ mdns_avahi_client_restart_defer (void);
 /* Print debug message
  */
 static void
-mdns_debug (const char *action, AvahiProtocol protocol,
-        const char *in_type, const char *in_name, const char *out)
+mdns_debug (const char *action, AvahiIfIndex interface, AvahiProtocol protocol,
+        AvahiLookupResultFlags flags, const char *in_type, const char *in_name,
+        const char *out)
 {
     const char *af = protocol == AVAHI_PROTO_INET ? "ipv4" : "ipv6";
+    char       ifname[IF_NAMESIZE] = "?";
     char       buf[512];
+    char       buf2[128] = "";
+
+    if (interface == AVAHI_IF_UNSPEC) {
+        strcpy(ifname, "*");
+    } else if (if_indextoname(interface, ifname) == NULL) {
+        sprintf(ifname, "%d", interface);
+    }
 
     if (in_name == NULL) {
         snprintf(buf, sizeof(buf), "\"%s\"", in_type);
+    } else if (in_type == NULL) {
+        snprintf(buf, sizeof(buf), "\"%s\"", in_name);
     } else {
         snprintf(buf, sizeof(buf), "\"%s\", \"%s\"", in_type, in_name);
     }
 
-    log_debug(mdns_log, "%s-%s(%s): %s",
-        action, af, buf, out);
+    flags &= AVAHI_LOOKUP_RESULT_CACHED |
+             AVAHI_LOOKUP_RESULT_WIDE_AREA |
+             AVAHI_LOOKUP_RESULT_MULTICAST |
+             AVAHI_LOOKUP_RESULT_STATIC;
+
+    if (flags != 0) {
+        char *s = buf2 + 1;
+
+        if ((flags & AVAHI_LOOKUP_RESULT_CACHED) != 0) {
+            strcpy(s, " CACHED");
+            s += strlen(s);
+        }
+
+        if ((flags & AVAHI_LOOKUP_RESULT_WIDE_AREA) != 0) {
+            strcpy(s, " WAN");
+            s += strlen(s);
+        }
+
+        if ((flags & AVAHI_LOOKUP_RESULT_MULTICAST) != 0) {
+            strcpy(s, " MCAST");
+            s += strlen(s);
+        }
+
+        if ((flags & AVAHI_LOOKUP_RESULT_STATIC) != 0) {
+            strcpy(s, " STATIC");
+            s += strlen(s);
+        }
+
+        strcpy(s, ")");
+        buf2[0] = ' ';
+        buf2[1] = '(';
+    }
+
+    log_debug(mdns_log, "%s-%s@%s(%s): %s%s",
+        action, af, ifname, buf, out, buf2);
 }
 
 /* Print error message
  */
 static void
-mdns_perror (const char *action, AvahiProtocol protocol,
+mdns_perror (const char *action, AvahiIfIndex interface, AvahiProtocol protocol,
         const char *in_type, const char *in_name)
 {
-    mdns_debug(action, protocol, in_type, in_name,
+    mdns_debug(action, interface, protocol, 0, in_type, in_name,
             avahi_strerror(avahi_client_errno(mdns_avahi_client)));
 }
 
@@ -543,23 +595,23 @@ mdns_avahi_resolver_callback (AvahiServiceResolver *r,
     (void) flags;
 
     /* Print debug message */
-    mdns_debug("resolve", protocol, type, name,
-        mdns_avahi_resolver_event_name(event));
-
     if (event == AVAHI_RESOLVER_FOUND) {
         char buf[128];
         avahi_address_snprint(buf, sizeof(buf), addr);
         sprintf(buf + strlen(buf), ":%d", port);
-        mdns_debug("resolve", protocol, type, name, buf);
-    }
-
-    if (event == AVAHI_RESOLVER_FAILURE) {
-        mdns_perror("resolve", protocol, type, name);
+        mdns_debug(MDNS_ACTION_RESOLVE, interface, protocol, flags, type, name,
+            buf);
+    } else if (event == AVAHI_RESOLVER_FAILURE) {
+        mdns_perror(MDNS_ACTION_RESOLVE, interface, protocol, type, name);
+    } else {
+        mdns_debug(MDNS_ACTION_RESOLVE, interface, protocol, flags, type, name,
+            mdns_avahi_resolver_event_name(event));
     }
 
     /* Remove resolver from list of pending ones */
     if (!ptr_array_del(mdns->resolvers, ptr_array_find(mdns->resolvers, r))) {
-        mdns_debug("resolve", protocol, type, name, "spurious avahi callback");
+        mdns_debug(MDNS_ACTION_RESOLVE, interface, protocol, flags, type, name,
+            "spurious avahi callback");
         return;
     }
 
@@ -637,7 +689,9 @@ mdns_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
     (void) flags;
 
     /* Print debug message */
-    mdns_debug("browse", protocol, type, NULL, mdns_avahi_browser_event_name(event));
+    mdns_debug(MDNS_ACTION_BROWSE, interface, protocol, flags, type, NULL,
+        mdns_avahi_browser_event_name(event));
+
     if (event == AVAHI_BROWSER_NEW) {
         size_t len = strlen(name);
         char   *buf = alloca(len + 3);
@@ -646,7 +700,8 @@ mdns_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
         buf[len + 1] = '"';
         buf[len + 2] = '\0';
 
-        mdns_debug("browse", protocol, type, NULL, buf);
+        mdns_debug(MDNS_ACTION_BROWSE, interface, protocol, flags, type, NULL,
+            buf);
     }
 
     switch (event) {
@@ -661,7 +716,7 @@ mdns_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
                 mdns_avahi_resolver_callback, mdns);
 
         if (r == NULL) {
-            mdns_perror("resolve", protocol, type, name);
+            mdns_perror(MDNS_ACTION_RESOLVE, interface, protocol, type, name);
             mdns_avahi_client_restart_defer();
             break;
         }
@@ -678,7 +733,7 @@ mdns_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
         break;
 
     case AVAHI_BROWSER_FAILURE:
-        mdns_perror("browse", protocol, type, NULL);
+        mdns_perror(MDNS_ACTION_BROWSE, interface, protocol, type, NULL);
         mdns_avahi_client_restart_defer();
         break;
 
@@ -857,6 +912,316 @@ void
 mdns_initscan_timer_expired (void)
 {
 }
+
+/***** Asynchronous MDNS resolver *****/
+
+/* mdns_resolver asynchronously resolves IP addresses using MDNS
+ */
+struct mdns_resolver {
+    int     ifindex; /* Interface index */
+    ll_head pending; /* Pending queries */
+};
+
+/* mdns_query represents a single mdns_resolver query
+ */
+struct mdns_query {
+    char                  *name;                 /* Requested name */
+    mdns_resolver         *resolver;             /* Back link to resolver */
+    ip_addrset            *answer;               /* Collected addresses */
+    uint64_t              dummy_callid;          /* Used when no resolvers
+                                                    can be created */
+    void                  (*callback)(           /* Completion callback */
+                                const mdns_query *query);
+    void                  *ptr;                  /* Callback's user data */
+    AvahiHostNameResolver **resolvers;           /* Avahi host name resolver */
+    ll_node               chain;                 /* In mdns_resolver::pending */
+};
+
+/* mdns_resolver_new creates a new MDNS resolver
+ */
+mdns_resolver*
+mdns_resolver_new (int ifindex)
+{
+    mdns_resolver *resolver = mem_new(mdns_resolver, 1);
+    resolver->ifindex = ifindex;
+    ll_init(&resolver->pending);
+    return resolver;
+}
+
+/* mdns_resolver_free frees the mdns_resolver previously created
+ * by mdns_resolver_new()
+ */
+void
+mdns_resolver_free (mdns_resolver *resolver)
+{
+    log_assert(mdns_log, ll_empty(&resolver->pending));
+    mem_free(resolver);
+}
+
+/* mdns_resolver_cancel cancels all pending queries
+ */
+void
+mdns_resolver_cancel (mdns_resolver *resolver)
+{
+    ll_node *node;
+
+    while ((node = ll_first(&resolver->pending)) != NULL) {
+         mdns_query *query = OUTER_STRUCT(node, mdns_query, chain);
+         mdns_query_cancel(query);
+    }
+}
+
+/* mdns_resolver_has_pending checks if resolver has pending queries
+ */
+bool
+mdns_resolver_has_pending (mdns_resolver *resolver)
+{
+    return !ll_empty(&resolver->pending);
+}
+
+/* mdns_query_free frees the mdns_query
+ */
+static void
+mdns_query_free (mdns_query *query)
+{
+    int i;
+
+    ll_del(&query->chain);
+
+    for (i = 0; query->resolvers[i] != NULL; i ++) {
+        avahi_host_name_resolver_free(query->resolvers[i]);
+    }
+
+    eloop_call_cancel(query->dummy_callid);
+
+    ip_addrset_free(query->answer);
+    mem_free(query->resolvers);
+    mem_free(query->name);
+    mem_free(query);
+}
+
+/* mdns_query_callback_exec executes completion callback, then
+ * frees the query
+ */
+static void
+mdns_query_callback_exec (mdns_query *query)
+{
+    char *s = ip_addrset_friendly_str(query->answer, NULL);
+    log_debug(mdns_log, "%s(%s): found %s", MDNS_ACTION_LOOKUP, query->name, s);
+    mem_free(s);
+
+    query->callback(query);
+    mdns_query_free(query);
+}
+
+/* AvahiHostNameResolver callback for mdns_query
+ */
+static void
+mdns_query_callback (AvahiHostNameResolver *r, AvahiIfIndex interface,
+                     AvahiProtocol protocol, AvahiResolverEvent event,
+                     const char *name, const AvahiAddress *addr,
+                     AvahiLookupResultFlags flags, void *userdata)
+{
+    mdns_query *query = (mdns_query*) userdata;
+    char       buf[256];
+
+    /* Print debug message */
+    switch (event) {
+    case AVAHI_RESOLVER_FOUND:
+        avahi_address_snprint(buf, sizeof(buf), addr);
+
+        mdns_debug(MDNS_ACTION_LOOKUP, interface, protocol, flags, NULL, name,
+            buf);
+        break;
+
+    case AVAHI_RESOLVER_FAILURE:
+        mdns_perror(MDNS_ACTION_LOOKUP, interface, protocol, NULL, name);
+        break;
+
+    default:
+        mdns_debug(MDNS_ACTION_LOOKUP, interface, protocol, flags, NULL, name,
+            mdns_avahi_resolver_event_name(event));
+    }
+
+    /* Remove resolver from list of pending ones */
+    if (!ptr_array_del(query->resolvers, ptr_array_find(query->resolvers, r))) {
+        mdns_debug(MDNS_ACTION_LOOKUP, interface, protocol, flags, NULL, name,
+                "spurious avahi callback");
+        return;
+    }
+
+    /* Handle event */
+    if (event == AVAHI_RESOLVER_FOUND) {
+        ip_addr ip = {
+            .ifindex = interface
+        };
+        bool ok = true;
+
+        switch (protocol) {
+        case AVAHI_PROTO_INET:
+            ip.af = AF_INET;
+            ip.ip.v4.s_addr = addr->data.ipv4.address;
+            break;
+
+        case AVAHI_PROTO_INET6:
+            ip.af = AF_INET6;
+            memcpy(&ip.ip.v6, addr->data.ipv6.address, 16);
+            break;
+
+        default:
+            /* Very unlikely to happen, but just in case...
+             */
+            ok = false;
+        }
+
+        if (ok) {
+            ip_addrset_add(query->answer, ip);
+        }
+    }
+
+    /* Raise callback, if all is done */
+    if (mem_len(query->resolvers) == 0) {
+        mdns_query_callback_exec(query);
+    }
+}
+
+/* eloop_call() callback for mdns_resolver that was created
+ * without any active AvahiHostNameResolver
+ *
+ * The purpose of thus callback is to ensure that mdns_resolver
+ * completion callback will be executed in any case
+ */
+static void
+mdns_query_dummy_callback (void *ptr)
+{
+    mdns_query *query = (mdns_query*) ptr;
+
+    mdns_query_callback_exec(query);
+}
+
+/* mdns_query_sumbit submits a new MDNS query for the specified domain
+ * name. When resolving is done, successfully or not, callback will be
+ * called
+ *
+ * The ptr parameter is passed to the callback without any interpretation
+ * as a user-defined argument
+ *
+ * Answer is a set of discovered IP addresses. It is owned by resolver,
+ * callback should not free it and should not assume that it is still
+ * valid after return from callback
+ */
+mdns_query*
+mdns_query_submit (mdns_resolver *resolver,
+                   const char *name,
+                   void (*callback)(const mdns_query *query),
+                   void *ptr)
+{
+    mdns_query            *query = mem_new(mdns_query, 1);
+    static AvahiProtocol  protos[] = {AVAHI_PROTO_INET, AVAHI_PROTO_INET6};
+    int                   i;
+    const char            *name_fqdn = name;
+
+    /* Normalize name, if it is not FQDN */
+    if (!avahi_is_valid_fqdn(name_fqdn)) {
+        char   *with_local;
+        size_t sz = strlen(name_fqdn);
+
+        with_local = alloca(strlen(name_fqdn) + 7);
+        memcpy(with_local, name_fqdn, sz);
+        strcpy(with_local + sz, ".local");
+
+        if (avahi_is_valid_fqdn(with_local)) {
+            name_fqdn = with_local;
+        }
+    }
+
+    /* Initialize a query structure */
+    query->name = str_dup(name);
+    query->resolver = resolver;
+    query->answer = ip_addrset_new();
+    query->dummy_callid = ELOOP_CALL_BADID;
+    query->callback = callback;
+    query->ptr = ptr;
+    query->resolvers = ptr_array_new(AvahiHostNameResolver*);
+
+    /* Create an AvahiHostNameResolver for each IPv4/v6 address family
+     */
+    for (i = 0; i < 2; i ++) {
+        AvahiProtocol         proto = protos[i];
+        AvahiHostNameResolver *r;
+
+        r = avahi_host_name_resolver_new(
+            mdns_avahi_client,
+            resolver->ifindex,
+            proto,
+            name_fqdn,
+            proto,
+            0,
+            mdns_query_callback,
+            query
+        );
+
+        if (r == NULL) {
+            mdns_perror(MDNS_ACTION_LOOKUP, resolver->ifindex, proto, NULL,
+                query->name);
+        } else {
+            query->resolvers = ptr_array_append(query->resolvers, r);
+            mdns_debug(MDNS_ACTION_LOOKUP, resolver->ifindex, proto, 0, NULL,
+                query->name, "started");
+        }
+    }
+
+    /* Make sure completion callback will be executed even
+     * if no resolvers were created
+     */
+    if (mem_len(query->resolvers) == 0) {
+        query->dummy_callid = eloop_call(mdns_query_dummy_callback, query);
+    }
+
+    ll_push_end(&resolver->pending, &query->chain);
+
+    return query;
+}
+
+/* mdns_query_cancel cancels the pending query. mdns_query memory will
+ * be released and callback will not be called
+ *
+ * Note, mdns_query pointer is valid when obtained from mdns_query_sumbit
+ * and until canceled or return from callback.
+ */
+void
+mdns_query_cancel (mdns_query *query)
+{
+    mdns_query_free(query);
+}
+
+/* mdns_query_get_name returns domain name, as it was specified
+ * when query was submitted
+ */
+const char*
+mdns_query_get_name (const mdns_query *query)
+{
+    return query->name;
+}
+
+/* mdns_query_get_answer returns resolved addresses
+ */
+const ip_addrset*
+mdns_query_get_answer (const mdns_query *query)
+{
+    return query->answer;
+}
+
+/* mdns_query_set_ptr gets the user-defined ptr, associated
+ * with query when it was submitted
+ */
+void*
+mdns_query_get_ptr (const mdns_query *query)
+{
+    return query->ptr;
+}
+
+/***** Initialization and cleanup *****/
 
 /* Initialize MDNS
  */

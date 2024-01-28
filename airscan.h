@@ -1158,10 +1158,19 @@ ip_addrset_is_intersect (const ip_addrset *set, const ip_addrset *set2);
 bool
 ip_addrset_on_network (const ip_addrset *set, ip_network net);
 
+/* Check if address set has some addresses of the specified
+ * address family
+ */
+bool
+ip_addrset_has_af (const ip_addrset *set, int af);
+
 /* Create user-friendly string out of set of addresses, containing
  * in the ip_addrset:
  *   * addresses are sorted, IP4 addresses goes first
  *   * link-local addresses are skipped, if there are non-link-local ones
+ *
+ * Caller must use mem_free to release the returned string when
+ * it is not needed anymore
  */
 char*
 ip_addrset_friendly_str (const ip_addrset *set, char *s);
@@ -1477,6 +1486,14 @@ eloop_cond_wait (pthread_cond_t *cond);
 const AvahiPoll*
 eloop_poll_get (void);
 
+/* ELOOP_CALL_BADID is the invalid callid which will never be returned by
+ * the eloop_call().
+ *
+ * It is safe to use ELOOP_CALL_BADID as parameter to eloop_call_cancel().
+ * Calling eloop_call_cancel(ELOOP_CALL_BADID) is guaranteed to do nothing.
+ */
+#define ELOOP_CALL_BADID        (~(uint64_t) 0)
+
 /* Call function on a context of event loop thread
  * The returned value can be supplied as a `callid'
  * parameter for the eloop_call_cancel() function
@@ -1634,6 +1651,14 @@ http_uri_af (const http_uri *uri)
     return addr ? addr->sa_family : AF_UNSPEC;
 }
 
+/* Tell if URI host is literal IP address
+ */
+static inline bool
+http_uri_is_literal (const http_uri *uri)
+{
+    return http_uri_addr(uri) != NULL;
+}
+
 /* Tell if URI IP address is loopback
  */
 static inline bool
@@ -1688,6 +1713,27 @@ http_uri_set_path (http_uri *uri, const char *path);
  */
 const char*
 http_uri_get_host (const http_uri *uri);
+
+/* http_uri_host_is checks if URI's host name is equal to the
+ * specified string.
+ *
+ * It does its best to compare domain names correctly, taking
+ * in account only significant difference (for example, the difference
+ * in upper/lower case * in domain names is not significant).
+ */
+bool
+http_uri_host_is (const http_uri *uri, const char *host);
+
+/* http_uri_host_is_literal returns true if URI uses literal
+ * IP address
+ */
+bool
+http_uri_host_is_literal (const http_uri *uri);
+
+/* Set URI host into the literal IP address.
+ */
+void
+http_uri_set_host_addr (http_uri *uri, ip_addr addr);
 
 /* Fix URI host: if `match` is NULL or uri's host matches `match`,
  * replace uri's host and port with values taken from the base_uri
@@ -1809,11 +1855,6 @@ http_client_cancel (http_client *client);
  */
 void
 http_client_timeout (http_client *client, int timeout);
-
-/* Cancel all pending queries with matching address family and uintptr
- */
-void
-http_client_cancel_af_uintptr (http_client *client, int af, uintptr_t uintptr);
 
 /* Check if client has pending queries
  */
@@ -2872,6 +2913,11 @@ zeroconf_init_scan (void);
 zeroconf_endpoint*
 zeroconf_endpoint_new (ID_PROTO proto, http_uri *uri);
 
+/* Free single zeroconf_endpoint
+ */
+void
+zeroconf_endpoint_free_single (zeroconf_endpoint *endpoint);
+
 /* Create a copy of zeroconf_endpoint list
  */
 zeroconf_endpoint*
@@ -2891,6 +2937,13 @@ zeroconf_endpoint_list_sort (zeroconf_endpoint *list);
  */
 zeroconf_endpoint*
 zeroconf_endpoint_list_sort_dedup (zeroconf_endpoint *list);
+
+/* Check if list of endpoints already contains the given
+ * endpoint (i.e., endpoint with the same URI and protocol)
+ */
+bool
+zeroconf_endpoint_list_contains (const zeroconf_endpoint *list,
+        const zeroconf_endpoint *endpoint);
 
 /* Check if endpoints list contains a non-link-local address
  * of the specified address family
@@ -2914,6 +2967,78 @@ mdns_init (void);
  */
 void
 mdns_cleanup (void);
+
+/* mdns_resolver asynchronously resolves IP addresses using MDNS
+ */
+typedef struct mdns_resolver mdns_resolver;
+
+/* mdns_query represents a single mdns_resolver query
+ */
+typedef struct mdns_query mdns_query;
+
+/* mdns_resolver_new creates a new MDNS resolver
+ */
+mdns_resolver*
+mdns_resolver_new (int ifindex);
+
+/* mdns_resolver_free frees the mdns_resolver previously created
+ * by mdns_resolver_new()
+ */
+void
+mdns_resolver_free (mdns_resolver *resolver);
+
+/* mdns_resolver_cancel cancels all pending queries
+ */
+void
+mdns_resolver_cancel (mdns_resolver *resolver);
+
+/* mdns_resolver_has_pending checks if resolver has pending queries
+ */
+bool
+mdns_resolver_has_pending (mdns_resolver *resolver);
+
+/* mdns_query_submit submits a new MDNS query for the specified domain
+ * name. When resolving is done, successfully or not, callback will be
+ * called
+ *
+ * The ptr parameter is passed to the callback without any interpretation
+ * as a user-defined argument
+ *
+ * Answer is a set of discovered IP addresses. It is owned by resolver,
+ * callback should not free it and should not assume that it is still
+ * valid after return from callback
+ */
+mdns_query*
+mdns_query_submit (mdns_resolver *resolver,
+                   const char *name,
+                   void (*callback)(const mdns_query *query),
+                   void *ptr);
+
+/* mdns_query_cancel cancels the pending query. mdns_query memory will
+ * be released and callback will not be called
+ *
+ * Note, mdns_query pointer is valid when obtained from mdns_query_sumbit
+ * and until canceled or return from callback.
+ */
+void
+mdns_query_cancel (mdns_query *query);
+
+/* mdns_query_get_name returns domain name, as it was specified
+ * when query was submitted
+ */
+const char*
+mdns_query_get_name (const mdns_query *query);
+
+/* mdns_query_get_answer returns resolved addresses
+ */
+const ip_addrset*
+mdns_query_get_answer (const mdns_query *query);
+
+/* mdns_query_set_ptr gets the user-defined ptr, associated
+ * with query when it was submitted
+ */
+void*
+mdns_query_get_ptr (const mdns_query *query);
 
 /******************** WS-Discovery ********************/
 /* Called by zeroconf to notify wsdd about initial scan timer expiration
