@@ -2902,11 +2902,6 @@ zeroconf_devinfo_lookup (const char *ident);
 void
 zeroconf_devinfo_free (zeroconf_devinfo *devinfo);
 
-/* Check if initial scan still in progress
- */
-bool
-zeroconf_init_scan (void);
-
 /* Create new zeroconf_endpoint. Newly created endpoint
  * takes ownership of uri string
  */
