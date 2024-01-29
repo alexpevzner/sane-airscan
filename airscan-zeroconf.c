@@ -447,7 +447,7 @@ zeroconf_merge_check (zeroconf_device *device, zeroconf_finding *finding)
     return false;
 }
 
-/* Find device, suitable for merging with specified findind
+/* Find device, suitable for merging with specified finding
  */
 static zeroconf_device*
 zeroconf_merge_find (zeroconf_finding *finding)
