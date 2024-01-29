@@ -951,11 +951,27 @@ http_uri_set_host_addr (http_uri *uri, ip_addr addr)
 {
     ip_straddr straddr = ip_addr_to_straddr(addr, true);
     char       *host = straddr.text;
+    char       *s;
 
     /* Remove square brackets around IPv6 address */
     if (host[0] == '[' && host[strlen(host) - 1] == ']') {
         host[strlen(host) - 1] = '\0';
         host ++;
+    }
+
+    /* Escape % character (zone suffix delimiter) */
+    s = strchr(host, '%');
+    if (s != NULL) {
+        /* Note, we replace '%' with '%25' plus don't forget
+         * the terminating '\0'. Hence strlen(host) + 3
+         */
+        char   *host2 = alloca(strlen(host) + 3);
+        size_t sz = s - host;
+
+        memcpy(host2, host, sz);
+        memcpy(host2 + sz, "%25", 3);
+        strcpy(host2 + sz + 3, s + 1);
+        host = host2;
     }
 
     /* Set the host */
