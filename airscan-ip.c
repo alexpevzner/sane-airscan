@@ -80,7 +80,8 @@ ip_straddr_from_sockaddr_dport (const struct sockaddr *addr,
             straddr.text[0] = '[';
                 inet_ntop(AF_INET6, &addr_in6->sin6_addr,
                     straddr.text + 1, sizeof(straddr.text) - 2);
-                if (withzone && addr_in6->sin6_scope_id != 0) {
+                if (withzone && addr_in6->sin6_scope_id != 0 &&
+                    ip_sockaddr_is_linklocal(addr)) {
                     sprintf(straddr.text + strlen(straddr.text), "%%%d",
                         addr_in6->sin6_scope_id);
                 }
