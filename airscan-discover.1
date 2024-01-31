@@ -4,7 +4,7 @@
 .SH "NAME"
 \fBairscan\-discover\fR \- Discover sane\-airscan compatible scanners
 .SH "SYNOPSIS"
-\fBairscan\-discover [\-fast] [\-h] [\-d] [\-t]\fR
+\fBairscan\-discover [options]\fR
 .SH "DESCRIPTION"
 \fBairscan\-discover\fR is a command\-line tool to find eSCL and WSD scanners on a local network
 .P
@@ -13,8 +13,11 @@ It uses Avahi to discover DNS\-SD devices and its own implementation of WS\-Disc
 On success, it outputs a fragment of sane\-airscan configuration file, that can be directly added to \fB/etc/sane\.d/airscan\.conf\fR
 .SH "OPTIONS"
 .TP
-\fB\-fast\fR
+\fB\-test\-fast\fR or \fB\-\-test\-fast\fR
 Fast discovery mode (see ane\-airscan(5) for details)
+.TP
+\fB\-test\-auto\fR or \fB\-\-test\-auto\fR
+Automatic protocol selection (see ane\-airscan(5) for details)
 .TP
 \fB\-d\fR
 Print debug messages to console

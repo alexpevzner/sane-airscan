@@ -3,7 +3,7 @@ airscan-discover -- Discover sane-airscan compatible scanners
 
 ## SYNOPSIS
 
-`airscan-discover [-fast] [-h] [-d] [-t]`
+`airscan-discover [options]`
 
 ## DESCRIPTION
 
@@ -18,8 +18,11 @@ file, that can be directly added to `/etc/sane.d/airscan.conf`
 
 ## OPTIONS
 
-   * `-fast`:
+   * `-test-fast` or `--test-fast`:
      Fast discovery mode (see ane-airscan(5) for details)
+
+   * `-test-auto` or `--test-auto`:
+     Automatic protocol selection (see ane-airscan(5) for details)
 
    * `-d`:
      Print debug messages to console

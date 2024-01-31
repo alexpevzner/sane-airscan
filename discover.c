@@ -20,10 +20,11 @@ usage (char **argv)
     printf("    %s [options]\n", argv[0]);
     printf("\n");
     printf("Options are:\n");
-    printf("    -fast  fast discovery mode\n");
-    printf("    -d     enable debug mode\n");
-    printf("    -t     enable protocol trace\n");
-    printf("    -h     print help page\n");
+    printf("    -test-fast  Fast discovery mode, for testing.\n");
+    printf("    -test-auto  automatic protocol selection, for testing\n");
+    printf("    -d          enable debug mode\n");
+    printf("    -t          enable protocol trace\n");
+    printf("    -h          print help page\n");
 
     exit(0);
 }
@@ -68,10 +69,14 @@ main (int argc, char **argv)
 
     /* Parse command-line options */
     for (i = 1; i < argc; i ++) {
-        if (!strcmp(argv[i], "-fast")) {
+        if (!strcmp(argv[i], "-test-fast")) {
             conf.wsdd_mode = WSDD_FAST;
-        } else if (!strcmp(argv[i], "--fast")) {
+        } else if (!strcmp(argv[i], "--test-fast")) {
             conf.wsdd_mode = WSDD_FAST;
+        } else if (!strcmp(argv[i], "-test-auto")) {
+            conf.proto_auto = true;
+        } else if (!strcmp(argv[i], "--test-auto")) {
+            conf.proto_auto = true;
         } else if (!strcmp(argv[i], "-d")) {
             conf.dbg_enabled = true;
         } else if (!strcmp(argv[i], "-t")) {
