@@ -16,9 +16,9 @@
 #include <string.h>
 
 /******************** Constants *********************/
-/* Max time to wait until device table is ready, in seconds
+/* Max time to wait until device table is ready, in milliseconds
  */
-#define ZEROCONF_READY_TIMEOUT                  5
+#define ZEROCONF_READY_TIMEOUT                  5000
 
 /******************** Local Types *********************/
 /* zeroconf_device represents a single device
@@ -391,6 +391,59 @@ zeroconf_device_is_blacklisted (zeroconf_device *device)
     }
 
     return NULL;
+}
+
+/* Check if there are unpaired MDNS-only devices with model names
+ * matching the specified parent.
+ *
+ * WSDD uses this function to decide when to use extended discovery
+ * time (some devices are known to be hard for WD-Discovery)
+ *
+ * Pattern is the glob-style expression, applied to the model name
+ * of discovered devices.
+ */
+bool
+zeroconf_device_exist_unpaired_mdns (int ifindex, const char *pattern)
+{
+    ll_node          *node, *node2;
+    zeroconf_device  *device;
+    zeroconf_finding *finding;
+
+    for (LL_FOR_EACH(node, &zeroconf_device_list)) {
+        device = OUTER_STRUCT(node, zeroconf_device, node_list);
+
+        /* If not the MDNS device or device already paired with the
+         * WSDD buddy -- skip the device
+         */
+        if (!zeroconf_device_is_mdns(device) || device->buddy != NULL) {
+            continue;
+        }
+
+        /* If model name doesn't match - skip the device
+         */
+        if (device->model == NULL ||
+            fnmatch(pattern, zeroconf_device_model(device), 0) != 0) {
+            continue;
+        }
+
+        /* The last check: does the device seen on the specified interface?
+         */
+        for (LL_FOR_EACH(node2, &device->findings)) {
+            finding = OUTER_STRUCT(node2, zeroconf_finding, list_node);
+
+            if (finding->ifindex == ifindex) {
+                log_debug(zeroconf_log,
+                    "Found unpaired MDNS device; WSDD discovery time extended");
+                log_debug(zeroconf_log,
+                    "Unpaired MDNS device: \"%s\" (interface %d)",
+                    device->model, ifindex);
+
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 /******************** Merging devices *********************/
@@ -1354,7 +1407,7 @@ static void
 zeroconf_start_stop_callback (bool start)
 {
     if (start) {
-        zeroconf_initscan_timer = eloop_timer_new(ZEROCONF_READY_TIMEOUT * 1000,
+        zeroconf_initscan_timer = eloop_timer_new(ZEROCONF_READY_TIMEOUT,
                 zeroconf_initscan_timer_callback, NULL);
     } else {
         if (zeroconf_initscan_timer != NULL) {

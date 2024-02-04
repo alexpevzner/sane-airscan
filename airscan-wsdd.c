@@ -29,7 +29,8 @@
  */
 #define WSDD_RETRANSMIT_MIN     100     /* Min retransmit time */
 #define WSDD_RETRANSMIT_MAX     250     /* Max retransmit time */
-#define WSDD_DISCOVERY_TIME     2500    /* Overall discovery time */
+#define WSDD_DISCOVERY_TIME     2500    /* Standard discovery time */
+#define WSDD_DISCOVERY_TIME_EX  5000    /* Extended discovery time */
 
 /* This delay is taken, if we have discovered, say, device's IPv6
  * addresses and have a strong suspicion that device has not yet
@@ -50,7 +51,8 @@ typedef struct {
     bool          ipv6;           /* We are on IPv6 */
     eloop_fdpoll  *fdpoll;        /* Socket fdpoll */
     eloop_timer   *timer;         /* Retransmit timer */
-    uint32_t      total_time;     /* Total elapsed time */
+    uint32_t      time_limit;     /* Discovery time limit */
+    uint32_t      time_elapsed;   /* Elapsed time */
     ip_straddr    str_ifaddr;     /* Interface address */
     ip_straddr    str_sockaddr;   /* Per-interface socket address */
     bool          initscan;       /* Initial scan in progress */
@@ -1187,22 +1189,35 @@ static void
 wsdd_resolver_timer_callback (void *data)
 {
     wsdd_resolver *resolver = data;
+
     resolver->timer = NULL;
 
-    if (resolver->total_time >= WSDD_DISCOVERY_TIME) {
-        eloop_fdpoll_free(resolver->fdpoll);
-        close(resolver->fd);
-        resolver->fdpoll = NULL;
-        resolver->fd = -1;
-        log_debug(wsdd_log, "%s: done discovery", resolver->str_ifaddr.text);
+    /* Resolver is about to use all its time limit.
+     * Should we use extended discovery time?
+     */
+    if (resolver->time_elapsed >= resolver->time_limit &&
+        resolver->time_limit < WSDD_DISCOVERY_TIME_EX &&
+        zeroconf_device_exist_unpaired_mdns(resolver->ifindex, "Pantum*")) {
+        resolver->time_limit = WSDD_DISCOVERY_TIME_EX;
+    }
 
-        if (resolver->initscan) {
-            resolver->initscan = false;
-            wsdd_initscan_count_dec();
-        }
-    } else {
+    /* Time limit not reached yet? */
+    if (resolver->time_elapsed < resolver->time_limit) {
         wsdd_resolver_send_probe(resolver);
-    };
+        return;
+    }
+
+    /* Resolving is done, cleanup after that */
+    eloop_fdpoll_free(resolver->fdpoll);
+    close(resolver->fd);
+    resolver->fdpoll = NULL;
+    resolver->fd = -1;
+    log_debug(wsdd_log, "%s: done discovery", resolver->str_ifaddr.text);
+
+    if (resolver->initscan) {
+        resolver->initscan = false;
+        wsdd_initscan_count_dec();
+    }
 }
 
 /* Set retransmit timer
@@ -1214,13 +1229,28 @@ wsdd_resolver_timer_set (wsdd_resolver *resolver)
 
     log_assert(wsdd_log, resolver->timer == NULL);
 
-    if (resolver->total_time + WSDD_RETRANSMIT_MAX >= WSDD_DISCOVERY_TIME) {
-        t = WSDD_DISCOVERY_TIME - resolver->total_time;
+    if (resolver->time_elapsed >= resolver->time_limit) {
+        /* Should not happen, but just in case */
+        t = WSDD_RETRANSMIT_MIN;
     } else {
-        t = math_rand_range(WSDD_RETRANSMIT_MIN, WSDD_RETRANSMIT_MAX);
+        /* Choose random time between WSDD_RETRANSMIT_MIN
+         * and WSDD_RETRANSMIT_MAX, but don't exceed
+         * available limit, if possible (i.e., if it
+         * is not less that WSDD_RETRANSMIT_MIN)
+         */
+        t = resolver->time_limit - resolver->time_elapsed;
+        if (t < WSDD_RETRANSMIT_MIN) {
+            t = WSDD_RETRANSMIT_MIN;
+        } else {
+            if (t > WSDD_RETRANSMIT_MAX) {
+                t = WSDD_RETRANSMIT_MAX;
+            }
+
+            t = math_rand_range(WSDD_RETRANSMIT_MIN, t);
+        }
     }
 
-    resolver->total_time += t;
+    resolver->time_elapsed += t;
     resolver->timer = eloop_timer_new(t,
             wsdd_resolver_timer_callback, resolver);
 }
@@ -1272,6 +1302,7 @@ wsdd_resolver_new (const netif_addr *addr, bool initscan)
 
     /* Build resolver structure */
     resolver->ifindex = addr->ifindex;
+    resolver->time_limit = WSDD_DISCOVERY_TIME;
 
     /* Open a socket */
     resolver->ipv6 = addr->ipv6;

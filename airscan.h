@@ -2876,6 +2876,18 @@ zeroconf_init (void);
 void
 zeroconf_cleanup (void);
 
+/* Check if there are unpaired MDNS-only devices with model names
+ * matching the specified parent.
+ *
+ * WSDD uses this function to decide when to use extended discovery
+ * time (some devices are known to be hard for WD-Discovery)
+ *
+ * Pattern is the glob-style expression, applied to the model name
+ * of discovered devices.
+ */
+bool
+zeroconf_device_exist_unpaired_mdns (int ifindex, const char *pattern);
+
 /* Get list of devices, in SANE format
  */
 const SANE_Device**
