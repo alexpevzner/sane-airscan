@@ -173,7 +173,8 @@ Legend:
 | HP Color Laser MFP M178nw          | Yes                       |                           |
 | HP LaserJet 200 colorMFP M276n     | No                        | Yes                       |
 | HP LaserJet MFP E62655             | Yes                       |                           |
-| HP LaserJet MFP M130fw             | No                        | Yes                       |
+| HP LaserJet MFP M130fn             | Yes                       | Yes                       |
+| HP LaserJet MFP M130fw             | Yes                       | Yes                       |
 | HP LaserJet MFP M140w              | Yes                       |                           |
 | HP LaserJet MFP M227sdn            | Yes                       |                           |
 | HP LaserJet MFP M426dw             | Yes                       |                           |
