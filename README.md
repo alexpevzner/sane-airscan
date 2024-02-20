@@ -61,6 +61,7 @@ Legend:
 | Brother DCP-J552DW                 | No                        | Yes                       |
 | Brother DCP-L2540DW                | No                        | Yes                       |
 | Brother DCP-L2550DN / DCP-L2550DW  | Yes                       |                           |
+| Brother DCP-7070DW                 | No                        | Yes                       |
 | Brother HL-L2380DW series          | No                        | Yes                       |
 | Brother HL-L2395DW series          | Yes                       |                           |
 | Brother MFC-7360N                  | No                        | Yes                       |
@@ -79,6 +80,7 @@ Legend:
 | Brother MFC-L2720DW                | No                        | Yes                       |
 | Brother MFC-L2750DW                | Yes                       | Yes                       |
 | Brother MFC-L3750CDW               | No                        | Yes                       |
+| Brother MFC-T910DW                 | Yes                       | Yes                       |
 | Canon D570                         | Yes                       |                           |
 | Canon G600 series                  | Yes                       |                           |
 | Canon imageCLASS MF642C/643C/644C  | Yes                       |                           |
@@ -135,6 +137,7 @@ Legend:
 | EPSON ET-4750 Series               | No                        | Yes                       |
 | EPSON ET-4850 Series               | Yes                       |                           |
 | EPSON ET-M2170 Series              | Yes                       |                           |
+| EPSON L6570 Series                 | Yes                       | Yes                       |
 | EPSON Stylus SX535WD               | No                        | Yes                       |
 | EPSON WF-3620 Series               | No                        | Yes                       |
 | EPSON WF-7710 Series               | No                        | Yes                       |
