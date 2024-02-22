@@ -59,6 +59,7 @@ typedef enum {
 typedef struct {
     zeroconf_finding     finding;        /* Base class */
     AvahiServiceResolver **resolvers;    /* Array of pending resolvers */
+    eloop_timer          *publish_timer; /* ZEROCONF_PUBLISH_DELAY timer */
     ll_node              node_list;      /* In mdns_finding_list */
     bool                 should_publish; /* Should we publish this finding */
     bool                 is_published;   /* Finding actually published */
@@ -372,6 +373,8 @@ mdns_finding_get (ZEROCONF_METHOD method, int ifindex, const char *name,
 }
 
 /* Kill pending resolvers
+ *
+ * It also cancels mdns->publish_timer, if it is active
  */
 static void
 mdns_finding_kill_resolvers (mdns_finding *mdns)
@@ -383,6 +386,11 @@ mdns_finding_kill_resolvers (mdns_finding *mdns)
     }
 
     ptr_array_trunc(mdns->resolvers);
+
+    if (mdns->publish_timer != NULL) {
+        eloop_timer_cancel(mdns->publish_timer);
+        mdns->publish_timer = NULL;
+    }
 }
 
 /* Del the mdns_finding
@@ -409,6 +417,74 @@ mdns_finding_del_all (void)
         mdns_finding *mdns;
         mdns = OUTER_STRUCT(node, mdns_finding, node_list);
         mdns_finding_del(mdns);
+    }
+}
+
+/* Publish mdns_finding
+ */
+static void
+mdns_finding_publish (mdns_finding *mdns)
+{
+    /* Cancel any activity, if still pending */
+    mdns_finding_kill_resolvers(mdns);
+
+    /* Fixup endpoints */
+    mdns->finding.endpoints = zeroconf_endpoint_list_sort_dedup(
+            mdns->finding.endpoints);
+
+    /* Fixup model and UUID */
+    if (mdns->finding.model == NULL) {
+        /* Very unlikely, just paranoia */
+        mdns->finding.model = str_dup(mdns->finding.name);
+    }
+
+    if (!uuid_valid(mdns->finding.uuid)) {
+        /* Paranoia too
+         *
+         * If device UUID is not available from DNS-SD (which
+         * is very unlikely), we generate a synthetic UUID,
+         * based on device name hash
+         */
+        mdns->finding.uuid = uuid_hash(mdns->finding.name);
+    }
+
+    /* Update initscan count */
+    if (mdns->initscan) {
+        mdns->initscan = false;
+        mdns_initscan_count_dec(mdns->finding.method);
+    }
+
+    /* Publish the finding */
+    if (mdns->should_publish && !mdns->is_published) {
+        mdns->is_published = true;
+        zeroconf_finding_publish(&mdns->finding);
+    }
+}
+
+/* ZEROCONF_PUBLISH_DELAY timer callback
+ */
+static void
+mdns_finding_publish_delay_timer_callback (void *data)
+{
+    mdns_finding *mdns = data;
+
+    log_debug(mdns_log, "\"%s\": publish-delay timer expired",
+            mdns->finding.name);
+
+    mdns->publish_timer = NULL;
+    mdns_finding_publish(mdns);
+}
+
+/* Publish mdns_finding with optional delay
+ */
+static void
+mdns_finding_publish_delay (mdns_finding *mdns)
+{
+    if (mdns->resolvers[0] == NULL) {
+        mdns_finding_publish(mdns);
+    } else if (mdns->publish_timer == NULL) {
+        mdns->publish_timer = eloop_timer_new(ZEROCONF_PUBLISH_DELAY,
+                mdns_finding_publish_delay_timer_callback, mdns);
     }
 }
 
@@ -628,39 +704,7 @@ mdns_avahi_resolver_callback (AvahiServiceResolver *r,
     }
 
     /* Perform appropriate actions, if resolving is done */
-    if (mdns->resolvers[0] == NULL) {
-        /* Fixup endpoints */
-        mdns->finding.endpoints = zeroconf_endpoint_list_sort_dedup(
-                mdns->finding.endpoints);
-
-        /* Fixup model and UUID */
-        if (mdns->finding.model == NULL) {
-            /* Very unlikely, just paranoia */
-            mdns->finding.model = str_dup(mdns->finding.name);
-        }
-
-        if (!uuid_valid(mdns->finding.uuid)) {
-            /* Paranoia too
-             *
-             * If device UUID is not available from DNS-SD (which
-             * is very unlikely), we generate a synthetic UUID,
-             * based on device name hash
-             */
-            mdns->finding.uuid = uuid_hash(mdns->finding.name);
-        }
-
-        /* Update initscan count */
-        if (mdns->initscan) {
-            mdns->initscan = false;
-            mdns_initscan_count_dec(mdns->finding.method);
-        }
-
-        /* Publish the finding */
-        if (mdns->should_publish && !mdns->is_published) {
-            mdns->is_published = true;
-            zeroconf_finding_publish(&mdns->finding);
-        }
-    }
+    mdns_finding_publish_delay(mdns);
 
     /* Notify WSDD about newly discovered address */
     if (event == AVAHI_RESOLVER_FOUND) {
