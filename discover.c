@@ -112,6 +112,8 @@ main (int argc, char **argv)
             printf("  %s = %s, %s\n", devinfo->name,
                 http_uri_str(endpoint->uri), id_proto_name(endpoint->proto));
         }
+
+        zeroconf_devinfo_free(devinfo);
     }
 
     zeroconf_device_list_free(devices);
