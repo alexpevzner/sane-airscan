@@ -717,7 +717,8 @@ mdns_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
                 mdns_avahi_resolver_callback, mdns);
 
         if (r == NULL) {
-            mdns_perror(MDNS_ACTION_RESOLVE, interface, protocol, type, name);
+            mdns_perror(MDNS_ACTION_RESOLVE, interface, AVAHI_PROTO_INET,
+                    type, name);
             mdns_avahi_client_restart_defer();
             break;
         }
@@ -730,7 +731,8 @@ mdns_avahi_browser_callback (AvahiServiceBrowser *b, AvahiIfIndex interface,
                 mdns_avahi_resolver_callback, mdns);
 
         if (r == NULL) {
-            mdns_perror(MDNS_ACTION_RESOLVE, interface, protocol, type, name);
+            mdns_perror(MDNS_ACTION_RESOLVE, interface, AVAHI_PROTO_INET6,
+                    type, name);
             mdns_avahi_client_restart_defer();
             break;
         }
