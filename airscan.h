@@ -2771,6 +2771,26 @@ SANE_Status
 devopt_get_option (devopt *opt, SANE_Int option, void *value);
 
 /******************** ZeroConf (device discovery) ********************/
+/* Due to the way how device discovery is implemented, resolving
+ * of device IP addresses are independent between IPv4/IPv6 protocols
+ * and between different network interfaces
+ *
+ * It means that some of device addresses may be already discovered,
+ * while others still pending
+ *
+ * From another hand, some of addresses that we hope to discover may
+ * be not available at all. For example, device may have IPv4 address
+ * but IPv6 address may be missed.
+ *
+ * So once we have at least one address discovered, we limit discovery
+ * of another addresses by this constant.
+ *
+ * This parameter is common for both MDNS and WSDD worlds
+ *
+ * The timeout is in milliseconds
+ */
+#define ZEROCONF_PUBLISH_DELAY  1000
+
 /* Common logging context for device discovery
  */
 extern log_ctx *zeroconf_log;

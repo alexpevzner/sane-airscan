@@ -32,12 +32,6 @@
 #define WSDD_DISCOVERY_TIME     2500    /* Standard discovery time */
 #define WSDD_DISCOVERY_TIME_EX  5000    /* Extended discovery time */
 
-/* This delay is taken, if we have discovered, say, device's IPv6
- * addresses and have a strong suspicion that device has not yet
- * discovered IPv4 addresses as well
- */
-#define WSDD_PUBLISH_DELAY      1000
-
 /* WS-Discovery stable endpoint path
  */
 #define WSDD_STABLE_ENDPOINT    \
@@ -70,7 +64,7 @@ typedef struct {
     mdns_resolver     *mdns_resolver;        /* MDNS resolver */
     http_client       *http_client;          /* HTTP client */
     ll_node           list_node;             /* In wsdd_finding_list */
-    eloop_timer       *publish_timer;        /* WSDD_PUBLISH_DELAY timer */
+    eloop_timer       *publish_timer;        /* ZEROCONF_PUBLISH_DELAY timer */
     bool              is_printer;            /* Device is printer */
     bool              is_scanner;            /* Device is scanner */
     bool              published;             /* This finding is published */
@@ -349,7 +343,7 @@ wsdd_finding_has_pending_queries (wsdd_finding *wsdd)
            http_client_has_pending(wsdd->http_client);
 }
 
-/* WSDD_PUBLISH_DELAY timer callback
+/* ZEROCONF_PUBLISH_DELAY timer callback
  */
 static void
 wsdd_finding_publish_delay_timer_callback (void *data)
@@ -410,7 +404,7 @@ wsdd_finding_publish_delay (wsdd_finding *wsdd)
 
     if (delay) {
         if (wsdd->publish_timer == NULL) {
-            wsdd->publish_timer = eloop_timer_new(WSDD_PUBLISH_DELAY,
+            wsdd->publish_timer = eloop_timer_new(ZEROCONF_PUBLISH_DELAY,
                 wsdd_finding_publish_delay_timer_callback, wsdd);
         }
 
