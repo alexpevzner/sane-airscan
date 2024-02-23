@@ -2852,6 +2852,12 @@ typedef struct {
     ll_node           list_node;  /* Node in device's list of findings */
 } zeroconf_finding;
 
+/* Compare two pointers to pointers to zeroconf_finding (zeroconf_finding**)
+ * by index+name, for qsort
+ */
+int
+zeroconf_finding_qsort_by_index_name (const void *p1, const void *p2);
+
 /* Publish the zeroconf_finding.
  *
  * Memory, referred by the finding, remains owned by
@@ -2895,18 +2901,6 @@ zeroconf_init (void);
  */
 void
 zeroconf_cleanup (void);
-
-/* Check if there are unpaired MDNS-only devices with model names
- * matching the specified parent.
- *
- * WSDD uses this function to decide when to use extended discovery
- * time (some devices are known to be hard for WD-Discovery)
- *
- * Pattern is the glob-style expression, applied to the model name
- * of discovered devices.
- */
-bool
-zeroconf_device_exist_unpaired_mdns (int ifindex, const char *pattern);
 
 /* Get list of devices, in SANE format
  */
@@ -3066,6 +3060,21 @@ mdns_query_get_answer (const mdns_query *query);
  */
 void*
 mdns_query_get_ptr (const mdns_query *query);
+
+/* mdns_device_count_by_model returns count of distinct devices
+ * with model names matching the specified parent.
+ *
+ * Several instances of the same device (i.e. printer vs scanner) are
+ * counted only once per network interface.
+ *
+ * WSDD uses this function to decide when to use extended discovery
+ * time (some devices are known to be hard for WD-Discovery)
+ *
+ * Pattern is the glob-style expression, applied to the model name
+ * of discovered devices.
+ */
+unsigned int
+mdns_device_count_by_model (int ifindex, const char *pattern);
 
 /******************** WS-Discovery ********************/
 /* Called by zeroconf to notify wsdd about initial scan timer expiration

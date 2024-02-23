@@ -11,6 +11,7 @@
 #include "airscan.h"
 
 #include <errno.h>
+#include <fnmatch.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -42,6 +43,7 @@
 typedef struct {
     int           fd;             /* File descriptor */
     int           ifindex;        /* Interface index */
+    netif_name    ifname;         /* Interface name, for logging */
     bool          ipv6;           /* We are on IPv6 */
     eloop_fdpoll  *fdpoll;        /* Socket fdpoll */
     eloop_timer   *timer;         /* Retransmit timer */
@@ -1177,12 +1179,39 @@ wsdd_resolver_read_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
     }
 }
 
+/* Count discovered devices with model names matching the specified parent.
+ *
+ * Pattern is the glob-style expression, applied to the model name
+ * of discovered devices.
+ */
+static unsigned int
+wsdd_resolver_count_devices_by_model (wsdd_resolver *resolver, const char *pattern)
+{
+    unsigned int answer = 0;
+    ll_node      *node;
+    wsdd_finding *wsdd;
+
+    /* Lookup existent finding */
+    for (LL_FOR_EACH(node, &wsdd_finding_list)) {
+        wsdd = OUTER_STRUCT(node, wsdd_finding, list_node);
+        if (wsdd->finding.ifindex == resolver->ifindex &&
+            wsdd->finding.model != NULL &&
+            wsdd->published &&
+            fnmatch(pattern, wsdd->finding.model, 0) == 0) {
+                answer ++;
+        }
+    }
+
+    return answer;
+}
+
 /* Retransmit timer callback
  */
 static void
 wsdd_resolver_timer_callback (void *data)
 {
     wsdd_resolver *resolver = data;
+    const char    pattern[] = "Pantum*";
 
     resolver->timer = NULL;
 
@@ -1190,9 +1219,25 @@ wsdd_resolver_timer_callback (void *data)
      * Should we use extended discovery time?
      */
     if (resolver->time_elapsed >= resolver->time_limit &&
-        resolver->time_limit < WSDD_DISCOVERY_TIME_EX &&
-        zeroconf_device_exist_unpaired_mdns(resolver->ifindex, "Pantum*")) {
-        resolver->time_limit = WSDD_DISCOVERY_TIME_EX;
+        resolver->time_limit < WSDD_DISCOVERY_TIME_EX) {
+        unsigned int cnt_mdns, cnt_wsdd;
+
+        cnt_mdns = mdns_device_count_by_model(resolver->ifindex, pattern);
+        cnt_wsdd = wsdd_resolver_count_devices_by_model(resolver, pattern);
+
+        if (cnt_wsdd < cnt_mdns) {
+            const char    *proto = resolver->ipv6 ? "ipv6" : "ipv4";
+
+            log_debug(wsdd_log, "%s@%s: \"%s\": MDNS/WSDD count: %d/%d",
+                proto, resolver->ifname.text,
+                pattern, cnt_mdns, cnt_wsdd);
+
+            log_debug(wsdd_log, "%s@%s: extending discovery time (%d->%d ms)",
+                proto, resolver->ifname.text,
+                resolver->time_limit, WSDD_DISCOVERY_TIME_EX);
+
+            resolver->time_limit = WSDD_DISCOVERY_TIME_EX;
+        }
     }
 
     /* Time limit not reached yet? */
@@ -1296,6 +1341,7 @@ wsdd_resolver_new (const netif_addr *addr, bool initscan)
 
     /* Build resolver structure */
     resolver->ifindex = addr->ifindex;
+    resolver->ifname = addr->ifname;
     resolver->time_limit = WSDD_DISCOVERY_TIME;
 
     /* Open a socket */

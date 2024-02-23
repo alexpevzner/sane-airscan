@@ -16,6 +16,7 @@
 #include <avahi-common/domain.h>
 #include <avahi-common/error.h>
 
+#include <fnmatch.h>
 #include <string.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -70,6 +71,7 @@ typedef struct {
  */
 static log_ctx *mdns_log;
 static ll_head mdns_finding_list;
+static size_t mdns_finding_list_count;
 static const AvahiPoll *mdns_avahi_poll;
 static AvahiTimeout *mdns_avahi_restart_timer;
 static AvahiClient *mdns_avahi_client;
@@ -368,6 +370,7 @@ mdns_finding_get (ZEROCONF_METHOD method, int ifindex, const char *name,
     mdns = mdns_finding_new(method, ifindex, name, initscan);
 
     ll_push_end(&mdns_finding_list, &mdns->node_list);
+    mdns_finding_list_count ++;
 
     return mdns;
 }
@@ -401,7 +404,10 @@ mdns_finding_del (mdns_finding *mdns)
     if (mdns->is_published) {
         zeroconf_finding_withdraw(&mdns->finding);
     }
+
     ll_del(&mdns->node_list);
+    mdns_finding_list_count --;
+
     mdns_finding_kill_resolvers(mdns);
     mdns_finding_free(mdns);
 }
@@ -1279,6 +1285,68 @@ void*
 mdns_query_get_ptr (const mdns_query *query)
 {
     return query->ptr;
+}
+
+/***** Miscellaneous *****/
+
+/* mdns_device_count_by_model returns count of distinct devices
+ * with model names matching the specified parent.
+ *
+ * Several instances of the same device (i.e. printer vs scanner) are
+ * counted only once per network interface.
+ *
+ * WSDD uses this function to decide when to use extended discovery
+ * time (some devices are known to be hard for WD-Discovery)
+ *
+ * Pattern is the glob-style expression, applied to the model name
+ * of discovered devices.
+ */
+unsigned int
+mdns_device_count_by_model (int ifindex, const char *pattern)
+{
+    mdns_finding **findings;
+    unsigned int findings_count = 0;
+    unsigned int i, answer;
+    ll_node      *node;
+
+    /* Collect matching devices */
+    if (mdns_finding_list_count == 0) {
+        return 0;
+    }
+
+    findings = alloca(sizeof(*findings) * mdns_finding_list_count);
+
+    for (LL_FOR_EACH(node, &mdns_finding_list)) {
+        mdns_finding *mdns = OUTER_STRUCT(node, mdns_finding, node_list);
+
+        if (mdns->finding.ifindex == ifindex &&
+            mdns->finding.model != NULL &&
+            fnmatch(pattern, mdns->finding.model, 0) == 0) {
+
+            findings[findings_count] = mdns;
+            findings_count ++;
+        }
+    }
+
+    /* Sort by ifindex + name, then count only distinct devices */
+    qsort(findings, findings_count, sizeof(*findings),
+        zeroconf_finding_qsort_by_index_name);
+
+    if (findings_count <= 1) {
+        return findings_count;
+    }
+
+    answer = 1;
+    for (i = 1; i < findings_count; i ++) {
+        mdns_finding **p1 = &findings[i - 1];
+        mdns_finding **p2 = &findings[i];
+
+        if (zeroconf_finding_qsort_by_index_name(p1, p2) != 0) {
+            answer ++;
+        }
+    }
+
+    return answer;
 }
 
 /***** Initialization and cleanup *****/

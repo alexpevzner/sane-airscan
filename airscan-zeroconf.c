@@ -393,59 +393,6 @@ zeroconf_device_is_blacklisted (zeroconf_device *device)
     return NULL;
 }
 
-/* Check if there are unpaired MDNS-only devices with model names
- * matching the specified parent.
- *
- * WSDD uses this function to decide when to use extended discovery
- * time (some devices are known to be hard for WD-Discovery)
- *
- * Pattern is the glob-style expression, applied to the model name
- * of discovered devices.
- */
-bool
-zeroconf_device_exist_unpaired_mdns (int ifindex, const char *pattern)
-{
-    ll_node          *node, *node2;
-    zeroconf_device  *device;
-    zeroconf_finding *finding;
-
-    for (LL_FOR_EACH(node, &zeroconf_device_list)) {
-        device = OUTER_STRUCT(node, zeroconf_device, node_list);
-
-        /* If not the MDNS device or device already paired with the
-         * WSDD buddy -- skip the device
-         */
-        if (!zeroconf_device_is_mdns(device) || device->buddy != NULL) {
-            continue;
-        }
-
-        /* If model name doesn't match - skip the device
-         */
-        if (device->model == NULL ||
-            fnmatch(pattern, zeroconf_device_model(device), 0) != 0) {
-            continue;
-        }
-
-        /* The last check: does the device seen on the specified interface?
-         */
-        for (LL_FOR_EACH(node2, &device->findings)) {
-            finding = OUTER_STRUCT(node2, zeroconf_finding, list_node);
-
-            if (finding->ifindex == ifindex) {
-                log_debug(zeroconf_log,
-                    "Found unpaired MDNS device; WSDD discovery time extended");
-                log_debug(zeroconf_log,
-                    "Unpaired MDNS device: \"%s\" (interface %d)",
-                    device->model, ifindex);
-
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
-
 /******************** Merging devices *********************/
 /* Recompute device->buddy for all devices
  */
@@ -878,6 +825,28 @@ zeroconf_find_static_by_ident (const char *ident)
     }
 
     return NULL;
+}
+
+/***** Miscellaneous functions for zeroconf_finding *****/
+
+/* Compare two pointers to pointers to zeroconf_finding (zeroconf_finding**)
+ * by index+name, for qsort
+ */
+int
+zeroconf_finding_qsort_by_index_name (const void *p1, const void *p2)
+{
+    const zeroconf_finding *f1 = *(const zeroconf_finding * const *) p1;
+    const zeroconf_finding *f2 = *(const zeroconf_finding * const *) p2;
+
+    if (f1->ifindex < f2->ifindex) {
+        return -1;
+    }
+
+    if (f1->ifindex > f2->ifindex) {
+        return 1;
+    }
+
+    return strcmp(f1->name, f2->name);
 }
 
 /******************** Events from discovery providers *********************/
