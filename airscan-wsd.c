@@ -1031,6 +1031,13 @@ wsd_status_decode (const proto_ctx *ctx)
             result.status = SANE_STATUS_NO_DOCS;
             return result;
         }
+
+        /* Ricoh Aficio MP 201 reports "ADF empty" status this strange way
+         */
+        if (!strcmp(wsd->fault_code, "ClientErrorJobIdNotFound")) {
+            result.status = SANE_STATUS_NO_DOCS;
+            return result;
+        }
     }
 
     /* Parse XML */
