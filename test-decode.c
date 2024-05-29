@@ -146,7 +146,10 @@ main (int argc, char **argv)
 
     /* Parse command-line arguments */
     if (argc != 2) {
-        die("usage: %s file", argv[0]);
+        die(
+                "test-decode - decodes image file and writes result to decoded.png\n"
+                "usage: %s image.file", argv[0]
+            );
     }
 
     file = argv[1];
