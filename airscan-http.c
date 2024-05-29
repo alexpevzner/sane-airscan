@@ -2755,6 +2755,10 @@ http_query_fdpoll_callback (int fd, void *data, ELOOP_FDPOLL_MASK mask)
             return;
         }
 
+        if (rc == 0) {
+            log_debug(q->client->log, "HTTP end of input");
+        }
+
         http_parser_execute(&q->http_parser, &http_query_callbacks,
                 io_buf, rc);
 
