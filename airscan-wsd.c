@@ -1157,6 +1157,21 @@ wsd_cancel_query (const proto_ctx *ctx)
     return wsd_http_post(ctx, xml_wr_finish_compact(xml));
 }
 
+/* Test interface: decode device capabilities
+ */
+static error
+wsd_test_decode_devcaps (proto_handler *proto,
+                         const void *xml_text, size_t xms_size,
+                         devcaps *caps)
+{
+    (void) proto;
+    (void) xml_text;
+    (void) xms_size;
+    (void) caps;
+
+    return ERROR("not implemented");
+}
+
 /* proto_handler_wsd_new creates new WSD protocol handler
  */
 proto_handler*
@@ -1183,6 +1198,8 @@ proto_handler_wsd_new (void)
     wsd->proto.status_decode = wsd_status_decode;
 
     wsd->proto.cancel_query = wsd_cancel_query;
+
+    wsd->proto.test_decode_devcaps = wsd_test_decode_devcaps;
 
     return &wsd->proto;
 }

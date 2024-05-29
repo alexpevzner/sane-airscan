@@ -3326,6 +3326,12 @@ struct proto_handler {
     /* Cancel scan in progress
      */
     http_query*  (*cancel_query) (const proto_ctx *ctx);
+
+    /* Test interfaces. Not for regular use!
+     */
+    error        (*test_decode_devcaps) (proto_handler *proto,
+                                         const void *xml_text, size_t xms_size,
+                                         devcaps *caps);
 };
 
 /* proto_handler_escl_new creates new eSCL protocol handler
@@ -3351,6 +3357,16 @@ proto_handler_new (ID_PROTO proto)
     default:
         return NULL;
     }
+}
+
+/* proto_handler_free destroys protocol handler, previously
+ * created by proto_handler_new/proto_handler_escl_new/
+ * proto_handler_wsd_new functions
+ */
+static inline void
+proto_handler_free (proto_handler *proto)
+{
+    proto->free(proto);
 }
 
 /******************** Image decoding ********************/

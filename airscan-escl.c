@@ -1158,6 +1158,22 @@ escl_cancel_query (const proto_ctx *ctx)
     return escl_http_query(ctx, ctx->location, "DELETE", NULL);
 }
 
+/******************** Test interfaces ********************/
+/* Test interface: decode device capabilities
+ */
+static error
+escl_test_decode_devcaps (proto_handler *proto,
+                          const void *xml_text, size_t xms_size,
+                          devcaps *caps)
+{
+    (void) proto;
+    (void) xml_text;
+    (void) xms_size;
+    (void) caps;
+
+    return ERROR("not implemented");
+}
+
 /******************** Constructor/destructor ********************/
 /* Free ESCL protocol handler
  */
@@ -1194,6 +1210,8 @@ proto_handler_escl_new (void)
 
     escl->proto.cleanup_query = escl_cancel_query;
     escl->proto.cancel_query = escl_cancel_query;
+
+    escl->proto.test_decode_devcaps = escl_test_decode_devcaps;
 
     return &escl->proto;
 }
