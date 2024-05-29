@@ -609,7 +609,7 @@ device_scanner_capabilities_callback (void *ptr, http_query *q)
         goto DONE;
     }
 
-    devcaps_dump(dev->log, &dev->opt.caps);
+    devcaps_dump(dev->log, &dev->opt.caps, true);
     devopt_set_defaults(&dev->opt);
 
     /* Update endpoint address in case of HTTP redirection */

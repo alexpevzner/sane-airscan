@@ -156,22 +156,28 @@ devcaps_reset (devcaps *caps)
 }
 
 /* Dump device capabilities, for debugging
+ *
+ * The 3rd parameter, 'trace' configures the debug level
+ * (log_debug vs log_trace) of the generated output
  */
 void
-devcaps_dump (log_ctx *log, devcaps *caps)
+devcaps_dump (log_ctx *log, devcaps *caps, bool trace)
 {
     int  i;
     char *buf = str_new();
+    void (*log_func) (log_ctx *log, const char *fmt, ...);
 
-    log_trace(log, "===== device capabilities =====");
-    log_trace(log, "  Size units:       %d DPI", caps->units);
-    log_trace(log, "  Protocol:         %s", caps->protocol);
+    log_func = trace ? log_trace : log_debug;
+
+    log_func(log, "===== device capabilities =====");
+    log_func(log, "  Size units:       %d DPI", caps->units);
+    log_func(log, "  Protocol:         %s", caps->protocol);
 
     if (caps->compression_ok) {
-        log_trace(log, "  Compression min:  %d", caps->compression_range.min);
-        log_trace(log, "  Compression max:  %d", caps->compression_range.max);
-        log_trace(log, "  Compression step: %d", caps->compression_range.quant);
-        log_trace(log, "  Compression norm: %d", caps->compression_norm);
+        log_func(log, "  Compression min:  %d", caps->compression_range.min);
+        log_func(log, "  Compression max:  %d", caps->compression_range.max);
+        log_func(log, "  Compression step: %d", caps->compression_range.quant);
+        log_func(log, "  Compression norm: %d", caps->compression_norm);
     }
 
     str_trunc(buf);
@@ -184,7 +190,7 @@ devcaps_dump (log_ctx *log, devcaps *caps)
         }
     }
 
-    log_trace(log, "  Sources:          %s", buf);
+    log_func(log, "  Sources:          %s", buf);
 
     ID_SOURCE id_src;
     for (id_src = (ID_SOURCE) 0; id_src < NUM_ID_SOURCE; id_src ++) {
@@ -195,19 +201,19 @@ devcaps_dump (log_ctx *log, devcaps *caps)
             continue;
         }
 
-        log_trace(log, "");
-        log_trace(log, "  %s:", id_source_sane_name(id_src));
+        log_func(log, "");
+        log_func(log, "  %s:", id_source_sane_name(id_src));
 
         math_fmt_mm(math_px2mm_res(src->min_wid_px, caps->units), xbuf);
         math_fmt_mm(math_px2mm_res(src->min_hei_px, caps->units), ybuf);
 
-        log_trace(log, "    Min window:  %dx%d px, %sx%s mm",
+        log_func(log, "    Min window:  %dx%d px, %sx%s mm",
                 src->min_wid_px, src->min_hei_px, xbuf, ybuf);
 
         math_fmt_mm(math_px2mm_res(src->max_wid_px, caps->units), xbuf);
         math_fmt_mm(math_px2mm_res(src->max_hei_px, caps->units), ybuf);
 
-        log_trace(log, "    Max window:  %dx%d px, %sx%s mm",
+        log_func(log, "    Max window:  %dx%d px, %sx%s mm",
                 src->max_wid_px, src->max_hei_px, xbuf, ybuf);
 
         if (src->flags & DEVCAPS_SOURCE_RES_DISCRETE) {
@@ -219,7 +225,7 @@ devcaps_dump (log_ctx *log, devcaps *caps)
                 buf = str_append_printf(buf, "%d", src->resolutions[i+1]);
             }
 
-            log_trace(log, "    Resolutions: %s", buf);
+            log_func(log, "    Resolutions: %s", buf);
         }
 
         str_trunc(buf);
@@ -233,7 +239,7 @@ devcaps_dump (log_ctx *log, devcaps *caps)
             }
         }
 
-        log_trace(log, "    Color modes: %s", buf);
+        log_func(log, "    Color modes: %s", buf);
 
         str_trunc(buf);
 
@@ -246,11 +252,11 @@ devcaps_dump (log_ctx *log, devcaps *caps)
             }
         }
 
-        log_trace(log, "    Formats:     %s", buf);
+        log_func(log, "    Formats:     %s", buf);
     }
 
     mem_free(buf);
-    log_trace(log, "");
+    log_func(log, "");
 }
 
 /* vim:ts=8:sw=4:et

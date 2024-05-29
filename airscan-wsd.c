@@ -529,6 +529,11 @@ wsd_devcaps_parse (proto_handler_wsd *wsd,
     xml_rd *xml;
     bool   found_configuration = false;
 
+    /* Fill "constant" part of device capabilities */
+    caps->units = 1000;
+    caps->protocol = wsd->proto.name;
+    caps->justification_x = caps->justification_y = ID_JUSTIFICATION_UNKNOWN;
+
     /* Parse capabilities XML */
     err = xml_rd_begin(&xml, xml_text, xml_len, wsd_ns_rd);
     if (err != NULL) {
@@ -575,10 +580,6 @@ wsd_devcaps_decode (const proto_ctx *ctx, devcaps *caps)
     proto_handler_wsd *wsd = (proto_handler_wsd*) ctx->proto;
     http_data         *data = http_query_get_response_data(ctx->query);
     error             err;
-
-    caps->units = 1000;
-    caps->protocol = ctx->proto->name;
-    caps->justification_x = caps->justification_y = ID_JUSTIFICATION_UNKNOWN;
 
     err = wsd_devcaps_parse(wsd, caps, data->bytes, data->size);
 
@@ -1164,12 +1165,9 @@ wsd_test_decode_devcaps (proto_handler *proto,
                          const void *xml_text, size_t xms_size,
                          devcaps *caps)
 {
-    (void) proto;
-    (void) xml_text;
-    (void) xms_size;
-    (void) caps;
+    proto_handler_wsd *wsd = (proto_handler_wsd*) proto;
 
-    return ERROR("not implemented");
+    return wsd_devcaps_parse(wsd, caps, xml_text, xms_size);
 }
 
 /* proto_handler_wsd_new creates new WSD protocol handler

@@ -88,6 +88,11 @@ main (int argc, char **argv)
 
     fclose(fp);
 
+    /* Initialize logging */
+    conf.dbg_enabled = true;
+    log_init();
+    log_configure();
+
     /* Decode device capabilities */
     memset(&caps, 0, sizeof(caps));
     devcaps_init(&caps);
@@ -97,9 +102,11 @@ main (int argc, char **argv)
         die("error: %s", ESTRING(err));
     }
 
+    devcaps_dump(NULL, &caps, false);
+
     /* Cleanup and exit */
     proto_handler_free(proto);
-    free(data);
+    mem_free(data);
 
     return 0;
 }

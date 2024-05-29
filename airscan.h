@@ -2716,9 +2716,12 @@ void
 devcaps_reset (devcaps *caps);
 
 /* Dump device capabilities, for debugging
+ *
+ * The 3rd parameter, 'trace' configures the debug level
+ * (log_debug vs log_trace) of the generated output
  */
 void
-devcaps_dump (log_ctx *log, devcaps *caps);
+devcaps_dump (log_ctx *log, devcaps *caps, bool trace);
 
 /******************** Device options ********************/
 /* Scan options
