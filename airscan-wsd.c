@@ -387,18 +387,6 @@ wsd_devcaps_parse_source (devcaps *caps, xml_rd *xml, ID_SOURCE src_id)
         min_hei = tmp;
     }
 
-    /* Workaround for yet another Kyocera bug. This device doesn't
-     * honor scan region settings. I.e., it understands it,
-     * properly mirrors in DocumentFinalParameters, but completely
-     * ignores when generating the image.
-     *
-     * So we can't rely on device's ability to clip the image and
-     * must implement clipping in software. It can be enforced
-     * in our backend by the following two lines:
-     */
-    min_wid = max_wid;
-    min_hei = max_hei;
-
     /* Save min/max width and height */
     src->min_wid_px = min_wid;
     src->max_wid_px = max_wid;
@@ -467,6 +455,11 @@ wsd_devcaps_parse_configuration (proto_handler_wsd *wsd,
 
         if (src != NULL) {
             src->formats = formats;
+
+            /* Note, as we can clip in software, we indicate
+             * minimal scan region size for SANE as 0x0. But
+             * maximal size is defined by hardware
+             */
             src->win_x_range_mm.min = src->win_y_range_mm.min = 0;
             src->win_x_range_mm.max = math_px2mm_res(src->max_wid_px, 1000);
             src->win_y_range_mm.max = math_px2mm_res(src->max_hei_px, 1000);
@@ -500,6 +493,25 @@ wsd_devcaps_parse_configuration (proto_handler_wsd *wsd,
     } else if (caps->src[ID_SOURCE_ADF_DUPLEX] != NULL) {
         devcaps_source_free(caps->src[ID_SOURCE_ADF_DUPLEX]);
         caps->src[ID_SOURCE_ADF_DUPLEX] = NULL;
+    }
+
+    /* Workaround for yet another Kyocera bug. This device doesn't
+     * honor scan region settings. I.e., it understands it,
+     * properly mirrors in DocumentFinalParameters, but completely
+     * ignores when generating the image.
+     *
+     * So we can't rely on device's ability to clip the image and
+     * must implement clipping in software. It can be enforced
+     * in our backend by setting minimum image size equal to
+     * max size.
+     */
+    for (i = 0; i < NUM_ID_SOURCE; i ++) {
+        devcaps_source *src = caps->src[i];
+
+        if (src != NULL) {
+            src->min_wid_px = src->max_wid_px;
+            src->min_hei_px = src->max_hei_px;
+        }
     }
 
     /* Check that we have at least one source */
