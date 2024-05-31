@@ -496,6 +496,11 @@ escl_devcaps_parse (proto_handler_escl *escl,
     ID_SOURCE id_src;
     bool      src_ok = false;
 
+    /* Fill "constant" part of device capabilities */
+    caps->units = 300;
+    caps->protocol = escl->proto.name;
+    caps->justification_x = caps->justification_y = ID_JUSTIFICATION_UNKNOWN;
+
     /* Parse capabilities XML */
     err = xml_rd_begin(&xml, xml_text, xml_len, NULL);
     if (err != NULL) {
@@ -623,10 +628,6 @@ escl_devcaps_decode (const proto_ctx *ctx, devcaps *caps)
     proto_handler_escl *escl = (proto_handler_escl*) ctx->proto;
     http_data          *data = http_query_get_response_data(ctx->query);
     const char         *s;
-
-    caps->units = 300;
-    caps->protocol = ctx->proto->name;
-    caps->justification_x = caps->justification_y = ID_JUSTIFICATION_UNKNOWN;
 
     /* Most of devices that have Server: HP_Compact_Server
      * in their HTTP response header, require this quirk
@@ -1166,12 +1167,9 @@ escl_test_decode_devcaps (proto_handler *proto,
                           const void *xml_text, size_t xms_size,
                           devcaps *caps)
 {
-    (void) proto;
-    (void) xml_text;
-    (void) xms_size;
-    (void) caps;
+    proto_handler_escl *escl = (proto_handler_escl*) proto;
 
-    return ERROR("not implemented");
+    return escl_devcaps_parse(escl, caps, xml_text, xms_size);
 }
 
 /******************** Constructor/destructor ********************/
