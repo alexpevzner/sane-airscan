@@ -215,6 +215,7 @@ device_new (zeroconf_devinfo *devinfo)
     log_debug(dev->log, "device created");
 
     dev->proto_ctx.log = dev->log;
+    dev->proto_ctx.devinfo = dev->devinfo;
     dev->proto_ctx.devcaps = &dev->opt.caps;
 
     devopt_init(&dev->opt);

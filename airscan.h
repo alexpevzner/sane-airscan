@@ -2892,6 +2892,7 @@ zeroconf_finding_done (ZEROCONF_METHOD method);
 typedef struct {
     const char        *ident;     /* Unique ident */
     const char        *name;      /* Human-friendly name */
+    const char        *model;     /* Model name, for quirks. "" if unknown */
     zeroconf_endpoint *endpoints; /* Device endpoints */
 } zeroconf_devinfo;
 
@@ -3248,6 +3249,7 @@ typedef struct {
     /* Common context */
     log_ctx              *log;            /* Logging context */
     struct proto_handler *proto;          /* Link to proto_handler */
+    const zeroconf_devinfo *devinfo;      /* Device info, from zeroconf */
     const devcaps        *devcaps;        /* Device capabilities */
     PROTO_OP             op;              /* Current operation */
     http_client          *http;           /* HTTP client for sending requests */

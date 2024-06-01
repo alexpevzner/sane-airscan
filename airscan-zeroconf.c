@@ -1304,7 +1304,9 @@ zeroconf_parse_devinfo_from_ident(const char *ident)
     devinfo = mem_new(zeroconf_devinfo, 1);
     devinfo->ident = str_dup(ident);
     devinfo->name = str_dup(name);
+    devinfo->model = str_dup("");
     devinfo->endpoints = zeroconf_endpoint_new(proto, uri);
+
     return devinfo;
 }
 
@@ -1349,9 +1351,11 @@ zeroconf_devinfo_lookup (const char *ident)
     if (dev_conf != NULL) {
         http_uri *uri = http_uri_clone(dev_conf->uri);
         devinfo->name = str_dup(dev_conf->name);
+        devinfo->model = str_dup("");
         devinfo->endpoints = zeroconf_endpoint_new(dev_conf->proto, uri);
     } else {
         devinfo->name = str_dup(zeroconf_device_name(device));
+        devinfo->model = str_dup(device->model ? device->model : "");
         devinfo->endpoints = zeroconf_device_endpoints(device, proto);
     }
 
@@ -1365,6 +1369,7 @@ zeroconf_devinfo_free (zeroconf_devinfo *devinfo)
 {
     mem_free((char*) devinfo->ident);
     mem_free((char*) devinfo->name);
+    mem_free((char*) devinfo->model);
     zeroconf_endpoint_list_free(devinfo->endpoints);
     mem_free(devinfo);
 }
