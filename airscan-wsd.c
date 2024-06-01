@@ -86,6 +86,18 @@ typedef struct {
     bool          pdf_a;
     bool          png;
     bool          dib;
+
+    /* Quirks */
+
+    /* Scanner doesn't handle sca:ImagesToTransfer if set to "0"
+     * (which means "scan until ADF is empty").
+     *
+     * This is the Ricoh Aficio MP 201 case.
+     *
+     * The workaround is to set sca:ImagesToTransfer to some big
+     * arbitrary number.
+     */
+    bool          quirk_broken_ImagesToTransfer;
 } proto_handler_wsd;
 
 /* Forward declarations */
@@ -593,6 +605,12 @@ wsd_devcaps_decode (const proto_ctx *ctx, devcaps *caps)
     http_data         *data = http_query_get_response_data(ctx->query);
     error             err;
 
+    /* Setup quirks */
+    if (!strcmp(ctx->devinfo->model, "RICOH Aficio MP 201")) {
+        wsd->quirk_broken_ImagesToTransfer = true;
+    }
+
+    /* Parse device capabilities response */
     err = wsd_devcaps_parse(wsd, caps, data->bytes, data->size);
 
     return err;
@@ -817,7 +835,11 @@ wsd_scan_query (const proto_ctx *ctx)
     log_assert(ctx->log, format != NULL);
     xml_wr_add_text(xml, "sca:Format", format);
 
-    xml_wr_add_text(xml, "sca:ImagesToTransfer", "0");
+    if (wsd->quirk_broken_ImagesToTransfer) {
+        xml_wr_add_text(xml, "sca:ImagesToTransfer", "100");
+    } else {
+        xml_wr_add_text(xml, "sca:ImagesToTransfer", "0");
+    }
 
     xml_wr_enter(xml, "sca:InputSize");
     xml_wr_enter(xml, "sca:InputMediaSize");
