@@ -159,10 +159,20 @@ wsd_devcaps_query (const proto_ctx *ctx)
     xml_wr_enter(xml, "soap:Body");
     xml_wr_enter(xml, "sca:GetScannerElementsRequest");
     xml_wr_enter(xml, "sca:RequestedElements");
-    xml_wr_add_text(xml, "sca:Name", "sca:ScannerDescription");
+
+    /* sca:ScannerConfiguration response defines scanner capabilities,
+     * such as document formats support, available sources, avaliable
+     * resolutions, color modes etc.
+     */
     xml_wr_add_text(xml, "sca:Name", "sca:ScannerConfiguration");
-    //xml_wr_add_text(xml, "sca:Name", "sca:DefaultScanTicket");
-    //xml_wr_add_text(xml, "sca:Name", "sca:ScannerStatus");
+
+    /* These elements are only requested for logging, to provide some
+     * device information for troubleshooting purposes
+     */
+    xml_wr_add_text(xml, "sca:Name", "sca:ScannerDescription");
+    xml_wr_add_text(xml, "sca:Name", "sca:DefaultScanTicket");
+    xml_wr_add_text(xml, "sca:Name", "sca:ScannerStatus");
+
     xml_wr_leave(xml);
     xml_wr_leave(xml);
     xml_wr_leave(xml);
