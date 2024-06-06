@@ -664,7 +664,7 @@ wsd_fault_check (const proto_ctx *ctx)
 /* Decode fault response
  */
 static proto_result
-wsd_fault_decode (const proto_ctx *ctx)
+wsd_fault_decode (const proto_ctx *ctx, bool cleanup)
 {
     proto_handler_wsd *wsd = (proto_handler_wsd*) ctx->proto;
     proto_result      result = {0};
@@ -674,7 +674,7 @@ wsd_fault_decode (const proto_ctx *ctx)
     /* Parse XML */
     result.err = xml_rd_begin(&xml, data->bytes, data->size, wsd_ns_rd);
     if (result.err != NULL) {
-        result.next = PROTO_OP_FINISH;
+        result.next = cleanup ? PROTO_OP_CLEANUP : PROTO_OP_FINISH;
         result.status = SANE_STATUS_IO_ERROR;
         return result;
     }
@@ -898,7 +898,7 @@ wsd_scan_decode (const proto_ctx *ctx)
 
     /* Decode error, if any */
     if (wsd_fault_check(ctx)) {
-        return wsd_fault_decode(ctx);
+        return wsd_fault_decode(ctx, false);
     }
 
     /* Decode CreateScanJobResponse */
@@ -996,19 +996,19 @@ wsd_load_decode (const proto_ctx *ctx)
 
     /* Check HTTP status */
     if (wsd_fault_check(ctx)) {
-        return wsd_fault_decode(ctx);
+        return wsd_fault_decode(ctx, true);
     }
 
     /* We expect multipart message with attached image */
     data = http_query_get_mp_response_data(ctx->query, 1);
     if (data == NULL) {
-        result.next = PROTO_OP_FINISH;
+        result.next = PROTO_OP_CLEANUP;
         result.err = ERROR("RetrieveImageRequest: invalid response");
         return result;
     }
 
     if (ctx->params.src == ID_SOURCE_PLATEN) {
-        result.next = PROTO_OP_FINISH;
+        result.next = PROTO_OP_CLEANUP;
     } else {
         result.next = PROTO_OP_LOAD;
     }
@@ -1055,7 +1055,7 @@ wsd_status_decode (const proto_ctx *ctx)
     log_debug(ctx->log, "PROTO_OP_CHECK: fault code: %s", wsd->fault_code);
 
     /* Initialize result */
-    result.next = PROTO_OP_FINISH;
+    result.next = ctx->location ? PROTO_OP_CLEANUP : PROTO_OP_FINISH;
     result.status = SANE_STATUS_GOOD;
 
     /* Look to the saved fault code. It it is specific enough, return
@@ -1229,6 +1229,7 @@ proto_handler_wsd_new (void)
     wsd->proto.status_query = wsd_status_query;
     wsd->proto.status_decode = wsd_status_decode;
 
+    wsd->proto.cleanup_query = wsd_cancel_query;
     wsd->proto.cancel_query = wsd_cancel_query;
 
     wsd->proto.test_decode_devcaps = wsd_test_decode_devcaps;
