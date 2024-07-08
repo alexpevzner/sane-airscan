@@ -845,10 +845,23 @@ wsd_scan_query (const proto_ctx *ctx)
     log_assert(ctx->log, format != NULL);
     xml_wr_add_text(xml, "sca:Format", format);
 
-    if (wsd->quirk_broken_ImagesToTransfer) {
-        xml_wr_add_text(xml, "sca:ImagesToTransfer", "100");
-    } else {
-        xml_wr_add_text(xml, "sca:ImagesToTransfer", "0");
+    /* WS-Scan specification says unspecified scan amount should be 0
+     * ( unknown amount, check for more ) and for Flatbed that is 1.
+     */
+    switch (params->src) {
+    case ID_SOURCE_PLATEN:
+        xml_wr_add_text(xml, "sca:ImagesToTransfer", "1");
+        break;
+    case ID_SOURCE_ADF_SIMPLEX:
+    case ID_SOURCE_ADF_DUPLEX:
+        if (wsd->quirk_broken_ImagesToTransfer) {
+            xml_wr_add_text(xml, "sca:ImagesToTransfer", "100");
+        } else {
+            xml_wr_add_text(xml, "sca:ImagesToTransfer", "0");
+        }
+        break;
+    default:
+        log_internal_error(ctx->log);
     }
 
     xml_wr_enter(xml, "sca:InputSize");
@@ -1018,7 +1031,7 @@ wsd_load_decode (const proto_ctx *ctx)
     }
 
     if (ctx->params.src == ID_SOURCE_PLATEN) {
-        result.next = PROTO_OP_CLEANUP;
+        result.next = PROTO_OP_FINISH;
     } else {
         result.next = PROTO_OP_LOAD;
     }
@@ -1065,7 +1078,7 @@ wsd_status_decode (const proto_ctx *ctx)
     log_debug(ctx->log, "PROTO_OP_CHECK: fault code: %s", wsd->fault_code);
 
     /* Initialize result */
-    result.next = ctx->location ? PROTO_OP_CLEANUP : PROTO_OP_FINISH;
+    result.next = PROTO_OP_FINISH;
     result.status = SANE_STATUS_GOOD;
 
     /* Look to the saved fault code. It it is specific enough, return
