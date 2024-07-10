@@ -220,9 +220,9 @@ Legend:
 | Lexmark MC2535adwe                 | Yes                       |                           |
 | Lexmark MC3224adwe                 | Yes                       |                           |
 | Lexmark MC3326adwe                 | Yes                       |                           |
-| OKI-MB471                          |                           | Yes                       |
-| OKI-MC332dn                        |                           | Yes                       |
-| OKI-MC362dn                        |                           | Yes                       |
+| OKI-MB471                          | No                        | Yes                       |
+| OKI-MC332dn                        | No                        | Yes                       |
+| OKI-MC362dn                        | No                        | Yes                       |
 | OKI-MC853                          | Yes                       |                           |
 | Panasonic KV-S1058Y                | No                        | Yes                       |
 | Pantum BM5100ADW series            | Yes                       | Yes                       |
