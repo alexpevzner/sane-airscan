@@ -216,6 +216,7 @@ Legend:
 | Kyocera ECOSYS M5521cdw            | Yes                       | Yes<sup>[5](#note5)</sup> |
 | Kyocera ECOSYS M5526cdw            | Yes                       |                           |
 | Kyocera FS-1028MFP                 | No                        | Yes<sup>[5](#note5)</sup> |
+| Kyocera TASKalfa 3051ci            |                           | Yes<sup>[5](#note5)</sup> |
 | Lexmark CX317dn                    | Yes<sup>[6](#note6)</sup> | Yes<sup>[6](#note6)</sup> |
 | Lexmark MB2236adw                  | Yes                       |                           |
 | Lexmark MC2535adwe                 | Yes                       |                           |
