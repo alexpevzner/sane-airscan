@@ -130,6 +130,7 @@ Legend:
 | Dell C2665dnf Color Laser Printer  | No                        | Yes                       |
 | Dell C3765dnf Color MFP            | No                        | Yes                       |
 | Dell E514dw                        | No                        | Yes                       |
+| EPSON ET-2650 Series               | Yes                       | Yes
 | EPSON ET-2710 Series               | No                        | Yes                       |
 | EPSON ET-2750 Series               | Yes                       |                           |
 | EPSON ET-2760 Series               | Yes                       |                           |
