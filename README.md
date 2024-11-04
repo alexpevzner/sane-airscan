@@ -142,6 +142,7 @@ Legend:
 | EPSON ET-M2170 Series              | Yes                       |                           |
 | EPSON L6570 Series                 | Yes                       | Yes                       |
 | EPSON Stylus SX535WD               | No                        | Yes                       |
+| EPSON WF-2760 Series               |                           | Yes                       |
 | EPSON WF-3620 Series               | No                        | Yes                       |
 | EPSON WF-7710 Series               | No                        | Yes                       |
 | EPSON XP-2100 Series               | No                        | Yes                       |
