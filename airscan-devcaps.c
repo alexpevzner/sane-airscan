@@ -253,6 +253,19 @@ devcaps_dump (log_ctx *log, devcaps *caps, bool trace)
         }
 
         log_func(log, "    Formats:     %s", buf);
+
+        str_trunc(buf);
+
+        for (i = 0; i < NUM_ID_SCANINTENT; i ++) {
+            if ((src->scanintents & (1 << i)) != 0) {
+                if (buf[0] != '\0') {
+                    buf = str_append(buf, ", ");
+                }
+                buf = str_append(buf, id_scanintent_sane_name(i));
+            }
+        }
+
+        log_func(log, "    Intents:     %s", buf);
     }
 
     mem_free(buf);
