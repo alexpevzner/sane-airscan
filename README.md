@@ -299,6 +299,7 @@ officially:
 * Arch Linux (in extra repository)
 * Debian 10+
 * Fedora 32+
+* Gentoo (emerge media-gfx/sane-airscan)
 * NixOS
 * Ubuntu 20.10+
 
