@@ -261,6 +261,49 @@ wsd_devcaps_parse_formats (proto_handler_wsd *wsd,
     return err;
 }
 
+/* Parse supported content types and map them to scan intents
+ */
+static error
+wsd_devcaps_parse_content_types (devcaps *caps, xml_rd *xml,
+        unsigned int *scanintents_out)
+{
+    error        err = NULL;
+    unsigned int level = xml_rd_depth(xml);
+    size_t       prefixlen = strlen(xml_rd_node_path(xml));
+    unsigned int scanintents = 0;
+
+    (void) caps;
+
+    /* Decode supported content types */
+    while (!xml_rd_end(xml)) {
+        const char *path = xml_rd_node_path(xml) + prefixlen;
+
+        if (!strcmp(path, "/scan:ContentTypeValue")) {
+            const char *v = xml_rd_node_value(xml);
+
+            if (!strcmp(v, "Auto")) {
+                scanintents |= 1 << ID_SCANINTENT_AUTO;
+            } else if (!strcmp(v, "Text")) {
+                scanintents |= 1 << ID_SCANINTENT_DOCUMENT;
+            } else if (!strcmp(v, "Photo")) {
+                scanintents |= 1 << ID_SCANINTENT_PHOTO;
+            } else if (!strcmp(v, "Halftone")) {
+                scanintents |= 1 << ID_SCANINTENT_HALFTONE;
+            } else if (!strcmp(v, "Mixed")) {
+                scanintents |= 1 << ID_SCANINTENT_TEXTANDGRAPHIC;
+            } else {
+                log_debug(NULL, "unknown content type: %s", v);
+            }
+        }
+
+        xml_rd_deep_next(xml, level);
+    }
+
+    *scanintents_out = scanintents;
+
+    return err;
+}
+
 /* Parse size
  */
 static error
@@ -442,6 +485,7 @@ wsd_devcaps_parse_configuration (proto_handler_wsd *wsd,
     size_t       prefixlen = strlen(xml_rd_node_path(xml));
     bool         adf = false, duplex = false;
     unsigned int formats = 0;
+    unsigned int scanintents = 0;
     int          i;
 
     /* Parse configuration */
@@ -450,6 +494,8 @@ wsd_devcaps_parse_configuration (proto_handler_wsd *wsd,
 
         if (!strcmp(path, "/scan:DeviceSettings/scan:FormatsSupported")) {
             err = wsd_devcaps_parse_formats(wsd, caps, xml, &formats);
+        } else if (!strcmp(path, "/scan:DeviceSettings/scan:ContentTypesSupported")) {
+            err = wsd_devcaps_parse_content_types(caps, xml, &scanintents);
         } else if (!strcmp(path, "/scan:Platen")) {
             err = wsd_devcaps_parse_source(caps, xml, ID_SOURCE_PLATEN);
         } else if (!strcmp(path, "/scan:ADF/scan:ADFFront")) {
@@ -477,6 +523,7 @@ wsd_devcaps_parse_configuration (proto_handler_wsd *wsd,
 
         if (src != NULL) {
             src->formats = formats;
+            src->scanintents = scanintents;
 
             /* Note, as we can clip in software, we indicate
              * minimal scan region size for SANE as 0x0. But
@@ -750,6 +797,7 @@ wsd_scan_query (const proto_ctx *ctx)
     xml_wr                  *xml = xml_wr_begin("soap:Envelope", wsd_ns_wr);
     const char              *source = NULL;
     const char              *colormode = NULL;
+    const char              *contenttype = NULL;
     const char              *format = NULL;
     static const char       *sides_simplex[] = {"sca:MediaFront", NULL};
     static const char       *sides_duplex[] = {"sca:MediaFront", "sca:MediaBack", NULL};
@@ -772,6 +820,18 @@ wsd_scan_query (const proto_ctx *ctx)
     case ID_COLORMODE_COLOR:     colormode = "RGB24"; break;
     case ID_COLORMODE_GRAYSCALE: colormode = "Grayscale8"; break;
     case ID_COLORMODE_BW1:       colormode = "BlackAndWhite1"; break;
+
+    default:
+        log_internal_error(ctx->log);
+    }
+
+    switch (params->scanintent) {
+    case ID_SCANINTENT_AUTO:           contenttype = "Auto"; break;
+    case ID_SCANINTENT_DOCUMENT:       contenttype = "Text"; break;
+    case ID_SCANINTENT_PHOTO:          contenttype = "Photo"; break;
+    case ID_SCANINTENT_HALFTONE:       contenttype = "Halftone"; break;
+    case ID_SCANINTENT_TEXTANDGRAPHIC: contenttype = "Mixed"; break;
+    case ID_SCANINTENT_UNKNOWN: break;
 
     default:
         log_internal_error(ctx->log);
@@ -862,6 +922,10 @@ wsd_scan_query (const proto_ctx *ctx)
         break;
     default:
         log_internal_error(ctx->log);
+    }
+
+    if (contenttype) {
+        xml_wr_add_text(xml, "sca:ContentType", contenttype);
     }
 
     xml_wr_enter(xml, "sca:InputSize");
