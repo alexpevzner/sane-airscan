@@ -182,6 +182,7 @@ id_format_short_name (ID_FORMAT id)
  * SANE name mapping
  */
 static id_name_table id_scanintent_sane_name_table[] = {
+    {ID_SCANINTENT_UNSET,          "*unset*"},
     {ID_SCANINTENT_AUTO,           "Auto"},
     {ID_SCANINTENT_DOCUMENT,       "Document"},
     {ID_SCANINTENT_TEXTANDGRAPHIC, "Text and Graphic"},

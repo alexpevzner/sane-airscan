@@ -811,6 +811,7 @@ id_format_short_name (ID_FORMAT id);
  */
 typedef enum {
     ID_SCANINTENT_UNKNOWN = -1,
+    ID_SCANINTENT_UNSET,          /* Intent is not set */
     ID_SCANINTENT_AUTO,           /*                        WSD: Auto */
     ID_SCANINTENT_DOCUMENT,       /* eSCL: Docoment,        WSD: Text */
     ID_SCANINTENT_TEXTANDGRAPHIC, /* eSCL: TextAndGraphic,  WSD: Mixed */

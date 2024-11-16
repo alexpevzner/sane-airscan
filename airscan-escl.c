@@ -793,13 +793,13 @@ escl_scan_query (const proto_ctx *ctx)
     }
 
     switch (params->scanintent) {
+    case ID_SCANINTENT_UNSET:          break;
     case ID_SCANINTENT_DOCUMENT:       scanintent = "Document"; break;
     case ID_SCANINTENT_TEXTANDGRAPHIC: scanintent = "TextAndGraphic"; break;
     case ID_SCANINTENT_PHOTO:          scanintent = "Photo"; break;
     case ID_SCANINTENT_PREVIEW:        scanintent = "Preview"; break;
     case ID_SCANINTENT_OBJECT:         scanintent = "Object"; break;
     case ID_SCANINTENT_BUSINESSCARD:   scanintent = "BusinessCard"; break;
-    case ID_SCANINTENT_UNKNOWN: break;
 
     default:
         log_internal_error(ctx->log);

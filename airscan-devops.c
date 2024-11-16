@@ -140,12 +140,14 @@ static ID_SCANINTENT
 devopt_choose_scanintent (devopt *opt, ID_SCANINTENT wanted)
 {
     devcaps_source *src = opt->caps.src[opt->src];
-    unsigned int   scanintent = src->scanintents;
+    unsigned int   scanintents = src->scanintents;
+
+    scanintents |= 1 << ID_SCANINTENT_UNSET; /* Always implicitly supported */
 
     /* Prefer wanted mode if possible */
     if (wanted != ID_SCANINTENT_UNKNOWN) {
         while (wanted < NUM_ID_SCANINTENT) {
-            if ((scanintent & (1 << wanted)) != 0) {
+            if ((scanintents & (1 << wanted)) != 0) {
                 return wanted;
             }
             wanted ++;
@@ -155,11 +157,12 @@ devopt_choose_scanintent (devopt *opt, ID_SCANINTENT wanted)
     /* Nothing found in a previous step. Just choose the first mode
      * supported by the scanner */
     wanted = (ID_SCANINTENT) 0;
-    while ((scanintent & (1 << wanted)) == 0 && wanted < NUM_ID_SCANINTENT) {
+    while ((scanintents & (1 << wanted)) == 0 && wanted < NUM_ID_SCANINTENT) {
         wanted ++;
     }
+
     if (wanted >= NUM_ID_SCANINTENT) {
-        wanted = ID_SCANINTENT_UNKNOWN;
+        wanted = ID_SCANINTENT_UNSET;
     }
 
     return wanted;
@@ -226,6 +229,7 @@ devopt_rebuild_opt_desc (devopt *opt)
         }
     }
 
+    scanintents |= 1 << ID_SCANINTENT_UNSET; /* Always implicitly supported */
     for (i = 0; i < NUM_ID_SCANINTENT; i ++) {
         if ((scanintents & (1 << i)) != 0) {
             opt->sane_scanintents =
@@ -689,7 +693,7 @@ devopt_set_defaults (devopt *opt)
 
     opt->colormode_emul = devopt_choose_colormode(opt, ID_COLORMODE_UNKNOWN);
     opt->colormode_real = devopt_real_colormode(opt->colormode_emul, src);
-    opt->scanintent = devopt_choose_scanintent(opt, ID_SCANINTENT_UNKNOWN);
+    opt->scanintent = ID_SCANINTENT_UNSET;
     opt->resolution = devopt_choose_resolution(opt, CONFIG_DEFAULT_RESOLUTION);
 
     opt->tl_x = 0;
@@ -815,11 +819,7 @@ devopt_get_option (devopt *opt, SANE_Int option, void *value)
         break;
 
     case OPT_SCAN_INTENT:
-        if (opt->scanintent == ID_SCANINTENT_UNKNOWN) {
-            strcpy(value, "");
-        } else {
-            strcpy(value, id_scanintent_sane_name(opt->scanintent));
-        }
+        strcpy(value, id_scanintent_sane_name(opt->scanintent));
         break;
 
     case OPT_SCAN_SOURCE:

@@ -826,12 +826,12 @@ wsd_scan_query (const proto_ctx *ctx)
     }
 
     switch (params->scanintent) {
+    case ID_SCANINTENT_UNSET:          break;
     case ID_SCANINTENT_AUTO:           contenttype = "Auto"; break;
     case ID_SCANINTENT_DOCUMENT:       contenttype = "Text"; break;
     case ID_SCANINTENT_PHOTO:          contenttype = "Photo"; break;
     case ID_SCANINTENT_HALFTONE:       contenttype = "Halftone"; break;
     case ID_SCANINTENT_TEXTANDGRAPHIC: contenttype = "Mixed"; break;
-    case ID_SCANINTENT_UNKNOWN: break;
 
     default:
         log_internal_error(ctx->log);
