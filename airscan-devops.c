@@ -283,7 +283,7 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc = &opt->desc[OPT_SCAN_INTENT];
     desc->name = "scan-intent";
     desc->title = "Scan intent";
-    desc->desc = "Selects the scan intent.";
+    desc->desc = "Optimize scan for Text/Photo/etc.";
     desc->type = SANE_TYPE_STRING;
     desc->size = sane_string_array_max_strlen(opt->sane_scanintents) + 1;
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
