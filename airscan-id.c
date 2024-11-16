@@ -183,7 +183,7 @@ id_format_short_name (ID_FORMAT id)
  */
 static id_name_table id_scanintent_sane_name_table[] = {
     {ID_SCANINTENT_AUTO,           "Auto"},
-    {ID_SCANINTENT_DOCUMENT,       "Text"},
+    {ID_SCANINTENT_DOCUMENT,       "Document"},
     {ID_SCANINTENT_TEXTANDGRAPHIC, "Text and Graphic"},
     {ID_SCANINTENT_PHOTO,          "Photo"},
     {ID_SCANINTENT_PREVIEW,        "Preview"},
