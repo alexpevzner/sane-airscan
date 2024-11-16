@@ -795,17 +795,30 @@ const char*
 id_format_short_name (ID_FORMAT id);
 
 /* ID_SCANINTENT represents scan intent
+ *
+ * Intent hints scanner on a purpose of requested scan, which may
+ * imply carious parameters tweaks depending on that purpose.
+ *
+ * Intent maps to the eSCL Intent (see Mopria eSCL Technical Specification, 5)
+ * and WSD ContentType. The semantics of these two parameters looks very
+ * similar.
+ *
+ * Please note, eSCL defines also the ContentType parameter, but after
+ * some thinking and discussion we came to conclusion that Intent better
+ * maps our need.
+ *
+ * Dee discussion at: https://github.com/alexpevzner/sane-airscan/pull/351
  */
 typedef enum {
     ID_SCANINTENT_UNKNOWN = -1,
-    ID_SCANINTENT_AUTO, /* maps to WSD ContentType=Auto */
-    ID_SCANINTENT_DOCUMENT, /* text */
-    ID_SCANINTENT_TEXTANDGRAPHIC, /* mixed */
-    ID_SCANINTENT_PHOTO,
-    ID_SCANINTENT_PREVIEW,
-    ID_SCANINTENT_OBJECT, /* 3D objects */
-    ID_SCANINTENT_BUSINESSCARD,
-    ID_SCANINTENT_HALFTONE, /* maps to WSD ContentType=Halftone */
+    ID_SCANINTENT_AUTO,           /*                        WSD: Auto */
+    ID_SCANINTENT_DOCUMENT,       /* eSCL: Docoment,        WSD: Text */
+    ID_SCANINTENT_TEXTANDGRAPHIC, /* eSCL: TextAndGraphic,  WSD: Mixed */
+    ID_SCANINTENT_PHOTO,          /* eSCL: Photo,           WSD: Photo */
+    ID_SCANINTENT_PREVIEW,        /* eSCL: Preview */
+    ID_SCANINTENT_OBJECT,         /* eSCL: Objects (3d scan) */
+    ID_SCANINTENT_BUSINESSCARD,   /* eSCL: BusinessCard */
+    ID_SCANINTENT_HALFTONE,       /*                        WSD: Halftone */
 
     NUM_ID_SCANINTENT
 } ID_SCANINTENT;
