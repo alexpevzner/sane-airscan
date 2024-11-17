@@ -54,6 +54,7 @@ typedef struct {
     bool quirk_localhost;            /* Set Host: localhost in ScanJobs rq */
     bool quirk_canon_mf410_series;   /* Canon MF410 Series */
     bool quirk_port_in_host;         /* Always set port in Host: header */
+    bool quirk_next_load_delay;      /* Use ESCL_NEXT_LOAD_DELAY */
 } proto_handler_escl;
 
 /* XML namespace for XML writer
@@ -562,6 +563,8 @@ escl_devcaps_parse (proto_handler_escl *escl,
                 escl->quirk_canon_mf410_series = true;
             } else if (!strncasecmp(m, "EPSON ", 6)) {
                 escl->quirk_port_in_host = true;
+            } else if (!strncasecmp(m, "Brother ", 8)) {
+                escl->quirk_next_load_delay = true;
             }
         } else if (xml_rd_node_name_match(xml, "scan:Manufacturer")) {
             const char *m = xml_rd_node_value(xml);
@@ -959,9 +962,10 @@ escl_load_query (const proto_ctx *ctx)
 static proto_result
 escl_load_decode (const proto_ctx *ctx)
 {
-    proto_result result = {0};
-    error        err = NULL;
-    timestamp    t = 0;
+    proto_handler_escl  *escl = (proto_handler_escl*) ctx->proto;
+    proto_result        result = {0};
+    error               err = NULL;
+    timestamp           t = 0;
 
     /* Check HTTP status */
     err = http_query_error(ctx->query);
@@ -977,7 +981,7 @@ escl_load_decode (const proto_ctx *ctx)
     }
 
     /* Compute delay until next load */
-    if (ctx->params.src != ID_SOURCE_PLATEN) {
+    if (escl->quirk_next_load_delay && ctx->params.src != ID_SOURCE_PLATEN) {
         t = timestamp_now() - http_query_timestamp(ctx->query);
         t *= ESCL_NEXT_LOAD_DELAY_MAX;
 
