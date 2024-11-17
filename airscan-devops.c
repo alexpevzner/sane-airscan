@@ -134,40 +134,6 @@ devopt_choose_colormode (devopt *opt, ID_COLORMODE wanted)
     return wanted;
 }
 
-/* Choose appropriate scan intent
- */
-static ID_SCANINTENT
-devopt_choose_scanintent (devopt *opt, ID_SCANINTENT wanted)
-{
-    devcaps_source *src = opt->caps.src[opt->src];
-    unsigned int   scanintents = src->scanintents;
-
-    scanintents |= 1 << ID_SCANINTENT_UNSET; /* Always implicitly supported */
-
-    /* Prefer wanted mode if possible */
-    if (wanted != ID_SCANINTENT_UNKNOWN) {
-        while (wanted < NUM_ID_SCANINTENT) {
-            if ((scanintents & (1 << wanted)) != 0) {
-                return wanted;
-            }
-            wanted ++;
-        }
-    }
-
-    /* Nothing found in a previous step. Just choose the first mode
-     * supported by the scanner */
-    wanted = (ID_SCANINTENT) 0;
-    while ((scanintents & (1 << wanted)) == 0 && wanted < NUM_ID_SCANINTENT) {
-        wanted ++;
-    }
-
-    if (wanted >= NUM_ID_SCANINTENT) {
-        wanted = ID_SCANINTENT_UNSET;
-    }
-
-    return wanted;
-}
-
 /* Choose appropriate scanner resolution
  */
 static SANE_Word
@@ -586,6 +552,24 @@ devopt_set_source (devopt *opt, ID_SOURCE id_src, SANE_Word *info)
     return SANE_STATUS_GOOD;
 }
 
+/* Set scan intent.
+ */
+static SANE_Status
+devopt_set_scanintent (devopt *opt, ID_SCANINTENT intent)
+{
+    devcaps_source *src = opt->caps.src[opt->src];
+    unsigned int   scanintents = src->scanintents;
+
+    scanintents |= 1 << ID_SCANINTENT_UNSET; /* Always implicitly supported */
+
+    if ((scanintents & (1 << intent)) == 0) {
+        return SANE_STATUS_INVAL;
+    }
+
+    opt->scanintent = intent;
+    return SANE_STATUS_GOOD;
+}
+
 /* Set geometry option
  */
 static SANE_Status
@@ -749,7 +733,7 @@ devopt_set_option (devopt *opt, SANE_Int option, void *value, SANE_Word *info)
         if (id_scanintent == ID_SCANINTENT_UNKNOWN) {
             status = SANE_STATUS_INVAL;
         } else {
-            opt->scanintent = devopt_choose_scanintent(opt, id_scanintent);
+            status = devopt_set_scanintent(opt, id_scanintent);
         }
         break;
 
