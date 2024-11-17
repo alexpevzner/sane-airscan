@@ -794,6 +794,48 @@ id_format_by_mime_name (const char *name);
 const char*
 id_format_short_name (ID_FORMAT id);
 
+/* ID_SCANINTENT represents scan intent
+ *
+ * Intent hints scanner on a purpose of requested scan, which may
+ * imply carious parameters tweaks depending on that purpose.
+ *
+ * Intent maps to the eSCL Intent (see Mopria eSCL Technical Specification, 5)
+ * and WSD ContentType. The semantics of these two parameters looks very
+ * similar.
+ *
+ * Please note, eSCL defines also the ContentType parameter, but after
+ * some thinking and discussion we came to conclusion that Intent better
+ * maps our need.
+ *
+ * Dee discussion at: https://github.com/alexpevzner/sane-airscan/pull/351
+ */
+typedef enum {
+    ID_SCANINTENT_UNKNOWN = -1,
+    ID_SCANINTENT_UNSET,          /* Intent is not set */
+    ID_SCANINTENT_AUTO,           /*                        WSD: Auto */
+    ID_SCANINTENT_DOCUMENT,       /* eSCL: Docoment,        WSD: Text */
+    ID_SCANINTENT_TEXTANDGRAPHIC, /* eSCL: TextAndGraphic,  WSD: Mixed */
+    ID_SCANINTENT_PHOTO,          /* eSCL: Photo,           WSD: Photo */
+    ID_SCANINTENT_PREVIEW,        /* eSCL: Preview */
+    ID_SCANINTENT_OBJECT,         /* eSCL: Objects (3d scan) */
+    ID_SCANINTENT_BUSINESSCARD,   /* eSCL: BusinessCard */
+    ID_SCANINTENT_HALFTONE,       /*                        WSD: Halftone */
+
+    NUM_ID_SCANINTENT
+} ID_SCANINTENT;
+
+/* id_scanintent_sane_name returns SANE name for the scan intents
+ * For unknown ID returns NULL
+ */
+const char*
+id_scanintent_sane_name (ID_SCANINTENT id);
+
+/* id_scanintent_by_sane_name returns ID_SCANINTENT by its SANE name
+ * For unknown name returns ID_SCANINTENT_UNKNOWN
+ */
+ID_SCANINTENT
+id_scanintent_by_sane_name (const char *name);
+
 /******************** Device ID ********************/
 /* Allocate unique device ID
  */
@@ -2535,6 +2577,7 @@ enum {
     OPT_GROUP_STANDARD,
     OPT_SCAN_RESOLUTION,
     OPT_SCAN_COLORMODE,         /* I.e. color/grayscale etc */
+    OPT_SCAN_INTENT,            /* Document/Photo etc */
     OPT_SCAN_SOURCE,            /* Platem/ADF/ADF Duplex */
 
     /* Geometry options group */
@@ -2648,6 +2691,7 @@ typedef struct {
     unsigned int flags;                  /* Source flags */
     unsigned int colormodes;             /* Set of 1 << ID_COLORMODE */
     unsigned int formats;                /* Set of 1 << ID_FORMAT */
+    unsigned int scanintents;            /* Set of 1 << ID_SCANINTENT */
     SANE_Word    min_wid_px, max_wid_px; /* Min/max width, in pixels */
     SANE_Word    min_hei_px, max_hei_px; /* Min/max height, in pixels */
     SANE_Word    *resolutions;           /* Discrete resolutions, in DPI */
@@ -2732,12 +2776,14 @@ typedef struct {
     ID_SOURCE              src;               /* Current source */
     ID_COLORMODE           colormode_emul;    /* Current "emulated" color mode*/
     ID_COLORMODE           colormode_real;    /* Current real color mode*/
+    ID_SCANINTENT          scanintent;        /* Current scan intent */
     SANE_Word              resolution;        /* Current resolution */
     SANE_Fixed             tl_x, tl_y;        /* Top-left x/y */
     SANE_Fixed             br_x, br_y;        /* Bottom-right x/y */
     SANE_Parameters        params;            /* Scan parameters */
     SANE_String            *sane_sources;     /* Sources, in SANE format */
     SANE_String            *sane_colormodes;  /* Color modes in SANE format */
+    SANE_String            *sane_scanintents; /* Scan intents in SANE format */
     SANE_Fixed             brightness;        /* -100.0 ... +100.0 */
     SANE_Fixed             contrast;          /* -100.0 ... +100.0 */
     SANE_Fixed             shadow;            /* 0.0 ... +100.0 */
@@ -3240,6 +3286,7 @@ typedef struct {
     int           x_res, y_res; /* X/Y resolution */
     ID_SOURCE     src;          /* Desired source */
     ID_COLORMODE  colormode;    /* Desired color mode */
+    ID_SCANINTENT scanintent;   /* Desired scan intent */
     ID_FORMAT     format;       /* Desired image format */
 } proto_scan_params;
 

@@ -41,6 +41,7 @@ devopt_init (devopt *opt)
     opt->resolution = CONFIG_DEFAULT_RESOLUTION;
     opt->sane_sources = sane_string_array_new();
     opt->sane_colormodes = sane_string_array_new();
+    opt->sane_scanintents = sane_string_array_new();
 }
 
 /* Cleanup device options
@@ -50,6 +51,7 @@ devopt_cleanup (devopt *opt)
 {
     sane_string_array_free(opt->sane_sources);
     sane_string_array_free(opt->sane_colormodes);
+    sane_string_array_free(opt->sane_scanintents);
     devcaps_cleanup(&opt->caps);
 }
 
@@ -168,6 +170,7 @@ devopt_rebuild_opt_desc (devopt *opt)
     SANE_Option_Descriptor  *desc;
     devcaps_source          *src = opt->caps.src[opt->src];
     unsigned int            colormodes = devopt_available_colormodes(src);
+    unsigned int            scanintents = src->scanintents;
     int                     i;
     const char              *s;
 
@@ -175,6 +178,7 @@ devopt_rebuild_opt_desc (devopt *opt)
 
     sane_string_array_reset(opt->sane_sources);
     sane_string_array_reset(opt->sane_colormodes);
+    sane_string_array_reset(opt->sane_scanintents);
 
     for (i = 0; i < NUM_ID_SOURCE; i ++) {
         if (opt->caps.src[i] != NULL) {
@@ -188,6 +192,15 @@ devopt_rebuild_opt_desc (devopt *opt)
             opt->sane_colormodes =
             sane_string_array_append(
                 opt->sane_colormodes, (SANE_String) id_colormode_sane_name(i));
+        }
+    }
+
+    scanintents |= 1 << ID_SCANINTENT_UNSET; /* Always implicitly supported */
+    for (i = 0; i < NUM_ID_SCANINTENT; i ++) {
+        if ((scanintents & (1 << i)) != 0) {
+            opt->sane_scanintents =
+            sane_string_array_append(
+                opt->sane_scanintents, (SANE_String) id_scanintent_sane_name(i));
         }
     }
 
@@ -235,6 +248,20 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->constraint_type = SANE_CONSTRAINT_STRING_LIST;
     desc->constraint.string_list = (SANE_String_Const*) opt->sane_colormodes;
+
+    /* OPT_SCAN_INTENT */
+    desc = &opt->desc[OPT_SCAN_INTENT];
+    desc->name = "scan-intent";
+    desc->title = "Scan intent";
+    desc->desc = "Optimize scan for Text/Photo/etc.";
+    desc->type = SANE_TYPE_STRING;
+    desc->size = sane_string_array_max_strlen(opt->sane_scanintents) + 1;
+    desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
+    desc->constraint_type = SANE_CONSTRAINT_STRING_LIST;
+    desc->constraint.string_list = (SANE_String_Const*) opt->sane_scanintents;
+    if (!scanintents) {
+        desc->cap |= SANE_CAP_INACTIVE;
+    }
 
     /* OPT_SCAN_SOURCE */
     desc = &opt->desc[OPT_SCAN_SOURCE];
@@ -525,6 +552,24 @@ devopt_set_source (devopt *opt, ID_SOURCE id_src, SANE_Word *info)
     return SANE_STATUS_GOOD;
 }
 
+/* Set scan intent.
+ */
+static SANE_Status
+devopt_set_scanintent (devopt *opt, ID_SCANINTENT intent)
+{
+    devcaps_source *src = opt->caps.src[opt->src];
+    unsigned int   scanintents = src->scanintents;
+
+    scanintents |= 1 << ID_SCANINTENT_UNSET; /* Always implicitly supported */
+
+    if ((scanintents & (1 << intent)) == 0) {
+        return SANE_STATUS_INVAL;
+    }
+
+    opt->scanintent = intent;
+    return SANE_STATUS_GOOD;
+}
+
 /* Set geometry option
  */
 static SANE_Status
@@ -632,6 +677,7 @@ devopt_set_defaults (devopt *opt)
 
     opt->colormode_emul = devopt_choose_colormode(opt, ID_COLORMODE_UNKNOWN);
     opt->colormode_real = devopt_real_colormode(opt->colormode_emul, src);
+    opt->scanintent = ID_SCANINTENT_UNSET;
     opt->resolution = devopt_choose_resolution(opt, CONFIG_DEFAULT_RESOLUTION);
 
     opt->tl_x = 0;
@@ -657,6 +703,7 @@ devopt_set_option (devopt *opt, SANE_Int option, void *value, SANE_Word *info)
     SANE_Status    status = SANE_STATUS_GOOD;
     ID_SOURCE      id_src;
     ID_COLORMODE   id_colormode;
+    ID_SCANINTENT  id_scanintent;
 
     /* Simplify life of options handlers by ensuring info != NULL  */
     if (info == NULL) {
@@ -678,6 +725,15 @@ devopt_set_option (devopt *opt, SANE_Int option, void *value, SANE_Word *info)
             status = SANE_STATUS_INVAL;
         } else {
             status = devopt_set_colormode(opt, id_colormode, info);
+        }
+        break;
+
+    case OPT_SCAN_INTENT:
+        id_scanintent = id_scanintent_by_sane_name(value);
+        if (id_scanintent == ID_SCANINTENT_UNKNOWN) {
+            status = SANE_STATUS_INVAL;
+        } else {
+            status = devopt_set_scanintent(opt, id_scanintent);
         }
         break;
 
@@ -744,6 +800,10 @@ devopt_get_option (devopt *opt, SANE_Int option, void *value)
 
     case OPT_SCAN_COLORMODE:
         strcpy(value, id_colormode_sane_name(opt->colormode_emul));
+        break;
+
+    case OPT_SCAN_INTENT:
+        strcpy(value, id_scanintent_sane_name(opt->scanintent));
         break;
 
     case OPT_SCAN_SOURCE:

@@ -177,6 +177,41 @@ id_format_short_name (ID_FORMAT id)
     return name ? name : mime;
 }
 
+/******************** ID_SCANINTENT ********************/
+/* id_scanintent_sane_name_table represents ID_SCANINTENT to
+ * SANE name mapping
+ */
+static id_name_table id_scanintent_sane_name_table[] = {
+    {ID_SCANINTENT_UNSET,          "*unset*"},
+    {ID_SCANINTENT_AUTO,           "Auto"},
+    {ID_SCANINTENT_DOCUMENT,       "Document"},
+    {ID_SCANINTENT_TEXTANDGRAPHIC, "Text and Graphic"},
+    {ID_SCANINTENT_PHOTO,          "Photo"},
+    {ID_SCANINTENT_PREVIEW,        "Preview"},
+    {ID_SCANINTENT_OBJECT,         "3D Object"},
+    {ID_SCANINTENT_BUSINESSCARD,   "Business Card"},
+    {ID_SCANINTENT_HALFTONE,       "Halftone"},
+    {-1, NULL}
+};
+
+/* id_scanintent_sane_name returns SANE name for the scan intent
+ * For unknown ID returns NULL
+ */
+const char*
+id_scanintent_sane_name (ID_SCANINTENT id)
+{
+    return id_name(id, id_scanintent_sane_name_table);
+}
+
+/* id_scanintent_by_sane_name returns ID_SCANINTENT by its SANE name
+ * For unknown name returns ID_SCANINTENT_UNKNOWN
+ */
+ID_SCANINTENT
+id_scanintent_by_sane_name (const char *name)
+{
+    return id_by_name(name, strcasecmp, id_scanintent_sane_name_table);
+}
+
 
 /******************** ID_JUSTIFICATION ********************/
 /* id_justification_sane_name_table represents ID_JUSTIFICATION to

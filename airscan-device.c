@@ -1040,6 +1040,7 @@ device_stm_start_scan (device *dev)
     params->y_res = y_resolution;
     params->src = dev->opt.src;
     params->colormode = dev->opt.colormode_real;
+    params->scanintent = dev->opt.scanintent;
     params->format = device_choose_format(dev, src);
 
     /* Dump parameters */
@@ -1051,6 +1052,8 @@ device_stm_start_scan (device *dev)
             id_colormode_sane_name(dev->opt.colormode_emul));
     log_trace(dev->log, "  colormode_real: %s",
             id_colormode_sane_name(params->colormode));
+    log_trace(dev->log, "  scanintent:     %s",
+            id_scanintent_sane_name(params->scanintent));
     log_trace(dev->log, "  tl_x:           %s mm",
             math_fmt_mm(dev->opt.tl_x, buf));
     log_trace(dev->log, "  tl_y:           %s mm",

@@ -341,6 +341,39 @@ escl_devcaps_source_parse_setting_profiles (xml_rd *xml, devcaps_source *src)
     return err;
 }
 
+/* Parse supported intents (photo/document etc).
+ */
+static error
+escl_devcaps_source_parse_supported_intents (xml_rd *xml, devcaps_source *src)
+{
+    error err = NULL;
+
+    xml_rd_enter(xml);
+    for (; !xml_rd_end(xml); xml_rd_next(xml)) {
+        if(xml_rd_node_name_match(xml, "scan:SupportedIntent")) {
+            const char *v = xml_rd_node_value(xml);
+            if (!strcmp(v, "Document")) {
+                src->scanintents |= 1 << ID_SCANINTENT_DOCUMENT;
+            } else if (!strcmp(v, "TextAndGraphic")) {
+                src->scanintents |= 1 << ID_SCANINTENT_TEXTANDGRAPHIC;
+            } else if (!strcmp(v, "Photo")) {
+                src->scanintents |= 1 << ID_SCANINTENT_PHOTO;
+            } else if (!strcmp(v, "Preview")) {
+                src->scanintents |= 1 << ID_SCANINTENT_PREVIEW;
+            } else if (!strcmp(v, "Object")) {
+                src->scanintents |= 1 << ID_SCANINTENT_OBJECT;
+            } else if (!strcmp(v, "BusinessCard")) {
+                src->scanintents |= 1 << ID_SCANINTENT_BUSINESSCARD;
+            } else {
+                log_debug(NULL, "unknown intent: %s", v);
+            }
+        }
+    }
+    xml_rd_leave(xml);
+
+    return err;
+}
+
 
 /* Parse ADF justification
  */
@@ -396,6 +429,8 @@ escl_devcaps_source_parse (xml_rd *xml, devcaps_source **out)
             err = xml_rd_node_value_uint(xml, &src->max_hei_px);
         } else if (xml_rd_node_name_match(xml, "scan:SettingProfiles")) {
             err = escl_devcaps_source_parse_setting_profiles(xml, src);
+        } else if (xml_rd_node_name_match(xml, "scan:SupportedIntents")) {
+            err = escl_devcaps_source_parse_supported_intents(xml, src);
         }
     }
     xml_rd_leave(xml);
@@ -732,6 +767,7 @@ escl_scan_query (const proto_ctx *ctx)
     const proto_scan_params *params = &ctx->params;
     const char              *source = NULL;
     const char              *colormode = NULL;
+    const char              *scanintent = NULL;
     const char              *mime = id_format_mime_name(ctx->params.format);
     const devcaps_source    *src = ctx->devcaps->src[params->src];
     bool                    duplex = false;
@@ -756,10 +792,27 @@ escl_scan_query (const proto_ctx *ctx)
         log_internal_error(ctx->log);
     }
 
+    switch (params->scanintent) {
+    case ID_SCANINTENT_UNSET:          break;
+    case ID_SCANINTENT_DOCUMENT:       scanintent = "Document"; break;
+    case ID_SCANINTENT_TEXTANDGRAPHIC: scanintent = "TextAndGraphic"; break;
+    case ID_SCANINTENT_PHOTO:          scanintent = "Photo"; break;
+    case ID_SCANINTENT_PREVIEW:        scanintent = "Preview"; break;
+    case ID_SCANINTENT_OBJECT:         scanintent = "Object"; break;
+    case ID_SCANINTENT_BUSINESSCARD:   scanintent = "BusinessCard"; break;
+
+    default:
+        log_internal_error(ctx->log);
+    }
+
     /* Build scan request */
     xml_wr *xml = xml_wr_begin("scan:ScanSettings", escl_xml_wr_ns);
 
     xml_wr_add_text(xml, "pwg:Version", "2.0");
+
+    if (scanintent) {
+        xml_wr_add_text(xml, "scan:Intent", scanintent);
+    }
 
     xml_wr_enter(xml, "pwg:ScanRegions");
     xml_wr_enter(xml, "pwg:ScanRegion");
