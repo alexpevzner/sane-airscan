@@ -535,17 +535,33 @@ wsd_devcaps_parse_configuration (proto_handler_wsd *wsd,
         }
     }
 
-    /* Note, WSD uses slightly unusual model: instead of providing
-     * source configurations for simplex and duplex modes, it provides
-     * source configuration for ADF front, which is required (when ADF
-     * is supported by device) and for ADF back, which is optional
+    /* Please note that the standard model for SANE and for our implementation
+     * involves having two separate configurations for the duplex ADF: one for
+     * simplex mode and another for duplex mode. In duplex mode, it is assumed
+     * that the front and back page scanning will have the same
+     * characteristics.
      *
-     * So we assume, that ADF front applies to both simplex and duplex
-     * modes, while ADF back applies only to duplex mode
+     * However, WSD employs a slightly different model. Instead of providing
+     * separate source configurations for simplex and duplex modes, it offers a
+     * source configuration for the ADF front, which is required when the ADF
+     * is supported by the device, and an optional configuration for the ADF
+     * back.
      *
-     * So if duplex is supported, we either merge front and back
-     * configurations, if both are present, or simply copy front
-     * to back, if back is missed
+     * According to the specification, the ADF back configuration is optional.
+     * If the scanner indicates duplex support (via the ADFSupportsDuplex) but
+     * does not provide a separate ADFBack element, the ADFBack should be
+     * assumed to be the same as ADFFront.
+     *
+     * During the decoding process, we temporarily store the ADF front
+     * information under the IDSOURCEADFSIMPLEX and the ADF back information
+     * under the IDSOURCEADFDUPLEX slots, and then make adjustments.
+     *
+     * When adjusting, we assume that the ADF front applies to both simplex and
+     * duplex modes, while the ADF back applies only to duplex mode.
+     *
+     * Therefore, if duplex is supported, we either merge the front and back
+     * configurations if both are present or simply copy the front
+     * configuration to the back if the back configuration is missing.
      */
     if (adf && duplex) {
         log_assert(NULL, caps->src[ID_SOURCE_ADF_SIMPLEX] != NULL);
