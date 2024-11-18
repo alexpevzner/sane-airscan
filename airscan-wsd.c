@@ -535,6 +535,20 @@ wsd_devcaps_parse_configuration (proto_handler_wsd *wsd,
         }
     }
 
+    /* Workaround for Brother MFC-9340CDW
+     *
+     * This device reports ADFSupportsDuplex as 0, but returns both
+     * ADFFront and ADFBack elements.
+     *
+     * As a workaround, we assume that if both ADFFront and ADFBack are
+     * present (temporary saved under the ID_SOURCE_ADF_SIMPLEX and
+     * ID_SOURCE_ADF_DUPLEX slots), scanner supports duplex mode,
+     * regardless of the ADFSupportsDuplex value it returns
+     */
+    if (adf && caps->src[ID_SOURCE_ADF_DUPLEX] != NULL) {
+        duplex = true;
+    }
+
     /* Please note that the standard model for SANE and for our implementation
      * involves having two separate configurations for the duplex ADF: one for
      * simplex mode and another for duplex mode. In duplex mode, it is assumed
@@ -553,8 +567,8 @@ wsd_devcaps_parse_configuration (proto_handler_wsd *wsd,
      * assumed to be the same as ADFFront.
      *
      * During the decoding process, we temporarily store the ADF front
-     * information under the IDSOURCEADFSIMPLEX and the ADF back information
-     * under the IDSOURCEADFDUPLEX slots, and then make adjustments.
+     * information under the ID_SOURCE_ADF_SIMPLEX and the ADF back information
+     * under the ID_SOURCE_ADF_DUPLEX slots, and then make adjustments.
      *
      * When adjusting, we assume that the ADF front applies to both simplex and
      * duplex modes, while the ADF back applies only to duplex mode.
