@@ -259,9 +259,6 @@ devopt_rebuild_opt_desc (devopt *opt)
     desc->cap = SANE_CAP_SOFT_SELECT | SANE_CAP_SOFT_DETECT;
     desc->constraint_type = SANE_CONSTRAINT_STRING_LIST;
     desc->constraint.string_list = (SANE_String_Const*) opt->sane_scanintents;
-    if (!scanintents) {
-        desc->cap |= SANE_CAP_INACTIVE;
-    }
 
     /* OPT_SCAN_SOURCE */
     desc = &opt->desc[OPT_SCAN_SOURCE];
