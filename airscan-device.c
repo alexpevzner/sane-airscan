@@ -15,11 +15,11 @@
 /******************** Constants ********************/
 /* HTTP timeouts, by operation, in milliseconds
  */
-#define DEVICE_HTTP_TIMEOUT_DEVCAPS     5000
-#define DEVICE_HTTP_TIMEOUT_PRECHECK    5000
+#define DEVICE_HTTP_TIMEOUT_DEVCAPS     20000
+#define DEVICE_HTTP_TIMEOUT_PRECHECK    20000
 #define DEVICE_HTTP_TIMEOUT_SCAN        30000
 #define DEVICE_HTTP_TIMEOUT_LOAD        -1
-#define DEVICE_HTTP_TIMEOUT_CHECK       5000
+#define DEVICE_HTTP_TIMEOUT_CHECK       20000
 #define DEVICE_HTTP_TIMEOUT_CLEANUP     30000
 #define DEVICE_HTTP_TIMEOUT_CANCEL      30000
 
