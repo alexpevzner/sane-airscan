@@ -718,7 +718,7 @@ escl_precheck_decode (const proto_ctx *ctx)
     }
 
     /* Note, the pre-check status is not always reliable, so normally
-     * we ignore it. Hoverer, with Canon MF410 Series attempt to
+     * we ignore it. However, with Canon MF410 Series attempt to
      * scan from empty ADF causes ADF jam error (really, physical!),
      * so we must take care
      */
