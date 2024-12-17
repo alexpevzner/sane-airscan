@@ -50,11 +50,12 @@
 typedef struct {
     proto_handler proto; /* Base class */
 
-    /* Miscellaneous flags */
-    bool quirk_localhost;            /* Set Host: localhost in ScanJobs rq */
-    bool quirk_canon_mf410_series;   /* Canon MF410 Series */
-    bool quirk_port_in_host;         /* Always set port in Host: header */
-    bool quirk_next_load_delay;      /* Use ESCL_NEXT_LOAD_DELAY */
+    /* Device-specific quirks */
+    bool         quirk_localhost;          /* Set Host: localhost in ScanJobs rq */
+    bool         quirk_canon_mf410_series; /* Canon MF410 Series */
+    bool         quirk_port_in_host;       /* Always set port in Host: header */
+    bool         quirk_next_load_delay;    /* Use ESCL_NEXT_LOAD_DELAY */
+    unsigned int quirk_adf_max_pages;      /* ADF max pages per job */
 } proto_handler_escl;
 
 /* XML namespace for XML writer
@@ -566,6 +567,12 @@ escl_devcaps_parse (proto_handler_escl *escl,
             } else if (!strncasecmp(m, "Brother ", 8)) {
                 escl->quirk_next_load_delay = true;
             }
+
+            if (!strcasecmp(m, "EPSON WF-2930 Series")) {
+                escl->quirk_adf_max_pages = true;
+            } else if (!strcasecmp(m, "RICOH MP 601")) {
+                escl->quirk_adf_max_pages = true;
+            }
         } else if (xml_rd_node_name_match(xml, "scan:Manufacturer")) {
             const char *m = xml_rd_node_value(xml);
 
@@ -843,6 +850,11 @@ escl_scan_query (const proto_ctx *ctx)
     xml_wr_add_uint(xml, "scan:YResolution", params->y_res);
     if (params->src != ID_SOURCE_PLATEN) {
         xml_wr_add_bool(xml, "scan:Duplex", duplex);
+
+        if (escl->quirk_adf_max_pages != 0) {
+            xml_wr_add_uint(xml, "scan:NumberOfPages",
+                escl->quirk_adf_max_pages);
+        }
     }
 
     /* Send request to device */
