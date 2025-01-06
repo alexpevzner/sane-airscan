@@ -56,6 +56,7 @@ Legend:
 | Device                             | eSCL mode                 | WSD mode                  |
 | ---------------------------------- | :-----------------------: | :-----------------------: |
 | Brother ADS-2700W                  | No                        | Yes                       |
+| Brother ADS-4300N                  | Yes                       | Yes                       |
 | Brother DCP-7055W                  | No                        | Yes                       |
 | Brother DCP-7070DW                 | No                        | Yes                       |
 | Brother DCP-9020CDW                | No                        | Yes                       |
