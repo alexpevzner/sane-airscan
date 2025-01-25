@@ -295,6 +295,8 @@ conf_load_from_ini (inifile *ini)
                     if (conf.socket_dir == NULL) {
                         conf_perror(rec, "failed to expand socket_dir path");
                     }
+                } else if (inifile_match_name(rec->variable, "pretend-local")) {
+                    conf_load_bool(rec, &conf.pretend_local, "true", "false");
                 }
             } else if (inifile_match_name(rec->section, "debug")) {
                 if (inifile_match_name(rec->variable, "trace")) {

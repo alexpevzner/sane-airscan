@@ -63,6 +63,8 @@ To figure out URLs of available devices, the simplest way is to run the supplied
 If running \fBairscan\-discover(1)\fR on the same LAN segment as a scanner is not possible, you will have to follow a hard way\. Your administrator must know device IP address, consult your device manual for the eSCL port, and the URL path component most likely is the "/eSCL", though on some devices it may differ\. Discovering WSD URLs doing this way is much harder, because it is very difficult to guess TCP port and URL path, that in a case of eSCL\.
 .P
 For eSCL devices, the URL can also use the unix:// scheme, such as unix://scanner\.sock/eSCL\. The "host" from the URL is a file name that will be searched for in the directory specified by socket_dir (see below)\. When connecting to the scanner, all traffic will be sent to the specified UNIX socket instead of a TCP connection\.
+.P
+By default, sane\-airscan treats all scanners as remote devices. This can be undesirable, if configuring a proxy that translates from eSCL/WSD to the SANE protocol, as \fBsaned(8)\fR ignores any device that isn't attached locally. By setting \fBpretend\-local = true\fR, sane-airscan can make its devices accessible to the SANE network daemon.
 .SH "CONFIGURATION OPTIONS"
 Miscellaneous options all goes to the \fB[options]\fR section\. Currently the following options are supported:
 .IP "" 4
@@ -94,6 +96,12 @@ ws\-discovery = fast | full | off
 ; socket name (not a full path)\.  The name will be searched for in the
 ; directory specified here\. The default is /var/run\.
 socket_dir = /path/to/directory
+
+; Configure whether eSCL and WSD devices should be treated as if
+; they were attached locally. The default behavior considers them as
+; remote devices that are accessed over the network. This option has
+; to be changed when exporting a scanner through "saned".
+pretend\-local = false | true
 .fi
 .IP "" 0
 .SH "BLACKLISTING DEVICES"

@@ -57,7 +57,7 @@ sane_get_devices (const SANE_Device ***device_list, SANE_Bool local_only)
 {
     log_debug(NULL, "API: sane_get_devices(): called");
 
-    if (local_only) {
+    if (local_only && !conf.pretend_local) {
         /* Note, all our devices are non-local */
         static const SANE_Device *empty_devlist[1] = {0};
         *device_list = empty_devlist;
