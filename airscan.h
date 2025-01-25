@@ -1391,6 +1391,7 @@ typedef struct {
     WSDD_MODE      wsdd_mode;        /* WS-Discovery mode */
     const char     *socket_dir;      /* Directory for AF_UNIX sockets */
     conf_blacklist *blacklist;       /* Devices blacklisted for discovery */
+    bool           pretend_local;    /* Pretend devices are local */
 } conf_data;
 
 #define CONF_INIT {                     \
@@ -1402,7 +1403,8 @@ typedef struct {
         .model_is_netname = true,       \
         .proto_auto = true,             \
         .wsdd_mode = WSDD_FAST,         \
-        .socket_dir = NULL              \
+        .socket_dir = NULL,             \
+        .pretend_local = false          \
     }
 
 extern conf_data conf;
