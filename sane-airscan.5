@@ -1,6 +1,6 @@
 .\" generated with Ronn-NG/v0.9.1
 .\" http://github.com/apjanke/ronn-ng/tree/0.9.1
-.TH "SANE\-AIRSCAN" "5" "May 2022" "" "AirScan (eSCL) and WSD SANE backend"
+.TH "SANE\-AIRSCAN" "5" "January 2025" "" "AirScan (eSCL) and WSD SANE backend"
 .SH "NAME"
 \fBsane\-airscan\fR \- SANE backend for AirScan (eSCL) and WSD scanners and MFP
 .SH "DESCRIPTION"
@@ -64,7 +64,7 @@ If running \fBairscan\-discover(1)\fR on the same LAN segment as a scanner is no
 .P
 For eSCL devices, the URL can also use the unix:// scheme, such as unix://scanner\.sock/eSCL\. The "host" from the URL is a file name that will be searched for in the directory specified by socket_dir (see below)\. When connecting to the scanner, all traffic will be sent to the specified UNIX socket instead of a TCP connection\.
 .P
-By default, sane\-airscan treats all scanners as remote devices. This can be undesirable, if configuring a proxy that translates from eSCL/WSD to the SANE protocol, as \fBsaned(8)\fR ignores any device that isn't attached locally. By setting \fBpretend\-local = true\fR, sane-airscan can make its devices accessible to the SANE network daemon.
+By default, sane\-airscan treats all scanners as remote devices\. This can be undesirable, if configuring a proxy that translates from eSCL/WSD to the SANE protocol, as \fBsaned(8)\fR ignores any device that isn't attached locally\. By setting \fBpretend\-local = true\fR, sane\-airscan can make its devices accessible to the SANE network daemon\.
 .SH "CONFIGURATION OPTIONS"
 Miscellaneous options all goes to the \fB[options]\fR section\. Currently the following options are supported:
 .IP "" 4
@@ -98,9 +98,9 @@ ws\-discovery = fast | full | off
 socket_dir = /path/to/directory
 
 ; Configure whether eSCL and WSD devices should be treated as if
-; they were attached locally. The default behavior considers them as
-; remote devices that are accessed over the network. This option has
-; to be changed when exporting a scanner through "saned".
+; they were attached locally\. The default behavior considers them as
+; remote devices that are accessed over the network\. This option has
+; to be changed when exporting a scanner through "saned"\.
 pretend\-local = false | true
 .fi
 .IP "" 0
@@ -116,9 +116,9 @@ ip    = 192\.168\.0\.0/24 ; blacklist the whole subnet
 .fi
 .IP "" 0
 .P
-Network names come from DNS\-SD, WS\-Discovery doesn\'t provide this information\. For filtering by network name to work, Avahi must be enabled and device must be discoverable via DNS\-SD (not necessarily as a scanner, it\'s enough if WSD scanner is discoverable as a printer via DNS\-SD)\.
+Network names come from DNS\-SD, WS\-Discovery doesn't provide this information\. For filtering by network name to work, Avahi must be enabled and device must be discoverable via DNS\-SD (not necessarily as a scanner, it's enough if WSD scanner is discoverable as a printer via DNS\-SD)\.
 .P
-Blacklisting only affects automatic discovery, and doesn\'t affect manually configured devices\.
+Blacklisting only affects automatic discovery, and doesn't affect manually configured devices\.
 .SH "DEBUGGING"
 sane\-airscan provides very good instrumentation for troubleshooting without physical access to the problemmatic device\.
 .P
