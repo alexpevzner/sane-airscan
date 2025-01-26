@@ -80,6 +80,12 @@ searched for in the directory specified by socket_dir (see below).  When
 connecting to the scanner, all traffic will be sent to the specified UNIX socket
 instead of a TCP connection.
 
+By default, sane-airscan treats all scanners as remote devices. This can be
+undesirable, if configuring a proxy that translates from eSCL/WSD to the SANE
+protocol, as `saned(8)` ignores any device that isn't attached locally. By
+setting `pretend-local = true`, sane-airscan can make its devices accessible
+to the SANE network daemon.
+
 ## CONFIGURATION OPTIONS
 
 Miscellaneous options all goes to the ``[options]`` section. Currently
@@ -112,6 +118,12 @@ the following options are supported:
     ; socket name (not a full path).  The name will be searched for in the
     ; directory specified here. The default is /var/run.
     socket_dir = /path/to/directory
+
+    ; Configure whether eSCL and WSD devices should be treated as if
+    ; they were attached locally. The default behavior considers them as
+    ; remote devices that are accessed over the network. This option has
+    ; to be changed when exporting a scanner through "saned".
+    pretend-local = false | true
 
 ## BLACKLISTING DEVICES
 
