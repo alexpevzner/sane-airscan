@@ -351,7 +351,8 @@ escl_devcaps_source_parse_supported_intents (xml_rd *xml, devcaps_source *src)
 
     xml_rd_enter(xml);
     for (; !xml_rd_end(xml); xml_rd_next(xml)) {
-        if(xml_rd_node_name_match(xml, "scan:SupportedIntent")) {
+        if(xml_rd_node_name_match(xml, "scan:SupportedIntent") ||
+           xml_rd_node_name_match(xml, "scan:Intent")) {
             const char *v = xml_rd_node_value(xml);
             if (!strcmp(v, "Document")) {
                 src->scanintents |= 1 << ID_SCANINTENT_DOCUMENT;
