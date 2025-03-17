@@ -77,6 +77,9 @@ devcaps_source_merge (const devcaps_source *s1, const devcaps_source *s2)
         goto FAIL;
     }
 
+    /* Merge scanintents */
+    src->scanintents = s1->scanintents & s2->scanintents;
+
     /* Merge dimensions */
     src->min_wid_px = math_max(s1->min_wid_px, s2->min_wid_px);
     src->max_wid_px = math_min(s1->max_wid_px, s2->max_wid_px);
