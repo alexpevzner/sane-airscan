@@ -80,6 +80,7 @@ Legend:
 | Brother MFC-L2710DW                | Yes                       | Yes                       |
 | Brother MFC-L2720DW                | No                        | Yes                       |
 | Brother MFC-L2750DW                | Yes                       | Yes                       |
+| Brother MFC-L3740CDWE              | Yes                       |                           |
 | Brother MFC-L3750CDW               | No                        | Yes                       |
 | Brother MFC-L3780CDW               | No                        | Yes                       |
 | Brother MFC-T910DW                 | Yes                       | Yes                       |
