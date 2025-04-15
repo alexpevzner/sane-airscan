@@ -55,6 +55,10 @@ typedef struct {
     bool quirk_canon_mf410_series;   /* Canon MF410 Series */
     bool quirk_port_in_host;         /* Always set port in Host: header */
     bool quirk_next_load_delay;      /* Use ESCL_NEXT_LOAD_DELAY */
+    bool quirk_retry_on_404;         /* Retry GET NextDocunemt on HTTP 404 */
+    bool quirk_retry_on_410;         /* Retry GET NextDocunemt on HTTP 410 */
+    bool quirk_broken_ipv6_location; /* Invalid hostname in IPv6 Location: */
+    bool quirk_skip_cleanup;         /* Don't cleanup after normal operations*/
 } proto_handler_escl;
 
 /* XML namespace for XML writer
@@ -64,7 +68,6 @@ static const xml_ns escl_xml_wr_ns[] = {
     {"scan", "http://schemas.hp.com/imaging/escl/2011/05/03"},
     {NULL, NULL}
 };
-
 
 /******************** Miscellaneous types ********************/
 /* escl_scanner_status represents decoded ScannerStatus response
@@ -566,6 +569,16 @@ escl_devcaps_parse (proto_handler_escl *escl,
                 escl->quirk_port_in_host = true;
             } else if (!strncasecmp(m, "Brother ", 8)) {
                 escl->quirk_next_load_delay = true;
+            } else if (!strcmp(m, "B205") || !strcmp(m, "B215")) {
+                /* Xerox B205/B215 machines may indicate temporary
+                 * unavailability of the scanned document (the need
+                 * for retry) using HTTP 404/410 codes. Normally,
+                 * HTTP 503 used for this purpose...
+                 */
+                escl->quirk_retry_on_404 = true;
+                escl->quirk_retry_on_410 = true;
+                escl->quirk_broken_ipv6_location = true;
+                escl->quirk_skip_cleanup = true;
             }
         } else if (xml_rd_node_name_match(xml, "scan:Manufacturer")) {
             const char *m = xml_rd_node_value(xml);
@@ -886,10 +899,11 @@ escl_scan_query (const proto_ctx *ctx)
 static proto_result
 escl_scan_decode (const proto_ctx *ctx)
 {
-    proto_result result = {0};
-    error        err = NULL;
-    const char   *location;
-    http_uri     *uri;
+    proto_handler_escl  *escl = (proto_handler_escl*) ctx->proto;
+    proto_result        result = {0};
+    error               err = NULL;
+    const char          *location;
+    http_uri            *uri;
 
     /* Check HTTP status */
     if (http_query_status(ctx->query) != HTTP_STATUS_CREATED) {
@@ -905,6 +919,34 @@ escl_scan_decode (const proto_ctx *ctx)
     if (location == NULL || *location == '\0') {
         err = eloop_eprintf("ScanJobs request: empty location received");
         goto ERROR;
+    }
+
+    /* Fix broken IPv6 location */
+    if (escl->quirk_broken_ipv6_location) {
+        /* Xerox B205/B215 return Location that looks like this:
+         *
+         *   Location: http://[fe80/eSCL/ScanJobs/4060
+         *
+         * Note unbalanced square bracket and truncated IPv6 address.
+         * As we anyway ignore Location: hostname, it is easy to fix...
+         */
+        if (str_has_prefix(location, "http://[") ||
+            str_has_prefix(location, "https://[")) {
+            if (strchr(location, ']') == NULL) {
+                const char *s = strstr(location, "://");
+                s += 3;
+                while (*s && *s != '/') {
+                    s ++;
+                }
+                if (*s == '/') {
+                    /* Skip URL until /path/...
+                     */
+                    log_debug(ctx->log, "Broken IPv6 Location: %s", location);
+                    location = s;
+                    log_debug(ctx->log, "Fixed Location:       %s", location);
+                }
+            }
+        }
     }
 
     /* Validate and save location */
@@ -973,6 +1015,9 @@ escl_load_decode (const proto_ctx *ctx)
     if (err != NULL) {
         if (ctx->params.src == ID_SOURCE_PLATEN && ctx->images_received > 0) {
             result.next = PROTO_OP_CLEANUP;
+            if (escl->quirk_skip_cleanup) {
+                result.next = PROTO_OP_FINISH;
+            }
         } else {
             result.next = PROTO_OP_CHECK;
             result.err = eloop_eprintf("HTTP: %s", ESTRING(err));
@@ -1119,10 +1164,12 @@ escl_decode_scanner_status (const proto_ctx *ctx,
 static proto_result
 escl_status_decode (const proto_ctx *ctx)
 {
-    proto_result result = {0};
-    error        err = NULL;
-    SANE_Status  status;
-    int          max_attempts;
+    proto_handler_escl *escl = (proto_handler_escl*) ctx->proto;
+    proto_result       result = {0};
+    error              err = NULL;
+    SANE_Status        status;
+    int                max_attempts;
+    bool               temporary = false;
 
     /* Decode status */
     err = http_query_error(ctx->query);
@@ -1140,8 +1187,25 @@ escl_status_decode (const proto_ctx *ctx)
         max_attempts = ESCL_RETRY_ATTEMPTS_LOAD;
     }
 
-    if (ctx->failed_http_status == HTTP_STATUS_SERVICE_UNAVAILABLE &&
-        ctx->failed_attempt < max_attempts) {
+    switch (ctx->failed_http_status) {
+    case HTTP_STATUS_SERVICE_UNAVAILABLE:
+        temporary = true;
+        break;
+
+    case HTTP_STATUS_NOT_FOUND:
+        if (escl->quirk_retry_on_404) {
+            temporary = true;
+        }
+        break;
+
+    case HTTP_STATUS_GONE:
+        if (escl->quirk_retry_on_410) {
+            temporary = true;
+        }
+        break;
+    }
+
+    if (temporary && ctx->failed_attempt < max_attempts) {
 
         /* Note, some devices may return HTTP 503 error core, meaning
          * that it makes sense to come back after small delay
@@ -1203,6 +1267,10 @@ escl_status_decode (const proto_ctx *ctx)
     /* Fill the result */
 FAIL:
     result.next = ctx->location ? PROTO_OP_CLEANUP : PROTO_OP_FINISH;
+    if (escl->quirk_skip_cleanup) {
+        result.next = PROTO_OP_FINISH;
+    }
+
     result.status = status;
     result.err = err;
 

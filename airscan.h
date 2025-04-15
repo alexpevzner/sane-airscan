@@ -2149,6 +2149,7 @@ enum {
     HTTP_STATUS_OK                  = 200,
     HTTP_STATUS_CREATED             = 201,
     HTTP_STATUS_NOT_FOUND           = 404,
+    HTTP_STATUS_GONE                = 410,
     HTTP_STATUS_SERVICE_UNAVAILABLE = 503
 };
 #endif
