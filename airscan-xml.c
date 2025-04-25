@@ -157,7 +157,7 @@ xml_rd_parse (xmlDoc **doc, const char *xml_text, size_t xml_len)
 #endif
 
         if (lasterr != NULL && lasterr->message != NULL) {
-            err = eloop_eprintf("XML: %s", ctxt->lastError.message);
+            err = eloop_eprintf("XML: %s", lasterr->message);
         } else {
             err = ERROR("XML: parse error");
         }
