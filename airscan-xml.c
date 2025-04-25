@@ -140,7 +140,23 @@ xml_rd_parse (xmlDoc **doc, const char *xml_text, size_t xml_len)
     if (ctxt->wellFormed) {
         *doc = ctxt->myDoc;
     } else {
-        if (ctxt->lastError.message != NULL) {
+        const xmlError *lasterr;
+
+        /* Starting from some version, xmlParserCtxt.lastError
+         * marked as deprecated and xmlCtxtGetLastError is provided
+         * instead.
+         *
+         * I don't know exact version when it did happen, but
+         * 2.12.10 (21210) known to work the both ways, so lets
+         * use that point to switch to the new API.
+         */
+#if     LIBXML_VERSION >= 21210
+        lasterr = xmlCtxtGetLastError(ctxt);
+#else
+        lasterr = &ctxt->lastError;
+#endif
+
+        if (lasterr != NULL && lasterr->message != NULL) {
             err = eloop_eprintf("XML: %s", ctxt->lastError.message);
         } else {
             err = ERROR("XML: parse error");
