@@ -114,15 +114,17 @@ the following options are supported:
     ; of WSD devices. The default is "fast".
     ws-discovery = fast | full | off
 
-    ; Scanners that use the unix:// schema in their URL can only specify a
-    ; socket name (not a full path).  The name will be searched for in the
-    ; directory specified here. The default is /var/run.
+    ; Scanners that use the unix:// schema in their URL can only
+    ; specify a socket name (not a full path). The name will be
+    ; searched for in the directory specified here.
+    ; The default is /var/run.
     socket_dir = /path/to/directory
 
-    ; Configure whether eSCL and WSD devices should be treated as if
-    ; they were attached locally. The default behavior considers them as
-    ; remote devices that are accessed over the network. This option has
-    ; to be changed when exporting a scanner through "saned".
+    ; Configure whether eSCL and WSD devices should be treated as
+    ; if they were attached locally. The default behavior considers
+    ; them as remote devices that are accessed over the network.
+    ; This option has to be changed when exporting a scanner through
+    ; saned. The default is "false"
     pretend-local = false | true
 
 ## BLACKLISTING DEVICES
@@ -194,7 +196,7 @@ project page: **https://github.com/alexpevzner/sane-airscan**
 
 ## SEE ALSO
 
-**sane(7), scanimage(1), xsane(1), airscan-discover(1)**
+**sane(7), saned (8), scanimage(1), xsane(1), airscan-discover(1)**
 
 ## AUTHOR
 Alexander Pevzner <pzz@apevzner.com\>

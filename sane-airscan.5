@@ -1,6 +1,6 @@
-.\" generated with Ronn-NG/v0.9.1
-.\" http://github.com/apjanke/ronn-ng/tree/0.9.1
-.TH "SANE\-AIRSCAN" "5" "January 2025" "" "AirScan (eSCL) and WSD SANE backend"
+.\" generated with Ronn-NG/v0.10.1
+.\" http://github.com/apjanke/ronn-ng/tree/0.10.1
+.TH "SANE\-AIRSCAN" "5" "April 2025" "" "AirScan (eSCL) and WSD SANE backend"
 .SH "NAME"
 \fBsane\-airscan\fR \- SANE backend for AirScan (eSCL) and WSD scanners and MFP
 .SH "DESCRIPTION"
@@ -92,15 +92,17 @@ protocol = auto | manual
 ; of WSD devices\. The default is "fast"\.
 ws\-discovery = fast | full | off
 
-; Scanners that use the unix:// schema in their URL can only specify a
-; socket name (not a full path)\.  The name will be searched for in the
-; directory specified here\. The default is /var/run\.
+; Scanners that use the unix:// schema in their URL can only
+; specify a socket name (not a full path)\. The name will be
+; searched for in the directory specified here\.
+; The default is /var/run\.
 socket_dir = /path/to/directory
 
-; Configure whether eSCL and WSD devices should be treated as if
-; they were attached locally\. The default behavior considers them as
-; remote devices that are accessed over the network\. This option has
-; to be changed when exporting a scanner through "saned"\.
+; Configure whether eSCL and WSD devices should be treated as
+; if they were attached locally\. The default behavior considers
+; them as remote devices that are accessed over the network\.
+; This option has to be changed when exporting a scanner through
+; saned\. The default is "false"
 pretend\-local = false | true
 .fi
 .IP "" 0
@@ -157,6 +159,6 @@ This variable alters the search path for configuration files\. This is a colon\-
 .SH "BUGS AND SUPPORT"
 If you have found a bug, please file a GitHub issue on a GitHub project page: \fBhttps://github\.com/alexpevzner/sane\-airscan\fR
 .SH "SEE ALSO"
-\fBsane(7), scanimage(1), xsane(1), airscan\-discover(1)\fR
+\fBsane(7), saned (8), scanimage(1), xsane(1), airscan\-discover(1)\fR
 .SH "AUTHOR"
 Alexander Pevzner <pzz@apevzner\.com>
