@@ -408,6 +408,7 @@ conf_load_from_env (void)
 {
     const char *env;
 
+    /* Handle the CONFIG_ENV_AIRSCAN_DEBUG variable */
     env = getenv(CONFIG_ENV_AIRSCAN_DEBUG);
     if (env != NULL) {
         if (inifile_match_name(env, "true")) {
@@ -427,6 +428,40 @@ conf_load_from_env (void)
             }
         }
     }
+
+    /* Handle the CONFIG_ENV_AIRSCAN_DEVICE variable */
+    env = getenv(CONFIG_ENV_AIRSCAN_DEVICE);
+    if (env != NULL) {
+        zeroconf_devinfo *devinfo = zeroconf_parse_devinfo_from_ident(env);
+
+        /* Reset the static configuration and disable auto discovery.
+         *
+         * Note, if we can't parse CONFIG_ENV_AIRSCAN_DEVICE, we still
+         * do this step. At this case user will see the empty list of
+         * available devices.
+         *
+         * If it happens, this event will be logged into the debug log,
+         * but this is the best what we can do.
+         *
+         * Unfortunately, we can't provide a more clear error indication
+         * from this point; this is the SANE API limitation.
+         */
+        conf_device_list_free();
+        devid_restart();
+        conf.discovery = false;
+
+        if (devinfo != NULL) {
+            zeroconf_endpoint *endpoint = devinfo->endpoints;
+
+            conf_device_list_prepend(devinfo->name,
+                http_uri_clone(endpoint->uri), endpoint->proto);
+
+            zeroconf_devinfo_free(devinfo);
+        } else {
+            log_debug(NULL, "Invalid %s: \"%s\"",
+                CONFIG_ENV_AIRSCAN_DEVICE, env);
+        }
+    }
 }
 
 /* Load configuration. Returns non-NULL (default configuration)
@@ -442,6 +477,7 @@ conf_load (void)
     /* Reset the configuration */
     conf = conf_init;
     conf.socket_dir = str_dup(CONFIG_DEFAULT_SOCKET_DIR);
+    devid_init();
 
     /* Look to configuration path in environment */
     s = getenv(CONFIG_PATH_ENV);

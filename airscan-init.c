@@ -36,8 +36,6 @@ airscan_init (AIRSCAN_INIT_FLAGS flags, const char *log_msg)
     log_configure(); /* As soon, as configuration is available */
 
     /* Initialize all parts */
-    devid_init();
-
     status = eloop_init();
     if (status == SANE_STATUS_GOOD) {
         status = rand_init();

@@ -61,6 +61,16 @@ devid_free (unsigned int id)
     devid_bits_set(id, false);
 }
 
+/* Restart device ID allocation counter.
+ * Note, it doesn't free already allocated IDs, only restarts
+ * counter from the beginning.
+ */
+void
+devid_restart (void)
+{
+    devid_next = 0;
+}
+
 /* Initialize device ID allocator
  */
 void

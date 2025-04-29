@@ -1252,7 +1252,7 @@ zeroconf_device_list_free (const SANE_Device **dev_list)
  * zeroconf_devinfo that the caller must free with zeroconf_devinfo_free().  On
  * failure, returns NULL.
  */
-static zeroconf_devinfo*
+zeroconf_devinfo*
 zeroconf_parse_devinfo_from_ident(const char *ident)
 {
     int              buf_size;

@@ -13,7 +13,7 @@ scanning. Currently it supports two protocols:
 
 The sane-airscan loads its configuration files from the following places:
 
-    1. /etc/sane.d/airscan.conf  
+    1. /etc/sane.d/airscan.conf
     2. /etc/sane.d/airscan.d/*
 
 The configuration file syntax is very similar to the .INI file syntax.
@@ -181,13 +181,35 @@ of the configuration file:
 
    * `SANE_DEBUG_AIRSCAN`:
      This variable if set to `true` or non-zero numerical value,
-     enables debug messages, that are printed to stdout
+     enables debug messages, that are printed to stderr
 
    * `SANE_CONFIG_DIR`:
      This variable alters the search path for configuration files. This is
      a colon-separated list of directories. These directories are searched
      for the airscan.conf configuration file and for the airscan.d
      subdirectory, before the standard path (/etc/sane.d) is searched.
+
+   * `SANE_AIRSCAN_DEVICE`:
+     This variable, if set, overrides all devices, manually configured
+     in the log files and disables auto discovery.
+
+     It consists of three parameters, delimited by the colons (`:`):
+
+     `"PROTO:DEVICE NAME:URL"`
+
+     Where:
+
+     \- `PROTO` is either `escl` or `wsd`.<br>
+     \- `DEVICE NAME` will appear in the list of devices.<br>
+     \- `URL` is the device URL, using `http:` or `https:` schemes.<br>
+
+     Examples:
+
+     `"escl:Kyocera eSCL:http://192.168.1.102:9095/eSCL"` (eSCL)<br>
+     `"wsd:Kyocera WSD:http://192.168.1.102:5358/WSDScanner"` (WSD)<br>
+
+     The primary purpose of this variable is the automated testing
+     of the `sane-airscan` backend.
 
 ## BUGS AND SUPPORT
 

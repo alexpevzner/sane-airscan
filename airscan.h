@@ -48,9 +48,16 @@ extern "C" {
 #define CONFIG_AIRSCAN_CONF             "airscan.conf"
 #define CONFIG_AIRSCAN_D                "airscan.d"
 
-/* Environment variables
+/* Environment variables:
+ *
+ *   CONFIG_ENV_AIRSCAN_DEBUG - if set to "true" or non-zero number,
+ *                              enables writing debug messages to stderr
+ *
+ *   SANE_AIRSCAN_DEVICE      - allows to forcibly set the target device.
+ *                              See sane-airscan(5) for detains.
  */
 #define CONFIG_ENV_AIRSCAN_DEBUG        "SANE_DEBUG_AIRSCAN"
+#define CONFIG_ENV_AIRSCAN_DEVICE       "SANE_AIRSCAN_DEVICE"
 
 /* Default resolution, DPI
  */
@@ -846,6 +853,13 @@ devid_alloc (void);
  */
 void
 devid_free (unsigned int id);
+
+/* Restart device ID allocation counter.
+ * Note, it doesn't free already allocated IDs, only restarts
+ * counter from the beginning.
+ */
+void
+devid_restart (void);
 
 /* Initialize device ID allocator
  */
@@ -2975,6 +2989,16 @@ zeroconf_device_list_free (const SANE_Device **dev_list);
  */
 zeroconf_devinfo*
 zeroconf_devinfo_lookup (const char *ident);
+
+/*
+ * The format "protocol:name:url" is accepted to directly specify a device
+ * without listing it in the config or finding it with autodiscovery.  Try
+ * to parse an identifier as that format.  On success, returns a newly allocated
+ * zeroconf_devinfo that the caller must free with zeroconf_devinfo_free().  On
+ * failure, returns NULL.
+ */
+zeroconf_devinfo*
+zeroconf_parse_devinfo_from_ident(const char *ident);
 
 /* Free zeroconf_devinfo, returned by zeroconf_devinfo_lookup()
  */

@@ -152,10 +152,35 @@ The shared library implementing this backend
 .SH "ENVIRONMENT"
 .TP
 \fBSANE_DEBUG_AIRSCAN\fR
-This variable if set to \fBtrue\fR or non\-zero numerical value, enables debug messages, that are printed to stdout
+This variable if set to \fBtrue\fR or non\-zero numerical value, enables debug messages, that are printed to stderr
 .TP
 \fBSANE_CONFIG_DIR\fR
 This variable alters the search path for configuration files\. This is a colon\-separated list of directories\. These directories are searched for the airscan\.conf configuration file and for the airscan\.d subdirectory, before the standard path (/etc/sane\.d) is searched\.
+.TP
+\fBSANE_AIRSCAN_DEVICE\fR
+This variable, if set, overrides all devices, manually configured in the log files and disables auto discovery\.
+.IP
+It consists of three parameters, delimited by the colons (\fB:\fR):
+.IP
+\fB"PROTO:DEVICE NAME:URL"\fR
+.IP
+Where:
+.IP
+\- \fBPROTO\fR is either \fBescl\fR or \fBwsd\fR\.
+.br
+\- \fBDEVICE NAME\fR will appear in the list of devices\.
+.br
+\- \fBURL\fR is the device URL, using \fBhttp:\fR or \fBhttps:\fR schemes\.
+.br
+.IP
+Examples:
+.IP
+\fB"escl:Kyocera eSCL:http://192\.168\.1\.102:9095/eSCL"\fR (eSCL)
+.br
+\fB"wsd:Kyocera WSD:http://192\.168\.1\.102:5358/WSDScanner"\fR (WSD)
+.br
+.IP
+The primary purpose of this variable is the automated testing of the \fBsane\-airscan\fR backend\.
 .SH "BUGS AND SUPPORT"
 If you have found a bug, please file a GitHub issue on a GitHub project page: \fBhttps://github\.com/alexpevzner/sane\-airscan\fR
 .SH "SEE ALSO"
