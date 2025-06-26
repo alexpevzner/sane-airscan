@@ -845,8 +845,18 @@ escl_scan_query (const proto_ctx *ctx)
     //xml_wr_add_text(xml, "scan:InputSource", source);
     xml_wr_add_text(xml, "pwg:InputSource", source);
     if (ctx->devcaps->compression_ok) {
-        xml_wr_add_uint(xml, "scan:CompressionFactor",
-            ctx->devcaps->compression_norm);
+        /* If the format is JPEG or TIFF (which can have embedded JPEG),
+         * prioritize quality over size.
+         */
+        if (ctx->params.format == ID_FORMAT_JPEG ||
+            ctx->params.format == ID_FORMAT_TIFF) {
+            xml_wr_add_uint(xml, "scan:CompressionFactor",
+                ctx->devcaps->compression_range.min);
+        }
+        else {
+            xml_wr_add_uint(xml, "scan:CompressionFactor",
+                ctx->devcaps->compression_norm);
+        }
     }
     xml_wr_add_text(xml, "scan:ColorMode", colormode);
     xml_wr_add_text(xml, "pwg:DocumentFormat", mime);
