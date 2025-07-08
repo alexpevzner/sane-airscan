@@ -52,7 +52,7 @@ typedef struct {
 
     /* Miscellaneous flags */
     bool quirk_localhost;            /* Set Host: localhost in ScanJobs rq */
-    bool quirk_canon_mf410_series;   /* Canon MF410 Series */
+    bool quirk_check_adf_state;      /* Check ADF state before scan */
     bool quirk_port_in_host;         /* Always set port in Host: header */
     bool quirk_next_load_delay;      /* Use ESCL_NEXT_LOAD_DELAY */
     bool quirk_retry_on_404;         /* Retry GET NextDocunemt on HTTP 404 */
@@ -564,7 +564,7 @@ escl_devcaps_parse (proto_handler_escl *escl,
             } else if (!strcmp(m, "HP Color LaserJet FlowMFP M578")) {
                 escl->quirk_localhost = true;
             } else if (!strcmp(m, "MF410 Series")) {
-                escl->quirk_canon_mf410_series = true;
+                escl->quirk_check_adf_state = true;
             } else if (!strncasecmp(m, "EPSON ", 6)) {
                 escl->quirk_port_in_host = true;
             } else if (!strncasecmp(m, "Brother ", 8)) {
@@ -579,6 +579,15 @@ escl_devcaps_parse (proto_handler_escl *escl,
                 escl->quirk_retry_on_410 = true;
                 escl->quirk_broken_ipv6_location = true;
                 escl->quirk_skip_cleanup = true;
+            } else if (!strcmp(m, "WorkCentre 3345")) {
+                /* Xerox WorkCentre 3345 raises the ScannerAdfJam
+                 * error on attempt to scan from empty ADF.
+                 */
+                escl->quirk_check_adf_state = true;
+
+                /* FIXME: not sure if it is really needed.
+                 */
+                escl->quirk_retry_on_410 = true;
             }
         } else if (xml_rd_node_name_match(xml, "scan:Manufacturer")) {
             const char *m = xml_rd_node_value(xml);
@@ -732,11 +741,10 @@ escl_precheck_decode (const proto_ctx *ctx)
     }
 
     /* Note, the pre-check status is not always reliable, so normally
-     * we ignore it. However, with Canon MF410 Series attempt to
-     * scan from empty ADF causes ADF jam error (really, physical!),
-     * so we must take care
+     * we ignore it. However, some scanners raise "ADF jam" error in
+     * attempt to scan from the empty ADF, so we need to care,,,
      */
-    if (escl->quirk_canon_mf410_series) {
+    if (escl->quirk_check_adf_state) {
         if (adf) {
             switch (sts.adf_status) {
             case SANE_STATUS_JAMMED:
