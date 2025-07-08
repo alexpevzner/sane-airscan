@@ -340,12 +340,6 @@ conf_load_from_ini (inifile *ini)
             break;
         }
     }
-
-    /* Trace implies console log
-     */
-    if (conf.dbg_trace != NULL) {
-        conf.dbg_enabled = true;
-    }
 }
 
 /* Load configuration from the particular file
