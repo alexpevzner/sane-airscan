@@ -1,6 +1,6 @@
 .\" generated with Ronn-NG/v0.10.1
 .\" http://github.com/apjanke/ronn-ng/tree/0.10.1
-.TH "SANE\-AIRSCAN" "5" "April 2025" "" "AirScan (eSCL) and WSD SANE backend"
+.TH "SANE\-AIRSCAN" "5" "July 2025" "" "AirScan (eSCL) and WSD SANE backend"
 .SH "NAME"
 \fBsane\-airscan\fR \- SANE backend for AirScan (eSCL) and WSD scanners and MFP
 .SH "DESCRIPTION"
@@ -158,7 +158,7 @@ This variable if set to \fBtrue\fR or non\-zero numerical value, enables debug m
 This variable alters the search path for configuration files\. This is a colon\-separated list of directories\. These directories are searched for the airscan\.conf configuration file and for the airscan\.d subdirectory, before the standard path (/etc/sane\.d) is searched\.
 .TP
 \fBSANE_AIRSCAN_DEVICE\fR
-This variable, if set, overrides all devices, manually configured in the log files and disables auto discovery\.
+This variable, if set, overrides all devices, manually configured in the configuration files and disables auto discovery\.
 .IP
 It consists of three parameters, delimited by the colons (\fB:\fR):
 .IP

@@ -191,7 +191,7 @@ of the configuration file:
 
    * `SANE_AIRSCAN_DEVICE`:
      This variable, if set, overrides all devices, manually configured
-     in the log files and disables auto discovery.
+     in the configuration files and disables auto discovery.
 
      It consists of three parameters, delimited by the colons (`:`):
 
