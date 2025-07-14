@@ -61,6 +61,26 @@ test_addr (const char *s, const char *expected)
     http_uri_free(uri);
 }
 
+/* Test http_uri_get_host
+ */
+static void
+test_get_host(const char *s, const char *expected)
+{
+    http_uri     *uri = http_uri_new(s, false);
+    const char   *host;
+
+    if (uri == NULL) {
+        fail("URI parse failed: %s", s);
+    }
+
+    host = http_uri_get_host(uri);
+    if (strcmp(host, expected)) {
+        fail("URI host %s != %s: %s", host, expected, s);
+    }
+
+    http_uri_free(uri);
+}
+
 /* Test http_uri_get_path
  */
 static void
@@ -183,6 +203,11 @@ main (void)
     test_addr("https://[::1]/",                 "[::1]:443");
     test_addr("http://1.2.3.4:1234/",           "1.2.3.4:1234");
     test_addr("http://[::1]:1234/",             "[::1]:1234");
+
+    test_get_host("http://1.2.3.4/", "1.2.3.4");
+    test_get_host("https://[::1]/", "[::1]");
+    test_get_host("http://example.com", "example.com");
+    test_get_host("http://GLBUH-M6700:5357/6861d9b0-a100-11e0-8264-acc51b5a2af9", "GLBUH-M6700");
 
     test_get_path("http://1.2.3.4/",            "/");
     test_get_path("http://1.2.3.4/xxx",         "/xxx");
