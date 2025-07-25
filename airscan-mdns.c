@@ -1211,29 +1211,40 @@ mdns_query_submit (mdns_resolver *resolver,
     query->resolvers = ptr_array_new(AvahiHostNameResolver*);
 
     /* Create an AvahiHostNameResolver for each IPv4/v6 address family
+     *
+     * Note, Avahi client connection may be being restarted due to
+     * the previous failure, and at this case mdns_avahi_client will
+     * be NULL and attempt to create a new name resolver will crash.
+     *
+     * We need to take care about that here. Other places are safe,
+     * because Avahi API is being called as reactions to the Avahi
+     * events. But here we can come from the WSDD, so we need to take
+     * care.
      */
-    for (i = 0; i < 2; i ++) {
-        AvahiProtocol         proto = protos[i];
-        AvahiHostNameResolver *r;
+    if (mdns_avahi_client != NULL) {
+        for (i = 0; i < 2; i ++) {
+            AvahiProtocol         proto = protos[i];
+            AvahiHostNameResolver *r;
 
-        r = avahi_host_name_resolver_new(
-            mdns_avahi_client,
-            resolver->ifindex,
-            proto,
-            name_fqdn,
-            proto,
-            0,
-            mdns_query_callback,
-            query
-        );
+            r = avahi_host_name_resolver_new(
+                mdns_avahi_client,
+                resolver->ifindex,
+                proto,
+                name_fqdn,
+                proto,
+                0,
+                mdns_query_callback,
+                query
+            );
 
-        if (r == NULL) {
-            mdns_perror(MDNS_ACTION_LOOKUP, resolver->ifindex, proto, NULL,
-                query->name);
-        } else {
-            query->resolvers = ptr_array_append(query->resolvers, r);
-            mdns_debug(MDNS_ACTION_LOOKUP, resolver->ifindex, proto, 0, NULL,
-                query->name, "started");
+            if (r == NULL) {
+                mdns_perror(MDNS_ACTION_LOOKUP, resolver->ifindex, proto, NULL,
+                    query->name);
+            } else {
+                query->resolvers = ptr_array_append(query->resolvers, r);
+                mdns_debug(MDNS_ACTION_LOOKUP, resolver->ifindex, proto,
+                    0, NULL, query->name, "started");
+            }
         }
     }
 
