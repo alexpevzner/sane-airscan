@@ -142,6 +142,7 @@ Legend:
 | EPSON ET-4750 Series               | No                        | Yes                       |
 | EPSON ET-4850 Series               | Yes                       |                           |
 | EPSON ET-M2170 Series              | Yes                       |                           |
+| EPSON EW-M752T Series              | No                        | Yes                       |
 | EPSON L6570 Series                 | Yes                       | Yes                       |
 | EPSON Stylus SX535WD               | No                        | Yes                       |
 | EPSON WF-2760 Series               |                           | Yes                       |
