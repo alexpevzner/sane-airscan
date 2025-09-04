@@ -27,7 +27,7 @@
 #   mandir       $(datarootdir)/man  $(datarootdir)/man
 #
 
-CC		= gcc
+CC		?= gcc
 COMPRESS 	= gzip -n
 CFLAGS		+= -O2 -g -W -Wall -Werror -pthread $(CPPFLAGS)
 PKG_CONFIG 	= pkg-config
