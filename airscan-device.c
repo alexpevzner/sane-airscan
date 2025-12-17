@@ -991,6 +991,7 @@ device_choose_format (device *dev, devcaps_source *src)
     size_t                 i;
     static const ID_FORMAT use[] = {
         ID_FORMAT_PNG,
+        ID_FORMAT_RAW,
         ID_FORMAT_JPEG,
         ID_FORMAT_TIFF,
         ID_FORMAT_BMP
@@ -1523,6 +1524,12 @@ device_read_next (device *dev)
     dev->proto_ctx.format_detected =
         image_format_detect(dev->read_image->bytes, dev->read_image->size);
 
+    /* If format not detected, but we requested RAW, assume it is RAW */
+    if (dev->proto_ctx.format_detected == ID_FORMAT_UNKNOWN &&
+        dev->proto_ctx.params.format == ID_FORMAT_RAW) {
+        dev->proto_ctx.format_detected = ID_FORMAT_RAW;
+    }
+
     if (dev->proto_ctx.format_detected  == ID_FORMAT_UNKNOWN) {
         err = eloop_eprintf("Can't detect image format");
         goto DONE;
@@ -1536,6 +1543,15 @@ device_read_next (device *dev)
     }
 
     /* Start new image decoding */
+    if (dev->proto_ctx.format_detected == ID_FORMAT_RAW) {
+        /* Use opt.params for dimensions at actual resolution
+         * (not proto_ctx.params which is at protocol's native DPI 300) */
+        int width = dev->opt.params.pixels_per_line;
+        int height = dev->opt.params.lines;
+        int channels = (dev->opt.params.format == SANE_FRAME_RGB) ? 3 : 1;
+        image_decoder_raw_configure(decoder, width, height, channels);
+    }
+
     err = image_decoder_begin(decoder,
             dev->read_image->bytes, dev->read_image->size);
 

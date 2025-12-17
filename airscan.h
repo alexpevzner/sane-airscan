@@ -781,6 +781,7 @@ typedef enum {
     ID_FORMAT_PNG,
     ID_FORMAT_PDF,
     ID_FORMAT_BMP,
+    ID_FORMAT_RAW,
 
     NUM_ID_FORMAT
 } ID_FORMAT;
@@ -2691,7 +2692,8 @@ enum {
     ((1 << ID_FORMAT_JPEG) |            \
      (1 << ID_FORMAT_PNG)  |            \
      (1 << ID_FORMAT_TIFF) |            \
-     (1 << ID_FORMAT_BMP))
+     (1 << ID_FORMAT_BMP)  |            \
+     (1 << ID_FORMAT_RAW))
 
 /* Supported color modes
  *
@@ -3492,6 +3494,17 @@ image_decoder_png_new (void);
 image_decoder*
 image_decoder_tiff_new (void);
 
+/* Create Raw image decoder
+ */
+image_decoder*
+image_decoder_raw_new (void);
+
+/* Configure Raw image decoder
+ */
+void
+image_decoder_raw_configure (image_decoder *decoder,
+        int width, int height, int channels);
+
 /* Create BMP image decoder
  */
 image_decoder*
@@ -3601,6 +3614,7 @@ image_decoder_create_all (image_decoder *decoders[NUM_ID_FORMAT])
     decoders[ID_FORMAT_JPEG] = image_decoder_jpeg_new();
     decoders[ID_FORMAT_PNG] = image_decoder_png_new();
     decoders[ID_FORMAT_TIFF] = image_decoder_tiff_new();
+    decoders[ID_FORMAT_RAW] = image_decoder_raw_new();
 }
 
 /* image_decoder_free_all destroys all decoders, previously

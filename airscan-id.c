@@ -146,6 +146,7 @@ static id_name_table id_format_mime_name_table[] = {
     {ID_FORMAT_PNG,  "image/png"},
     {ID_FORMAT_PDF,  "application/pdf"},
     {ID_FORMAT_BMP,  "application/bmp"},
+    {ID_FORMAT_RAW,  "application/octet-stream"},
     {-1, NULL}
 };
 
@@ -171,6 +172,11 @@ id_format_by_mime_name (const char *name)
 const char*
 id_format_short_name (ID_FORMAT id)
 {
+    /* process explicitly these types with non-obvious mime types */
+    if (id == ID_FORMAT_RAW) {
+        return "raw";
+    }
+
     const char *mime = id_format_mime_name(id);
     const char *name = mime ? (strchr(mime, '/') + 1) : NULL;
 
