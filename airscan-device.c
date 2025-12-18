@@ -987,6 +987,13 @@ device_geom_compute (SANE_Fixed tl, SANE_Fixed br,
 static ID_FORMAT
 device_choose_format (device *dev, devcaps_source *src)
 {
+    /* If user explicitly selected a format, use it */
+    if (dev->opt.transfer_format != ID_FORMAT_UNKNOWN) {
+        return dev->opt.transfer_format;
+    }
+
+    /* Fallback to default logic if no specific format selected
+     * (should not happen if devopt_set_defaults works correctly) */
     unsigned int           formats = src->formats & DEVCAPS_FORMATS_SUPPORTED;
     size_t                 i;
     static const ID_FORMAT use[] = {
@@ -1526,7 +1533,7 @@ device_read_next (device *dev)
 
     /* If format not detected, but we requested RAW, assume it is RAW */
     if (dev->proto_ctx.format_detected == ID_FORMAT_UNKNOWN &&
-        dev->proto_ctx.params.format == ID_FORMAT_RAW) {
+        dev->opt.transfer_format == ID_FORMAT_RAW) {
         dev->proto_ctx.format_detected = ID_FORMAT_RAW;
     }
 

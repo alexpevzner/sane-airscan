@@ -263,5 +263,23 @@ proto_op_name (PROTO_OP op)
     return id_name(op, proto_op_name_table);
 }
 
+/* id_format_by_short_name returns ID_FORMAT by its short name
+ * For unknown name returns ID_FORMAT_UNKNOWN
+ */
+ID_FORMAT
+id_format_by_short_name (const char *name)
+{
+    int i;
+
+    for (i = 0; i < NUM_ID_FORMAT; i ++) {
+        const char *short_name = id_format_short_name(i);
+        if (short_name != NULL && !strcasecmp(name, short_name)) {
+            return i;
+        }
+    }
+
+    return ID_FORMAT_UNKNOWN;
+}
+
 /* vim:ts=8:sw=4:et
  */

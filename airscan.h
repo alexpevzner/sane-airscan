@@ -802,6 +802,12 @@ id_format_by_mime_name (const char *name);
 const char*
 id_format_short_name (ID_FORMAT id);
 
+/* id_format_by_short_name returns ID_FORMAT by its short name
+ * For unknown name returns ID_FORMAT_UNKNOWN
+ */
+ID_FORMAT
+id_format_by_short_name (const char *name);
+
 /* ID_SCANINTENT represents scan intent
  *
  * Intent hints scanner on a purpose of requested scan, which may
@@ -2596,6 +2602,7 @@ enum {
     OPT_SCAN_RESOLUTION,
     OPT_SCAN_COLORMODE,         /* I.e. color/grayscale etc */
     OPT_SCAN_INTENT,            /* Document/Photo etc */
+    OPT_SCAN_TRANSFER_FORMAT,      /* JPEG/Raw etc */
     OPT_SCAN_SOURCE,            /* Platem/ADF/ADF Duplex */
 
     /* Geometry options group */
@@ -2644,6 +2651,11 @@ enum {
 #define SANE_TITLE_ADF_JUSTIFICATION_Y SANE_I18N("ADF Height Justification")
 #define SANE_DESC_ADF_JUSTIFICATION_Y  \
         SANE_I18N("ADF height justification (top/bottom/center)")
+
+#define SANE_NAME_SCAN_TRANSFER_FORMAT    "scan-transfer-format"
+#define SANE_TITLE_SCAN_TRANSFER_FORMAT   SANE_I18N("Scan transfer format")
+#define SANE_DESC_SCAN_TRANSFER_FORMAT    \
+        SANE_I18N("Scan transfer format (JPEG/Raw)")
 
 /* Check if option belongs to image enhancement group
  */
@@ -2803,6 +2815,8 @@ typedef struct {
     SANE_String            *sane_sources;     /* Sources, in SANE format */
     SANE_String            *sane_colormodes;  /* Color modes in SANE format */
     SANE_String            *sane_scanintents; /* Scan intents in SANE format */
+    SANE_String            *sane_transfer_formats; /* Transfer formats in SANE format */
+    ID_FORMAT              transfer_format;   /* Current transfer format */
     SANE_Fixed             brightness;        /* -100.0 ... +100.0 */
     SANE_Fixed             contrast;          /* -100.0 ... +100.0 */
     SANE_Fixed             shadow;            /* 0.0 ... +100.0 */
