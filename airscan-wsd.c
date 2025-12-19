@@ -86,7 +86,6 @@ typedef struct {
     bool          pdf_a;
     bool          png;
     bool          dib;
-    bool          raw;
 
     /* Quirks */
 
@@ -220,8 +219,6 @@ wsd_devcaps_parse_formats (proto_handler_wsd *wsd,
                 wsd->png = true;
             } else if (!strcmp(v, "dib")) {
                 wsd->dib = true;
-            } else if (!strcmp(v, "application/octet-stream")) {
-                wsd->raw = true;
             }
         }
 
@@ -254,10 +251,6 @@ wsd_devcaps_parse_formats (proto_handler_wsd *wsd,
         if (wsd->dib) {
             formats |= 1 << ID_FORMAT_BMP;
         }
-    }
-
-    if (wsd->raw) {
-        formats |= 1 << ID_FORMAT_RAW;
     }
 
     *formats_out = formats;
@@ -923,9 +916,6 @@ wsd_scan_query (const proto_ctx *ctx)
         break;
 
     case ID_FORMAT_RAW:
-        if (wsd->raw) {
-            format = "application/octet-stream";
-        }
         break;
 
     case ID_FORMAT_PDF:
