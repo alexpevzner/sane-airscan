@@ -181,9 +181,6 @@ devopt_choose_format (devopt *opt, ID_FORMAT wanted)
     if ((formats & (1 << ID_FORMAT_PNG)) != 0) {
         return ID_FORMAT_PNG;
     }
-    if ((formats & (1 << ID_FORMAT_RAW)) != 0) {
-        return ID_FORMAT_RAW;
-    }
     if ((formats & (1 << ID_FORMAT_JPEG)) != 0) {
         return ID_FORMAT_JPEG;
     }
@@ -192,6 +189,9 @@ devopt_choose_format (devopt *opt, ID_FORMAT wanted)
     }
     if ((formats & (1 << ID_FORMAT_BMP)) != 0) {
         return ID_FORMAT_BMP;
+    }
+    if ((formats & (1 << ID_FORMAT_RAW)) != 0) {
+        return ID_FORMAT_RAW;
     }
 
     return ID_FORMAT_UNKNOWN;

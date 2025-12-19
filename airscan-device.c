@@ -998,10 +998,10 @@ device_choose_format (device *dev, devcaps_source *src)
     size_t                 i;
     static const ID_FORMAT use[] = {
         ID_FORMAT_PNG,
-        ID_FORMAT_RAW,
         ID_FORMAT_JPEG,
         ID_FORMAT_TIFF,
-        ID_FORMAT_BMP
+        ID_FORMAT_BMP,
+        ID_FORMAT_RAW
     };
 
     for (i = 0; i < sizeof(use)/sizeof(use[0]); i ++) {
