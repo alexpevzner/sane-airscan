@@ -2655,7 +2655,7 @@ enum {
 #define SANE_NAME_SCAN_TRANSFER_FORMAT    "scan-transfer-format"
 #define SANE_TITLE_SCAN_TRANSFER_FORMAT   SANE_I18N("Scan transfer format")
 #define SANE_DESC_SCAN_TRANSFER_FORMAT    \
-        SANE_I18N("Scan transfer format (JPEG/Raw)")
+        SANE_I18N("Choose data format for transfer from scanner (quality vs speed trade-off)")
 
 /* Check if option belongs to image enhancement group
  */
