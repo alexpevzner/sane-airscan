@@ -214,6 +214,7 @@ Legend:
 | HP ScanJet Pro 3500 fn1            | Yes<sup>[3](#note3)</sup> |                           |
 | HP ScanJet Pro 4500 fn1            | Yes                       |                           |
 | HP Smart Tank 5100 series          | Yes                       |                           |
+| HP Smart Tank 7300 series          | Yes                       | No                        |
 | HP Smart Tank Plus 550 series      | Yes                       |                           |
 | Kyocera ECOSYS M2035dn             | No                        | Yes<sup>[5](#note5)</sup> |
 | Kyocera ECOSYS M2040dn             | Yes                       | Yes<sup>[5](#note5)</sup> |
