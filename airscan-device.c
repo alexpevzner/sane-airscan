@@ -1556,6 +1556,19 @@ device_read_next (device *dev)
         int width = dev->opt.params.pixels_per_line;
         int height = dev->opt.params.lines;
         int channels = (dev->opt.params.format == SANE_FRAME_RGB) ? 3 : 1;
+        size_t expected_size = (size_t) width * height * channels;
+
+        if (dev->read_image->size != expected_size) {
+            log_error(dev->log, "Transferred raw image size mismatch "
+                "(expected %zu, got %zu)."
+                "If the problem persists, it may mean that the raw image "
+                "format of your scanner is not supported yet. "
+                "Please file a bug report in "
+                "https://github.com/alexpevzner/sane-airscan .",
+                expected_size, dev->read_image->size);
+            return SANE_STATUS_IO_ERROR;
+        }
+
         image_decoder_raw_configure(decoder, width, height, channels);
     }
 

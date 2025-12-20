@@ -11,6 +11,10 @@
 #include <string.h>
 
 /* Raw image decoder
+ *
+ * Assume by default RGB24 interleaved row-first format.
+ * If some scanners use a different format, we'll need to
+ * add configuration options and quirks to handle it.
  */
 typedef struct {
     image_decoder decoder;   /* Base class */

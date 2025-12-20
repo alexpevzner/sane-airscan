@@ -226,6 +226,17 @@ log_debug (log_ctx *log, const char *fmt, ...)
     va_end(ap);
 }
 
+/* Write an error message.
+ */
+void
+log_error (log_ctx *log, const char *fmt, ...)
+{
+    va_list      ap;
+    va_start(ap, fmt);
+    log_message(log, false, true, fmt, ap);
+    va_end(ap);
+}
+
 /* Write a protocol trace message
  */
 void

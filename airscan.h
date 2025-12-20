@@ -3824,6 +3824,11 @@ log_ctx_trace (log_ctx *log);
 void
 log_debug (log_ctx *log, const char *fmt, ...);
 
+/* Write an error message.
+ */
+void
+log_error (log_ctx *log, const char *fmt, ...);
+
 /* Write a protocol trace message
  */
 void
