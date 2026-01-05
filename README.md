@@ -105,6 +105,7 @@ Legend:
 | Canon MF440 Series                 | Yes                       | Yes                       |
 | Canon MF645Cx                      | Yes                       |                           |
 | Canon MF650C Series                | Yes                       |                           |
+| Canon MF660C Series                | Yes                       |                           |
 | Canon MF745C/746C                  | Yes                       | Yes                       |
 | Canon MG5200 series                | No                        | Yes                       |
 | Canon MG5300 series                | No                        | Yes                       |
