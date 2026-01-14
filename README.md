@@ -63,6 +63,7 @@ Legend:
 | Brother DCP-J552DW                 | No                        | Yes                       |
 | Brother DCP-L2540DW                | No                        | Yes                       |
 | Brother DCP-L2550DN / DCP-L2550DW  | Yes                       |                           |
+| Brother DCP-L2660DW                | Yes                       |                           |
 | Brother HL-L2380DW series          | No                        | Yes                       |
 | Brother HL-L2395DW series          | Yes                       |                           |
 | Brother MFC-7360N                  | No                        | Yes                       |
