@@ -61,6 +61,7 @@ Legend:
 | Brother DCP-7070DW                 | No                        | Yes                       |
 | Brother DCP-9020CDW                | No                        | Yes                       |
 | Brother DCP-J552DW                 | No                        | Yes                       |
+| Brother DCP-L2530DW                | Yes                       | Yes                       |
 | Brother DCP-L2540DW                | No                        | Yes                       |
 | Brother DCP-L2550DN / DCP-L2550DW  | Yes                       |                           |
 | Brother DCP-L2660DW                | Yes                       |                           |
