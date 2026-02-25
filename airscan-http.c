@@ -1784,7 +1784,7 @@ http_data_set_content_type (http_data *data, const char *content_type)
         content_type = str_dup("text/plain");
     } else {
         char *content_type2 = str_dup_tolower(content_type);
-        char *s = strchr(content_type, ';');
+        char *s = strchr(content_type2, ';');
 
         if (s != NULL) {
             *s = '\0';
