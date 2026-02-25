@@ -662,7 +662,7 @@ http_uri_str_equal(const char *beg, const char *end, const char *pattern)
 /* Find 1st occurrence of the character in the string,
  * defined by begin and end pointers
  */
-static char *
+static const char *
 http_uri_str_chr(const char *beg, const char *end, char c)
 {
     return memchr(beg, c, end - beg);
@@ -737,8 +737,8 @@ http_uri_remove_dot_segments (char *path, char *end)
          *     the next "/" character or the end of the input buffer.
          */
         } else {
-            char   *s = http_uri_str_chr(input + 1, end, '/');
-            size_t sz = s ? s - input : end - input;
+            const char *s = http_uri_str_chr(input + 1, end, '/');
+            size_t     sz = s ? s - input : end - input;
 
             memmove(path_end, input, sz);
             path_end += sz;
@@ -1783,13 +1783,14 @@ http_data_set_content_type (http_data *data, const char *content_type)
     if (content_type == NULL) {
         content_type = str_dup("text/plain");
     } else {
-        char *s;
+        char *content_type2 = str_dup_tolower(content_type);
+        char *s = strchr(content_type, ';');
 
-        content_type = str_dup_tolower(content_type);
-        s = strchr(content_type, ';');
         if (s != NULL) {
             *s = '\0';
         }
+
+        content_type = content_type2;
     }
 
     data->content_type = content_type;
@@ -2156,7 +2157,8 @@ http_query_free (http_query *q)
 static void
 http_query_set_host (http_query *q)
 {
-    char                  *host, *end, *buf;
+    const char            *host, *end;
+    char                  *buf;
     size_t                len;
     const struct sockaddr *addr = http_uri_addr(q->uri);
 
