@@ -75,6 +75,7 @@ static size_t mdns_finding_list_count;
 static const AvahiPoll *mdns_avahi_poll;
 static AvahiTimeout *mdns_avahi_restart_timer;
 static AvahiClient *mdns_avahi_client;
+static bool mdns_avahi_client_set_pending;
 static bool mdns_avahi_browser_running;
 static AvahiServiceBrowser *mdns_avahi_browser[NUM_MDNS_SERVICE];
 static bool mdns_initscan[NUM_MDNS_SERVICE];
@@ -109,12 +110,12 @@ mdns_debug (const char *action, AvahiIfIndex interface, AvahiProtocol protocol,
         sprintf(ifname, "%d", interface);
     }
 
-    if (in_name == NULL) {
-        snprintf(buf, sizeof(buf), "\"%s\"", in_type);
-    } else if (in_type == NULL) {
-        snprintf(buf, sizeof(buf), "\"%s\"", in_name);
-    } else {
+    if (in_name != NULL && in_type != NULL) {
         snprintf(buf, sizeof(buf), "\"%s\", \"%s\"", in_type, in_name);
+    } else if (in_type != NULL) {
+        snprintf(buf, sizeof(buf), "\"%s\"", in_type);
+    } else if (in_name != NULL) {
+        snprintf(buf, sizeof(buf), "\"%s\"", in_name);
     }
 
     flags &= AVAHI_LOOKUP_RESULT_CACHED |
@@ -901,7 +902,10 @@ mdns_avahi_client_callback (AvahiClient *client, AvahiClientState state,
          * return, so mdns_avahi_client may be still unset.
          * Fix it here
          */
-        mdns_avahi_client = client;
+        if (mdns_avahi_client_set_pending) {
+            mdns_avahi_client = client;
+            mdns_avahi_client_set_pending = false;
+        }
 
         if (!mdns_avahi_browser_running) {
             if (!mdns_avahi_browser_start()) {
@@ -946,12 +950,28 @@ mdns_avahi_client_stop (void)
 static void
 mdns_avahi_client_start (void)
 {
-    int error;
+    int         error;
+    AvahiClient *client;
 
     log_assert(mdns_log, mdns_avahi_client == NULL);
 
-    mdns_avahi_client = avahi_client_new (mdns_avahi_poll,
+    /* Note: mdns_avahi_client_callback may be invoked before
+     * avahi_client_new() returns. In that case, the callback will
+     * save the mdns_avahi_client pointer.  The callback may also
+     * initiate further operations that could fail, in which case it
+     * might reset mdns_avahi_client to NULL. To prevent this function
+     * from overwriting the callback's updates to mdns_avahi_client,
+     * we use the mdns_avahi_client_set_pending flag to coordinate access.
+     */
+    mdns_avahi_client_set_pending = true;
+    client = avahi_client_new (mdns_avahi_poll,
         AVAHI_CLIENT_NO_FAIL, mdns_avahi_client_callback, NULL, &error);
+
+    if (mdns_avahi_client_set_pending) {
+        mdns_avahi_client = client;
+        mdns_avahi_client_set_pending = false;
+    }
+
     if (mdns_avahi_client == NULL) {
 	log_debug(mdns_log, "avahi_client_new failed: %s", avahi_strerror(error));
     }
