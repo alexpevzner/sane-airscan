@@ -99,3 +99,16 @@ install_data('airscan.conf',
 install_data(dll_file,
   install_dir: join_paths(get_option('sysconfdir'),  'sane.d', 'dll.d')
 )
+
+foreach name : [
+  'test-zeroconf.c',
+  'test-uri.c',
+]
+  test_exe = executable(
+    name + '.bin',
+    sources + [name],
+    dependencies: shared_deps,
+    build_by_default: false,
+  )
+  test(name, test_exe, workdir: meson.current_source_dir())
+endforeach
