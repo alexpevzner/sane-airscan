@@ -146,6 +146,7 @@ static id_name_table id_format_mime_name_table[] = {
     {ID_FORMAT_PNG,  "image/png"},
     {ID_FORMAT_PDF,  "application/pdf"},
     {ID_FORMAT_BMP,  "application/bmp"},
+    {ID_FORMAT_RAW,  "application/octet-stream"},
     {-1, NULL}
 };
 
@@ -171,6 +172,11 @@ id_format_by_mime_name (const char *name)
 const char*
 id_format_short_name (ID_FORMAT id)
 {
+    /* process explicitly these types with non-obvious mime types */
+    if (id == ID_FORMAT_RAW) {
+        return "raw";
+    }
+
     const char *mime = id_format_mime_name(id);
     const char *name = mime ? (strchr(mime, '/') + 1) : NULL;
 
@@ -255,6 +261,24 @@ const char*
 proto_op_name (PROTO_OP op)
 {
     return id_name(op, proto_op_name_table);
+}
+
+/* id_format_by_short_name returns ID_FORMAT by its short name
+ * For unknown name returns ID_FORMAT_UNKNOWN
+ */
+ID_FORMAT
+id_format_by_short_name (const char *name)
+{
+    int i;
+
+    for (i = 0; i < NUM_ID_FORMAT; i ++) {
+        const char *short_name = id_format_short_name(i);
+        if (short_name != NULL && !strcasecmp(name, short_name)) {
+            return i;
+        }
+    }
+
+    return ID_FORMAT_UNKNOWN;
 }
 
 /* vim:ts=8:sw=4:et

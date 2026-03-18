@@ -987,13 +987,21 @@ device_geom_compute (SANE_Fixed tl, SANE_Fixed br,
 static ID_FORMAT
 device_choose_format (device *dev, devcaps_source *src)
 {
+    /* If user explicitly selected a format, use it */
+    if (dev->opt.transfer_format != ID_FORMAT_UNKNOWN) {
+        return dev->opt.transfer_format;
+    }
+
+    /* Fallback to default logic if no specific format selected
+     * (should not happen if devopt_set_defaults works correctly) */
     unsigned int           formats = src->formats & DEVCAPS_FORMATS_SUPPORTED;
     size_t                 i;
     static const ID_FORMAT use[] = {
         ID_FORMAT_PNG,
         ID_FORMAT_JPEG,
         ID_FORMAT_TIFF,
-        ID_FORMAT_BMP
+        ID_FORMAT_BMP,
+        ID_FORMAT_RAW
     };
 
     for (i = 0; i < sizeof(use)/sizeof(use[0]); i ++) {
@@ -1523,6 +1531,12 @@ device_read_next (device *dev)
     dev->proto_ctx.format_detected =
         image_format_detect(dev->read_image->bytes, dev->read_image->size);
 
+    /* If format not detected, but we requested RAW, assume it is RAW */
+    if (dev->proto_ctx.format_detected == ID_FORMAT_UNKNOWN &&
+        dev->opt.transfer_format == ID_FORMAT_RAW) {
+        dev->proto_ctx.format_detected = ID_FORMAT_RAW;
+    }
+
     if (dev->proto_ctx.format_detected  == ID_FORMAT_UNKNOWN) {
         err = eloop_eprintf("Can't detect image format");
         goto DONE;
@@ -1536,6 +1550,28 @@ device_read_next (device *dev)
     }
 
     /* Start new image decoding */
+    if (dev->proto_ctx.format_detected == ID_FORMAT_RAW) {
+        /* Use opt.params for dimensions at actual resolution
+         * (not proto_ctx.params which is at protocol's native DPI 300) */
+        int width = dev->opt.params.pixels_per_line;
+        int height = dev->opt.params.lines;
+        int channels = (dev->opt.params.format == SANE_FRAME_RGB) ? 3 : 1;
+        size_t expected_size = (size_t) width * height * channels;
+
+        if (dev->read_image->size != expected_size) {
+            log_error(dev->log, "Transferred raw image size mismatch "
+                "(expected %zu, got %zu)."
+                "If the problem persists, it may mean that the raw image "
+                "format of your scanner is not supported yet. "
+                "Please file a bug report in "
+                "https://github.com/alexpevzner/sane-airscan .",
+                expected_size, dev->read_image->size);
+            return SANE_STATUS_IO_ERROR;
+        }
+
+        image_decoder_raw_configure(decoder, width, height, channels);
+    }
+
     err = image_decoder_begin(decoder,
             dev->read_image->bytes, dev->read_image->size);
 

@@ -781,6 +781,7 @@ typedef enum {
     ID_FORMAT_PNG,
     ID_FORMAT_PDF,
     ID_FORMAT_BMP,
+    ID_FORMAT_RAW,
 
     NUM_ID_FORMAT
 } ID_FORMAT;
@@ -800,6 +801,12 @@ id_format_by_mime_name (const char *name);
  */
 const char*
 id_format_short_name (ID_FORMAT id);
+
+/* id_format_by_short_name returns ID_FORMAT by its short name
+ * For unknown name returns ID_FORMAT_UNKNOWN
+ */
+ID_FORMAT
+id_format_by_short_name (const char *name);
 
 /* ID_SCANINTENT represents scan intent
  *
@@ -2595,6 +2602,7 @@ enum {
     OPT_SCAN_RESOLUTION,
     OPT_SCAN_COLORMODE,         /* I.e. color/grayscale etc */
     OPT_SCAN_INTENT,            /* Document/Photo etc */
+    OPT_SCAN_TRANSFER_FORMAT,      /* JPEG/Raw etc */
     OPT_SCAN_SOURCE,            /* Platem/ADF/ADF Duplex */
 
     /* Geometry options group */
@@ -2644,6 +2652,11 @@ enum {
 #define SANE_DESC_ADF_JUSTIFICATION_Y  \
         SANE_I18N("ADF height justification (top/bottom/center)")
 
+#define SANE_NAME_SCAN_TRANSFER_FORMAT    "scan-transfer-format"
+#define SANE_TITLE_SCAN_TRANSFER_FORMAT   SANE_I18N("Scan transfer format")
+#define SANE_DESC_SCAN_TRANSFER_FORMAT    \
+        SANE_I18N("Choose data format for transfer from scanner (quality vs speed trade-off)")
+
 /* Check if option belongs to image enhancement group
  */
 static inline bool
@@ -2691,7 +2704,8 @@ enum {
     ((1 << ID_FORMAT_JPEG) |            \
      (1 << ID_FORMAT_PNG)  |            \
      (1 << ID_FORMAT_TIFF) |            \
-     (1 << ID_FORMAT_BMP))
+     (1 << ID_FORMAT_BMP)  |            \
+     (1 << ID_FORMAT_RAW))
 
 /* Supported color modes
  *
@@ -2801,6 +2815,8 @@ typedef struct {
     SANE_String            *sane_sources;     /* Sources, in SANE format */
     SANE_String            *sane_colormodes;  /* Color modes in SANE format */
     SANE_String            *sane_scanintents; /* Scan intents in SANE format */
+    SANE_String            *sane_transfer_formats; /* Transfer formats in SANE format */
+    ID_FORMAT              transfer_format;   /* Current transfer format */
     SANE_Fixed             brightness;        /* -100.0 ... +100.0 */
     SANE_Fixed             contrast;          /* -100.0 ... +100.0 */
     SANE_Fixed             shadow;            /* 0.0 ... +100.0 */
@@ -3492,6 +3508,17 @@ image_decoder_png_new (void);
 image_decoder*
 image_decoder_tiff_new (void);
 
+/* Create Raw image decoder
+ */
+image_decoder*
+image_decoder_raw_new (void);
+
+/* Configure Raw image decoder
+ */
+void
+image_decoder_raw_configure (image_decoder *decoder,
+        int width, int height, int channels);
+
 /* Create BMP image decoder
  */
 image_decoder*
@@ -3601,6 +3628,7 @@ image_decoder_create_all (image_decoder *decoders[NUM_ID_FORMAT])
     decoders[ID_FORMAT_JPEG] = image_decoder_jpeg_new();
     decoders[ID_FORMAT_PNG] = image_decoder_png_new();
     decoders[ID_FORMAT_TIFF] = image_decoder_tiff_new();
+    decoders[ID_FORMAT_RAW] = image_decoder_raw_new();
 }
 
 /* image_decoder_free_all destroys all decoders, previously
@@ -3795,6 +3823,11 @@ log_ctx_trace (log_ctx *log);
  */
 void
 log_debug (log_ctx *log, const char *fmt, ...);
+
+/* Write an error message.
+ */
+void
+log_error (log_ctx *log, const char *fmt, ...);
 
 /* Write a protocol trace message
  */
