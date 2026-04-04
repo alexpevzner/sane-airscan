@@ -30,7 +30,7 @@ If you want to preserve them, put name or value into quotes ("like this").
 
 ## CONFIGURATION OF DEVICES
 
-If scanner and computer are connected to the same LAN segment, everything
+If scanner and computer are connected to the same LAN segment, everything is
 expected to "just work" out of box, without any need of manual configuration.
 
 However, in some cases manual configuration can be useful. For example:
