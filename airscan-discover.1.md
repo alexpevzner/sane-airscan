@@ -19,10 +19,10 @@ file, that can be directly added to `/etc/sane.d/airscan.conf`
 ## OPTIONS
 
    * `-test-fast` or `--test-fast`:
-     Fast discovery mode (see ane-airscan(5) for details)
+     Fast discovery mode (see sane-airscan(5) for details)
 
    * `-test-auto` or `--test-auto`:
-     Automatic protocol selection (see ane-airscan(5) for details)
+     Automatic protocol selection (see sane-airscan(5) for details)
 
    * `-d`:
      Print debug messages to console
