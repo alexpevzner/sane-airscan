@@ -2759,6 +2759,8 @@ typedef struct {
     ID_JUSTIFICATION justification_x;   /* Width justification*/
     ID_JUSTIFICATION justification_y;   /* Height justification*/
 
+    /* Quirks */
+    bool quirk_two_pass_duplex_flip; /* Two pass duplex scanners may output flip back-side */
 } devcaps;
 
 /* Initialize Device Capabilities

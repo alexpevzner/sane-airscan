@@ -567,6 +567,7 @@ escl_devcaps_parse (proto_handler_escl *escl,
                 escl->quirk_check_adf_state = true;
             } else if (!strncasecmp(m, "EPSON ", 6)) {
                 escl->quirk_port_in_host = true;
+                caps->quirk_two_pass_duplex_flip = true;
             } else if (!strncasecmp(m, "Brother ", 8)) {
                 escl->quirk_next_load_delay = true;
             } else if (!strcmp(m, "B205") || !strcmp(m, "B215")) {
