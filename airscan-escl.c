@@ -324,24 +324,6 @@ escl_devcaps_source_parse_setting_profiles (xml_rd *xml, devcaps_source *src)
     }
     xml_rd_leave(xml);
 
-    /* Validate results */
-    if (err == NULL) {
-        src->colormodes &= DEVCAPS_COLORMODES_SUPPORTED;
-        if (src->colormodes == 0) {
-            return ERROR("no color modes detected");
-        }
-
-        src->formats &= DEVCAPS_FORMATS_SUPPORTED;
-        if (src->formats == 0) {
-            return ERROR("no image formats detected");
-        }
-
-        if (!(src->flags & (DEVCAPS_SOURCE_RES_DISCRETE|
-                            DEVCAPS_SOURCE_RES_RANGE))){
-            return ERROR("scan resolutions are not defined");
-        }
-    }
-
     return err;
 }
 
@@ -441,6 +423,31 @@ escl_devcaps_source_parse (xml_rd *xml, devcaps_source **out)
     xml_rd_leave(xml);
 
     if (err != NULL) {
+        goto DONE;
+    }
+
+    /* Validate color modes, formats and resolutions. These are parsed from
+     * <scan:SettingProfiles> (eSCL 2.x). eSCL 1.0 devices don't have that
+     * node (their capabilities live under top-level <scan:ColorProfiles>),
+     * so a source can reach this point with none of them set. Reject such a
+     * source with an error here, rather than accepting it and later hitting
+     * the assertion in devopt_choose_colormode() (an unsupported eSCL 1.0
+     * device must fail gracefully, not abort the whole backend).
+     */
+    src->colormodes &= DEVCAPS_COLORMODES_SUPPORTED;
+    if (src->colormodes == 0) {
+        err = ERROR("no color modes detected");
+        goto DONE;
+    }
+
+    src->formats &= DEVCAPS_FORMATS_SUPPORTED;
+    if (src->formats == 0) {
+        err = ERROR("no image formats detected");
+        goto DONE;
+    }
+
+    if (!(src->flags & (DEVCAPS_SOURCE_RES_DISCRETE|DEVCAPS_SOURCE_RES_RANGE))) {
+        err = ERROR("scan resolutions are not defined");
         goto DONE;
     }
 
