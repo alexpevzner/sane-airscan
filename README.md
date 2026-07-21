@@ -104,6 +104,7 @@ Legend:
 | Canon MF110/910                    | Yes                       |                           |
 | Canon MF240 Series                 | No                        | Yes<sup>[4](#note4)</sup> |
 | Canon MF260 Series                 | Yes                       | Yes<sup>[4](#note4)</sup> |
+| Canon MF270 Series                 | Yes<sup>[11](#note11)</sup>| Yes<sup>[4](#note4)</sup> |
 | Canon MF410 Series                 | Yes                       | Yes                       |
 | Canon MF440 Series                 | Yes                       | Yes                       |
 | Canon MF645Cx                      | Yes                       |                           |
@@ -301,6 +302,11 @@ Mobile Device->Apply
 
 <a name="note10"><sup>[10]</sup></a>: WSD scan is disabled by default. In the
 Embedded Web Server: Properties->Connectivity->Protocols->WSD->Enable
+
+<a name="note11"><sup>[11]</sup></a>: requires manual activation of AirPrint
+scanning on its web console: open web console, Click `[Settings/Registration]`,
+Click `[Network Settings]`->`[TCP/IP Settings]`, Click `[Edit]` in `[Network Link Scan Settings]`,
+enable `[Use Network Link Scan]` checkbox, Click `[OK]`
 
 ### Distros that come with sane-airscan
 
