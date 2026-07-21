@@ -1136,6 +1136,8 @@ mdns_query_callback (AvahiHostNameResolver *r, AvahiIfIndex interface,
         return;
     }
 
+    avahi_host_name_resolver_free(r);
+
     /* Handle event */
     if (event == AVAHI_RESOLVER_FOUND) {
         ip_addr ip = {
