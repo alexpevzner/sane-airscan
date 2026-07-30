@@ -242,7 +242,6 @@ static id_name_table proto_op_name_table[] = {
     {PROTO_OP_NONE,     "PROTO_OP_NONE"},
     {PROTO_OP_PRECHECK, "PROTO_OP_PRECHECK"},
     {PROTO_OP_SCAN,     "PROTO_OP_SCAN"},
-    {PROTO_OP_PRELOAD,  "PROTO_OP_PRELOAD"},
     {PROTO_OP_LOAD,     "PROTO_OP_LOAD"},
     {PROTO_OP_CHECK,    "PROTO_OP_CHECK"},
     {PROTO_OP_CLEANUP,  "PROTO_OP_CLEANUP"},
