@@ -443,6 +443,11 @@ device_proto_op_submit (device *dev, PROTO_OP op,
         timeout = DEVICE_HTTP_TIMEOUT_SCAN;
         break;
 
+    case PROTO_OP_PRELOAD:
+        func = dev->proto_ctx.proto->status_query;
+        timeout = DEVICE_HTTP_TIMEOUT_CHECK;
+        break;
+
     case PROTO_OP_LOAD:
         func = dev->proto_ctx.proto->load_query;
         timeout = DEVICE_HTTP_TIMEOUT_LOAD;
@@ -500,6 +505,7 @@ device_proto_op_decode (device *dev, PROTO_OP op)
     case PROTO_OP_NONE:    log_internal_error(dev->log); break;
     case PROTO_OP_PRECHECK:func = dev->proto_ctx.proto->precheck_decode; break;
     case PROTO_OP_SCAN:    func = dev->proto_ctx.proto->scan_decode; break;
+    case PROTO_OP_PRELOAD: func = dev->proto_ctx.proto->status_decode; break;
     case PROTO_OP_LOAD:    func = dev->proto_ctx.proto->load_decode; break;
     case PROTO_OP_CHECK:   func = dev->proto_ctx.proto->status_decode; break;
     case PROTO_OP_CLEANUP: func = device_proto_dummy_decode; break;
