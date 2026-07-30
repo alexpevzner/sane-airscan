@@ -443,11 +443,6 @@ device_proto_op_submit (device *dev, PROTO_OP op,
         timeout = DEVICE_HTTP_TIMEOUT_SCAN;
         break;
 
-    case PROTO_OP_PRELOAD:
-        func = dev->proto_ctx.proto->status_query;
-        timeout = DEVICE_HTTP_TIMEOUT_CHECK;
-        break;
-
     case PROTO_OP_LOAD:
         func = dev->proto_ctx.proto->load_query;
         timeout = DEVICE_HTTP_TIMEOUT_LOAD;
