@@ -53,6 +53,7 @@ typedef struct {
     /* Miscellaneous flags */
     bool quirk_localhost;            /* Set Host: localhost in ScanJobs rq */
     bool quirk_check_adf_state;      /* Check ADF state before scan */
+    bool quirk_status_before_load;   /* Query status before NextDocument */
     bool quirk_port_in_host;         /* Always set port in Host: header */
     bool quirk_next_load_delay;      /* Use ESCL_NEXT_LOAD_DELAY */
     bool quirk_retry_on_404;         /* Retry GET NextDocunemt on HTTP 404 */
@@ -572,6 +573,8 @@ escl_devcaps_parse (proto_handler_escl *escl,
                 escl->quirk_localhost = true;
             } else if (!strcmp(m, "MF410 Series")) {
                 escl->quirk_check_adf_state = true;
+            } else if (!strcmp(m, "RICOH")) {
+                escl->quirk_status_before_load = true;
             } else if (!strncasecmp(m, "EPSON ", 6)) {
                 escl->quirk_port_in_host = true;
             } else if (!strncasecmp(m, "Brother ", 8)) {
@@ -997,7 +1000,8 @@ escl_scan_decode (const proto_ctx *ctx)
     result.data.location = str_dup(http_uri_str(uri));
     http_uri_free(uri);
 
-    result.next = PROTO_OP_LOAD;
+    result.next = escl->quirk_status_before_load ?
+        PROTO_OP_PRELOAD : PROTO_OP_LOAD;
 
     return result;
 
@@ -1195,6 +1199,21 @@ escl_status_decode (const proto_ctx *ctx)
     SANE_Status        status;
     int                max_attempts;
     bool               temporary = false;
+
+    if (ctx->op == PROTO_OP_PRELOAD) {
+        proto_result preload = {0};
+
+        preload.err = http_query_error(ctx->query);
+        if (preload.err != NULL) {
+            preload.status = SANE_STATUS_IO_ERROR;
+            preload.next = PROTO_OP_CLEANUP;
+        } else {
+            preload.status = SANE_STATUS_GOOD;
+            preload.next = PROTO_OP_LOAD;
+        }
+
+        return preload;
+    }
 
     /* Decode status */
     err = http_query_error(ctx->query);
