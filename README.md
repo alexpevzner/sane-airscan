@@ -155,6 +155,7 @@ Legend:
 | EPSON WF-2760 Series               |                           | Yes                       |
 | EPSON WF-3620 Series               | No                        | Yes                       |
 | EPSON WF-7710 Series               | No                        | Yes                       |
+| EPSON WorkForce ES-580W            | No                        | Yes<sup>[12](#note12)</sup>|
 | EPSON XP-2100 Series               | No                        | Yes                       |
 | EPSON XP-340 Series                | Yes                       |                           |
 | EPSON XP-352 355 Series            | No                        | Yes                       |
@@ -307,6 +308,10 @@ Embedded Web Server: Properties->Connectivity->Protocols->WSD->Enable
 scanning on its web console: open web console, Click `[Settings/Registration]`,
 Click `[Network Settings]`->`[TCP/IP Settings]`, Click `[Edit]` in `[Network Link Scan Settings]`,
 enable `[Use Network Link Scan]` checkbox, Click `[OK]`
+
+<a name="note12"><sup>[12]</sup></a>: WSD scan is disabled by default. Enable it
+in the Embedded Web Server: Network Security->Protocol->WSD Settings->Enable WSD.
+Before scanning, tap the Home icon on the device (if necessary), then select WSD.
 
 ### Distros that come with sane-airscan
 
