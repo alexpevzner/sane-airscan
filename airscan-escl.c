@@ -1001,7 +1001,7 @@ escl_scan_decode (const proto_ctx *ctx)
     http_uri_free(uri);
 
     result.next = escl->quirk_status_before_load ?
-        PROTO_OP_CHECK : PROTO_OP_LOAD;
+        PROTO_OP_PRELOAD : PROTO_OP_LOAD;
 
     return result;
 
@@ -1200,7 +1200,7 @@ escl_status_decode (const proto_ctx *ctx)
     int                max_attempts;
     bool               temporary = false;
 
-    if (ctx->op == PROTO_OP_CHECK) {
+    if (ctx->op == PROTO_OP_PRELOAD) {
         proto_result preload = {0};
 
         preload.err = http_query_error(ctx->query);
