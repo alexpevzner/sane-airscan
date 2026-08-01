@@ -1004,8 +1004,10 @@ escl_scan_decode (const proto_ctx *ctx)
     result.data.location = str_dup(http_uri_str(uri));
     http_uri_free(uri);
 
-    result.next = escl->quirk_status_before_load ?
-        PROTO_OP_PRELOAD : PROTO_OP_LOAD;
+    result.next = PROTO_OP_LOAD;
+    if (escl->quirk_status_before_load) {
+        result.next = PROTO_OP_PRELOAD;
+    }
 
     return result;
 
