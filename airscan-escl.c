@@ -574,6 +574,10 @@ escl_devcaps_parse (proto_handler_escl *escl,
             } else if (!strcmp(m, "MF410 Series")) {
                 escl->quirk_check_adf_state = true;
             } else if (!strcmp(m, "RICOH")) {
+                /* Some RICOH devices require ScannerStatus to be
+                 queried after ScanJobs and before NextDocument. Otherwise,
+                 the job remains in the Pending state indefinitely.
+                 */
                 escl->quirk_status_before_load = true;
             } else if (!strncasecmp(m, "EPSON ", 6)) {
                 escl->quirk_port_in_host = true;
