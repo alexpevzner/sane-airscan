@@ -1201,18 +1201,16 @@ escl_status_decode (const proto_ctx *ctx)
     bool               temporary = false;
 
     if (ctx->op == PROTO_OP_PRELOAD) {
-        proto_result preload = {0};
-
-        preload.err = http_query_error(ctx->query);
-        if (preload.err != NULL) {
-            preload.status = SANE_STATUS_IO_ERROR;
-            preload.next = PROTO_OP_CLEANUP;
+        result.err = http_query_error(ctx->query);
+        if (result.err != NULL) {
+            result.status = SANE_STATUS_IO_ERROR;
+            result.next = PROTO_OP_CLEANUP;
         } else {
-            preload.status = SANE_STATUS_GOOD;
-            preload.next = PROTO_OP_LOAD;
+            result.status = SANE_STATUS_GOOD;
+            result.next = PROTO_OP_LOAD;
         }
 
-        return preload;
+        return result;
     }
 
     /* Decode status */
