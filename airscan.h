@@ -3388,8 +3388,12 @@ struct proto_handler {
     http_query*  (*scan_query) (const proto_ctx *ctx);
     proto_result (*scan_decode) (const proto_ctx *ctx);
 
+    /* Initiate magical passes, required by some devices, and decode result.
+     */
+    http_query*  (*preload_query) (const proto_ctx *ctx);
+    proto_result (*preload_decode) (const proto_ctx *ctx);
+
     /* Initiate image downloading and decode result.
-     * On success, load_decode must set ctx->data.image
      */
     http_query*  (*load_query) (const proto_ctx *ctx);
     proto_result (*load_decode) (const proto_ctx *ctx);

@@ -1018,6 +1018,35 @@ ERROR:
     return result;
 }
 
+/* Request device status
+ * Some of devices (namely, RICOH SP C261SFNw, and, probably other
+ * RICOH devices) require it before image can be loaded.
+ */
+static http_query*
+escl_preload_query (const proto_ctx *ctx)
+{
+    return escl_http_get(ctx, "ScannerStatus");
+}
+
+/* Decode result of preload request
+ */
+static proto_result
+escl_preload_decode (const proto_ctx *ctx)
+{
+    proto_result       result = {0};
+
+    result.err = http_query_error(ctx->query);
+    if (result.err != NULL) {
+        result.status = SANE_STATUS_IO_ERROR;
+        result.next = PROTO_OP_CLEANUP;
+    } else {
+        result.status = SANE_STATUS_GOOD;
+        result.next = PROTO_OP_LOAD;
+    }
+
+    return result;
+}
+
 /* Initiate image downloading
  */
 static http_query*
@@ -1206,19 +1235,6 @@ escl_status_decode (const proto_ctx *ctx)
     int                max_attempts;
     bool               temporary = false;
 
-    if (ctx->op == PROTO_OP_PRELOAD) {
-        result.err = http_query_error(ctx->query);
-        if (result.err != NULL) {
-            result.status = SANE_STATUS_IO_ERROR;
-            result.next = PROTO_OP_CLEANUP;
-        } else {
-            result.status = SANE_STATUS_GOOD;
-            result.next = PROTO_OP_LOAD;
-        }
-
-        return result;
-    }
-
     /* Decode status */
     err = http_query_error(ctx->query);
     if (err != NULL) {
@@ -1373,6 +1389,9 @@ proto_handler_escl_new (void)
 
     escl->proto.scan_query = escl_scan_query;
     escl->proto.scan_decode = escl_scan_decode;
+
+    escl->proto.preload_query = escl_preload_query;
+    escl->proto.preload_decode = escl_preload_decode;
 
     escl->proto.load_query = escl_load_query;
     escl->proto.load_decode = escl_load_decode;

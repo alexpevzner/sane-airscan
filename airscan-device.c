@@ -18,6 +18,7 @@
 #define DEVICE_HTTP_TIMEOUT_DEVCAPS     20000
 #define DEVICE_HTTP_TIMEOUT_PRECHECK    20000
 #define DEVICE_HTTP_TIMEOUT_SCAN        30000
+#define DEVICE_HTTP_TIMEOUT_PRELOAD     20000
 #define DEVICE_HTTP_TIMEOUT_LOAD        -1
 #define DEVICE_HTTP_TIMEOUT_CHECK       20000
 #define DEVICE_HTTP_TIMEOUT_CLEANUP     30000
@@ -444,8 +445,8 @@ device_proto_op_submit (device *dev, PROTO_OP op,
         break;
 
     case PROTO_OP_PRELOAD:
-        func = dev->proto_ctx.proto->status_query;
-        timeout = DEVICE_HTTP_TIMEOUT_CHECK;
+        func = dev->proto_ctx.proto->preload_query;
+        timeout = DEVICE_HTTP_TIMEOUT_PRELOAD;
         break;
 
     case PROTO_OP_LOAD:
@@ -505,7 +506,7 @@ device_proto_op_decode (device *dev, PROTO_OP op)
     case PROTO_OP_NONE:    log_internal_error(dev->log); break;
     case PROTO_OP_PRECHECK:func = dev->proto_ctx.proto->precheck_decode; break;
     case PROTO_OP_SCAN:    func = dev->proto_ctx.proto->scan_decode; break;
-    case PROTO_OP_PRELOAD: func = dev->proto_ctx.proto->status_decode; break;
+    case PROTO_OP_PRELOAD: func = dev->proto_ctx.proto->preload_decode; break;
     case PROTO_OP_LOAD:    func = dev->proto_ctx.proto->load_decode; break;
     case PROTO_OP_CHECK:   func = dev->proto_ctx.proto->status_decode; break;
     case PROTO_OP_CLEANUP: func = device_proto_dummy_decode; break;
