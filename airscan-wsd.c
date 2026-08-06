@@ -915,6 +915,9 @@ wsd_scan_query (const proto_ctx *ctx)
         }
         break;
 
+    case ID_FORMAT_RAW:
+        break;
+
     case ID_FORMAT_PDF:
         if (wsd->pdf_a) {
             format = "pdf-a";
