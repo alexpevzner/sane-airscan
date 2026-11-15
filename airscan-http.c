@@ -2063,6 +2063,10 @@ struct http_query {
     http_data         *response_data;           /* NULL if none */
     http_multipart    *response_multipart;      /* NULL if not multipart */
 
+    /* Reception speed measurement */
+    timestamp         rx_timestamp;             /* 1st segment timestamp */
+    size_t            rx_offset;                /* 1st segment size */
+
     /* Callbacks and context */
     timestamp         timestamp;                /* Submission timestamp */
     uintptr_t         uintptr;                  /* User-defined parameter */
@@ -2581,6 +2585,8 @@ http_query_on_body_callback (http_parser *parser,
 
     if (q->response_data == NULL) {
         q->response_data = http_data_new(NULL, NULL, 0);
+        q->rx_timestamp = timestamp_now();
+        q->rx_offset = size;
     }
 
     if (!http_data_append(q->response_data, data, size)) {
@@ -2623,6 +2629,24 @@ http_query_on_message_complete (http_parser *parser)
 
     if (q->response_data != NULL) {
         const char *content_type;
+        size_t     received = q->response_data->size - q->rx_offset;
+
+        /* Measure RX speed. Ignore small transfers */
+        if (received >= 16384) {
+            timestamp  elapsed = timestamp_now() - q->rx_timestamp;
+
+            log_debug(q->client->log,
+                    "HTTP rx speed: got %d bytes in %d.%3.3d seconds",
+                    (int) received, (int) elapsed / 1000, (int) (elapsed % 1000));
+
+            if (elapsed != 0) {
+                double speed = ((double) received) /
+                               ((double) elapsed) * 8000;
+
+                log_debug(q->client->log, "HTTP rx speed: %.3f bits/sec", speed);
+            }
+        }
+
 
         content_type = http_query_get_response_header(q, "Content-Type");
         if (content_type != NULL) {
