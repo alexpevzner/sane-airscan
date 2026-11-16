@@ -943,6 +943,9 @@ device_geom;
  *   minlen, maxlen - device-defined min and max width or height,
  *                    in pixels, assuming 300 dpi
  *   res            - scan resolution
+ *   units          - device units (pixels per inch)
+ *   shift          - additional offset, in device units, added to
+ *                    the requested offset (see device_geom_justify())
  *
  * Output:
  *   Filled device_geom structure
@@ -968,11 +971,12 @@ device_geom;
  */
 static device_geom
 device_geom_compute (SANE_Fixed tl, SANE_Fixed br,
-        SANE_Word minlen, SANE_Word maxlen, SANE_Word res, SANE_Word units)
+        SANE_Word minlen, SANE_Word maxlen, SANE_Word res, SANE_Word units,
+        SANE_Word shift)
 {
     device_geom geom;
 
-    geom.off = math_mm2px_res(tl, units);
+    geom.off = math_mm2px_res(tl, units) + shift;
     geom.len = math_mm2px_res(br - tl, units);
     geom.skip = 0;
 
@@ -1014,12 +1018,60 @@ device_choose_format (device *dev, devcaps_source *src)
     return ID_FORMAT_UNKNOWN;
 }
 
+/* Compute the offset, in device units, to be added to the requested
+ * scan window to compensate for the hardware-defined ADF justification.
+ *
+ * Frontends assume the document is aligned to the top-left corner of
+ * the scan area, so when they request, say, an A4 window at (0,0), they
+ * expect to receive the A4 sheet. However, some ADF scanners (many Epson
+ * models among them) report that they center the sheet (or align it to
+ * the right) within the maximal scan width, and interpret the requested
+ * offset relative to the edge of that maximal area. Without compensation
+ * the resulting image is shifted, and part of the document is cut off.
+ *
+ * The document size is not known, so the bottom-right coordinate of the
+ * requested window is used as the best estimate of it. When the full
+ * width (height) is requested, no compensation is applied.
+ *
+ * Input:
+ *   just   - hardware-defined justification
+ *   br     - bottom-right X/Y of the requested window, in mm
+ *   maxlen - device-defined max width or height, in device units
+ *   units  - device units (pixels per inch)
+ */
+static SANE_Word
+device_geom_justify (ID_JUSTIFICATION just, SANE_Fixed br,
+        SANE_Word maxlen, SANE_Word units)
+{
+    SANE_Word doclen = math_mm2px_res(br, units);
+    SANE_Word gap;
+
+    if (doclen >= maxlen) {
+        return 0;
+    }
+
+    gap = maxlen - doclen;
+
+    switch (just) {
+    case ID_JUSTIFICATION_CENTER:
+        return gap / 2;
+
+    case ID_JUSTIFICATION_RIGHT:
+    case ID_JUSTIFICATION_BOTTOM:
+        return gap;
+
+    default:
+        return 0;
+    }
+}
+
 /* Request scan
  */
 static void
 device_stm_start_scan (device *dev)
 {
     device_geom       geom_x, geom_y;
+    SANE_Word         shift_x = 0, shift_y = 0;
     proto_ctx         *ctx = &dev->proto_ctx;
     proto_scan_params *params = &ctx->params;
     devcaps_source    *src = dev->opt.caps.src[dev->opt.src];
@@ -1027,12 +1079,23 @@ device_stm_start_scan (device *dev)
     SANE_Word         y_resolution = dev->opt.resolution;
     char              buf[64];
 
+    /* Compensate for hardware-defined ADF justification */
+    if (dev->opt.src == ID_SOURCE_ADF_SIMPLEX ||
+        dev->opt.src == ID_SOURCE_ADF_DUPLEX) {
+        shift_x = device_geom_justify(dev->opt.caps.justification_x,
+            dev->opt.br_x, src->max_wid_px, dev->opt.caps.units);
+        shift_y = device_geom_justify(dev->opt.caps.justification_y,
+            dev->opt.br_y, src->max_hei_px, dev->opt.caps.units);
+    }
+
     /* Prepare window parameters */
     geom_x = device_geom_compute(dev->opt.tl_x, dev->opt.br_x,
-        src->min_wid_px, src->max_wid_px, x_resolution, dev->opt.caps.units);
+        src->min_wid_px, src->max_wid_px, x_resolution, dev->opt.caps.units,
+        shift_x);
 
     geom_y = device_geom_compute(dev->opt.tl_y, dev->opt.br_y,
-        src->min_hei_px, src->max_hei_px, y_resolution, dev->opt.caps.units);
+        src->min_hei_px, src->max_hei_px, y_resolution, dev->opt.caps.units,
+        shift_y);
 
     dev->job_skip_x = geom_x.skip;
     dev->job_skip_y = geom_y.skip;
@@ -1072,6 +1135,7 @@ device_stm_start_scan (device *dev)
     log_trace(dev->log, "  image size:     %dx%d", params->wid, params->hei);
     log_trace(dev->log, "  image X offset: %d", params->x_off);
     log_trace(dev->log, "  image Y offset: %d", params->y_off);
+    log_trace(dev->log, "  justify shift:  %d,%d", shift_x, shift_y);
     log_trace(dev->log, "  x_resolution:   %d", params->x_res);
     log_trace(dev->log, "  y_resolution:   %d", params->y_res);
     log_trace(dev->log, "  format:         %s",
