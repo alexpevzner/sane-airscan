@@ -8,6 +8,7 @@
 
 #include "airscan.h"
 
+#include <sane/sane.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -94,6 +95,12 @@ typedef enum {
     DEVICE_STM_CLOSED
 } DEVICE_STM_STATE;
 
+typedef enum {
+    DEVICE_IMAGE_SIDE_NONE,
+    DEVICE_IMAGE_SIDE_FRONT,
+    DEVICE_IMAGE_SIDE_BACK,
+} DEVICE_DUPLEX_SIDE;
+
 /* Device descriptor
  */
 struct device {
@@ -143,6 +150,9 @@ struct device {
                                                 beginning */
     bool                 read_24_to_8;       /* Resample 24 to 8 bits */
     filter               *read_filters;      /* Chain of image filters */
+
+    unsigned char        *read_image_flipped;/* Current image (flipped) */
+    DEVICE_DUPLEX_SIDE   read_image_side;    /* Current image is front or back */
 };
 
 /* Static variables
@@ -192,6 +202,9 @@ device_read_filters_setup (device *dev);
 
 static void
 device_read_filters_cleanup (device *dev);
+
+static SANE_Status
+device_read_decode_line (device *dev);
 
 static void
 device_management_start_stop (bool start);
@@ -1350,6 +1363,7 @@ device_start_new_job (device *dev)
     dev->proto_ctx.failed_op = PROTO_OP_NONE;
     dev->proto_ctx.failed_attempt = 0;
     dev->proto_ctx.images_received = 0;
+    dev->read_image_side = DEVICE_IMAGE_SIDE_NONE;
 
     eloop_call(device_start_do, dev);
 
@@ -1664,6 +1678,50 @@ device_read_next (device *dev)
         }
     }
 
+    /* Decode the image into a flipped buffer */
+    if (dev->proto_ctx.devcaps->quirk_two_pass_duplex_flip &&
+        dev->proto_ctx.params.src == ID_SOURCE_ADF_DUPLEX) {
+        switch (dev->read_image_side) {
+        case DEVICE_IMAGE_SIDE_NONE:
+        case DEVICE_IMAGE_SIDE_BACK:
+            dev->read_image_side = DEVICE_IMAGE_SIDE_FRONT;
+            break;
+        case DEVICE_IMAGE_SIDE_FRONT:
+            dev->read_image_side = DEVICE_IMAGE_SIDE_BACK;
+            break;
+        }
+    }
+
+    /* Decode the image into a flipped buffer */
+    if (dev->proto_ctx.devcaps->quirk_two_pass_duplex_flip &&
+        dev->proto_ctx.params.src == ID_SOURCE_ADF_DUPLEX &&
+        dev->read_image_side == DEVICE_IMAGE_SIDE_BACK) {
+        int      bpp = dev->opt.params.format == SANE_FRAME_RGB ? 3 : 1;
+        SANE_Int pixels_per_line = dev->opt.params.pixels_per_line;
+        SANE_Int total_bytes = dev->opt.params.bytes_per_line * dev->opt.params.lines;
+
+        dev->read_image_flipped = mem_resize(dev->read_image_flipped, total_bytes, 0);
+        for (SANE_Int line_num = 0; line_num < dev->read_line_end; line_num++) {
+            SANE_Status status = device_read_decode_line(dev);
+            if (status != SANE_STATUS_GOOD) {
+                http_data_unref(dev->read_image);
+                dev->read_image = NULL;
+                mem_free(dev->read_image_flipped);
+                dev->read_image_flipped = NULL;
+                return status;
+            }
+
+            for (SANE_Int pixel = 0; pixel < pixels_per_line; pixel++) {
+                SANE_Int flipped_pixel = (dev->read_line_end - line_num) * pixels_per_line - pixel - 1;
+                for (SANE_Int channel = 0; channel < bpp; channel++) {
+                    dev->read_image_flipped[flipped_pixel * bpp + channel] = dev->read_line_buf[pixel * bpp + channel];
+                }
+            }
+        }
+        dev->read_line_off = 0;
+        dev->read_line_num = 0;
+    }
+
     /* Wake up reader */
     pollable_signal(dev->read_pollable);
 
@@ -1672,6 +1730,8 @@ DONE:
         log_debug(dev->log, ESTRING(err));
         http_data_unref(dev->read_image);
         dev->read_image = NULL;
+        mem_free(dev->read_image_flipped);
+        dev->read_image_flipped = NULL;
         return SANE_STATUS_IO_ERROR;
     }
 
@@ -1818,6 +1878,36 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
         }
     }
 
+    /* Read flipped image for back-side of two pass duplex scan */
+    if (dev->proto_ctx.devcaps->quirk_two_pass_duplex_flip &&
+        dev->proto_ctx.params.src == ID_SOURCE_ADF_DUPLEX &&
+        dev->read_image_side == DEVICE_IMAGE_SIDE_BACK) {
+
+        if (dev->read_line_num == dev->opt.params.lines) {
+            status = SANE_STATUS_EOF;
+            goto DONE;
+        }
+
+        SANE_Int image_off = dev->opt.params.bytes_per_line * dev->read_line_num + dev->read_line_off;
+        SANE_Int image_size = dev->read_line_end * dev->opt.params.bytes_per_line;
+
+        if (image_off < image_size) {
+            len = math_min(image_size - image_off, max_len);
+            memcpy(data, dev->read_image_flipped + image_off, len);
+        }
+
+        if (image_off + len >= image_size) {
+            SANE_Int total_size = dev->opt.params.lines * dev->opt.params.bytes_per_line;
+            SANE_Int sz = math_min(max_len - len, total_size - image_off - len);
+            memset(data + len, 0xff, sz);
+            len += sz;
+        }
+
+        dev->read_line_num = (image_off + len) / dev->opt.params.bytes_per_line;
+        dev->read_line_off = (image_off + len) % dev->opt.params.bytes_per_line;
+        goto DONE;
+    }
+
     /* Read line by line */
     for (len = 0; status == SANE_STATUS_GOOD && len < max_len; ) {
         if (dev->read_line_off == dev->opt.params.bytes_per_line) {
@@ -1859,6 +1949,8 @@ DONE:
         http_data_unref(dev->read_image);
         dev->read_image = NULL;
     }
+    mem_free(dev->read_image_flipped);
+    dev->read_image_flipped = NULL;
     mem_free(dev->read_line_buf);
     dev->read_line_buf = NULL;
 
