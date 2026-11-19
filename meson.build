@@ -27,6 +27,7 @@ sources = [
   'airscan-png.c',
   'airscan-pollable.c',
   'airscan-rand.c',
+  'airscan-raw.c',
   'airscan-trace.c',
   'airscan-tiff.c',
   'airscan-uuid.c',
