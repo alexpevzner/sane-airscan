@@ -856,23 +856,32 @@ device_stm_op_callback (void *ptr, http_query *q)
         }
     } else if (dev->proto_ctx.op == PROTO_OP_LOAD) {
         if (result.data.image != NULL) {
-            http_data_queue_push(dev->read_queue, result.data.image);
-            dev->proto_ctx.images_received ++;
-            pollable_signal(dev->read_pollable);
+            if (dev->job_status == SANE_STATUS_CANCELLED) {
+                /* Discard late/partial image data arriving after
+                 * cancellation so it cannot remain stranded in
+                 * dev->read_queue for subsequent scan jobs.
+                 */
+                http_data_unref(result.data.image);
+            } else {
+                http_data_queue_push(dev->read_queue, result.data.image);
+                dev->proto_ctx.images_received ++;
+                pollable_signal(dev->read_pollable);
 
-            dev->proto_ctx.failed_attempt = 0;
-            pthread_cond_broadcast(&dev->stm_cond);
+                dev->proto_ctx.failed_attempt = 0;
+                pthread_cond_broadcast(&dev->stm_cond);
+            }
         }
     }
 
     /* Update job status */
     device_job_set_status(dev, result.status);
 
-    /* If CANCEL was sent, and next operation is CLEANUP or
+    /* If CANCEL was sent, and next operation is CLEANUP or LOAD, or
      * current operation is CHECK, FINISH the job
      */
     if (dev->stm_cancel_sent) {
         if (result.next == PROTO_OP_CLEANUP ||
+            result.next == PROTO_OP_LOAD ||
             dev->proto_ctx.op == PROTO_OP_CHECK) {
             result.next = PROTO_OP_FINISH;
         }
@@ -1345,6 +1354,7 @@ device_start_new_job (device *dev)
 
     dev->stm_cancel_sent = false;
     dev->job_status = SANE_STATUS_GOOD;
+    http_data_queue_purge(dev->read_queue);
     mem_free((char*) dev->proto_ctx.location);
     dev->proto_ctx.location = NULL;
     dev->proto_ctx.failed_op = PROTO_OP_NONE;
@@ -1802,6 +1812,7 @@ device_read (device *dev, SANE_Byte *data, SANE_Int max_len, SANE_Int *len_out)
         }
 
         if (dev->job_status == SANE_STATUS_CANCELLED) {
+            http_data_queue_purge(dev->read_queue);
             status = SANE_STATUS_CANCELLED;
             goto DONE;
         }
